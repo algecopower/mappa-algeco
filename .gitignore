@@ -1,0 +1,34 @@
+# Credenziali e segreti
+credenziali.json
+users.json
+.flask_secret_key
+credenziali_utenti_*.txt
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+.env
+venv/
+.venv/
+
+# Cache applicazione
+cache/
+
+# File generati (mappe in templates/)
+templates/mappa_torino.html
+templates/mappa_pavia.html
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo

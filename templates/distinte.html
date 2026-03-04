@@ -1,0 +1,3382 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2">
+    <title>Gestione Distinte - Algeco Power</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #25D366;
+            --primary-dark: #128C7E;
+            --danger: #e74c3c;
+            --warning: #f39c12;
+            --success: #27ae60;
+            --info: #3498db;
+            --bg-dark: #1a1a2e;
+            --bg-card: #16213e;
+            --text: #eee;
+            --text-muted: #888;
+            --border: #333;
+        }
+
+        [data-theme="light"] {
+            --bg-dark: #f5f5f5;
+            --bg-card: #ffffff;
+            --text: #333;
+            --text-muted: #777;
+            --border: #ddd;
+            --primary: #25D366;
+            --primary-dark: #128C7E;
+            --danger: #e74c3c;
+            --warning: #e67e22;
+            --success: #27ae60;
+            --info: #2980b9;
+        }
+
+        [data-theme="light"] .upload-section {
+            background: #ffffff;
+            border-color: #ccc;
+        }
+
+        [data-theme="light"] .upload-section label {
+            border-color: #bbb;
+            background: #f9f9f9;
+        }
+
+        [data-theme="light"] .upload-section label:hover {
+            border-color: var(--primary);
+            background: #f0faf0;
+        }
+
+        [data-theme="light"] .contact-card {
+            background: #ffffff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        [data-theme="light"] .contact-card:hover {
+            box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+        }
+
+        [data-theme="light"] .contact-card.completed {
+            background: #f0f8f0;
+            border-color: var(--success);
+        }
+
+        [data-theme="light"] header {
+            background: #ffffff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+
+        [data-theme="light"] .alert-item {
+            background: #fff8e1;
+            border-color: #ffcc80;
+        }
+
+        [data-theme="light"] .value-box {
+            background: #f5f5f5;
+        }
+
+        [data-theme="light"] .note-display {
+            background: #f5f5f5;
+            color: #333;
+            border-color: #ddd;
+        }
+
+        [data-theme="light"] .note-dropdown {
+            background: #ffffff;
+            border-color: #ddd;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+        }
+
+        [data-theme="light"] .note-dropdown-item:hover {
+            background: #f0f0f0;
+        }
+
+        [data-theme="light"] .numeri-alternativi-box {
+            background: #f8f9fa;
+            border-color: #ddd;
+        }
+
+        [data-theme="light"] .modal-content {
+            background: #ffffff;
+            color: #333;
+        }
+
+        [data-theme="light"] #messagePreview {
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        [data-theme="light"] .template-tab {
+            background: #f0f0f0;
+            color: #555;
+        }
+
+        [data-theme="light"] .template-tab:hover {
+            background: #e0e0e0;
+        }
+
+        [data-theme="light"] .template-tab.active {
+            background: var(--primary);
+            color: white;
+        }
+
+        [data-theme="light"] .template-field input,
+        [data-theme="light"] .template-field textarea {
+            background: #f5f5f5;
+            color: #333;
+            border-color: #ddd;
+        }
+
+        [data-theme="light"] .back-btn {
+            color: #555;
+        }
+
+        [data-theme="light"] .back-btn:hover {
+            color: var(--primary);
+        }
+
+        [data-theme="light"] .filters-bar {
+            background: #ffffff;
+        }
+
+        [data-theme="light"] .appuntamento-section {
+            background: #f8f9fa;
+        }
+
+        [data-theme="light"] .appuntamento-time-input,
+        [data-theme="light"] .appuntamento-date-input {
+            background: #ffffff;
+            color: #333;
+            border-color: #ddd;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            background: var(--bg-card);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        header h1 {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--primary);
+        }
+
+        header h1 i {
+            font-size: 1.5em;
+        }
+
+        .provincia-badge {
+            background: var(--primary);
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+        }
+
+        .upload-section {
+            background: var(--bg-card);
+            padding: 25px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            border: 2px dashed var(--border);
+            text-align: center;
+            transition: all 0.3s;
+        }
+
+        .upload-section:hover, .upload-section.drag-over {
+            border-color: var(--primary);
+            background: rgba(37, 211, 102, 0.1);
+        }
+
+        .upload-section input[type="file"] {
+            display: none;
+        }
+
+        .upload-section label {
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .upload-section i {
+            font-size: 3em;
+            color: var(--primary);
+        }
+
+        .upload-section p {
+            color: var(--text-muted);
+        }
+
+        .upload-section .file-list {
+            margin-top: 15px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .file-chip {
+            background: var(--bg-dark);
+            padding: 8px 15px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .file-chip .remove {
+            cursor: pointer;
+            color: var(--danger);
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+
+        .btn-warning {
+            background: var(--warning);
+            color: white;
+        }
+
+        .btn-info {
+            background: var(--info);
+            color: white;
+        }
+
+        .btn-search-phone {
+            background: #9b59b6;
+            color: white;
+        }
+
+        .btn-search-phone:hover {
+            background: #8e44ad;
+        }
+
+        .btn-search-google {
+            background: #4285f4;
+            color: white;
+        }
+
+        .btn-search-google:hover {
+            background: #3367d6;
+        }
+
+        /* PEC Search */
+        .btn-search-pec {
+            background: #e74c3c;
+            color: white;
+        }
+        .btn-search-pec:hover {
+            background: #c0392b;
+        }
+        .btn-ufficio-camerale {
+            background: #1a5276;
+            color: white;
+        }
+        .btn-ufficio-camerale:hover {
+            background: #154360;
+        }
+        .btn-inipec {
+            background: #2c3e50;
+            color: white;
+        }
+        .btn-inipec:hover {
+            background: #1a252f;
+        }
+        .btn-registro-imprese {
+            background: #196f3d;
+            color: white;
+        }
+        .btn-registro-imprese:hover {
+            background: #145a32;
+        }
+
+        /* Badge azienda/condominio */
+        .tipo-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.7em;
+            font-weight: bold;
+            margin-left: 6px;
+            vertical-align: middle;
+        }
+        .tipo-badge.azienda {
+            background: rgba(231, 76, 60, 0.15);
+            color: #e74c3c;
+            border: 1px solid rgba(231, 76, 60, 0.3);
+        }
+        .tipo-badge.condominio {
+            background: rgba(243, 156, 18, 0.15);
+            color: #f39c12;
+            border: 1px solid rgba(243, 156, 18, 0.3);
+        }
+        .tipo-badge.ente_pubblico {
+            background: rgba(52, 152, 219, 0.15);
+            color: #3498db;
+            border: 1px solid rgba(52, 152, 219, 0.3);
+        }
+
+        /* PEC info row */
+        .pec-info-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 6px;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 0.85em;
+        }
+        .pec-info-row.has-pec {
+            background: rgba(39, 174, 96, 0.1);
+            border: 1px solid rgba(39, 174, 96, 0.2);
+        }
+        .pec-info-row.no-pec {
+            background: rgba(231, 76, 60, 0.05);
+            border: 1px dashed rgba(231, 76, 60, 0.2);
+        }
+        .pec-info-row .pec-icon {
+            color: #e74c3c;
+            width: 16px;
+        }
+        .pec-info-row .pec-value {
+            flex: 1;
+            font-family: monospace;
+            font-size: 0.9em;
+            color: var(--text);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .pec-edit-input {
+            flex: 1;
+            padding: 4px 8px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: var(--bg-card);
+            color: var(--text);
+            font-size: 0.85em;
+        }
+        .pec-edit-input:focus {
+            outline: none;
+            border-color: #e74c3c;
+        }
+        .btn-mini.btn-pec {
+            background: #e74c3c;
+            color: white;
+        }
+        .btn-mini.btn-pec:hover {
+            background: #c0392b;
+            transform: scale(1.1);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .btn i {
+            opacity: 1 !important;
+        }
+
+        /* Sezione appuntamento inline */
+        .appuntamento-section {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border);
+        }
+
+        .appuntamento-title {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .appuntamento-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .appuntamento-time-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .appuntamento-time-input {
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            padding: 6px 8px;
+            font-size: 13px;
+            width: 85px;
+        }
+
+        .appuntamento-time-input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .appuntamento-date-input {
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            padding: 6px 8px;
+            font-size: 13px;
+            width: 130px;
+        }
+
+        .appuntamento-date-input:focus {
+            outline: none;
+            border-color: var(--info);
+        }
+
+        .appuntamento-date-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+            flex-wrap: wrap;
+        }
+
+        .appuntamento-date-label {
+            font-size: 12px;
+            color: var(--text-muted);
+            min-width: 45px;
+        }
+
+        .phone-edit-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid var(--border);
+        }
+
+        .phone-edit-row .phone-icon {
+            color: var(--warning);
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+
+        .phone-edit-input {
+            flex: 1;
+            min-width: 120px;
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 6px 10px;
+            font-size: 12px;
+            color: var(--text-muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            cursor: text;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .phone-edit-input:focus {
+            border-color: var(--warning);
+            color: var(--text);
+        }
+
+        .phone-edit-input.has-phone {
+            color: var(--text);
+        }
+
+        .note-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+
+        .note-display {
+            flex: 1;
+            min-width: 150px;
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 6px 10px;
+            font-size: 12px;
+            color: var(--text-muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            cursor: text;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .note-display:focus {
+            border-color: var(--primary);
+            color: var(--text);
+            white-space: normal;
+            overflow: visible;
+        }
+
+        .note-display.has-note {
+            color: var(--text);
+        }
+
+        .btn-add-note {
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            padding: 6px 10px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            position: relative;
+        }
+
+        .btn-add-note:hover {
+            background: var(--bg-card);
+            border-color: var(--primary);
+        }
+
+        .note-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            min-width: 180px;
+            z-index: 100;
+            margin-top: 4px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            display: none;
+        }
+
+        .note-dropdown.show {
+            display: block;
+        }
+
+        .note-dropdown-item {
+            padding: 10px 15px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .note-dropdown-item:hover {
+            background: var(--bg-dark);
+        }
+
+        .note-dropdown-item:first-child {
+            border-radius: 8px 8px 0 0;
+        }
+
+        .note-dropdown-item:last-child {
+            border-radius: 0 0 8px 8px;
+        }
+
+        .note-dropdown-item i {
+            width: 16px;
+            text-align: center;
+        }
+
+        .btn-salva-data {
+            background: var(--info);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .btn-salva-data:hover {
+            background: #2980b9;
+        }
+
+        .btn-salva-data:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .appuntamento-time-sep {
+            color: var(--text-muted);
+        }
+
+        .btn-appuntamento {
+            background: var(--warning);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .btn-appuntamento:hover {
+            background: #e0a800;
+        }
+
+        .btn-appuntamento:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .appuntamento-status {
+            font-size: 12px;
+            margin-top: 6px;
+            display: none;
+        }
+
+        .appuntamento-status.visible {
+            display: block;
+        }
+
+        .appuntamento-status.success {
+            color: var(--success);
+        }
+
+        .appuntamento-status.error {
+            color: var(--danger);
+        }
+
+        .filters {
+            background: var(--bg-card);
+            padding: 15px 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .filters label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            padding: 8px 15px;
+            border-radius: 8px;
+            background: var(--bg-dark);
+            transition: all 0.2s;
+        }
+
+        .filters label:hover {
+            background: rgba(255,255,255,0.1);
+        }
+
+        .filters input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--primary);
+        }
+
+        .stats {
+            display: flex;
+            gap: 15px;
+            margin-left: auto;
+        }
+
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 15px;
+            border-radius: 8px;
+            background: var(--bg-dark);
+        }
+
+        .stat-item.cellulare {
+            color: var(--primary);
+        }
+
+        .stat-item.fisso {
+            color: var(--warning);
+        }
+
+        .stat-item.no-phone {
+            color: var(--text-muted);
+        }
+
+        .contacts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+            gap: 15px;
+            min-height: 200px;
+        }
+
+        /* Quando c'è solo empty-state, centralo */
+        .contacts-grid:has(.empty-state) {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .contact-card {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 15px;
+            position: relative;
+            transition: all 0.2s;
+            border-left: 4px solid var(--border);
+        }
+
+        .contact-card.cellulare {
+            border-left-color: var(--primary);
+        }
+
+        .contact-card.fisso {
+            border-left-color: var(--warning);
+        }
+
+        .contact-card.no-phone {
+            border-left-color: var(--text-muted);
+        }
+
+        .contact-card.completed {
+            opacity: 0.6;
+            background: rgba(39, 174, 96, 0.1);
+        }
+
+        .contact-card.completed::after {
+            content: '✓ Completato';
+            position: absolute;
+            top: 38px;
+            right: 10px;
+            background: var(--success);
+            color: white;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+        }
+
+        .contact-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 10px;
+        }
+
+        .contact-header .lavoro-num {
+            background: var(--bg-dark);
+            padding: 5px 12px;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .contact-header .type-badge {
+            padding: 3px 10px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .contact-header .type-badge.cellulare {
+            background: var(--primary);
+            color: white;
+        }
+
+        .contact-header .type-badge.fisso {
+            background: var(--warning);
+            color: white;
+        }
+
+        .contact-header .type-badge.no-phone,
+        .contact-header .type-badge.senza_telefono {
+            background: var(--text-muted);
+            color: white;
+        }
+
+        .contact-name {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .contact-details {
+            display: grid;
+            gap: 5px;
+            font-size: 14px;
+            color: var(--text-muted);
+        }
+
+        .contact-details i {
+            width: 20px;
+            color: var(--text);
+        }
+
+        .contact-details .phone {
+            color: var(--primary);
+            font-weight: bold;
+        }
+
+        .contact-details .phone.phone-invalid {
+            text-decoration: line-through;
+            opacity: 0.5;
+            color: var(--danger);
+        }
+
+        .btn-add-to-filone {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            background: var(--info);
+            color: white;
+            border: none;
+            padding: 4px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8em;
+            transition: all 0.2s;
+            margin-left: 8px;
+        }
+
+        .btn-add-to-filone:hover {
+            background: #2980b9;
+            transform: scale(1.05);
+        }
+
+        .contact-details .date {
+            color: var(--info);
+        }
+
+        .contact-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+
+        .contact-actions .btn {
+            flex: 1;
+            min-width: 100px;
+            justify-content: center;
+        }
+
+        /* Stili per numeri alternativi trovati */
+        .numeri-alternativi-box {
+            width: 100%;
+            background: rgba(52, 152, 219, 0.1);
+            border: 1px solid rgba(52, 152, 219, 0.3);
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+
+        .numeri-alternativi-header {
+            font-size: 12px;
+            color: var(--info);
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+
+        .numeri-alternativi-header i {
+            color: #f1c40f;
+            margin-right: 5px;
+        }
+
+        .numero-alternativo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 6px 8px;
+            background: var(--bg-dark);
+            border-radius: 6px;
+            margin-bottom: 5px;
+        }
+
+        .numero-alternativo:last-child {
+            margin-bottom: 0;
+        }
+
+        .numero-fonte {
+            font-size: 11px;
+            color: var(--text-muted);
+            min-width: 100px;
+        }
+
+        .numero-valore {
+            font-family: monospace;
+            font-size: 14px;
+            font-weight: bold;
+            flex: 1;
+        }
+
+        .numero-valore.cellulare {
+            color: var(--primary);
+        }
+
+        .numero-valore.fisso {
+            color: var(--warning);
+        }
+
+        .numero-tipo-badge {
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+        }
+
+        .numero-tipo-badge.cellulare {
+            background: var(--primary);
+            color: white;
+        }
+
+        .numero-tipo-badge.fisso {
+            background: var(--warning);
+            color: white;
+        }
+
+        .btn-mini {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+
+        .btn-mini.btn-whatsapp {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-mini.btn-whatsapp:hover {
+            background: #128C7E;
+            transform: scale(1.1);
+        }
+
+        .btn-mini.btn-call {
+            background: var(--warning);
+            color: white;
+        }
+
+        .btn-mini.btn-call:hover {
+            background: #d68910;
+            transform: scale(1.1);
+        }
+
+        .btn-mini.btn-mail {
+            background: var(--info);
+            color: white;
+        }
+
+        .btn-mini.btn-mail:hover {
+            background: #2980b9;
+            transform: scale(1.1);
+        }
+
+        .checkbox-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid var(--border);
+        }
+
+        .checkbox-wrapper input {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--success);
+        }
+
+        .checkbox-wrapper label {
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .note-input {
+            width: 100%;
+            margin-top: 10px;
+            padding: 8px 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg-dark);
+            color: var(--text);
+            font-size: 13px;
+        }
+
+        .note-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        /* Alerts Section */
+        .alerts-section {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-left: 4px solid var(--danger);
+            margin-top: 32px; /* aggiunto margine sopra */
+        }
+
+        .alerts-section h3 {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--danger);
+            margin-bottom: 15px;
+        }
+
+        .alert-item {
+            background: var(--bg-dark);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .alert-item .message {
+            flex: 1;
+        }
+
+        .alert-item .values {
+            display: flex;
+            gap: 20px;
+            font-size: 14px;
+        }
+
+        .alert-item .value-box {
+            padding: 5px 12px;
+            border-radius: 5px;
+        }
+
+        .alert-item .distinta-value {
+            background: rgba(39, 174, 96, 0.2);
+            border: 1px solid var(--success);
+        }
+
+        .alert-item .filone-value {
+            background: rgba(231, 76, 60, 0.2);
+            border: 1px solid var(--danger);
+        }
+
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.35);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: var(--bg-card);
+            border-radius: 12px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            animation: modalSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes modalSlideUp {
+            from { opacity: 0; transform: translateY(24px) scale(0.97); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        .modal.modal-wide {
+            max-width: 850px;
+        }
+
+        .modal-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h3 {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text);
+            font-size: 24px;
+            cursor: pointer;
+        }
+
+        .modal-body {
+            padding: 20px;
+        }
+
+        .message-preview {
+            background: var(--bg-dark);
+            border-radius: 8px;
+            padding: 20px;
+            white-space: pre-wrap;
+            font-family: inherit;
+            line-height: 1.6;
+            border-left: 4px solid var(--primary);
+        }
+
+        .message-preview.email-preview {
+            border-left-color: var(--info);
+        }
+
+        .modal-footer {
+            padding: 20px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        /* Template Selector Tabs */
+        .template-tabs {
+            display: flex;
+            gap: 0;
+            overflow-x: auto;
+            border-bottom: 2px solid var(--border);
+            margin-bottom: 15px;
+            scrollbar-width: thin;
+        }
+
+        .template-tab {
+            padding: 10px 16px;
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            white-space: nowrap;
+            border-bottom: 3px solid transparent;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .template-tab:hover {
+            color: var(--text);
+            background: rgba(255,255,255,0.05);
+        }
+
+        .template-tab.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+        }
+
+        .template-tab.active.email-tab {
+            color: var(--info);
+            border-bottom-color: var(--info);
+        }
+
+        .template-tab i {
+            font-size: 12px;
+        }
+
+        /* Template editable fields */
+        .template-fields {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 15px;
+            padding: 12px;
+            background: var(--bg-dark);
+            border-radius: 8px;
+        }
+
+        .template-field {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .template-field.full-width {
+            grid-column: 1 / -1;
+        }
+
+        .template-field label {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .template-field input,
+        .template-field textarea {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            padding: 8px 10px;
+            font-size: 13px;
+            font-family: inherit;
+        }
+
+        .template-field textarea {
+            min-height: 60px;
+            resize: vertical;
+        }
+
+        .template-field input:focus,
+        .template-field textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .template-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: rgba(52, 152, 219, 0.1);
+            border: 1px solid rgba(52, 152, 219, 0.3);
+            border-radius: 8px;
+            font-size: 12px;
+            color: var(--info);
+            margin-bottom: 12px;
+        }
+
+        .template-info i {
+            font-size: 14px;
+        }
+
+        .email-subject-box {
+            background: var(--bg-dark);
+            border-radius: 8px;
+            padding: 10px 15px;
+            margin-bottom: 10px;
+            font-size: 13px;
+        }
+
+        .email-subject-box strong {
+            color: var(--info);
+        }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            border-radius: 8px;
+            background: var(--success);
+            color: white;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s;
+            z-index: 2000;
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        /* Loading */
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 999;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .loading-overlay.active {
+            display: flex;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .contacts-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .filters {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .stats {
+                margin-left: 0;
+                justify-content: center;
+            }
+        }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-muted);
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .empty-state i {
+            font-size: 4em;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        /* Back button */
+        .back-btn {
+            background: var(--bg-dark);
+            color: var(--text);
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 20px;
+            transition: all 0.2s;
+        }
+
+        .back-btn:hover {
+            background: var(--bg-card);
+        }
+    </style>
+</head>
+<body>
+    <script>
+        // Applica tema salvato immediatamente per evitare flash
+        const savedTheme = localStorage.getItem('algeco_theme') || 'dark';
+        document.body.setAttribute('data-theme', savedTheme);
+    </script>
+    <div class="container">
+        <a href="/" class="back-btn">
+            <i class="fas fa-arrow-left"></i>
+            Torna alla Mappa
+        </a>
+
+        <header>
+            <h1>
+                <i class="fas fa-file-alt"></i>
+                Gestione Distinte
+            </h1>
+            <span class="provincia-badge" id="provinciaBadge">TORINO</span>
+        </header>
+
+        <!-- Upload Section -->
+        <div class="upload-section" id="uploadSection">
+            <label for="pdfInput">
+                <i class="fas fa-file-pdf"></i>
+                <span><strong>Carica file DistintaBase</strong></span>
+                <p>Trascina qui i file PDF o clicca per selezionare</p>
+            </label>
+            <input type="file" id="pdfInput" accept=".pdf" multiple>
+            <div class="file-list" id="fileList"></div>
+            <div style="margin-top: 15px;">
+                <button class="btn btn-primary" id="processBtn" disabled>
+                    <i class="fas fa-cogs" style="color: white;"></i>
+                    Elabora Distinte
+                </button>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="filters" id="filtersSection" style="display: none;">
+            <label>
+                <input type="checkbox" id="filterCellulare" checked>
+                <i class="fas fa-mobile-alt" style="color: var(--primary)"></i>
+                Cellulare
+            </label>
+            <label>
+                <input type="checkbox" id="filterFisso" checked>
+                <i class="fas fa-phone" style="color: var(--warning)"></i>
+                Fisso
+            </label>
+            <label>
+                <input type="checkbox" id="filterNoPhone">
+                <i class="fas fa-phone-slash" style="color: var(--text-muted)"></i>
+                Senza telefono
+            </label>
+
+            <span style="width:1px;height:28px;background:var(--border);margin:0 5px;"></span>
+
+            <label>
+                <input type="checkbox" id="filterCompleted" checked>
+                <i class="fas fa-check-circle" style="color: var(--success)"></i>
+                Completati
+            </label>
+            <label>
+                <input type="checkbox" id="filterNotCompleted" checked>
+                <i class="fas fa-circle" style="color: var(--text-muted)"></i>
+                Da fare
+            </label>
+
+            <div class="stats">
+                <div class="stat-item cellulare">
+                    <i class="fas fa-mobile-alt"></i>
+                    <span id="countCellulare">0</span>
+                </div>
+                <div class="stat-item fisso">
+                    <i class="fas fa-phone"></i>
+                    <span id="countFisso">0</span>
+                </div>
+                <div class="stat-item no-phone">
+                    <i class="fas fa-phone-slash"></i>
+                    <span id="countNoPhone">0</span>
+                </div>
+                <div class="stat-item" style="color: var(--success);">
+                    <i class="fas fa-check-circle"></i>
+                    <span id="countCompleted">0</span>
+                </div>
+            </div>
+
+
+        </div>
+
+        <!-- Contacts Grid -->
+        <div class="contacts-grid" id="contactsGrid">
+            <div class="empty-state">
+                <i class="fas fa-file-upload"></i>
+                <h3>Carica una distinta per iniziare</h3>
+                <p>Seleziona uno o più file PDF DistintaBase per visualizzare i contatti</p>
+            </div>
+        </div>
+
+        <!-- Alerts Section (differenze distinta/filone) - alla fine -->
+        <div class="alerts-section" id="alertsSection" style="display: none;">
+            <h3>
+                <i class="fas fa-exclamation-triangle"></i>
+                Differenze rilevate con il Filone
+            </h3>
+            <div id="alertsList"></div>
+        </div>
+    </div>
+
+    <!-- Message Modal (Template System) -->
+    <div class="modal-overlay" id="messageModal">
+        <div class="modal modal-wide">
+            <div class="modal-header">
+                <h3 id="modalTitle">
+                    <i class="fab fa-whatsapp" style="color: var(--primary)"></i>
+                    <span>Messaggi e Template</span>
+                </h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="margin-bottom: 12px; color: var(--text-muted);" id="modalContactInfo"></p>
+
+                <!-- Template Tabs -->
+                <div class="template-tabs" id="templateTabs"></div>
+
+                <!-- Editable Fields -->
+                <div id="templateFields"></div>
+
+                <!-- Template Info -->
+                <div class="template-info" id="templateInfo" style="display:none;">
+                    <i class="fas fa-info-circle"></i>
+                    <span id="templateInfoText"></span>
+                </div>
+
+                <!-- Email Subject (only for email) -->
+                <div class="email-subject-box" id="emailSubjectBox" style="display:none;">
+                    <strong>Oggetto:</strong> <span id="emailSubjectPreview"></span>
+                </div>
+
+                <!-- Message Preview -->
+                <div class="message-preview" id="messagePreview"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="closeModal()">Chiudi</button>
+                <button class="btn btn-primary" id="copyMessageBtn">
+                    <i class="fas fa-copy"></i>
+                    Copia
+                </button>
+                <button class="btn btn-info" id="copySubjectBtn" style="display:none;">
+                    <i class="fas fa-copy"></i>
+                    Copia Oggetto
+                </button>
+                <a class="btn btn-primary" id="openWhatsappBtn" target="_blank" style="display:none;">
+                    <i class="fab fa-whatsapp"></i>
+                    Apri WhatsApp
+                </a>
+                <a class="btn btn-info" id="openMailBtn" target="_blank" style="display:none;">
+                    <i class="fas fa-envelope"></i>
+                    Apri Mail
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Phone Search Modal -->
+    <div class="modal-overlay" id="phoneSearchModal">
+        <div class="modal" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3>
+                    <i class="fas fa-phone" style="color: var(--info)"></i>
+                    Aggiungi Numero di Telefono
+                </h3>
+                <button class="modal-close" onclick="closePhoneModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="margin-bottom: 15px;">
+                    <strong id="searchContactName">Nome cliente</strong><br>
+                    <span id="searchContactAddress" style="color: var(--text-muted); font-size: 0.9em;"></span>
+                </p>
+                
+                <p style="margin-bottom: 15px; color: var(--text-muted);">
+                    Cerca il numero su Pagine Bianche o Google, poi inseriscilo qui sotto:
+                </p>
+                
+                <div style="display: flex; gap: 10px; margin-bottom: 20px; justify-content: center;">
+                    <a id="linkPagineBianche" href="#" target="_blank" class="btn btn-info">
+                        <i class="fas fa-external-link-alt"></i>
+                        Pagine Bianche
+                    </a>
+                    <a id="linkGoogle" href="#" target="_blank" class="btn btn-search-google">
+                        <i class="fab fa-google"></i>
+                        Cerca su Google
+                    </a>
+                </div>
+                
+                <div style="padding: 15px; background: var(--bg-dark); border-radius: 10px;">
+                    <p style="margin-bottom: 10px; font-weight: bold;">
+                        <i class="fas fa-keyboard"></i> Inserisci il numero trovato:
+                    </p>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="manualPhoneInput" placeholder="Numero telefono..." autocomplete="off"
+                            style="flex: 1; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); font-size: 1.1em;">
+                        <button class="btn btn-primary" onclick="salvaNumeroManuale()">
+                            <i class="fas fa-save"></i>
+                            Salva
+                        </button>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 15px; text-align: center;">
+                    <button class="btn btn-warning" onclick="salvaNonTrovato()" style="opacity: 0.8;">
+                        <i class="fas fa-times"></i>
+                        Segna come "non trovato"
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="closePhoneModal()">Chiudi</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PEC Search Modal -->
+    <div class="modal-overlay" id="pecSearchModal">
+        <div class="modal" style="max-width: 550px;">
+            <div class="modal-header">
+                <h3>
+                    <i class="fas fa-envelope" style="color: #e74c3c"></i>
+                    Cerca PEC / Email
+                </h3>
+                <button class="modal-close" onclick="closePecModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="margin-bottom: 15px;">
+                    <strong id="pecContactName">Nome azienda</strong>
+                    <span id="pecContactType" class="tipo-badge azienda" style="margin-left:8px"></span>
+                    <br>
+                    <span id="pecContactAddress" style="color: var(--text-muted); font-size: 0.9em;"></span>
+                </p>
+
+                <p style="margin-bottom: 15px; color: var(--text-muted); font-size: 0.9em;">
+                    Clicca sui link per cercare la PEC di questa azienda (verrà copiata automaticamente negli appunti):
+                </p>
+
+                <div style="display: flex; gap: 8px; margin-bottom: 10px; justify-content: center; flex-wrap: wrap;">
+                    <a id="linkGooglePec" href="#" target="_blank" class="btn btn-search-google" onclick="copiaENomeEApri(event)">
+                        <i class="fab fa-google"></i>
+                        Google PEC
+                    </a>
+                    <a id="linkUfficioCamerale" href="https://www.ufficiocamerale.it" target="_blank" class="btn btn-ufficio-camerale" onclick="copiaENomeEApri(event)">
+                        <i class="fas fa-landmark"></i>
+                        Ufficio Camerale
+                    </a>
+                    <a id="linkIniPec" href="https://www.inipec.gov.it/cerca-pec" target="_blank" class="btn btn-inipec" onclick="copiaENomeEApri(event)">
+                        <i class="fas fa-certificate"></i>
+                        INI-PEC
+                    </a>
+                    <a id="linkRegistroImprese" href="https://www.registroimprese.it/web/guest/home" target="_blank" class="btn btn-registro-imprese" onclick="copiaENomeEApri(event)">
+                        <i class="fas fa-building"></i>
+                        Registro Imprese
+                    </a>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="closePecModal()">Chiudi</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner"></div>
+        <p>Elaborazione in corso...</p>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast">
+        <i class="fas fa-check-circle"></i>
+        <span id="toastMessage">Messaggio copiato!</span>
+    </div>
+
+    <script>
+        // Stato applicazione
+        let contatti = [];
+        let differenze = [];
+        let selectedFiles = [];
+        let provincia = 'TORINO';
+        let completedStates = {}; // POD -> boolean
+        let noteStates = {}; // POD -> string
+        let erratiStates = {}; // POD -> boolean (numero errato)
+
+        // Applica tema automaticamente da localStorage (impostato dalla mappa)
+        (function() {
+            const t = localStorage.getItem('algeco_theme') || 'dark';
+            document.body.setAttribute('data-theme', t);
+        })();
+
+        // Carica configurazione
+        async function loadConfig() {
+            try {
+                const resp = await fetch('/api/config');
+                const config = await resp.json();
+                provincia = config.provincia;
+                document.getElementById('provinciaBadge').textContent = provincia;
+            } catch (e) {
+                console.error('Errore caricamento config:', e);
+            }
+            // Carica template messaggi dal JSON centralizzato (dopo aver impostato provincia)
+            await caricaTemplates();
+        }
+
+        // Gestione upload file
+        const uploadSection = document.getElementById('uploadSection');
+        const pdfInput = document.getElementById('pdfInput');
+        const fileList = document.getElementById('fileList');
+        const processBtn = document.getElementById('processBtn');
+
+        uploadSection.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadSection.classList.add('drag-over');
+        });
+
+        uploadSection.addEventListener('dragleave', () => {
+            uploadSection.classList.remove('drag-over');
+        });
+
+        uploadSection.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadSection.classList.remove('drag-over');
+            handleFiles(e.dataTransfer.files);
+        });
+
+        pdfInput.addEventListener('change', (e) => {
+            handleFiles(e.target.files);
+        });
+
+        function handleFiles(files) {
+            for (const file of files) {
+                if (file.type === 'application/pdf' && file.name.toLowerCase().startsWith('distintabase')) {
+                    if (!selectedFiles.find(f => f.name === file.name)) {
+                        selectedFiles.push(file);
+                    }
+                } else if (file.type === 'application/pdf') {
+                    showToast('Il file deve iniziare con "DistintaBase"', 'warning');
+                }
+            }
+            renderFileList();
+        }
+
+        function renderFileList() {
+            fileList.innerHTML = selectedFiles.map((file, idx) => `
+                <div class="file-chip">
+                    <i class="fas fa-file-pdf" style="color: var(--danger)"></i>
+                    <span>${file.name}</span>
+                    <i class="fas fa-times remove" onclick="removeFile(${idx})"></i>
+                </div>
+            `).join('');
+            
+            processBtn.disabled = selectedFiles.length === 0;
+        }
+
+        function removeFile(idx) {
+            selectedFiles.splice(idx, 1);
+            renderFileList();
+        }
+
+        // Elaborazione distinte
+        processBtn.addEventListener('click', async () => {
+            if (selectedFiles.length === 0) return;
+            
+            showLoading(true);
+            
+            try {
+                const formData = new FormData();
+                selectedFiles.forEach(file => {
+                    formData.append('files', file);
+                });
+
+                const resp = await fetch('/api/distinte/parse-distinta', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await resp.json();
+                
+                if (data.error) {
+                    showToast(data.error, 'error');
+                    return;
+                }
+
+                contatti = data.contatti || [];
+                differenze = data.differenze || [];
+                
+                // Carica stati salvati e inizializza note da filone
+                loadSavedStates();
+                initNotesFromFilone();
+                
+                // Mostra risultati
+                renderAlerts();
+                renderContacts();
+                
+                document.getElementById('filtersSection').style.display = 'flex';
+                document.getElementById('alertsSection').style.display = differenze.length > 0 ? 'block' : 'none';
+                
+                showToast(`Elaborati ${contatti.length} contatti`);
+                
+            } catch (e) {
+                console.error('Errore elaborazione:', e);
+                showToast('Errore durante l\'elaborazione', 'error');
+            } finally {
+                showLoading(false);
+            }
+        });
+
+        // Rendering alerts (differenze)
+        function renderAlerts() {
+            const container = document.getElementById('alertsList');
+            
+            if (differenze.length === 0) {
+                container.innerHTML = '<p style="color: var(--text-muted)">Nessuna differenza rilevata</p>';
+                return;
+            }
+            
+            container.innerHTML = differenze.map((diff, idx) => `
+                <div class="alert-item">
+                    <div class="message">
+                        <strong>Lavoro ${diff.lavoro || '?'} - POD: ${diff.pod}</strong>
+                        <p style="color: var(--text-muted); margin-top: 5px;">${diff.messaggio}</p>
+                    </div>
+                    <div class="values">
+                        <div class="value-box distinta-value">
+                            <small>Distinta:</small><br>
+                            <strong>${diff.valore_distinta || '-'}</strong>
+                        </div>
+                        <div class="value-box filone-value">
+                            <small>Filone:</small><br>
+                            <strong>${diff.valore_filone || '-'}</strong>
+                        </div>
+                    </div>
+                    ${diff.suggerisci_sovrascrittura ? `
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            <button class="btn btn-warning" onclick="sovrascrivi(${idx})">
+                                <i class="fas fa-sync"></i>
+                                Usa valore distinta
+                            </button>
+                            ${diff.tipo === 'telefono_diverso' ? `
+                                <button class="btn" style="background: var(--success-color, #28a745); color: white;" onclick="ignoraDifferenza(${idx})">
+                                    <i class="fas fa-check"></i>
+                                    Mantieni filone
+                                </button>
+                            ` : ''}
+                        </div>
+                    ` : ''}
+                </div>
+            `).join('');
+        }
+
+        // Sovrascrittura valore sul filone
+        async function sovrascrivi(idx) {
+            const diff = differenze[idx];
+            
+            try {
+                const resp = await fetch('/api/distinte/sovrascrivi', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        pod: diff.pod,
+                        campo: diff.campo,
+                        valore: diff.valore_distinta
+                    })
+                });
+                
+                const data = await resp.json();
+                
+                if (data.success) {
+                    showToast('Valore aggiornato sul filone');
+                    // Rimuovi alert
+                    differenze.splice(idx, 1);
+                    renderAlerts();
+                    if (differenze.length === 0) {
+                        document.getElementById('alertsSection').style.display = 'none';
+                    }
+                } else {
+                    showToast(data.error || 'Errore aggiornamento', 'error');
+                }
+            } catch (e) {
+                showToast('Errore comunicazione server', 'error');
+            }
+        }
+
+        // Ignora differenza (mantieni valore filone)
+        function ignoraDifferenza(idx) {
+            differenze.splice(idx, 1);
+            renderAlerts();
+            if (differenze.length === 0) {
+                document.getElementById('alertsSection').style.display = 'none';
+            }
+            showToast('Differenza ignorata, mantenuto valore filone');
+        }
+
+        // Rendering contatti
+        function renderContacts() {
+            const container = document.getElementById('contactsGrid');
+            
+            // Applica filtri
+            const showCellulare = document.getElementById('filterCellulare').checked;
+            const showFisso = document.getElementById('filterFisso').checked;
+            const showNoPhone = document.getElementById('filterNoPhone').checked;
+            const showCompleted = document.getElementById('filterCompleted').checked;
+            const showNotCompleted = document.getElementById('filterNotCompleted').checked;
+            
+            const filtered = contatti.filter(c => {
+                if (c.tipo === 'cellulare' && !showCellulare) return false;
+                if (c.tipo === 'fisso' && !showFisso) return false;
+                if (c.tipo === 'senza_telefono' && !showNoPhone) return false;
+                
+                const isCompleted = completedStates[c.pod] || false;
+                if (isCompleted && !showCompleted) return false;
+                if (!isCompleted && !showNotCompleted) return false;
+                
+                return true;
+            });
+            
+            // Aggiorna conteggi
+            const totalCompleted = contatti.filter(c => completedStates[c.pod]).length;
+            document.getElementById('countCellulare').textContent = contatti.filter(c => c.tipo === 'cellulare').length;
+            document.getElementById('countFisso').textContent = contatti.filter(c => c.tipo === 'fisso').length;
+            document.getElementById('countNoPhone').textContent = contatti.filter(c => c.tipo === 'senza_telefono').length;
+            document.getElementById('countCompleted').textContent = totalCompleted + '/' + contatti.length;
+            
+            if (filtered.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-filter"></i>
+                        <h3>Nessun contatto trovato</h3>
+                        <p>Prova a modificare i filtri</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = filtered.map(c => {
+                const isCompleted = completedStates[c.pod] || false;
+                const note = noteStates[c.pod] || '';
+                
+                return `
+                <div class="contact-card ${c.tipo} ${isCompleted ? 'completed' : ''}" data-pod="${c.pod}">
+                    <div class="contact-header">
+                        <span class="lavoro-num">Lavoro ${c.lavoro}</span>
+                        <span class="type-badge ${c.tipo}">
+                            ${c.tipo === 'cellulare' ? '<i class="fas fa-mobile-alt"></i> Cellulare' : 
+                              c.tipo === 'fisso' ? '<i class="fas fa-phone"></i> Fisso' : 
+                              '<i class="fas fa-phone-slash"></i> No Tel'}
+                        </span>
+                    </div>
+                    
+                    <div class="contact-name">${c.nome || 'Nome non disponibile'}${c.is_azienda ? `<span class="tipo-badge ${c.tipo_contatto}">${c.tipo_contatto === 'condominio' ? '🏢 Condominio' : c.tipo_contatto === 'ente_pubblico' ? '🏛️ Ente' : '🏭 Azienda'}</span>` : ''}</div>
+                    
+                    <div class="contact-details">
+                        ${c.telefono ? `<div class="phone ${erratiStates[c.pod] ? 'phone-invalid' : ''}" id="phoneDisplay_${c.pod}"><i class="fas fa-phone"></i> ${c.telefono}${(c.telefono && !(c.telefono_filone || '').trim()) ? `<button class="btn-add-to-filone" onclick="event.stopPropagation(); aggiungiTelFilone('${c.pod}', '${escapeHtml(c.telefono)}')" title="Aggiungi questo numero al filone"><i class="fas fa-plus-circle"></i> Aggiungi al filone</button>` : ''}</div>` : ''}
+                        <div><i class="fas fa-map-marker-alt"></i> ${c.indirizzo || ''} ${c.civico || ''}</div>
+                        <div><i class="fas fa-city"></i> ${c.cap || ''} ${c.comune || ''}</div>
+                        <div class="date"><i class="fas fa-calendar"></i> ${c.data_intervento || ''}</div>
+                        <div><i class="fas fa-barcode"></i> POD: ${c.pod || ''}</div>
+                        ${c.tipologia_contatore ? `<div><i class="fas fa-tachometer-alt"></i> Tipo: ${c.tipologia_contatore}</div>` : ''}
+                        ${c.posizione_contatore ? `<div><i class="fas fa-map-pin"></i> Posizione: ${c.posizione_contatore}</div>` : ''}
+                    </div>
+                    
+                    <div class="contact-actions">
+                        ${c.tipo === 'cellulare' ? `
+                            <button class="btn btn-primary" onclick="showMessage('${c.pod}')">
+                                <i class="fab fa-whatsapp"></i>
+                                Messaggi / Template
+                            </button>
+                        ` : c.tipo === 'fisso' ? `
+                            <a class="btn btn-warning" href="tel:${c.telefono}">
+                                <i class="fas fa-phone"></i>
+                                Chiama
+                            </a>
+                            <button class="btn btn-primary" onclick="showMessage('${c.pod}')" style="background: var(--info);">
+                                <i class="fas fa-envelope"></i>
+                                Template
+                            </button>
+                        ` : c.tipo === 'senza_telefono' ? `
+                            ${c.numeri_alternativi && c.numeri_alternativi.length > 0 ? `
+                            <div class="numeri-alternativi-box">
+                                <div class="numeri-alternativi-header">
+                                    <i class="fas fa-lightbulb"></i> Numeri trovati in altri campi:
+                                </div>
+                                ${c.numeri_alternativi.map(n => `
+                                    <div class="numero-alternativo">
+                                        <span class="numero-fonte">${
+                                            n.fonte === 'filone' ? 'Tel. Filone' : 
+                                            n.fonte === 'nominativo_filone' ? 'Nel nome (Filone)' : 
+                                            n.fonte === 'nominativo_distinta' ? 'Nel nome (Distinta)' :
+                                            n.fonte === 'indirizzo_filone' ? 'Indirizzo (Filone)' :
+                                            n.fonte === 'comune_filone' ? 'Comune (Filone)' :
+                                            n.fonte === 'note_filone' ? 'Note (Filone)' :
+                                            n.fonte
+                                        }</span>
+                                        <span class="numero-valore ${n.tipo}">${n.numero}</span>
+                                        ${n.tipo === 'cellulare' ? `<span class="numero-tipo-badge ${n.tipo}"><i class="fas fa-mobile-alt"></i></span>` : ''}
+                                        ${n.tipo === 'cellulare' ? `
+                                            <button class="btn-mini btn-whatsapp" onclick="event.stopPropagation(); showMessage('${c.pod}', '${n.numero}')" title="WhatsApp con template">
+                                                <i class="fab fa-whatsapp"></i>
+                                            </button>
+                                        ` : `
+                                            <a class="btn-mini btn-call" href="tel:${n.numero}" title="Chiama">
+                                                <i class="fas fa-phone"></i>
+                                            </a>
+                                            <button class="btn-mini btn-mail" onclick="event.stopPropagation(); showMessage('${c.pod}', '${n.numero}', 'fisso')" title="Email con template">
+                                                <i class="fas fa-envelope"></i>
+                                            </button>
+                                        `}
+                                    </div>
+                                `).join('')}
+                            </div>
+                            ` : ''}
+                            <button class="btn btn-search-phone" onclick="cercaTelefono('${c.pod}')">
+                                <i class="fas fa-search"></i>
+                                Aggiungi numero
+                            </button>
+                            ${c.is_azienda ? `
+                            <button class="btn btn-search-pec" onclick="cercaPec('${c.pod}')" style="margin-top:4px;">
+                                <i class="fas fa-certificate"></i>
+                                Cerca PEC
+                            </button>
+                            ` : ''}
+                        ` : ''}
+                    </div>
+                    
+                    <div class="phone-edit-row">
+                        <i class="fas fa-phone phone-icon"></i>
+                        <input type="text" class="phone-edit-input ${c.telefono_filone ? 'has-phone' : ''}" id="phoneEdit_${c.pod}" 
+                            value="${escapeHtml(c.telefono_filone || '')}" placeholder="Nessun telefono sul filone"
+                            onkeydown="if(event.key==='Enter'){event.preventDefault(); salvaTelefonoInline('${c.pod}', this.value);}"
+                            onblur="salvaTelefonoInline('${c.pod}', this.value)">
+                    </div>
+
+                    ${c.is_azienda ? `
+                    <div class="pec-info-row no-pec">
+                        <i class="fas fa-certificate pec-icon"></i>
+                        <span class="pec-value" style="color:var(--text-muted);font-style:italic;">Cerca PEC</span>
+                        <button class="btn-mini btn-pec" onclick="event.stopPropagation(); cercaPec('${c.pod}')" title="Cerca PEC">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </div>
+                    ` : ''}
+
+                    <div class="checkbox-wrapper">
+                        <input type="checkbox" id="completed_${c.pod}" 
+                            ${isCompleted ? 'checked' : ''} 
+                            onchange="toggleCompleted('${c.pod}')">
+                        <label for="completed_${c.pod}">Completato</label>
+                    </div>
+                    
+                    <div class="note-actions">
+                        <input type="text" class="note-display ${note ? 'has-note' : ''}" id="noteDisplay_${c.pod}" 
+                            value="${escapeHtml(note)}" placeholder="Nessuna nota"
+                            onkeydown="if(event.key==='Enter'){event.preventDefault(); salvaNota('${c.pod}', this.value);}" 
+                            onblur="salvaNota('${c.pod}', this.value)">
+                        <div class="btn-add-note" onclick="toggleNoteDropdown('${c.pod}')">
+                            <i class="fas fa-plus"></i>
+                            Aggiungi nota
+                            <div class="note-dropdown" id="noteDropdown_${c.pod}">
+                                ${c.tipo === 'cellulare' ? `
+                                <div class="note-dropdown-item" onclick="aggiungiNota('${c.pod}', 'mandato wa')">
+                                    <i class="fab fa-whatsapp" style="color: var(--primary)"></i>
+                                    Mandato WA
+                                </div>
+                                ` : ''}
+                                <div class="note-dropdown-item" onclick="aggiungiNota('${c.pod}', 'nr')">
+                                    <i class="fas fa-phone-slash" style="color: var(--danger)"></i>
+                                    Non risponde
+                                </div>
+                                <div class="note-dropdown-item" onclick="aggiungiNota('${c.pod}', 'chiamare')">
+                                    <i class="fas fa-phone" style="color: var(--info)"></i>
+                                    Chiamare
+                                </div>
+                                <div class="note-dropdown-item" onclick="aggiungiNota('${c.pod}', 'numero errato')">
+                                    <i class="fas fa-times-circle" style="color: var(--danger, #e74c3c)"></i>
+                                    ❌ Numero errato
+                                </div>
+                                <div class="note-dropdown-item" onclick="aggiungiNota('${c.pod}', 'mandata mail')">
+                                    <i class="fas fa-envelope" style="color: var(--info)"></i>
+                                    Mandata mail
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    ${provincia === 'PAVIA' ? `
+                    <div class="note-actions" style="margin-top: 4px;">
+                        <input type="text" class="note-display ${c.ora_pian_filone ? 'has-note' : ''}" id="oraPianDisplay_${c.pod}" 
+                            value="${escapeHtml(c.ora_pian_filone || '')}" placeholder="Ora pian (vuoto)"
+                            onkeydown="if(event.key==='Enter'){event.preventDefault(); salvaOraPian('${c.pod}', this.value);}" 
+                            onblur="salvaOraPian('${c.pod}', this.value)">
+                        <span style="font-size: 11px; color: var(--text-muted); padding: 2px 6px;">
+                            <i class="fas fa-clock"></i> Ora pian
+                        </span>
+                    </div>
+                    ` : ''}
+                    
+                    <div class="appuntamento-section">
+                        <div class="appuntamento-title">
+                            <i class="fas fa-calendar-alt"></i>
+                            Modifica Data / Fissa Appuntamento
+                        </div>
+                        <div class="appuntamento-date-row">
+                            <span class="appuntamento-date-label">Data:</span>
+                            <input type="date" class="appuntamento-date-input" id="appDate_${c.pod}" 
+                                value="${formatDateForInput(c.data_pian_filone || c.data_intervento)}">
+                            <button class="btn-salva-data" onclick="salvaData('${c.pod}')">
+                                <i class="fas fa-save"></i>
+                                Salva data
+                            </button>
+                        </div>
+                        <div class="appuntamento-row">
+                            <span class="appuntamento-date-label">Orario:</span>
+                            <div class="appuntamento-time-group">
+                                <input type="time" class="appuntamento-time-input" id="appStart_${c.pod}" value="09:00">
+                                <span class="appuntamento-time-sep">-</span>
+                                <input type="time" class="appuntamento-time-input" id="appEnd_${c.pod}" placeholder="--:--">
+                            </div>
+                            <button class="btn-appuntamento" onclick="fissaAppuntamento('${c.pod}')">
+                                <i class="fas fa-check"></i>
+                                Fissa
+                            </button>
+                            <button class="btn-appuntamento" id="btnRimuoviApp_${c.pod}" onclick="rimuoviAppuntamento('${c.pod}')" style="background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%); ${(c.note_filone || '').toUpperCase().includes('APP') || (c.ora_pian_filone || '') ? '' : 'display: none;'}">
+                                <i class="fas fa-trash"></i>
+                                Rimuovi
+                            </button>
+                        </div>
+                        <div class="appuntamento-status" id="appStatus_${c.pod}"></div>
+                    </div>
+                </div>
+                `;
+            }).join('');
+        }
+
+        // ========================================
+        // TEMPLATE SYSTEM
+        // ========================================
+
+        let currentTemplatePod = null;
+        let currentTemplateId = 'wa_conferma';
+        let currentTemplateContact = null;
+
+        // --- Template e campi caricati dal JSON centralizzato ---
+        let TEMPLATES = {};
+        let FIELD_DEFS = {};
+        let templateSettings = {};
+
+        /**
+         * Converte una data DD/MM/YYYY in formato esteso es. "VENERDÌ 27 FEBBRAIO"
+         * (maiuscolo, con giorno della settimana e mese in lettere).
+         */
+        function formatDataEstesa(dateStr) {
+            if (!dateStr) return '';
+            const giorni = ['DOMENICA','LUNEDÌ','MARTEDÌ','MERCOLEDÌ','GIOVEDÌ','VENERDÌ','SABATO'];
+            const mesi = ['GENNAIO','FEBBRAIO','MARZO','APRILE','MAGGIO','GIUGNO',
+                          'LUGLIO','AGOSTO','SETTEMBRE','OTTOBRE','NOVEMBRE','DICEMBRE'];
+            // Prova DD/MM/YYYY
+            const match = dateStr.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+            if (match) {
+                const d = new Date(parseInt(match[3]), parseInt(match[2]) - 1, parseInt(match[1]));
+                if (!isNaN(d)) return `${giorni[d.getDay()]} ${d.getDate()} ${mesi[d.getMonth()]}`;
+            }
+            // Prova YYYY-MM-DD
+            const match2 = dateStr.match(/(\d{4})-(\d{2})-(\d{2})/);
+            if (match2) {
+                const d = new Date(parseInt(match2[1]), parseInt(match2[2]) - 1, parseInt(match2[3]));
+                if (!isNaN(d)) return `${giorni[d.getDay()]} ${d.getDate()} ${mesi[d.getMonth()]}`;
+            }
+            return dateStr;
+        }
+
+        /**
+         * Risolve i placeholder {campo} in una stringa template.
+         * Gestisce anche {email_tecnico} e condizionali definiti nel JSON.
+         */
+        function resolveTemplate(bodyStr, fields, conditionals) {
+            let result = bodyStr;
+            // Risolvi condizionali (es. {distacco_text})
+            if (conditionals) {
+                for (const [key, cond] of Object.entries(conditionals)) {
+                    const fieldVal = fields[cond.field] || '';
+                    const replacement = cond.values[fieldVal] || '';
+                    result = result.replace(new RegExp('\\{' + key + '\\}', 'g'), replacement);
+                }
+            }
+            // Risolvi {email_tecnico}
+            const emailTecnico = provincia === 'PAVIA'
+                ? templateSettings.email_pavia
+                : templateSettings.email_torino;
+            result = result.replace(/\{email_tecnico\}/g, emailTecnico || '');
+            // Risolvi tutti i {campo} — formatta date in formato esteso
+            const dateFields = ['data', 'nuova_data'];
+            for (const [k, v] of Object.entries(fields)) {
+                const val = dateFields.includes(k) ? formatDataEstesa(v) : (v || '');
+                result = result.replace(new RegExp('\\{' + k + '\\}', 'g'), val);
+            }
+            return result;
+        }
+
+        /**
+         * Carica i template dal file JSON centralizzato e
+         * ricostruisce TEMPLATES e FIELD_DEFS con le funzioni necessarie.
+         */
+        async function caricaTemplates() {
+            try {
+                const resp = await fetch('/api/distinte/templates');
+                if (!resp.ok) throw new Error('Errore caricamento template');
+                const data = await resp.json();
+                templateSettings = data.settings || {};
+
+                // Ricostruisci FIELD_DEFS con autoFill come funzione
+                FIELD_DEFS = {};
+                for (const [id, def] of Object.entries(data.fields || {})) {
+                    const fd = { label: def.label, placeholder: def.placeholder };
+                    if (def.type) fd.type = def.type;
+                    if (def.options) fd.options = def.options;
+                    // Costruisci autoFill in base al JSON
+                    if (def.autoFillRule) {
+                        const rule = def.autoFillRule;
+                        fd.autoFill = c => {
+                            const val = c[rule.field] || '';
+                            return val.toLowerCase().includes(rule.contains) ? rule.then : rule.else;
+                        };
+                    } else if (def.autoFillFrom === null) {
+                        fd.autoFill = () => '';
+                    } else if (Array.isArray(def.autoFillFrom)) {
+                        const keys = def.autoFillFrom;
+                        fd.autoFill = c => keys.map(k => c[k] || '').join(' ').trim();
+                    } else {
+                        const key = def.autoFillFrom;
+                        fd.autoFill = c => c[key] || '';
+                    }
+                    FIELD_DEFS[id] = fd;
+                }
+
+                // Ricostruisci TEMPLATES con generate/subject come funzioni
+                TEMPLATES = {};
+                for (const [id, tmpl] of Object.entries(data.templates || {})) {
+                    TEMPLATES[id] = {
+                        id: id,
+                        label: tmpl.label,
+                        icon: tmpl.icon,
+                        type: tmpl.type,
+                        fields: tmpl.fields,
+                        info: tmpl.info || null,
+                        generate: (c, f) => resolveTemplate(tmpl.body, f, tmpl.conditionals),
+                    };
+                    if (tmpl.subject) {
+                        const subjTmpl = tmpl.subject;
+                        TEMPLATES[id].subject = (c, f) => resolveTemplate(subjTmpl, f);
+                    }
+                }
+                console.log('[Templates] Caricati dal JSON centralizzato');
+            } catch (err) {
+                console.error('[Templates] Errore caricamento, uso fallback vuoto:', err);
+            }
+        }
+
+        function showMessage(pod, numeroOverride, tipoOverride) {
+            const contatto = contatti.find(c => c.pod === pod);
+            if (!contatto) return;
+            currentTemplatePod = pod;
+            // Se viene passato un numero override (es. da numeri alternativi), usalo
+            currentTemplateContact = {...contatto};
+            if (numeroOverride) {
+                currentTemplateContact.telefono = numeroOverride;
+                currentTemplateContact.telefono_formattato = '39' + numeroOverride.replace(/^\+?39/, '');
+            }
+            
+            const telefono = currentTemplateContact.telefono_formattato || currentTemplateContact.telefono || '';
+            const infoHtml = telefono 
+                ? `Numero: <strong style="color: var(--primary)">${telefono}</strong> &mdash; ${contatto.nome || ''}`
+                : `<strong>${contatto.nome || ''}</strong>`;
+            document.getElementById('modalContactInfo').innerHTML = infoHtml;
+
+            // Build tabs: usa tipoOverride se fornito, altrimenti se c'è un numero override cellulare trattalo come cellulare
+            const contactType = tipoOverride || (numeroOverride ? 'cellulare' : (contatto.tipo || 'cellulare'));
+            buildTemplateTabs(contactType);
+            // Select default template based on contact type
+            const defaultTemplate = contactType === 'fisso' ? 'email_societa' : 'wa_conferma';
+            selectTemplate(defaultTemplate);
+
+            document.getElementById('messageModal').classList.add('active');
+        }
+
+        function buildTemplateTabs(contactType) {
+            const filtered = Object.values(TEMPLATES).filter(t => {
+                // Per i numeri fissi, mostra solo i template email
+                if (contactType === 'fisso' && t.type !== 'email') return false;
+                return true;
+            });
+            const tabsHtml = filtered.map(t => {
+                const isEmail = t.type === 'email';
+                return `<button class="template-tab ${isEmail ? 'email-tab' : ''}" data-template="${t.id}" onclick="selectTemplate('${t.id}')">
+                    <i class="${t.icon}"></i>
+                    ${t.label}
+                </button>`;
+            }).join('');
+            document.getElementById('templateTabs').innerHTML = tabsHtml;
+        }
+
+        function selectTemplate(templateId) {
+            currentTemplateId = templateId;
+            const tmpl = TEMPLATES[templateId];
+            const c = currentTemplateContact;
+            if (!tmpl || !c) return;
+
+            // Update active tab
+            document.querySelectorAll('.template-tab').forEach(tab => {
+                tab.classList.toggle('active', tab.dataset.template === templateId);
+            });
+
+            // Update modal title icon
+            const titleEl = document.getElementById('modalTitle');
+            if (tmpl.type === 'email') {
+                titleEl.innerHTML = `<i class="fas fa-envelope" style="color: var(--info)"></i><span>${tmpl.label}</span>`;
+            } else {
+                titleEl.innerHTML = `<i class="fab fa-whatsapp" style="color: var(--primary)"></i><span>${tmpl.label}</span>`;
+            }
+
+            // Build editable fields
+            buildTemplateFields(tmpl, c);
+
+            // Show/hide info
+            const infoEl = document.getElementById('templateInfo');
+            if (tmpl.info) {
+                document.getElementById('templateInfoText').textContent = tmpl.info;
+                infoEl.style.display = 'flex';
+            } else {
+                infoEl.style.display = 'none';
+            }
+
+            // Generate preview
+            updateTemplatePreview();
+
+            // Show/hide action buttons based on type
+            const waBtn = document.getElementById('openWhatsappBtn');
+            const mailBtn = document.getElementById('openMailBtn');
+            const subjBtn = document.getElementById('copySubjectBtn');
+            const subjBox = document.getElementById('emailSubjectBox');
+            const previewEl = document.getElementById('messagePreview');
+
+            if (tmpl.type === 'email') {
+                waBtn.style.display = 'none';
+                mailBtn.style.display = 'inline-flex';
+                subjBtn.style.display = 'inline-flex';
+                subjBox.style.display = 'block';
+                previewEl.classList.add('email-preview');
+            } else {
+                waBtn.style.display = 'inline-flex';
+                mailBtn.style.display = 'none';
+                subjBtn.style.display = 'none';
+                subjBox.style.display = 'none';
+                previewEl.classList.remove('email-preview');
+            }
+        }
+
+        function buildTemplateFields(tmpl, c) {
+            const container = document.getElementById('templateFields');
+            if (!tmpl.fields || tmpl.fields.length === 0) {
+                container.innerHTML = '';
+                return;
+            }
+
+            const fieldsHtml = tmpl.fields.map(fieldId => {
+                const def = FIELD_DEFS[fieldId];
+                if (!def) return '';
+                const value = def.autoFill(c);
+
+                if (def.type === 'select') {
+                    const optionsHtml = def.options.map(o => 
+                        `<option value="${o.v}" ${o.v === value ? 'selected' : ''}>${o.l}</option>`
+                    ).join('');
+                    return `<div class="template-field">
+                        <label>${def.label}</label>
+                        <select class="template-field-input" data-field="${fieldId}" onchange="updateTemplatePreview()"
+                            style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 8px 10px; font-size: 13px;">
+                            ${optionsHtml}
+                        </select>
+                    </div>`;
+                }
+
+                return `<div class="template-field">
+                    <label>${def.label}</label>
+                    <input type="text" class="template-field-input" data-field="${fieldId}" 
+                        value="${escapeHtml(value)}" placeholder="${def.placeholder}"
+                        oninput="updateTemplatePreview()">
+                </div>`;
+            }).join('');
+
+            container.innerHTML = `<div class="template-fields">${fieldsHtml}</div>`;
+        }
+
+        function getFieldValues() {
+            const values = {};
+            document.querySelectorAll('.template-field-input').forEach(el => {
+                values[el.dataset.field] = el.value;
+            });
+            return values;
+        }
+
+        function updateTemplatePreview() {
+            const tmpl = TEMPLATES[currentTemplateId];
+            const c = currentTemplateContact;
+            if (!tmpl || !c) return;
+
+            const fields = getFieldValues();
+            const messaggio = tmpl.generate(c, fields);
+            document.getElementById('messagePreview').textContent = messaggio;
+
+            // Update WhatsApp link
+            if (tmpl.type === 'whatsapp') {
+                const telefono = c.telefono_formattato || c.telefono || '';
+                const waUrl = `https://wa.me/${telefono.replace('+', '')}?text=${encodeURIComponent(messaggio)}`;
+                document.getElementById('openWhatsappBtn').href = waUrl;
+            }
+
+            // Update email subject & mailto link
+            if (tmpl.type === 'email') {
+                const subject = tmpl.subject ? tmpl.subject(c, fields) : '';
+                document.getElementById('emailSubjectPreview').textContent = subject;
+                
+                const mailtoUrl = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(messaggio)}`;
+                document.getElementById('openMailBtn').href = mailtoUrl;
+            }
+
+            // Update copy button
+            document.getElementById('copyMessageBtn').onclick = () => {
+                navigator.clipboard.writeText(messaggio);
+                showToast('Messaggio copiato negli appunti!');
+                closeModal();
+            };
+
+            // Update copy subject button (email)
+            document.getElementById('copySubjectBtn').onclick = () => {
+                const subject = tmpl.subject ? tmpl.subject(c, getFieldValues()) : '';
+                navigator.clipboard.writeText(subject);
+                showToast('Oggetto copiato negli appunti!');
+            };
+
+            // Close modal when opening WhatsApp + aggiungi nota "mandato wa"
+            document.getElementById('openWhatsappBtn').onclick = () => {
+                if (currentTemplatePod) {
+                    aggiungiNota(currentTemplatePod, 'mandato wa');
+                }
+                setTimeout(closeModal, 300);
+            };
+
+            // Close modal when opening Mail + aggiungi nota "mandata mail"
+            document.getElementById('openMailBtn').onclick = (e) => {
+                if (currentTemplatePod) {
+                    aggiungiNota(currentTemplatePod, 'mandata mail');
+                }
+                setTimeout(closeModal, 300);
+            };
+        }
+
+        function closeModal() {
+            document.getElementById('messageModal').classList.remove('active');
+            currentTemplatePod = null;
+            currentTemplateContact = null;
+        }
+
+        // Converte data da DD/MM/YYYY a YYYY-MM-DD per input date
+        function formatDateForInput(dateStr) {
+            if (!dateStr) return '';
+            // Prova DD/MM/YYYY
+            const match = dateStr.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+            if (match) {
+                const day = match[1].padStart(2, '0');
+                const month = match[2].padStart(2, '0');
+                const year = match[3];
+                return `${year}-${month}-${day}`;
+            }
+            // Già nel formato corretto?
+            if (/\d{4}-\d{2}-\d{2}/.test(dateStr)) {
+                return dateStr;
+            }
+            return '';
+        }
+
+        // Converte data da YYYY-MM-DD a DD/MM/YYYY per salvataggio
+        function formatDateForSave(dateStr) {
+            if (!dateStr) return '';
+            const match = dateStr.match(/(\d{4})-(\d{2})-(\d{2})/);
+            if (match) {
+                return `${match[3]}/${match[2]}/${match[1]}`;
+            }
+            return dateStr;
+        }
+
+        // Salva nuova data pianificazione
+        async function salvaData(pod) {
+            const dateInput = document.getElementById(`appDate_${pod}`);
+            const statusDiv = document.getElementById(`appStatus_${pod}`);
+            const btn = event.target.closest('.btn-salva-data');
+            
+            const dataValue = dateInput?.value || '';
+            
+            if (!dataValue) {
+                statusDiv.className = 'appuntamento-status visible error';
+                statusDiv.textContent = '⚠️ Seleziona una data';
+                return;
+            }
+            
+            // Converti in formato DD/MM/YYYY
+            const dataFormattata = formatDateForSave(dataValue);
+            
+            // Disabilita bottone
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ...';
+            }
+            statusDiv.className = 'appuntamento-status';
+            
+            try {
+                const resp = await fetch('/api/distinte/aggiorna-data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pod, data: dataFormattata })
+                });
+                
+                const data = await resp.json();
+                
+                if (data.success) {
+                    statusDiv.className = 'appuntamento-status visible success';
+                    statusDiv.textContent = '✅ Data aggiornata: ' + dataFormattata;
+                    showToast(`Data aggiornata: ${dataFormattata}`);
+                    
+                    // Aggiorna il contatto locale
+                    const contatto = contatti.find(c => c.pod === pod);
+                    if (contatto) {
+                        contatto.data_intervento = dataFormattata;
+                        contatto.data_pian_filone = dataFormattata;
+                    }
+                } else {
+                    statusDiv.className = 'appuntamento-status visible error';
+                    statusDiv.textContent = '❌ ' + (data.error || 'Errore sconosciuto');
+                }
+            } catch (e) {
+                statusDiv.className = 'appuntamento-status visible error';
+                statusDiv.textContent = '❌ Errore di connessione';
+                console.error('Errore salvaData:', e);
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-save"></i> Salva data';
+                }
+            }
+        }
+
+        // Legacy wrapper - used by wa.me links on alternative numbers
+        function generateMessage(c) {
+            const f = {
+                nome: c.nome || 'Cliente',
+                indirizzo: `${c.indirizzo || ''} ${c.civico || ''}`.trim(),
+                comune: c.comune || '',
+                data: c.data_intervento || ''
+            };
+            if (TEMPLATES.wa_conferma) return TEMPLATES.wa_conferma.generate(c, f);
+            return '';
+        }
+
+        // Gestione completamento
+        function toggleCompleted(pod) {
+            // Solo stato locale, nessuna modifica al filone
+            const wasCompleted = completedStates[pod] || false;
+            completedStates[pod] = !wasCompleted;
+            saveStates();
+            renderContacts();
+        }
+
+        // Genera link ricerca Pagine Bianche
+        function generaLinkPagineBianche(contatto) {
+            // Pulisce il nome (rimuove prefissi come "SOC.", "IMPRESA", ecc.)
+            let nome = (contatto.nome || '').replace(/^(SOC\.|SOCIETA'|IMPRESA|DITTA|SRL|SPA|S\.R\.L\.|S\.P\.A\.)\s*/i, '').trim();
+            let comune = (contatto.comune || '').trim();
+            
+            // Costruisce l'URL di ricerca
+            const params = new URLSearchParams();
+            params.set('qs', nome);
+            if (comune) params.set('dv', comune);
+            
+            return `https://www.paginebianche.it/ricerca?${params.toString()}`;
+        }
+
+        // Genera link ricerca Google
+        function generaLinkGoogle(contatto) {
+            let nome = (contatto.nome || '').trim();
+            let indirizzo = `${contatto.indirizzo || ''} ${contatto.civico || ''}`.trim();
+            let comune = (contatto.comune || '').trim();
+            
+            // Costruisce query di ricerca
+            let query = `${nome} ${comune} telefono`;
+            if (indirizzo) query = `${nome} ${indirizzo} ${comune} telefono`;
+            
+            return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+        }
+
+        // ========================================
+        // AGGIUNGI TELEFONO - Link manuali
+        // ========================================
+        
+        let currentSearchPod = null;  // POD attualmente in ricerca
+        
+        // Apri modal per aggiungere telefono
+        function cercaTelefono(pod) {
+            const contatto = contatti.find(c => c.pod === pod);
+            if (!contatto) return;
+            
+            currentSearchPod = pod;
+            
+            // Mostra modal
+            document.getElementById('searchContactName').textContent = contatto.nome || 'Nome non disponibile';
+            document.getElementById('searchContactAddress').textContent = 
+                `${contatto.indirizzo || ''} ${contatto.civico || ''}, ${contatto.cap || ''} ${contatto.comune || ''}`;
+            
+            // Imposta link manuali
+            document.getElementById('linkPagineBianche').href = generaLinkPagineBianche(contatto);
+            document.getElementById('linkGoogle').href = generaLinkGoogle(contatto);
+            
+            // Reset input
+            document.getElementById('manualPhoneInput').value = '';
+            
+            document.getElementById('phoneSearchModal').classList.add('active');
+        }
+        
+        // Salva numero inserito manualmente
+        async function salvaNumeroManuale() {
+            const telefono = document.getElementById('manualPhoneInput').value.trim();
+            if (!telefono) {
+                showToast('Inserisci un numero di telefono', 'warning');
+                return;
+            }
+            await salvaTelefonoNelFilone(currentSearchPod, telefono, 'inserito manualmente');
+        }
+        
+        // Segna come non trovato - salva "non trovato" nella colonna telefono del filone, ma lascia l'utente nella categoria senza telefono
+        async function salvaNonTrovato() {
+            const pod = currentSearchPod;
+            if (!pod) return;
+            
+            try {
+                // Salva "non trovato" nel campo telefono del filone
+                const resp = await fetch('/api/distinte/salva-telefono', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pod, telefono: 'non trovato', fonte: '' })
+                });
+                
+                const data = await resp.json();
+                
+                if (data.success) {
+                    // Aggiorna stato locale
+                    const contatto = contatti.find(c => c.pod === pod);
+                    if (contatto) {
+                        contatto.telefono_filone = 'non trovato';
+                    }
+                    showToast('Segnato come "non trovato"');
+                    closePhoneModal();
+                    renderContacts();
+                } else {
+                    showToast(data.error || 'Errore nel salvataggio', 'error');
+                }
+            } catch (e) {
+                console.error('Errore salvaNonTrovato:', e);
+                showToast('Errore di connessione', 'error');
+            }
+        }
+        
+        // Salva telefono nel filone e aggiorna UI
+        async function salvaTelefonoNelFilone(pod, telefono, fonte) {
+            try {
+                const resp = await fetch('/api/distinte/salva-telefono', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pod, telefono, fonte })
+                });
+                
+                const data = await resp.json();
+                
+                if (data.success) {
+                    // Aggiorna il contatto localmente
+                    const contatto = contatti.find(c => c.pod === pod);
+                    if (contatto) {
+                        contatto.telefono = telefono;
+                        contatto.telefono_filone = telefono;
+                        contatto.telefono_formattato = '+39' + telefono.replace(/[^\d]/g, '');
+                        _lastSavedPhone[pod] = telefono;
+                        
+                        // Determina nuova categoria
+                        const isCellulare = /^3\d{8,9}$/.test(telefono.replace(/[^\d]/g, ''));
+                        contatto.tipo = isCellulare ? 'cellulare' : 'fisso';
+                        
+                        showToast(`Numero salvato! Contatto spostato in: ${isCellulare ? 'Cellulare' : 'Fisso'}`);
+                    }
+                    
+                    closePhoneModal();
+                    renderContacts();
+                } else {
+                    showToast(data.error || 'Errore nel salvataggio', 'error');
+                }
+            } catch (e) {
+                console.error('Errore salvataggio telefono:', e);
+                showToast('Errore di connessione', 'error');
+            }
+        }
+        
+        // Funzione segnaIrrintracciabile rimossa - ora si usa solo salvaNonTrovato dal modal
+        
+        function closePhoneModal() {
+            document.getElementById('phoneSearchModal').classList.remove('active');
+            currentSearchPod = null;
+        }
+
+        // ========================================
+        // PEC SEARCH - Ricerca e salvataggio PEC
+        // ========================================
+
+        let currentPecPod = null;
+
+        function cercaPec(pod) {
+            const contatto = contatti.find(c => c.pod === pod);
+            if (!contatto) return;
+
+            currentPecPod = pod;
+
+            // Popola modal
+            document.getElementById('pecContactName').textContent = contatto.nome || 'Nome non disponibile';
+            const tipoBadge = document.getElementById('pecContactType');
+            const tipo = contatto.tipo_contatto || 'azienda';
+            tipoBadge.className = `tipo-badge ${tipo}`;
+            tipoBadge.textContent = tipo === 'condominio' ? '🏢 Condominio' : tipo === 'ente_pubblico' ? '🏛️ Ente' : '🏭 Azienda';
+            document.getElementById('pecContactAddress').textContent =
+                `${contatto.indirizzo || ''} ${contatto.civico || ''}, ${contatto.cap || ''} ${contatto.comune || ''}`;
+
+            // Link di ricerca
+            const links = contatto.link_pec || {};
+            const linkGoogle = document.getElementById('linkGooglePec');
+            const linkUC = document.getElementById('linkUfficioCamerale');
+
+            if (links.google_pec) {
+                linkGoogle.href = links.google_pec;
+            } else {
+                const query = encodeURIComponent(`"${contatto.nome || ''}" PEC ${contatto.comune || ''}`);
+                linkGoogle.href = `https://www.google.com/search?q=${query}`;
+            }
+            if (links.ufficio_camerale) {
+                linkUC.href = links.ufficio_camerale;
+            }
+
+            document.getElementById('pecSearchModal').classList.add('active');
+        }
+
+        function copiaENomeEApri(event) {
+            // Copia il nome dell'azienda in clipboard prima di aprire qualsiasi sito
+            const contatto = contatti.find(c => c.pod === currentPecPod);
+            if (contatto && contatto.nome) {
+                navigator.clipboard.writeText(contatto.nome).then(() => {
+                    showToast('"' + contatto.nome + '" copiato! Incolla con Ctrl+V');
+                });
+            }
+            // Il link si apre normalmente grazie a target="_blank"
+        }
+
+        function closePecModal() {
+            document.getElementById('pecSearchModal').classList.remove('active');
+            currentPecPod = null;
+        }
+
+        // Helper per escape HTML
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        // Inizializza note da filone (sempre dal filone, è la fonte di verità)
+        function initNotesFromFilone() {
+            for (const c of contatti) {
+                const pod = c.pod;
+                // Usa sempre il valore dal filone come fonte di verità
+                if (c.note_filone !== undefined && c.note_filone !== null) {
+                    noteStates[pod] = c.note_filone;
+                }
+            }
+            saveStates();
+        }
+
+        // Toggle dropdown note
+        function toggleNoteDropdown(pod) {
+            event.stopPropagation();
+            
+            // Chiudi tutti gli altri dropdown
+            document.querySelectorAll('.note-dropdown.show').forEach(dd => {
+                if (dd.id !== `noteDropdown_${pod}`) {
+                    dd.classList.remove('show');
+                }
+            });
+            
+            const dropdown = document.getElementById(`noteDropdown_${pod}`);
+            if (dropdown) {
+                dropdown.classList.toggle('show');
+            }
+        }
+
+        // Aggiungi nota predefinita
+        async function aggiungiNota(pod, tipo) {
+            event.stopPropagation();
+            
+            // Chiudi dropdown
+            const dropdown = document.getElementById(`noteDropdown_${pod}`);
+            if (dropdown) dropdown.classList.remove('show');
+            
+            // Formatta data odierna come DD/MM
+            const oggi = new Date();
+            const giorno = String(oggi.getDate()).padStart(2, '0');
+            const mese = String(oggi.getMonth() + 1).padStart(2, '0');
+            const prefisso = `${giorno}/${mese}`;
+            
+            // "chiamare" e "numero errato" non hanno prefisso data
+            let testoNota = (tipo === 'chiamare') ? tipo : `${prefisso} ${tipo}`;
+            
+            // "numero errato" → segna direttamente sulla colonna telefono, non nelle note
+            if (tipo === 'numero errato') {
+                const phoneDisplay = document.getElementById(`phoneDisplay_${pod}`);
+                if (phoneDisplay) {
+                    phoneDisplay.classList.add('phone-invalid');
+                }
+                // Salva stato locale
+                erratiStates[pod] = true;
+                saveStates();
+                
+                // Applica " ERRATO" + strikethrough nella colonna telefono su Sheets
+                try {
+                    const stResp = await fetch('/api/distinte/segna-errato', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ pod })
+                    });
+                    const stData = await stResp.json();
+                    if (stData.success) {
+                        showToast('Numero segnato come ERRATO su Sheets');
+                    } else {
+                        showToast('Errore: ' + (stData.error || ''), 'error');
+                    }
+                } catch (e) {
+                    console.error('Errore segna errato:', e);
+                    showToast('Errore comunicazione server', 'error');
+                }
+                return; // Non salva nelle note
+            }
+            
+            // Prendi nota attuale
+            let notaAttuale = noteStates[pod] || '';
+            
+            // Se già contiene questa nota (oggi per mandato wa/nr, o chiamare), non duplicare
+            if (notaAttuale.includes(testoNota)) {
+                showToast('Nota già presente', 'warning');
+                return;
+            }
+            
+            // Metti all'inizio
+            let nuovaNota = notaAttuale.trim() ? `${testoNota} // ${notaAttuale}` : testoNota;
+            
+            // Aggiorna stato locale
+            noteStates[pod] = nuovaNota;
+            saveStates();
+            
+            // Aggiorna display
+            const noteDisplay = document.getElementById(`noteDisplay_${pod}`);
+            if (noteDisplay) {
+                noteDisplay.value = nuovaNota;
+                noteDisplay.title = nuovaNota;
+                noteDisplay.classList.add('has-note');
+            }
+            
+            // Salva sul filone
+            try {
+                const resp = await fetch('/api/distinte/salva-nota', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pod, nota: nuovaNota })
+                });
+                
+                const data = await resp.json();
+                if (data.success) {
+                    showToast(`Nota aggiunta: ${testoNota}`);
+                    // Aggiorna con la nota restituita dal server
+                    if (data.nota !== undefined) {
+                        noteStates[pod] = data.nota;
+                        if (noteDisplay) {
+                            noteDisplay.value = data.nota;
+                            noteDisplay.title = data.nota;
+                        }
+                    }
+                } else {
+                    showToast(data.error || 'Errore salvataggio', 'error');
+                }
+            } catch (e) {
+                showToast('Errore di connessione', 'error');
+            }
+        }
+
+        // Salva telefono inline (da input editabile - su Enter o blur)
+        let _lastSavedPhone = {};  // Anti-duplicato
+        async function salvaTelefonoInline(pod, valore) {
+            valore = (valore || '').trim();
+            
+            // Evita salvataggio se non cambiato
+            const contatto = contatti.find(c => c.pod === pod);
+            const currentFilone = contatto ? (contatto.telefono_filone || '') : '';
+            if (_lastSavedPhone[pod] === valore && currentFilone === valore) return;
+            
+            _lastSavedPhone[pod] = valore;
+            
+            // Aggiorna classe
+            const phoneInput = document.getElementById(`phoneEdit_${pod}`);
+            if (phoneInput) {
+                phoneInput.classList.toggle('has-phone', !!valore);
+            }
+            
+            // Salva sul filone
+            try {
+                const resp = await fetch('/api/distinte/salva-telefono', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pod, telefono: valore, fonte: 'modifica inline' })
+                });
+                
+                const data = await resp.json();
+                if (data.success) {
+                    // Aggiorna contatto locale
+                    if (contatto) {
+                        contatto.telefono_filone = data.telefono || valore;
+                    }
+                    showToast('Telefono aggiornato sul filone');
+                } else {
+                    showToast(data.error || 'Errore salvataggio telefono', 'error');
+                }
+            } catch (e) {
+                showToast('Errore di connessione', 'error');
+            }
+        }
+
+        // Salva nota libera (da input editabile - su Enter o blur)
+        let _lastSavedNote = {};  // Anti-duplicato: evita salvataggi inutili su blur dopo Enter
+        async function salvaNota(pod, valore) {
+            valore = (valore || '').trim();
+            
+            // Evita salvataggio se non cambiato
+            if (_lastSavedNote[pod] === valore && noteStates[pod] === valore) return;
+            
+            // Aggiorna stato locale
+            noteStates[pod] = valore;
+            _lastSavedNote[pod] = valore;
+            saveStates();
+            
+            // Aggiorna classe
+            const noteDisplay = document.getElementById(`noteDisplay_${pod}`);
+            if (noteDisplay) {
+                noteDisplay.classList.toggle('has-note', !!valore);
+            }
+            
+
+            
+            // Salva sul filone
+            try {
+                const resp = await fetch('/api/distinte/salva-nota', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pod, nota: valore, sovrascrivere: true })
+                });
+                
+                const data = await resp.json();
+                if (data.success) {
+                    showToast('Nota salvata');
+                } else {
+                    showToast(data.error || 'Errore salvataggio nota', 'error');
+                }
+            } catch (e) {
+                showToast('Errore di connessione', 'error');
+            }
+        }
+
+        // Salva Ora pian (solo Pavia - da input editabile su Enter o blur)
+        let _lastSavedOraPian = {};
+        async function salvaOraPian(pod, valore) {
+            valore = (valore || '').trim();
+            
+            // Evita salvataggio se non cambiato
+            if (_lastSavedOraPian[pod] === valore) return;
+            _lastSavedOraPian[pod] = valore;
+            
+            // Aggiorna classe
+            const oraPianDisplay = document.getElementById(`oraPianDisplay_${pod}`);
+            if (oraPianDisplay) {
+                oraPianDisplay.classList.toggle('has-note', !!valore);
+            }
+            
+            // Salva sul filone
+            try {
+                const resp = await fetch('/api/distinte/salva-ora-pian', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pod, ora_pian: valore })
+                });
+                
+                const data = await resp.json();
+                if (data.success) {
+                    showToast('Ora pian salvata');
+                } else {
+                    showToast(data.error || 'Errore salvataggio ora pian', 'error');
+                }
+            } catch (e) {
+                showToast('Errore di connessione', 'error');
+            }
+        }
+
+        // Chiudi dropdown quando si clicca fuori
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.btn-add-note')) {
+                document.querySelectorAll('.note-dropdown.show').forEach(dd => {
+                    dd.classList.remove('show');
+                });
+            }
+        });
+
+        // Aggiungi telefono dalla distinta al filone
+        async function aggiungiTelFilone(pod, telefono) {
+            try {
+                const resp = await fetch('/api/distinte/salva-telefono', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pod, telefono, fonte: 'distinta' })
+                });
+                
+                const data = await resp.json();
+                
+                if (data.success) {
+                    // Aggiorna dati locali
+                    const contatto = contatti.find(c => c.pod === pod);
+                    if (contatto) {
+                        contatto.telefono_filone = telefono;
+                        _lastSavedPhone[pod] = telefono;
+                    }
+                    
+                    // Aggiorna l'input telefono inline
+                    const phoneEditInput = document.getElementById(`phoneEdit_${pod}`);
+                    if (phoneEditInput) {
+                        phoneEditInput.value = telefono;
+                        phoneEditInput.classList.add('has-phone');
+                    }
+                    
+                    // Rimuovi il pulsante dalla card
+                    const phoneDisplay = document.getElementById(`phoneDisplay_${pod}`);
+                    if (phoneDisplay) {
+                        const btn = phoneDisplay.querySelector('.btn-add-to-filone');
+                        if (btn) btn.remove();
+                    }
+                    
+                    showToast('Numero aggiunto al filone!');
+                } else {
+                    showToast(data.error || 'Errore nel salvataggio', 'error');
+                }
+            } catch (e) {
+                console.error('Errore salvataggio telefono nel filone:', e);
+                showToast('Errore di connessione', 'error');
+            }
+        }
+
+        // Fissa Appuntamento
+        async function fissaAppuntamento(pod) {
+            const startInput = document.getElementById(`appStart_${pod}`);
+            const endInput = document.getElementById(`appEnd_${pod}`);
+            const statusDiv = document.getElementById(`appStatus_${pod}`);
+            const btn = event.target.closest('.btn-appuntamento');
+            
+            const oraInizio = startInput?.value || '';
+            const oraFine = endInput?.value || '';
+            
+            if (!oraInizio) {
+                statusDiv.className = 'appuntamento-status visible error';
+                statusDiv.textContent = '⚠️ Inserisci almeno l\'orario di inizio';
+                return;
+            }
+            
+            let orario = oraInizio;
+            if (oraFine) {
+                orario += '-' + oraFine;
+            }
+            
+            // Disabilita bottone
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ...';
+            }
+            statusDiv.className = 'appuntamento-status';
+            
+            try {
+                const resp = await fetch('/api/distinte/appuntamento', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pod, orario })
+                });
+                
+                const data = await resp.json();
+                
+                if (data.success) {
+                    statusDiv.className = 'appuntamento-status visible success';
+                    statusDiv.textContent = '✅ Appuntamento impostato: APP ' + orario;
+                    showToast(`Appuntamento fissato: ${orario}`);
+                    
+                    // Aggiorna il campo note con la nota restituita dal server
+                    if (data.nota) {
+                        noteStates[pod] = data.nota;
+                        saveStates();
+                        const noteDisplay = document.getElementById(`noteDisplay_${pod}`);
+                        if (noteDisplay) {
+                            noteDisplay.value = data.nota;
+                            noteDisplay.title = data.nota;
+                            noteDisplay.classList.add('has-note');
+                        }
+                    }
+                    
+                    // Per Pavia: aggiorna anche il campo Ora pian
+                    if (provincia === 'PAVIA' && data.ora_pian !== undefined) {
+                        const oraPianDisplay = document.getElementById(`oraPianDisplay_${pod}`);
+                        if (oraPianDisplay) {
+                            oraPianDisplay.value = data.ora_pian;
+                            oraPianDisplay.classList.toggle('has-note', !!data.ora_pian);
+                        }
+                    }
+                    
+                    // Mostra il pulsante rimuovi appuntamento
+                    const btnRimuovi = document.getElementById(`btnRimuoviApp_${pod}`);
+                    if (btnRimuovi) {
+                        btnRimuovi.style.display = '';
+                    }
+                } else {
+                    statusDiv.className = 'appuntamento-status visible error';
+                    statusDiv.textContent = '❌ ' + (data.error || 'Errore sconosciuto');
+                }
+            } catch (e) {
+                statusDiv.className = 'appuntamento-status visible error';
+                statusDiv.textContent = '❌ Errore di connessione';
+                console.error('Errore fissaAppuntamento:', e);
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-check"></i> Fissa';
+                }
+            }
+        }
+
+        // Rimuovi Appuntamento
+        async function rimuoviAppuntamento(pod) {
+            if (!confirm('Vuoi rimuovere l\'appuntamento da questo contatore?')) return;
+            
+            const statusDiv = document.getElementById(`appStatus_${pod}`);
+            const btn = document.getElementById(`btnRimuoviApp_${pod}`);
+            
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ...';
+            }
+            statusDiv.className = 'appuntamento-status';
+            
+            try {
+                const resp = await fetch('/api/distinte/rimuovi-appuntamento', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pod })
+                });
+                
+                const data = await resp.json();
+                
+                if (data.success) {
+                    statusDiv.className = 'appuntamento-status visible success';
+                    statusDiv.textContent = '✅ Appuntamento rimosso';
+                    showToast('Appuntamento rimosso');
+                    
+                    // Aggiorna il campo note
+                    if (data.nota !== undefined) {
+                        noteStates[pod] = data.nota;
+                        saveStates();
+                        const noteDisplay = document.getElementById(`noteDisplay_${pod}`);
+                        if (noteDisplay) {
+                            noteDisplay.value = data.nota;
+                            noteDisplay.title = data.nota;
+                            noteDisplay.classList.toggle('has-note', !!data.nota);
+                        }
+                    }
+                    
+                    // Per Pavia: pulisci anche il campo Ora pian
+                    if (provincia === 'PAVIA') {
+                        const oraPianDisplay = document.getElementById(`oraPianDisplay_${pod}`);
+                        if (oraPianDisplay) {
+                            oraPianDisplay.value = '';
+                            oraPianDisplay.classList.remove('has-note');
+                        }
+                    }
+                    
+                    // Nascondi il pulsante rimuovi
+                    if (btn) {
+                        btn.style.display = 'none';
+                    }
+                } else {
+                    statusDiv.className = 'appuntamento-status visible error';
+                    statusDiv.textContent = '❌ ' + (data.error || 'Errore sconosciuto');
+                }
+            } catch (e) {
+                statusDiv.className = 'appuntamento-status visible error';
+                statusDiv.textContent = '❌ Errore di connessione';
+                console.error('Errore rimuoviAppuntamento:', e);
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-trash"></i> Rimuovi';
+                }
+            }
+        }
+
+        // Gestione note
+        async function saveNote(pod, note) {
+            const oldNote = noteStates[pod] || '';
+            
+            if (note === oldNote) return;
+            
+            // Se c'è già una nota, concatena con //
+            let finalNote = note;
+            
+            // Salva in locale
+            noteStates[pod] = finalNote;
+            saveStates();
+            
+            // Salva sul filone
+            try {
+                const resp = await fetch('/api/distinte/salva-nota', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        pod: pod,
+                        nota: finalNote
+                    })
+                });
+                
+                const data = await resp.json();
+                if (data.success) {
+                    showToast('Nota salvata');
+                } else {
+                    showToast(data.error || 'Errore salvataggio nota', 'error');
+                }
+            } catch (e) {
+                console.error('Errore salvataggio nota:', e);
+            }
+        }
+
+        // Persistenza stati locali
+        function saveStates() {
+            localStorage.setItem('distinte_completed', JSON.stringify(completedStates));
+            localStorage.setItem('distinte_notes', JSON.stringify(noteStates));
+            localStorage.setItem('distinte_errati', JSON.stringify(erratiStates));
+        }
+
+        function loadSavedStates() {
+            try {
+                completedStates = JSON.parse(localStorage.getItem('distinte_completed') || '{}');
+                noteStates = JSON.parse(localStorage.getItem('distinte_notes') || '{}');
+                erratiStates = JSON.parse(localStorage.getItem('distinte_errati') || '{}');
+            } catch (e) {
+                completedStates = {};
+                noteStates = {};
+                erratiStates = {};
+            }
+        }
+
+        // Filtri
+        document.getElementById('filterCellulare').addEventListener('change', renderContacts);
+        document.getElementById('filterFisso').addEventListener('change', renderContacts);
+        document.getElementById('filterNoPhone').addEventListener('change', renderContacts);
+        document.getElementById('filterCompleted').addEventListener('change', renderContacts);
+        document.getElementById('filterNotCompleted').addEventListener('change', renderContacts);
+
+        // Utilities
+        function showLoading(show) {
+            document.getElementById('loadingOverlay').classList.toggle('active', show);
+        }
+
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            const icon = toast.querySelector('i');
+            
+            toast.style.background = type === 'error' ? 'var(--danger)' : 
+                                     type === 'warning' ? 'var(--warning)' : 'var(--success)';
+            icon.className = type === 'error' ? 'fas fa-exclamation-circle' :
+                             type === 'warning' ? 'fas fa-exclamation-triangle' : 'fas fa-check-circle';
+            
+            document.getElementById('toastMessage').textContent = message;
+            toast.classList.add('show');
+            
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+
+        // Chiudi modal con Escape
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeModal();
+        });
+
+        // Init
+        loadConfig();
+    </script>
+</body>
+</html>

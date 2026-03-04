@@ -1,0 +1,34 @@
+{
+  "operatori_vip": [
+    "ALESSANDRO",
+    "MELEK",
+    "BRAHIM"
+  ],
+  "colori_operatori": {
+    "ALESSANDRO": "#e74c3c",
+    "MELEK": "#f1c40f",
+    "BRAHIM": "#2ecc71"
+  },
+  "operatori_dict": {
+    "ALESSANDRO": "ALESSANDRO",
+    "MELEK": "MELEK",
+    "BRAHIM": "BRAHIM"
+  },
+  "deposito": {
+    "Nome": "DEPOSITO PAVIA",
+    "Lat": 45.2221001,
+    "Lon": 9.2254115
+  },
+  "ora_inizio_giornata": 480,
+  "ora_fine_giornata": 1020,
+  "velocita_media_kmh": 35,
+  "tempo_intervento_min": 20,
+  "raggio_microzona_km": 0.5,
+  "ottimizza_per_tempo": true,
+  "data_inizio": "2025-10-01",
+  "data_fine": "2026-04-30",
+  "intervallo_sync_secondi": 180,
+  "mappatura_colonne": {
+    "comune": "Località"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "giada": {
+    "abilitato": true,
+    "orario_alert": "23:32",
+    "mostra_completate": false,
+    "notifica_browser": true,
+    "suono": true,
+    "categorie": [],
+    "ultimo_alert_mostrato": "2026-02-19",
+    "aggiornato_il": "2026-02-20T00:03:47.689287",
+    "orario_scadenza": "12:45"
+  }
+}

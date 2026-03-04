@@ -1,0 +1,2881 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2">
+    <title>Calendario Attività - Algeco</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #25D366;
+            --primary-dark: #128C7E;
+            --danger: #e74c3c;
+            --warning: #f39c12;
+            --success: #27ae60;
+            --info: #3498db;
+            --purple: #9b59b6;
+            --bg-dark: #1a1a2e;
+            --bg-card: #16213e;
+            --text: #eee;
+            --text-muted: #888;
+            --border: #333;
+        }
+
+        [data-theme="light"] {
+            --bg-dark: #f5f5f5;
+            --bg-card: #ffffff;
+            --text: #333;
+            --text-muted: #777;
+            --border: #ddd;
+        }
+
+        [data-theme="light"] header {
+            background: #ffffff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+
+        [data-theme="light"] .back-btn {
+            color: #555;
+        }
+
+        [data-theme="light"] .back-btn:hover {
+            color: var(--primary);
+        }
+
+        [data-theme="light"] .attivita-card {
+            background: #ffffff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        [data-theme="light"] .attivita-card:hover {
+            box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+        }
+
+        [data-theme="light"] .attivita-card.completata {
+            background: #f0f8f0;
+            border-left-color: var(--success) !important;
+        }
+
+        [data-theme="light"] .modal-content {
+            background: #ffffff;
+            color: #333;
+        }
+
+        [data-theme="light"] .form-input {
+            background: #f5f5f5;
+            color: #333;
+            border-color: #ddd;
+        }
+
+        [data-theme="light"] .stat-card {
+            background: #ffffff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+
+        [data-theme="light"] .calendar-grid .day {
+            background: #ffffff;
+            border-color: #eee;
+        }
+
+        [data-theme="light"] .calendar-grid .day:hover {
+            background: #f0f8f0;
+        }
+
+        [data-theme="light"] .calendar-grid .day.today {
+            border-color: var(--primary);
+        }
+
+        [data-theme="light"] .calendar-grid .day.other-month {
+            background: #fafafa;
+            color: #bbb;
+        }
+
+        [data-theme="light"] .filter-btn {
+            background: #f0f0f0;
+            color: #555;
+        }
+
+        [data-theme="light"] .filter-btn:hover {
+            background: #e0e0e0;
+        }
+
+        [data-theme="light"] .filter-btn.active {
+            background: var(--filter-active-bg, var(--primary));
+            color: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            transform: scale(1.05);
+        }
+
+        [data-theme="light"] .giorno-header {
+            background: #f0f0f0;
+            color: #555;
+        }
+
+        [data-theme="light"] .tab-btn {
+            background: #f0f0f0;
+            color: #555;
+        }
+
+        [data-theme="light"] .tab-btn.active {
+            background: var(--primary);
+            color: white;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Back button */
+        .back-btn {
+            background: var(--bg-dark);
+            color: var(--text);
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 20px;
+            transition: all 0.2s;
+        }
+
+        .back-btn:hover {
+            background: var(--bg-card);
+        }
+
+        header {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 20px 30px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        header h1 {
+            font-size: 1.5em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        header h1 i {
+            color: var(--primary);
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        /* Stat cards */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+            transition: transform 0.2s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+        }
+
+        .stat-card .stat-value {
+            font-size: 1.8em;
+            font-weight: bold;
+        }
+
+        .stat-card .stat-label {
+            font-size: 0.85em;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        /* Tabs */
+        .tabs-bar {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .tab-btn {
+            padding: 8px 18px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-size: 0.9em;
+            background: var(--bg-card);
+            color: var(--text);
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .tab-btn:hover, .tab-btn.active {
+            background: var(--primary);
+            color: white;
+        }
+
+        /* Filters */
+        .filters-bar {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .filter-btn {
+            padding: 6px 14px;
+            border-radius: 20px;
+            border: none;
+            cursor: pointer;
+            font-size: 0.8em;
+            background: var(--bg-card);
+            color: var(--text);
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .filter-btn:hover {
+            background: rgba(255,255,255,0.1);
+        }
+
+        .filter-btn.active {
+            color: white;
+            background: var(--filter-active-bg, var(--primary));
+            box-shadow: 0 0 0 2px rgba(255,255,255,0.15), 0 2px 8px rgba(0,0,0,0.3);
+            transform: scale(1.05);
+        }
+
+        .filter-btn .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .filter-separator {
+            width: 1px;
+            height: 24px;
+            background: var(--text-muted);
+            opacity: 0.3;
+            margin: 0 6px;
+            flex-shrink: 0;
+        }
+
+        /* BoxBeat Panel */
+        .boxbeat-panel {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-left: 4px solid #e91e63;
+        }
+
+        .boxbeat-panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .boxbeat-panel.collapsed .boxbeat-panel-header {
+            margin-bottom: 0;
+        }
+
+        .boxbeat-panel.collapsed #boxbeatListaOggi {
+            display: none;
+        }
+
+        .boxbeat-panel-header h2 {
+            font-size: 1.2em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #e91e63;
+        }
+
+        .boxbeat-collapse-btn {
+            background: none;
+            border: none;
+            color: #e91e63;
+            font-size: 1.1em;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 8px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+        }
+
+        .boxbeat-collapse-btn:hover {
+            background: rgba(233, 30, 99, 0.1);
+        }
+
+        .boxbeat-panel.collapsed .boxbeat-collapse-btn i {
+            transform: rotate(-90deg);
+        }
+
+        .boxbeat-collapse-btn i {
+            transition: transform 0.2s;
+        }
+
+        .boxbeat-badge {
+            background: #e91e63;
+            color: white;
+            font-size: 0.8em;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-weight: 700;
+            animation: pulse-badge 2s infinite;
+        }
+
+        .boxbeat-badge.done {
+            background: var(--success);
+            animation: none;
+        }
+
+        @keyframes pulse-badge {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .boxbeat-card {
+            background: rgba(233, 30, 99, 0.05);
+            border: 1px solid rgba(233, 30, 99, 0.2);
+            border-radius: 12px;
+            padding: 14px 16px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            transition: all 0.2s;
+        }
+
+        .boxbeat-card:hover {
+            background: rgba(233, 30, 99, 0.1);
+            border-color: rgba(233, 30, 99, 0.4);
+        }
+
+        .boxbeat-card.completata {
+            opacity: 0.5;
+            background: rgba(39, 174, 96, 0.05);
+            border-color: rgba(39, 174, 96, 0.2);
+        }
+
+        .boxbeat-card .bb-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .boxbeat-card .bb-title {
+            font-weight: 600;
+            font-size: 0.95em;
+            margin-bottom: 6px;
+        }
+
+        .boxbeat-card .bb-fields {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 4px 16px;
+            font-size: 0.82em;
+            color: var(--text-muted);
+        }
+
+        .boxbeat-card .bb-field {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .boxbeat-card .bb-field strong {
+            color: var(--text);
+            font-weight: 600;
+        }
+
+        .boxbeat-card .bb-note {
+            margin-top: 6px;
+            font-size: 0.82em;
+            color: var(--text-muted);
+            font-style: italic;
+        }
+
+        .boxbeat-card .bb-origin {
+            font-size: 0.7em;
+            padding: 2px 8px;
+            border-radius: 10px;
+            background: rgba(233, 30, 99, 0.15);
+            color: #e91e63;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        [data-theme="light"] .boxbeat-panel {
+            background: #fff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+
+        [data-theme="light"] .boxbeat-card {
+            background: rgba(233, 30, 99, 0.03);
+        }
+
+        /* BoxBeat loading skeleton */
+        .boxbeat-loading {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding: 8px 0;
+        }
+
+        .boxbeat-skeleton-card {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 16px;
+            border-radius: 12px;
+            background: rgba(233, 30, 99, 0.05);
+            border: 1px solid rgba(233, 30, 99, 0.1);
+        }
+
+        .skeleton-circle {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(90deg, rgba(233,30,99,0.08) 25%, rgba(233,30,99,0.15) 50%, rgba(233,30,99,0.08) 75%);
+            background-size: 200% 100%;
+            animation: skeleton-shimmer 1.5s infinite;
+            flex-shrink: 0;
+        }
+
+        .skeleton-lines {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .skeleton-line {
+            height: 10px;
+            border-radius: 5px;
+            background: linear-gradient(90deg, rgba(233,30,99,0.08) 25%, rgba(233,30,99,0.15) 50%, rgba(233,30,99,0.08) 75%);
+            background-size: 200% 100%;
+            animation: skeleton-shimmer 1.5s infinite;
+        }
+
+        .skeleton-line:first-child { width: 60%; height: 12px; }
+        .skeleton-line:nth-child(2) { width: 80%; }
+        .skeleton-line:last-child { width: 45%; }
+
+        @keyframes skeleton-shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        /* BoxBeat deadline alert */
+        .boxbeat-alert {
+            background: linear-gradient(135deg, #e91e63, #c2185b);
+            color: white;
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin-bottom: 20px;
+            display: none;
+            align-items: center;
+            gap: 12px;
+            animation: slide-down 0.3s ease;
+        }
+
+        .boxbeat-alert.active {
+            display: flex;
+        }
+
+        .boxbeat-alert i {
+            font-size: 1.5em;
+        }
+
+        .boxbeat-alert .alert-text {
+            flex: 1;
+        }
+
+        .boxbeat-alert .alert-text strong {
+            display: block;
+            font-size: 1.05em;
+            margin-bottom: 2px;
+        }
+
+        .boxbeat-alert .alert-text span {
+            font-size: 0.85em;
+            opacity: 0.9;
+        }
+
+        .boxbeat-alert .alert-dismiss {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            padding: 6px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+
+        .boxbeat-alert .alert-dismiss:hover {
+            background: rgba(255,255,255,0.35);
+        }
+
+        @keyframes slide-down {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Settings modal for BoxBeat */
+        .settings-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .settings-row:last-child {
+            border-bottom: none;
+        }
+
+        .settings-row label {
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .settings-row label i {
+            color: var(--text-muted);
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 44px;
+            height: 24px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: var(--border);
+            border-radius: 24px;
+            transition: 0.3s;
+        }
+
+        .toggle-slider:before {
+            content: "";
+            position: absolute;
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background: white;
+            border-radius: 50%;
+            transition: 0.3s;
+        }
+
+        .toggle-switch input:checked + .toggle-slider {
+            background: var(--primary);
+        }
+
+        .toggle-switch input:checked + .toggle-slider:before {
+            transform: translateX(20px);
+        }
+
+        /* BoxBeat nuovo promemoria modal — compact */
+        #modalBoxBeat .modal-content {
+            padding: 18px 22px;
+            max-width: 540px;
+        }
+        #modalBoxBeat .modal-header {
+            margin-bottom: 12px;
+        }
+        #modalBoxBeat .modal-header h2 {
+            font-size: 1.1em;
+        }
+        #modalBoxBeat .modal-footer {
+            margin-top: 10px;
+            padding-top: 10px;
+        }
+        .bb-form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px 10px;
+        }
+        .bb-form-grid .form-group {
+            margin-bottom: 0;
+        }
+        .bb-form-grid .form-group label {
+            margin-bottom: 3px;
+            font-size: 0.8em;
+        }
+        .bb-form-grid .form-input {
+            padding: 7px 10px;
+            font-size: 0.9em;
+        }
+        .bb-form-grid .form-group.full-width {
+            grid-column: 1 / -1;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid var(--bg-card);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+        }
+
+        /* Btn */
+        .btn {
+            padding: 10px 20px;
+            border-radius: 10px;
+            border: none;
+            cursor: pointer;
+            font-size: 0.95em;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            opacity: 0.9;
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 0.85em;
+            border-radius: 8px;
+        }
+
+        .btn-ghost {
+            background: transparent;
+            color: var(--text-muted);
+            padding: 6px 10px;
+            border: none;
+        }
+
+        .btn-ghost:hover {
+            color: var(--text);
+            background: rgba(255,255,255,0.08);
+            border-radius: 8px;
+        }
+
+        /* Action buttons on activity cards */
+        .action-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 6px 8px;
+            border-radius: 8px;
+            font-size: 0.9em;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .action-btn:hover {
+            background: rgba(255,255,255,0.08);
+            color: var(--text);
+        }
+
+        .action-btn.action-delete:hover {
+            background: rgba(231, 76, 60, 0.15);
+            color: var(--danger);
+        }
+
+        /* Modal close button (stile mappa) */
+        .modal-close-btn {
+            background: rgba(255,255,255,0.1);
+            color: var(--text);
+            border: none;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.1em;
+            transition: background 0.3s, color 0.3s, transform 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            line-height: 1;
+            padding: 0;
+        }
+
+        .modal-close-btn:hover {
+            background: var(--primary);
+            color: white;
+            transform: rotate(90deg);
+        }
+
+        /* Checkbox completamento */
+        .check-btn {
+            background: none;
+            border: 2px solid var(--text-muted);
+            width: 26px;
+            height: 26px;
+            min-width: 26px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.25s;
+            padding: 0;
+            color: transparent;
+            font-size: 0.8em;
+        }
+
+        .check-btn:hover {
+            border-color: var(--primary);
+            background: rgba(37, 211, 102, 0.1);
+            color: var(--primary);
+        }
+
+        .check-btn.checked {
+            background: var(--success);
+            border-color: var(--success);
+            color: white;
+        }
+
+        .check-btn.checked:hover {
+            background: var(--warning);
+            border-color: var(--warning);
+        }
+
+        /* Giorno header (vista lista) */
+        .giorno-header {
+            background: var(--bg-card);
+            padding: 10px 16px;
+            border-radius: 10px;
+            margin-bottom: 8px;
+            font-weight: 600;
+            font-size: 0.95em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            position: sticky;
+            top: 0;
+            z-index: 5;
+        }
+
+        .giorno-header .badge-count {
+            background: var(--primary);
+            color: white;
+            font-size: 0.75em;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 600;
+        }
+
+        .giorno-header.scaduto {
+            border-left: 3px solid var(--danger);
+        }
+
+        .giorno-header.oggi {
+            border-left: 3px solid var(--primary);
+        }
+
+        /* Activity card */
+        .attivita-card {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 8px;
+            border-left: 4px solid var(--text-muted);
+            transition: all 0.2s;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .attivita-card:hover {
+            transform: translateX(4px);
+        }
+
+        .attivita-card.completata {
+            opacity: 0.6;
+            border-left-color: var(--success) !important;
+        }
+
+        .attivita-card.completata .attivita-titolo {
+            text-decoration: line-through;
+        }
+
+        .attivita-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 6px;
+        }
+
+        .attivita-titolo {
+            font-weight: 600;
+            font-size: 1em;
+        }
+
+        .attivita-actions {
+            display: flex;
+            gap: 4px;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .attivita-card:hover .attivita-actions {
+            opacity: 1;
+        }
+
+        .attivita-meta {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            font-size: 0.85em;
+            color: var(--text-muted);
+        }
+
+        .attivita-meta span {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .attivita-desc {
+            margin-top: 8px;
+            font-size: 0.9em;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        .cat-badge {
+            font-size: 0.7em;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: white;
+        }
+
+        /* Calendar grid */
+        .calendar-nav {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 16px;
+        }
+
+        .calendar-nav h2 {
+            min-width: 200px;
+            text-align: center;
+            font-size: 1.2em;
+        }
+
+        .calendar-nav button {
+            background: var(--bg-card);
+            border: none;
+            color: var(--text);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .calendar-nav button:hover {
+            background: var(--primary);
+            color: white;
+        }
+
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 4px;
+            margin-bottom: 20px;
+        }
+
+        .calendar-grid .day-label {
+            text-align: center;
+            font-size: 0.8em;
+            font-weight: 600;
+            color: var(--text-muted);
+            padding: 8px 0;
+        }
+
+        .calendar-grid .day {
+            background: var(--bg-card);
+            border-radius: 8px;
+            padding: 8px;
+            min-height: 80px;
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .calendar-grid .day:hover {
+            border-color: var(--primary);
+        }
+
+        .calendar-grid .day.today {
+            border: 2px solid var(--primary);
+        }
+
+        .calendar-grid .day.other-month {
+            opacity: 0.4;
+        }
+
+        .calendar-grid .day .day-num {
+            font-size: 0.85em;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .calendar-grid .day .day-events {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .calendar-grid .day .day-event {
+            font-size: 0.7em;
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: white;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .calendar-grid .day .more-events {
+            font-size: 0.7em;
+            color: var(--text-muted);
+            text-align: center;
+            margin-top: 2px;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.45);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            opacity: 0;
+            transition: opacity 0.25s ease;
+            pointer-events: none;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-content {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 30px;
+            width: 100%;
+            max-width: 520px;
+            max-height: 90vh;
+            overflow-y: auto;
+            animation: modalSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes modalSlideUp {
+            from { opacity: 0; transform: translateY(24px) scale(0.97); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+        }
+
+        .modal-header h2 {
+            font-size: 1.3em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .modal-header h2 i {
+            color: var(--primary);
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.85em;
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: var(--text-muted);
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 10px 14px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: rgba(255,255,255,0.05);
+            color: var(--text);
+            font-size: 0.95em;
+            font-family: inherit;
+            transition: border-color 0.2s;
+        }
+
+        /* Fix select/option text color in dark mode */
+        select.form-input {
+            color-scheme: dark;
+        }
+
+        select.form-input option {
+            background: #1a1a2e;
+            color: #eee;
+        }
+
+        [data-theme="light"] select.form-input {
+            color-scheme: light;
+        }
+
+        [data-theme="light"] select.form-input option {
+            background: #ffffff;
+            color: #333;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        textarea.form-input {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .form-row-3 {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 12px;
+        }
+
+        .cat-select {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .cat-option {
+            padding: 6px 14px;
+            border-radius: 20px;
+            border: 2px solid var(--border);
+            cursor: pointer;
+            font-size: 0.85em;
+            transition: all 0.2s;
+            color: var(--text);
+            background: transparent;
+        }
+
+        .cat-option:hover {
+            border-color: var(--text-muted);
+        }
+
+        .cat-option.selected {
+            color: white;
+            border-color: transparent;
+        }
+
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 24px;
+        }
+
+        /* Toast notification */
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: var(--success);
+            color: white;
+            padding: 14px 24px;
+            border-radius: 10px;
+            font-weight: 600;
+            z-index: 2000;
+            display: none;
+            animation: fadeIn 0.3s;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+
+        .toast.error {
+            background: var(--danger);
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-muted);
+        }
+
+        .empty-state i {
+            font-size: 4em;
+            margin-bottom: 16px;
+            opacity: 0.4;
+        }
+
+        .empty-state p {
+            font-size: 1.1em;
+        }
+
+        /* Theme toggle */
+        .theme-toggle {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 1.2em;
+            padding: 6px;
+            transition: color 0.2s;
+        }
+
+        .theme-toggle:hover {
+            color: var(--warning);
+        }
+
+        /* User badge */
+        .user-badge {
+            font-size: 0.8em;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container { padding: 12px; }
+            header { padding: 16px; flex-direction: column; align-items: flex-start; }
+            .stats-row { grid-template-columns: repeat(2, 1fr); }
+            .calendar-grid .day { min-height: 50px; padding: 4px; }
+            .calendar-grid .day .day-event { display: none; }
+            .calendar-grid .day .more-events { display: none; }
+            .form-row, .form-row-3 { grid-template-columns: 1fr; }
+            .attivita-actions { opacity: 1; }
+            .modal-content { padding: 20px; }
+        }
+    </style>
+</head>
+<body>
+    <script>
+        const savedTheme = localStorage.getItem('algeco_theme') || 'dark';
+        document.body.setAttribute('data-theme', savedTheme);
+    </script>
+
+    <div class="container">
+        <a href="/" class="back-btn">
+            <i class="fas fa-arrow-left"></i>
+            Torna alla Mappa
+        </a>
+
+        <header>
+            <h1>
+                <i class="fas fa-calendar-alt"></i>
+                Calendario Attività
+            </h1>
+            <div class="header-actions">
+                <span class="user-badge">
+                    <i class="fas fa-user"></i>
+                    <span id="currentUser">-</span>
+                </span>
+                <button class="btn btn-sm" style="background: #e91e63; color: white;" onclick="apriModalBoxBeatSettings()" title="Impostazioni Promemoria">
+                    <i class="fas fa-cog"></i> Promemoria
+                </button>
+                <button class="btn btn-sm" style="background: #e91e63; color: white;" onclick="scaricaExcelBoxBeat()" title="Scarica Excel appuntamenti di oggi">
+                    <i class="fas fa-file-excel"></i>
+                </button>
+                <button class="btn btn-primary" onclick="apriModalNuova()">
+                    <i class="fas fa-plus"></i>
+                    Nuova Attività
+                </button>
+            </div>
+        </header>
+
+        <!-- Stats -->
+        <div class="stats-row" id="statsRow">
+            <div class="stat-card">
+                <div class="stat-value" style="color: var(--info)" id="statOggi">0</div>
+                <div class="stat-label">Oggi</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" style="color: var(--primary)" id="statMese">0</div>
+                <div class="stat-label">Questo Mese</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" style="color: var(--danger)" id="statScadute">0</div>
+                <div class="stat-label">Scadute</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" style="color: var(--success)" id="statCompletate">0</div>
+                <div class="stat-label">Completate</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" style="color: #e91e63" id="statBoxbeat">0</div>
+                <div class="stat-label">Appuntamenti Oggi</div>
+            </div>
+        </div>
+
+        <!-- BoxBeat Deadline Alert -->
+        <div class="boxbeat-alert" id="boxbeatAlert">
+            <i class="fas fa-bell"></i>
+            <div class="alert-text">
+                <strong>Promemoria Appuntamento in scadenza!</strong>
+                <span id="boxbeatAlertText">Hai appuntamenti da riportare</span>
+            </div>
+            <button class="alert-dismiss" onclick="dismissBoxBeatAlert()">OK</button>
+        </div>
+
+        <!-- Promemoria Appuntamento Panel (appuntamenti di oggi da riportare) -->
+        <div class="boxbeat-panel" id="boxbeatPanel" style="display: none;">
+            <div class="boxbeat-panel-header" onclick="toggleBoxbeatPanel(event)">
+                <h2>
+                    <i class="fas fa-clipboard-check"></i>
+                    Promemoria Appuntamento — Oggi
+                </h2>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span class="boxbeat-badge" id="boxbeatBadge">0 pendenti</span>
+                    <button class="btn btn-sm" style="background: #e91e63; color: white;" onclick="event.stopPropagation(); apriModalNuovoBoxBeat()">
+                        <i class="fas fa-plus"></i> Aggiungi
+                    </button>
+                    <button class="boxbeat-collapse-btn" title="Comprimi/Espandi">
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                </div>
+            </div>
+            <div id="boxbeatListaOggi"></div>
+        </div>
+
+        <!-- Placeholder loading per Promemoria Appuntamento -->
+        <div class="boxbeat-panel" id="boxbeatLoadingPanel">
+            <div class="boxbeat-panel-header" style="cursor: default;">
+                <h2>
+                    <i class="fas fa-clipboard-check"></i>
+                    Promemoria Appuntamento — Oggi
+                </h2>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span class="boxbeat-badge" style="background: var(--text-muted); animation: pulse-badge 1.5s infinite;">Caricamento...</span>
+                </div>
+            </div>
+            <div class="boxbeat-loading">
+                <div class="boxbeat-skeleton-card">
+                    <div class="skeleton-circle"></div>
+                    <div class="skeleton-lines"><div class="skeleton-line"></div><div class="skeleton-line"></div><div class="skeleton-line"></div></div>
+                </div>
+                <div class="boxbeat-skeleton-card">
+                    <div class="skeleton-circle"></div>
+                    <div class="skeleton-lines"><div class="skeleton-line"></div><div class="skeleton-line"></div><div class="skeleton-line"></div></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- View tabs -->
+        <div class="tabs-bar">
+            <button class="tab-btn active" data-view="lista" onclick="cambiaVista('lista')">
+                <i class="fas fa-list"></i> Lista
+            </button>
+            <button class="tab-btn" data-view="calendario" onclick="cambiaVista('calendario')">
+                <i class="fas fa-calendar"></i> Calendario
+            </button>
+        </div>
+
+        <!-- Category filters -->
+        <div class="filters-bar" id="filtersBar">
+            <button class="filter-btn active" data-cat="tutte" onclick="filtraCategoria('tutte')">
+                Tutte
+            </button>
+            <button class="filter-btn" data-cat="appuntamento" onclick="filtraCategoria('appuntamento')">
+                <span class="dot" style="background: #3498db"></span> Appuntamento
+            </button>
+            <button class="filter-btn" data-cat="promemoria" onclick="filtraCategoria('promemoria')">
+                <span class="dot" style="background: #f39c12"></span> Promemoria
+            </button>
+            <button class="filter-btn" data-cat="scadenza" onclick="filtraCategoria('scadenza')">
+                <span class="dot" style="background: #e74c3c"></span> Scadenza
+            </button>
+            <button class="filter-btn" data-cat="riunione" onclick="filtraCategoria('riunione')">
+                <span class="dot" style="background: #9b59b6"></span> Riunione
+            </button>
+            <button class="filter-btn" data-cat="altro" onclick="filtraCategoria('altro')">
+                <span class="dot" style="background: #95a5a6"></span> Altro
+            </button>
+            <button class="filter-btn" data-cat="boxbeat" onclick="filtraCategoria('boxbeat')">
+                <span class="dot" style="background: #e91e63"></span> Appuntamento BB
+            </button>
+            <span class="filter-separator"></span>
+
+            <button class="filter-btn prov-filter active" data-prov="tutte" onclick="filtraProvincia('tutte')">
+                <i class="fas fa-globe"></i> Tutte
+            </button>
+            <button class="filter-btn prov-filter" data-prov="TORINO" onclick="filtraProvincia('TORINO')">
+                <i class="fas fa-map-marker-alt"></i> Torino
+            </button>
+            <button class="filter-btn prov-filter" data-prov="PAVIA" onclick="filtraProvincia('PAVIA')">
+                <i class="fas fa-map-marker-alt"></i> Pavia
+            </button>
+            <button class="filter-btn prov-filter" data-prov="nessuna" onclick="filtraProvincia('nessuna')">
+                <i class="fas fa-minus-circle"></i> Senza prov.
+            </button>
+
+            <label style="margin-left: auto; font-size: 0.85em; display: flex; align-items: center; gap: 6px; cursor: pointer; color: var(--text-muted);">
+                <input type="checkbox" id="mostraCompletate" checked onchange="caricaAttivita()"> Completate
+            </label>
+        </div>
+
+        <!-- Vista Lista -->
+        <div id="vistaLista">
+            <div id="loadingIndicator" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 0; gap: 14px; color: var(--text-muted);">
+                <div class="spinner"></div>
+                <span style="font-size: 0.9em;">Caricamento attività...</span>
+            </div>
+            <div id="listaAttivita"></div>
+        </div>
+
+        <!-- Vista Calendario -->
+        <div id="vistaCalendario" style="display: none;">
+            <div class="calendar-nav">
+                <button onclick="mesePrecedente()"><i class="fas fa-chevron-left"></i></button>
+                <h2 id="calMeseLabel"></h2>
+                <button onclick="meseProssimo()"><i class="fas fa-chevron-right"></i></button>
+                <button onclick="meseCorrente()" title="Oggi" style="margin-left: 8px; width: auto; padding: 6px 14px; border-radius: 8px; font-size: 0.85em;">
+                    <i class="fas fa-dot-circle"></i> Oggi
+                </button>
+            </div>
+            <div class="calendar-grid" id="calendarGrid"></div>
+        </div>
+    </div>
+
+    <!-- Modal Nuova/Modifica Attività -->
+    <div class="modal-overlay" id="modalAttivita">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-pen"></i> <span id="modalTitle">Nuova Attività</span></h2>
+                <button class="modal-close-btn" onclick="chiudiModal()" title="Chiudi">✕</button>
+            </div>
+
+            <input type="hidden" id="editId" value="">
+
+            <div class="form-group">
+                <label>Titolo *</label>
+                <input type="text" class="form-input" id="inputTitolo" placeholder="Es: Sopralluogo cliente Rossi" maxlength="120">
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Data *</label>
+                    <input type="date" class="form-input" id="inputData">
+                </div>
+                <div class="form-group">
+                    <label>Ora inizio</label>
+                    <input type="time" class="form-input" id="inputOra">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Ora fine</label>
+                    <input type="time" class="form-input" id="inputOraFine">
+                </div>
+                <div class="form-group">
+                    <label>Provincia</label>
+                    <select class="form-input" id="inputProvincia">
+                        <option value="">-- Nessuna --</option>
+                        <option value="TORINO">Torino</option>
+                        <option value="PAVIA">Pavia</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Categoria</label>
+                <div class="cat-select" id="catSelect">
+                    <button type="button" class="cat-option selected" data-cat="promemoria" style="--cat-color: #f39c12" onclick="selezionaCategoria('promemoria')">
+                        <i class="fas fa-sticky-note"></i> Promemoria
+                    </button>
+                    <button type="button" class="cat-option" data-cat="appuntamento" onclick="selezionaCategoria('appuntamento')">
+                        <i class="fas fa-handshake"></i> Appuntamento
+                    </button>
+                    <button type="button" class="cat-option" data-cat="scadenza" onclick="selezionaCategoria('scadenza')">
+                        <i class="fas fa-exclamation-circle"></i> Scadenza
+                    </button>
+                    <button type="button" class="cat-option" data-cat="riunione" onclick="selezionaCategoria('riunione')">
+                        <i class="fas fa-users"></i> Riunione
+                    </button>
+                    <button type="button" class="cat-option" data-cat="altro" onclick="selezionaCategoria('altro')">
+                        <i class="fas fa-tag"></i> Altro
+                    </button>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Descrizione</label>
+                <textarea class="form-input" id="inputDescrizione" placeholder="Dettagli aggiuntivi..." rows="3"></textarea>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-ghost" onclick="chiudiModal()">Annulla</button>
+                <button class="btn btn-primary" id="btnSalva" onclick="salvaAttivita()">
+                    <i class="fas fa-save"></i> Salva
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Conferma Eliminazione -->
+    <div class="modal-overlay" id="modalElimina">
+        <div class="modal-content" style="max-width: 400px; text-align: center;">
+            <div style="font-size: 3em; margin-bottom: 16px;">
+                <i class="fas fa-trash-alt" style="color: var(--danger);"></i>
+            </div>
+            <h3 style="margin-bottom: 10px;">Eliminare questa attività?</h3>
+            <p style="color: var(--text-muted); margin-bottom: 24px;" id="eliminaMsg">L'azione non può essere annullata.</p>
+            <div style="display: flex; gap: 10px; justify-content: center;">
+                <button class="btn btn-ghost" onclick="chiudiModalElimina()">Annulla</button>
+                <button class="btn btn-danger" onclick="confermaElimina()">
+                    <i class="fas fa-trash"></i> Elimina
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Nuovo/Modifica Promemoria BoxBeat -->
+    <div class="modal-overlay" id="modalBoxBeat">
+        <div class="modal-content" style="max-width: 580px;">
+            <div class="modal-header">
+                <h2 style="color: #e91e63;"><i class="fas fa-clipboard-check"></i> <span id="bbModalTitle">Nuovo Promemoria Appuntamento</span></h2>
+                <button class="modal-close-btn" onclick="chiudiModalBoxBeat()" title="Chiudi">✕</button>
+            </div>
+
+            <input type="hidden" id="bbEditId" value="">
+
+            <div class="bb-form-grid">
+                <div class="form-group">
+                    <label>Data Appuntamento *</label>
+                    <input type="date" class="form-input" id="bbData">
+                </div>
+                <div class="form-group">
+                    <label>Orario Appuntamento *</label>
+                    <input type="text" class="form-input" id="bbOrario" placeholder="Es: 10:00-12:00 o 10:30">
+                </div>
+                <div class="form-group">
+                    <label>POD</label>
+                    <input type="text" class="form-input" id="bbPod" placeholder="IT001E...">
+                </div>
+                <div class="form-group">
+                    <label>ENELTEL</label>
+                    <input type="text" class="form-input" id="bbEneltel" placeholder="Codice ENELTEL">
+                </div>
+                <div class="form-group full-width">
+                    <label>Nominativo</label>
+                    <input type="text" class="form-input" id="bbNominativo" placeholder="Nome e cognome del cliente">
+                </div>
+                <div class="form-group">
+                    <label>Via</label>
+                    <input type="text" class="form-input" id="bbVia" placeholder="Via/Piazza/Corso...">
+                </div>
+                <div class="form-group">
+                    <label>Civico</label>
+                    <input type="text" class="form-input" id="bbCivico" placeholder="N. civico">
+                </div>
+                <div class="form-group">
+                    <label>Comune</label>
+                    <input type="text" class="form-input" id="bbComune" placeholder="Comune">
+                </div>
+                <div class="form-group">
+                    <label>Provincia</label>
+                    <select class="form-input" id="bbProvincia">
+                        <option value="TORINO">Torino</option>
+                        <option value="PAVIA">Pavia</option>
+                    </select>
+                </div>
+                <div class="form-group full-width">
+                    <label>Note</label>
+                    <textarea class="form-input" id="bbNote" placeholder="Note aggiuntive..." rows="1"></textarea>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-ghost" onclick="chiudiModalBoxBeat()">Annulla</button>
+                <button class="btn" style="background: #e91e63; color: white;" id="bbBtnSalva" onclick="salvaBoxBeat()">
+                    <i class="fas fa-save"></i> <span id="bbBtnLabel">Crea Promemoria</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Impostazioni BoxBeat -->
+    <div class="modal-overlay" id="modalBoxBeatSettings">
+        <div class="modal-content" style="max-width: 480px;">
+            <div class="modal-header">
+                <h2 style="color: #e91e63;"><i class="fas fa-cog"></i> Impostazioni Promemoria Appuntamento</h2>
+                <button class="modal-close-btn" onclick="chiudiModalBoxBeatSettings()" title="Chiudi">✕</button>
+            </div>
+
+            <p style="color: var(--text-muted); font-size: 0.9em; margin-bottom: 16px;">
+                Configura l'orario di scadenza per i promemoria Appuntamento. Riceverai un avviso 
+                quando si avvicina l'orario impostato e ci sono ancora appuntamenti da riportare.
+            </p>
+
+            <div class="settings-row">
+                <label><i class="fas fa-bell"></i> Promemoria attivi</label>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="bbSettAbilitato" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+
+            <div class="settings-row">
+                <label><i class="fas fa-clock"></i> Orario scadenza</label>
+                <input type="time" class="form-input" id="bbSettOrario" value="17:00" style="width: 130px;">
+            </div>
+
+            <div class="settings-row">
+                <label><i class="fas fa-desktop"></i> Notifica browser</label>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="bbSettNotifica" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+
+            <div class="settings-row">
+                <label><i class="fas fa-volume-up"></i> Suono avviso</label>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="bbSettSuono" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-ghost" onclick="chiudiModalBoxBeatSettings()">Annulla</button>
+                <button class="btn" style="background: #e91e63; color: white;" onclick="salvaBoxBeatSettings()">
+                    <i class="fas fa-save"></i> Salva
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+    <script>
+    // =========================================================================
+    // STATO
+    // =========================================================================
+    let attivitaList = [];
+    let categoriaFiltro = 'tutte';
+    let provinciaFiltro = 'tutte';
+    let vistaCorrente = 'lista';
+    let calAnno, calMese; // Per la vista calendario
+    let eliminaId = null;
+    let currentUser = '';
+    let boxbeatSettings = {};
+    let boxbeatOggiList = [];
+    let boxbeatAlertDismissed = false;
+    let boxbeatCheckInterval = null;
+
+    const COLORI = {
+        appuntamento: '#3498db',
+        promemoria: '#f39c12',
+        scadenza: '#e74c3c',
+        riunione: '#9b59b6',
+        altro: '#95a5a6',
+        boxbeat: '#e91e63'
+    };
+
+    const ICONE = {
+        appuntamento: 'fa-handshake',
+        promemoria: 'fa-sticky-note',
+        scadenza: 'fa-exclamation-circle',
+        riunione: 'fa-users',
+        altro: 'fa-tag',
+        boxbeat: 'fa-clipboard-check'
+    };
+
+    const MESI = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno',
+                  'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
+    const GIORNI = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
+    const GIORNI_FULL = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
+
+    // =========================================================================
+    // INIT
+    // =========================================================================
+    (async function init() {
+        // Imposta mese corrente per la vista calendario
+        const oggi = new Date();
+        calAnno = oggi.getFullYear();
+        calMese = oggi.getMonth();
+
+        // Carica utente corrente
+        try {
+            const res = await fetch('/api/user');
+            const data = await res.json();
+            if (data.user) {
+                const username = typeof data.user === 'object' ? data.user.username : data.user;
+                currentUser = username;
+                document.getElementById('currentUser').textContent = username;
+            }
+        } catch(e) {}
+
+        // Imposta colore iniziale filtro "Tutte"
+        const btnTutte = document.querySelector('.filter-btn[data-cat="tutte"]');
+        if (btnTutte) btnTutte.style.setProperty('--filter-active-bg', FILTER_COLORS['tutte']);
+        const btnProvTutte = document.querySelector('.prov-filter[data-prov="tutte"]');
+        if (btnProvTutte) btnProvTutte.style.setProperty('--filter-active-bg', PROV_COLORS['tutte']);
+
+        // Carica tutto in parallelo per velocizzare il caricamento iniziale
+        await Promise.all([
+            caricaAttivita(),
+            caricaRiepilogo(),
+            caricaBoxBeatSettings(),
+            caricaBoxBeatOggi()
+        ]);
+
+        // Avvia check periodico BoxBeat (ogni 60 secondi)
+        boxbeatCheckInterval = setInterval(checkBoxBeatDeadline, 60000);
+        checkBoxBeatDeadline();
+
+        // SSE per aggiornamenti real-time
+        setupSSE();
+
+        // Richiedi permesso notifiche
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission();
+        }
+    })();
+
+    // =========================================================================
+    // SSE + Helpers per aggiornamento in background
+    // =========================================================================
+    let _skipSSECount = 0;           // Contatore SSE da skippare (supporta toggle rapidi)
+    let _sseReloadTimer = null;     // Debounce SSE reload
+    const SSE_DEBOUNCE_MS = 500;    // Ritardo debounce SSE
+    const _inflightToggles = new Set();  // ID attività con toggle in corso
+    let _postToggleReloadTimer = null;   // Debounce reload post-toggle
+
+    /** Ricarica tutti i dati in parallelo, senza bloccare l'UI */
+    function ricaricaTuttoInBackground() {
+        Promise.all([
+            caricaAttivita(),
+            caricaRiepilogo(),
+            caricaBoxBeatOggi()
+        ]).catch(() => {});
+    }
+
+    function setupSSE() {
+        try {
+            const evtSource = new EventSource('/api/events');
+            evtSource.addEventListener('calendario_update', () => {
+                // Se l'azione è stata fatta da questo client, skip per evitare doppio render
+                if (_skipSSECount > 0) {
+                    _skipSSECount--;
+                    return;
+                }
+                // Debounce per evitare N reload ravvicinati
+                clearTimeout(_sseReloadTimer);
+                _sseReloadTimer = setTimeout(() => {
+                    ricaricaTuttoInBackground();
+                }, SSE_DEBOUNCE_MS);
+            });
+        } catch(e) {
+            console.warn('SSE non disponibile');
+        }
+    }
+
+    // =========================================================================
+    // API
+    // =========================================================================
+    async function caricaAttivita() {
+        try {
+            const completate = document.getElementById('mostraCompletate').checked;
+            const params = new URLSearchParams({ completate: completate });
+
+            const res = await fetch(`/api/calendario?${params}`);
+            if (!res.ok) throw new Error('Errore caricamento');
+            const data = await res.json();
+            attivitaList = data.attivita || [];
+
+            const loader = document.getElementById('loadingIndicator');
+            if (loader) loader.remove();
+
+            renderVista();
+        } catch(e) {
+            const loader = document.getElementById('loadingIndicator');
+            if (loader) loader.remove();
+            console.error('Errore caricamento attività:', e);
+        }
+    }
+
+    async function caricaRiepilogo() {
+        try {
+            const res = await fetch('/api/calendario/riepilogo');
+            if (!res.ok) return;
+            const data = await res.json();
+            document.getElementById('statOggi').textContent = data.oggi || 0;
+            document.getElementById('statMese').textContent = data.mese_corrente || 0;
+            document.getElementById('statScadute').textContent = data.scadute || 0;
+            document.getElementById('statCompletate').textContent = data.completate || 0;
+        } catch(e) {}
+    }
+
+    async function salvaAttivita() {
+        const id = document.getElementById('editId').value;
+        const dati = {
+            titolo: document.getElementById('inputTitolo').value,
+            data: document.getElementById('inputData').value,
+            ora: document.getElementById('inputOra').value,
+            ora_fine: document.getElementById('inputOraFine').value,
+            descrizione: document.getElementById('inputDescrizione').value,
+            categoria: document.querySelector('.cat-option.selected')?.dataset.cat || 'promemoria',
+            provincia: document.getElementById('inputProvincia').value,
+        };
+
+        if (!dati.titolo.trim()) { showToast('Inserisci un titolo', true); return; }
+        if (!dati.data) { showToast('Inserisci una data', true); return; }
+
+        // Optimistic UI: aggiorna subito localmente
+        if (id) {
+            // Modifica: aggiorna l'attività nella lista locale
+            const idx = attivitaList.findIndex(a => a.id === id);
+            if (idx !== -1) {
+                Object.assign(attivitaList[idx], dati);
+                renderVista();
+            }
+        } else {
+            // Creazione: aggiungi temporaneamente alla lista locale
+            const tempAtt = {
+                ...dati,
+                id: '_temp_' + Date.now(),
+                completata: false,
+                creato_da: currentUser || '?',
+                creata_il: new Date().toISOString()
+            };
+            attivitaList.push(tempAtt);
+            attivitaList.sort((a, b) => (a.data + (a.ora || '')) > (b.data + (b.ora || '')) ? 1 : -1);
+            renderVista();
+        }
+
+        // Chiudi modal e mostra toast immediatamente
+        showToast(id ? 'Attività modificata!' : 'Attività creata!');
+        chiudiModal();
+
+        // Salva in background
+        _skipSSECount++;
+        try {
+            const url = id ? `/api/calendario/${id}` : '/api/calendario';
+            const method = id ? 'PUT' : 'POST';
+
+            const res = await fetch(url, {
+                method: method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(dati)
+            });
+
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.error || 'Errore');
+            }
+        } catch(e) {
+            showToast('Errore salvataggio: ' + e.message, true);
+        }
+        // Sincronizza i dati reali dal server in background
+        ricaricaTuttoInBackground();
+    }
+
+    async function toggleCompleta(id, e) {
+        if (e) e.stopPropagation();
+
+        // Previeni doppio toggle se richiesta già in corso per questo ID
+        if (_inflightToggles.has(id)) return;
+        _inflightToggles.add(id);
+
+        // Optimistic UI: aggiorna subito localmente
+        const att = attivitaList.find(a => a.id === id);
+        const wasCompletata = att ? att.completata : false;
+        if (att) {
+            att.completata = !att.completata;
+            if (att.completata) {
+                att.completata_da = currentUser || '?';
+                att.completata_il = new Date().toISOString();
+            } else {
+                att.completata_da = null;
+                att.completata_il = null;
+            }
+            renderVista();
+        }
+
+        // Aggiorna anche il pannello BoxBeat se è un boxbeat
+        if (att && att.categoria === 'boxbeat') {
+            const bbAtt = boxbeatOggiList.find(a => a.id === id);
+            if (bbAtt) {
+                bbAtt.completata = att.completata;
+                bbAtt.completata_da = att.completata_da;
+                bbAtt.completata_il = att.completata_il;
+                renderBoxBeatPanel();
+                aggiornaStatBoxBeat();
+            }
+        }
+
+        // Invia al server in background
+        _skipSSECount++;
+        try {
+            const res = await fetch(`/api/calendario/${id}/completa`, { method: 'POST' });
+            if (!res.ok) throw new Error();
+            // Aggiorna riepilogo e boxbeat con debounce (evita reload multipli ravvicinati)
+            clearTimeout(_postToggleReloadTimer);
+            _postToggleReloadTimer = setTimeout(() => {
+                Promise.all([caricaRiepilogo(), caricaBoxBeatOggi()]).catch(() => {});
+            }, 600);
+        } catch(err) {
+            // Rollback su errore
+            if (att) {
+                att.completata = wasCompletata;
+                if (att.completata) {
+                    att.completata_da = currentUser || '?';
+                    att.completata_il = new Date().toISOString();
+                } else {
+                    att.completata_da = null;
+                    att.completata_il = null;
+                }
+                renderVista();
+                // Rollback anche boxbeat panel
+                if (att.categoria === 'boxbeat') {
+                    const bbAtt = boxbeatOggiList.find(a => a.id === id);
+                    if (bbAtt) {
+                        bbAtt.completata = att.completata;
+                        bbAtt.completata_da = att.completata_da;
+                        bbAtt.completata_il = att.completata_il;
+                        renderBoxBeatPanel();
+                        aggiornaStatBoxBeat();
+                    }
+                }
+            }
+            showToast('Errore aggiornamento', true);
+        } finally {
+            _inflightToggles.delete(id);
+        }
+    }
+
+    async function confermaElimina() {
+        if (!eliminaId) return;
+        const idToDelete = eliminaId;
+
+        // Optimistic UI: rimuovi subito dalla lista locale
+        const removedIdx = attivitaList.findIndex(a => a.id === idToDelete);
+        const removedAtt = removedIdx !== -1 ? attivitaList.splice(removedIdx, 1)[0] : null;
+        const removedBbIdx = boxbeatOggiList.findIndex(a => a.id === idToDelete);
+        const removedBb = removedBbIdx !== -1 ? boxbeatOggiList.splice(removedBbIdx, 1)[0] : null;
+        renderVista();
+        if (removedBb) { renderBoxBeatPanel(); aggiornaStatBoxBeat(); }
+        showToast('Attività eliminata');
+        chiudiModalElimina();
+
+        // Elimina in background
+        _skipSSECount++;
+        try {
+            const res = await fetch(`/api/calendario/${idToDelete}`, { method: 'DELETE' });
+            if (!res.ok) throw new Error();
+        } catch(e) {
+            // Rollback: reinserisci l'attività
+            if (removedAtt) { attivitaList.splice(removedIdx, 0, removedAtt); renderVista(); }
+            if (removedBb) { boxbeatOggiList.splice(removedBbIdx, 0, removedBb); renderBoxBeatPanel(); aggiornaStatBoxBeat(); }
+            showToast('Errore eliminazione', true);
+        }
+        // Sincronizza dati reali in background
+        ricaricaTuttoInBackground();
+    }
+
+    // =========================================================================
+    // RENDER
+    // =========================================================================
+    function renderVista() {
+        if (vistaCorrente === 'lista') {
+            renderLista();
+        } else {
+            renderCalendario();
+        }
+    }
+
+    function getAttivitaFiltrate() {
+        let list = [...attivitaList];
+        if (categoriaFiltro !== 'tutte') {
+            list = list.filter(a => a.categoria === categoriaFiltro);
+        }
+        if (provinciaFiltro !== 'tutte') {
+            if (provinciaFiltro === 'nessuna') {
+                list = list.filter(a => !a.provincia);
+            } else {
+                list = list.filter(a => a.provincia === provinciaFiltro);
+            }
+        }
+        return list;
+    }
+
+    function renderLista() {
+        const container = document.getElementById('listaAttivita');
+        const attivita = getAttivitaFiltrate();
+
+        if (attivita.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-calendar-check"></i>
+                    <p>Nessuna attività trovata</p>
+                    <p style="font-size:0.85em; margin-top:8px; color: var(--text-muted)">
+                        Clicca "Nuova Attività" per aggiungerne una
+                    </p>
+                </div>`;
+            return;
+        }
+
+        // Raggruppa per data
+        const gruppi = {};
+        attivita.forEach(a => {
+            const d = a.data || 'senza-data';
+            if (!gruppi[d]) gruppi[d] = [];
+            gruppi[d].push(a);
+        });
+
+        const oggi = new Date().toISOString().split('T')[0];
+        let html = '';
+
+        Object.keys(gruppi).sort().forEach(data => {
+            const items = gruppi[data];
+            const isOggi = data === oggi;
+            const isScaduto = data < oggi;
+            const dataLabel = formattaDataLabel(data, isOggi);
+            const classeHeader = isOggi ? 'oggi' : (isScaduto ? 'scaduto' : '');
+
+            html += `<div class="giorno-header ${classeHeader}">
+                <i class="fas fa-calendar-day"></i>
+                ${dataLabel}
+                <span class="badge-count">${items.length}</span>
+            </div>`;
+
+            items.forEach(a => {
+                html += renderAttivitaCard(a);
+            });
+        });
+
+        container.innerHTML = html;
+    }
+
+    function renderAttivitaCard(a) {
+        const colore = COLORI[a.categoria] || COLORI.altro;
+        const icona = ICONE[a.categoria] || ICONE.altro;
+        const completata = a.completata ? 'completata' : '';
+        const checkedClass = a.completata ? 'checked' : '';
+        const checkLabel = a.completata ? 'Riapri' : 'Completa';
+
+        // Estrai username stringa anche se fosse un oggetto
+        const creatoDa = (typeof a.creato_da === 'object' && a.creato_da) ? a.creato_da.username : (a.creato_da || '?');
+
+        let meta = '';
+        if (a.ora) {
+            meta += `<span><i class="far fa-clock"></i> ${a.ora}${a.ora_fine ? ' - ' + a.ora_fine : ''}</span>`;
+        }
+        if (a.provincia) {
+            meta += `<span><i class="fas fa-map-marker-alt"></i> ${a.provincia}</span>`;
+        }
+        meta += `<span><i class="fas fa-user"></i> ${escapeHtml(creatoDa)}</span>`;
+
+        // BoxBeat: mostra dati strutturati invece della descrizione standard
+        let desc = '';
+        if (a.categoria === 'boxbeat' && a.boxbeat_data) {
+            const bb = a.boxbeat_data;
+            let fields = '';
+            if (bb.pod) fields += `<div class="bb-field"><i class="fas fa-barcode"></i> <strong>POD:</strong> ${escapeHtml(bb.pod)}</div>`;
+            if (bb.eneltel) fields += `<div class="bb-field"><i class="fas fa-hashtag"></i> <strong>ENELTEL:</strong> ${escapeHtml(bb.eneltel)}</div>`;
+            if (bb.nominativo) fields += `<div class="bb-field"><i class="fas fa-user-tag"></i> <strong>Nominativo:</strong> ${escapeHtml(bb.nominativo)}</div>`;
+            let indirizzo = '';
+            if (bb.via) { indirizzo = bb.via; if (bb.civico) indirizzo += ' ' + bb.civico; }
+            if (indirizzo) fields += `<div class="bb-field"><i class="fas fa-road"></i> <strong>Indirizzo:</strong> ${escapeHtml(indirizzo)}</div>`;
+            if (bb.comune) fields += `<div class="bb-field"><i class="fas fa-city"></i> <strong>Comune:</strong> ${escapeHtml(bb.comune)}</div>`;
+            if (bb.ora_appuntamento) fields += `<div class="bb-field"><i class="fas fa-clock"></i> <strong>Orario APP:</strong> ${escapeHtml(bb.ora_appuntamento)}</div>`;
+            desc = `<div class="bb-fields" style="margin-top:8px;">${fields}</div>`;
+            if (bb.note) desc += `<div class="bb-note"><i class="fas fa-sticky-note"></i> ${escapeHtml(bb.note)}</div>`;
+            if (bb.origine) desc += `<span class="bb-origin" style="display:inline-block; margin-top:6px;"><i class="fas fa-link"></i> ${escapeHtml(bb.origine)}</span>`;
+        } else if (a.descrizione) {
+            desc = `<div class="attivita-desc">${escapeHtml(a.descrizione)}</div>`;
+        }
+
+        let completataInfo = '';
+        if (a.completata && a.completata_da) {
+            const completataDa = (typeof a.completata_da === 'object' && a.completata_da) ? a.completata_da.username : a.completata_da;
+            completataInfo = `<span style="color: var(--success)"><i class="fas fa-check"></i> ${escapeHtml(completataDa)}</span>`;
+        }
+
+        return `
+        <div class="attivita-card ${completata}" style="border-left-color: ${colore}" onclick="apriModalModifica('${a.id}')">
+            <div class="attivita-top">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <button class="check-btn ${checkedClass}" onclick="toggleCompleta('${a.id}', event)" title="${checkLabel}">
+                        <i class="fas fa-check"></i>
+                    </button>
+                    <span class="attivita-titolo">${escapeHtml(a.titolo)}</span>
+                    <span class="cat-badge" style="background:${colore}">
+                        <i class="fas ${icona}"></i> ${a.categoria === 'boxbeat' ? 'Appuntamento' : a.categoria}
+                    </span>
+                </div>
+                <div class="attivita-actions">
+                    <button class="action-btn" onclick="apriModalModifica('${a.id}'); event.stopPropagation();" title="Modifica">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="action-btn action-delete" onclick="apriModalElimina('${a.id}', '${escapeJsAttr(a.titolo)}'); event.stopPropagation();" title="Elimina">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="attivita-meta">
+                ${meta}
+                ${completataInfo}
+            </div>
+            ${desc}
+        </div>`;
+    }
+
+    function renderCalendario() {
+        const grid = document.getElementById('calendarGrid');
+        document.getElementById('calMeseLabel').textContent = `${MESI[calMese]} ${calAnno}`;
+
+        const primoGiorno = new Date(calAnno, calMese, 1);
+        const ultimoGiorno = new Date(calAnno, calMese + 1, 0);
+        const oggi = new Date().toISOString().split('T')[0];
+
+        // Giorno della settimana del primo del mese (0=dom -> converti a lun=0)
+        let startDay = primoGiorno.getDay() - 1;
+        if (startDay < 0) startDay = 6;
+
+        const attivita = getAttivitaFiltrate();
+
+        // Mappa data -> attività
+        const mappaEventi = {};
+        attivita.forEach(a => {
+            if (!mappaEventi[a.data]) mappaEventi[a.data] = [];
+            mappaEventi[a.data].push(a);
+        });
+
+        let html = '';
+        // Day labels
+        GIORNI.forEach(g => {
+            html += `<div class="day-label">${g}</div>`;
+        });
+
+        // Days from previous month
+        const prevMonth = new Date(calAnno, calMese, 0);
+        for (let i = startDay - 1; i >= 0; i--) {
+            const d = prevMonth.getDate() - i;
+            html += `<div class="day other-month"><div class="day-num">${d}</div></div>`;
+        }
+
+        // Days of current month
+        for (let d = 1; d <= ultimoGiorno.getDate(); d++) {
+            const dateStr = `${calAnno}-${String(calMese + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+            const isToday = dateStr === oggi;
+            const events = mappaEventi[dateStr] || [];
+
+            let eventsHtml = '<div class="day-events">';
+            const maxShow = 3;
+            events.slice(0, maxShow).forEach(e => {
+                const col = COLORI[e.categoria] || COLORI.altro;
+                const titolo = escapeHtml(e.titolo).substring(0, 18);
+                eventsHtml += `<div class="day-event" style="background:${col}" title="${escapeHtml(e.titolo)}">${titolo}</div>`;
+            });
+            if (events.length > maxShow) {
+                eventsHtml += `<div class="more-events">+${events.length - maxShow} altre</div>`;
+            }
+            eventsHtml += '</div>';
+
+            html += `<div class="day ${isToday ? 'today' : ''}" onclick="giornoClick('${dateStr}')">
+                <div class="day-num">${d}</div>
+                ${eventsHtml}
+            </div>`;
+        }
+
+        // Days of next month
+        const totalCells = startDay + ultimoGiorno.getDate();
+        const remaining = (7 - (totalCells % 7)) % 7;
+        for (let d = 1; d <= remaining; d++) {
+            html += `<div class="day other-month"><div class="day-num">${d}</div></div>`;
+        }
+
+        grid.innerHTML = html;
+    }
+
+    // =========================================================================
+    // NAVIGAZIONE CALENDARIO
+    // =========================================================================
+    function mesePrecedente() {
+        calMese--;
+        if (calMese < 0) { calMese = 11; calAnno--; }
+        renderCalendario();
+    }
+
+    function meseProssimo() {
+        calMese++;
+        if (calMese > 11) { calMese = 0; calAnno++; }
+        renderCalendario();
+    }
+
+    function meseCorrente() {
+        const oggi = new Date();
+        calAnno = oggi.getFullYear();
+        calMese = oggi.getMonth();
+        renderCalendario();
+    }
+
+    function giornoClick(dateStr) {
+        apriModalNuova(dateStr);
+    }
+
+    // =========================================================================
+    // VISTE E FILTRI
+    // =========================================================================
+    function cambiaVista(vista) {
+        vistaCorrente = vista;
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelector(`.tab-btn[data-view="${vista}"]`).classList.add('active');
+
+        document.getElementById('vistaLista').style.display = vista === 'lista' ? '' : 'none';
+        document.getElementById('vistaCalendario').style.display = vista === 'calendario' ? '' : 'none';
+
+        renderVista();
+    }
+
+    const FILTER_COLORS = {
+        tutte: 'var(--primary)',
+        appuntamento: '#3498db',
+        promemoria: '#f39c12',
+        scadenza: '#e74c3c',
+        riunione: '#9b59b6',
+        altro: '#95a5a6',
+        boxbeat: '#e91e63'
+    };
+
+    const PROV_COLORS = {
+        tutte: 'var(--primary)',
+        TORINO: '#e67e22',
+        PAVIA: '#27ae60',
+        nessuna: '#7f8c8d'
+    };
+
+    function filtraProvincia(prov) {
+        provinciaFiltro = prov;
+        document.querySelectorAll('.prov-filter').forEach(b => {
+            b.classList.remove('active');
+            b.style.removeProperty('--filter-active-bg');
+        });
+        const btn = document.querySelector(`.prov-filter[data-prov="${prov}"]`);
+        btn.classList.add('active');
+        btn.style.setProperty('--filter-active-bg', PROV_COLORS[prov] || 'var(--primary)');
+        renderVista();
+    }
+
+    function filtraCategoria(cat) {
+        categoriaFiltro = cat;
+        document.querySelectorAll('.filter-btn:not(.prov-filter)').forEach(b => {
+            b.classList.remove('active');
+            b.style.removeProperty('--filter-active-bg');
+        });
+        const btn = document.querySelector(`.filter-btn[data-cat="${cat}"]`);
+        btn.classList.add('active');
+        btn.style.setProperty('--filter-active-bg', FILTER_COLORS[cat] || 'var(--primary)');
+        renderVista();
+    }
+
+    // =========================================================================
+    // MODALS
+    // =========================================================================
+    function apriModalNuova(data) {
+        document.getElementById('editId').value = '';
+        document.getElementById('modalTitle').textContent = 'Nuova Attività';
+        document.getElementById('inputTitolo').value = '';
+        document.getElementById('inputData').value = data || new Date().toISOString().split('T')[0];
+        document.getElementById('inputOra').value = '';
+        document.getElementById('inputOraFine').value = '';
+        document.getElementById('inputDescrizione').value = '';
+        document.getElementById('inputProvincia').value = '';
+        selezionaCategoria('promemoria');
+        document.getElementById('modalAttivita').classList.add('active');
+        setTimeout(() => document.getElementById('inputTitolo').focus(), 100);
+    }
+
+    function apriModalModifica(id) {
+        const att = attivitaList.find(a => a.id === id);
+        if (!att) return;
+
+        // Se è un BoxBeat, apri il modal BoxBeat dedicato in modalità modifica
+        if (att.categoria === 'boxbeat') {
+            apriModalModificaBoxBeat(att);
+            return;
+        }
+
+        document.getElementById('editId').value = att.id;
+        document.getElementById('modalTitle').textContent = 'Modifica Attività';
+        document.getElementById('inputTitolo').value = att.titolo || '';
+        document.getElementById('inputData').value = att.data || '';
+        document.getElementById('inputOra').value = att.ora || '';
+        document.getElementById('inputOraFine').value = att.ora_fine || '';
+        document.getElementById('inputDescrizione').value = att.descrizione || '';
+        document.getElementById('inputProvincia').value = att.provincia || '';
+        selezionaCategoria(att.categoria || 'promemoria');
+        document.getElementById('modalAttivita').classList.add('active');
+    }
+
+    function apriModalModificaBoxBeat(att) {
+        const bb = att.boxbeat_data || {};
+        document.getElementById('bbEditId').value = att.id;
+        document.getElementById('bbModalTitle').textContent = 'Modifica Promemoria Appuntamento';
+        document.getElementById('bbBtnLabel').textContent = 'Salva Modifiche';
+        document.getElementById('bbData').value = att.data || '';
+        document.getElementById('bbOrario').value = bb.ora_appuntamento || (att.ora ? (att.ora + (att.ora_fine ? '-' + att.ora_fine : '')) : '');
+        document.getElementById('bbPod').value = bb.pod || '';
+        document.getElementById('bbEneltel').value = bb.eneltel || '';
+        document.getElementById('bbNominativo').value = bb.nominativo || '';
+        document.getElementById('bbVia').value = bb.via || '';
+        document.getElementById('bbCivico').value = bb.civico || '';
+        document.getElementById('bbComune').value = bb.comune || '';
+        document.getElementById('bbProvincia').value = att.provincia || 'TORINO';
+        document.getElementById('bbNote').value = bb.note || '';
+        document.getElementById('modalBoxBeat').classList.add('active');
+    }
+
+    function chiudiModal() {
+        document.getElementById('modalAttivita').classList.remove('active');
+    }
+
+    function apriModalElimina(id, titolo) {
+        eliminaId = id;
+        document.getElementById('eliminaMsg').textContent = `"${titolo}" verrà eliminata permanentemente.`;
+        document.getElementById('modalElimina').classList.add('active');
+    }
+
+    function chiudiModalElimina() {
+        document.getElementById('modalElimina').classList.remove('active');
+        eliminaId = null;
+    }
+
+    function selezionaCategoria(cat) {
+        document.querySelectorAll('.cat-option').forEach(b => {
+            b.classList.remove('selected');
+            b.style.background = '';
+            b.style.borderColor = '';
+        });
+        const btn = document.querySelector(`.cat-option[data-cat="${cat}"]`);
+        if (btn) {
+            btn.classList.add('selected');
+            btn.style.background = COLORI[cat] || COLORI.altro;
+            btn.style.borderColor = 'transparent';
+        }
+    }
+
+    // =========================================================================
+    // UTILITIES
+    // =========================================================================
+    function formattaDataLabel(dataStr, isOggi) {
+        if (dataStr === 'senza-data') return 'Senza data';
+        try {
+            const [anno, mese, giorno] = dataStr.split('-').map(Number);
+            const d = new Date(anno, mese - 1, giorno);
+            const nomeGiorno = GIORNI_FULL[d.getDay() === 0 ? 6 : d.getDay() - 1];
+            const nomeMese = MESI[mese - 1];
+            let label = `${nomeGiorno} ${giorno} ${nomeMese} ${anno}`;
+            if (isOggi) label = `📌 OGGI — ${label}`;
+            return label;
+        } catch(e) {
+            return dataStr;
+        }
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                  .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    }
+
+    function escapeJsAttr(str) {
+        if (!str) return '';
+        return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
+    }
+
+    function showToast(msg, isError = false) {
+        const t = document.getElementById('toast');
+        t.textContent = msg;
+        t.className = 'toast' + (isError ? ' error' : '');
+        t.style.display = 'block';
+        setTimeout(() => { t.style.display = 'none'; }, 3000);
+    }
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') {
+            chiudiModal();
+            chiudiModalElimina();
+            chiudiModalBoxBeat();
+            chiudiModalBoxBeatSettings();
+        }
+        if (e.key === 'n' && !e.ctrlKey && !e.metaKey && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+            apriModalNuova();
+        }
+    });
+
+    // Close modal on overlay click
+    document.querySelectorAll('.modal-overlay').forEach(el => {
+        el.addEventListener('click', e => {
+            if (e.target === el) {
+                chiudiModal();
+                chiudiModalElimina();
+                chiudiModalBoxBeat();
+                chiudiModalBoxBeatSettings();
+            }
+        });
+    });
+
+    // =========================================================================
+    // BOXBEAT - Funzioni
+    // =========================================================================
+
+    async function caricaBoxBeatSettings() {
+        try {
+            const res = await fetch('/api/boxbeat/settings');
+            if (!res.ok) return;
+            boxbeatSettings = await res.json();
+        } catch(e) {
+            console.warn('Errore caricamento impostazioni promemoria:', e);
+        }
+    }
+
+    async function caricaBoxBeatOggi() {
+        try {
+            const res = await fetch('/api/boxbeat/promemoria?completati=true');
+            if (!res.ok) return;
+            const data = await res.json();
+            boxbeatOggiList = data.promemoria || [];
+            // Nascondi placeholder loading (solo al primo caricamento)
+            const loadingPanel = document.getElementById('boxbeatLoadingPanel');
+            if (loadingPanel) loadingPanel.style.display = 'none';
+            renderBoxBeatPanel();
+            aggiornaStatBoxBeat();
+        } catch(e) {
+            console.warn('Errore caricamento promemoria oggi:', e);
+            // Nascondi placeholder anche in caso di errore
+            const loadingPanel = document.getElementById('boxbeatLoadingPanel');
+            if (loadingPanel) loadingPanel.style.display = 'none';
+        }
+    }
+
+    function aggiornaStatBoxBeat() {
+        const pendenti = boxbeatOggiList.filter(a => !a.completata).length;
+        const el = document.getElementById('statBoxbeat');
+        if (el) el.textContent = pendenti;
+    }
+
+    function renderBoxBeatPanel() {
+        const panel = document.getElementById('boxbeatPanel');
+        const lista = document.getElementById('boxbeatListaOggi');
+        const badge = document.getElementById('boxbeatBadge');
+
+        if (boxbeatOggiList.length === 0) {
+            panel.style.display = 'none';
+            return;
+        }
+
+        panel.style.display = 'block';
+        const pendenti = boxbeatOggiList.filter(a => !a.completata).length;
+        const totali = boxbeatOggiList.length;
+
+        if (pendenti === 0) {
+            badge.textContent = `Tutti completati (${totali})`;
+            badge.classList.add('done');
+        } else {
+            badge.textContent = `${pendenti} pendenti su ${totali}`;
+            badge.classList.remove('done');
+        }
+
+        let html = '';
+        boxbeatOggiList.forEach(a => {
+            const bb = a.boxbeat_data || {};
+            const compClass = a.completata ? 'completata' : '';
+            const checkedClass = a.completata ? 'checked' : '';
+
+            let fields = '';
+            if (bb.pod) fields += `<div class="bb-field"><i class="fas fa-barcode"></i> <strong>POD:</strong> ${escapeHtml(bb.pod)}</div>`;
+            if (bb.eneltel) fields += `<div class="bb-field"><i class="fas fa-hashtag"></i> <strong>ENELTEL:</strong> ${escapeHtml(bb.eneltel)}</div>`;
+            if (bb.nominativo) fields += `<div class="bb-field"><i class="fas fa-user-tag"></i> <strong>${escapeHtml(bb.nominativo)}</strong></div>`;
+            let indirizzo = '';
+            if (bb.via) { indirizzo = bb.via; if (bb.civico) indirizzo += ' ' + bb.civico; }
+            if (indirizzo) fields += `<div class="bb-field"><i class="fas fa-road"></i> ${escapeHtml(indirizzo)}</div>`;
+            if (bb.comune) fields += `<div class="bb-field"><i class="fas fa-city"></i> ${escapeHtml(bb.comune)}</div>`;
+            if (bb.data_pianificata) {
+                // Formatta data pianificata in italiano
+                try {
+                    const dp = new Date(bb.data_pianificata + 'T00:00:00');
+                    const giorniIt = ['domenica','lunedì','martedì','mercoledì','giovedì','venerdì','sabato'];
+                    const mesiIt = ['gennaio','febbraio','marzo','aprile','maggio','giugno','luglio','agosto','settembre','ottobre','novembre','dicembre'];
+                    const dataFmt = `${giorniIt[dp.getDay()]} ${dp.getDate()} ${mesiIt[dp.getMonth()]}`;
+                    fields += `<div class="bb-field"><i class="fas fa-calendar-day"></i> <strong>Data:</strong> ${escapeHtml(dataFmt)}</div>`;
+                } catch(e) {
+                    fields += `<div class="bb-field"><i class="fas fa-calendar-day"></i> <strong>Data:</strong> ${escapeHtml(bb.data_pianificata)}</div>`;
+                }
+            }
+            if (bb.ora_appuntamento) fields += `<div class="bb-field"><i class="fas fa-clock"></i> <strong>${escapeHtml(bb.ora_appuntamento)}</strong></div>`;
+
+            let noteHtml = '';
+            if (bb.note) noteHtml = `<div class="bb-note"><i class="fas fa-sticky-note"></i> ${escapeHtml(bb.note)}</div>`;
+
+            let originHtml = '';
+            if (bb.origine && bb.origine !== 'manuale') {
+                originHtml = `<span class="bb-origin"><i class="fas fa-link"></i> ${escapeHtml(bb.origine)}</span>`;
+            }
+
+            html += `
+            <div class="boxbeat-card ${compClass}">
+                <button class="check-btn ${checkedClass}" onclick="toggleBoxBeatCompleta('${a.id}')" title="${a.completata ? 'Riapri' : 'Segna come riportato'}">
+                    <i class="fas fa-check"></i>
+                </button>
+                <div class="bb-info">
+                    <div class="bb-title">${escapeHtml(a.titolo)} ${originHtml}</div>
+                    <div class="bb-fields">${fields}</div>
+                    ${noteHtml}
+                </div>
+                <button class="action-btn action-delete" onclick="apriModalElimina('${a.id}', '${escapeJsAttr(a.titolo)}'); event.stopPropagation();" title="Elimina" style="opacity:1;">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>`;
+        });
+
+        lista.innerHTML = html;
+    }
+
+    async function toggleBoxBeatCompleta(id) {
+        // Previeni doppio toggle se richiesta già in corso per questo ID
+        if (_inflightToggles.has(id)) return;
+        _inflightToggles.add(id);
+
+        // Optimistic UI: aggiorna subito localmente
+        const bbAtt = boxbeatOggiList.find(a => a.id === id);
+        const att = attivitaList.find(a => a.id === id);
+        const wasCompletata = bbAtt ? bbAtt.completata : false;
+
+        if (bbAtt) {
+            bbAtt.completata = !bbAtt.completata;
+            bbAtt.completata_da = bbAtt.completata ? (currentUser || '?') : null;
+            bbAtt.completata_il = bbAtt.completata ? new Date().toISOString() : null;
+            renderBoxBeatPanel();
+            aggiornaStatBoxBeat();
+        }
+        if (att) {
+            att.completata = !wasCompletata;
+            att.completata_da = att.completata ? (currentUser || '?') : null;
+            att.completata_il = att.completata ? new Date().toISOString() : null;
+            renderVista();
+        }
+        checkBoxBeatDeadline();
+
+        // Invia al server in background
+        _skipSSECount++;
+        try {
+            const res = await fetch(`/api/calendario/${id}/completa`, { method: 'POST' });
+            if (!res.ok) throw new Error();
+            // Aggiorna riepilogo con debounce (evita reload multipli ravvicinati)
+            clearTimeout(_postToggleReloadTimer);
+            _postToggleReloadTimer = setTimeout(() => {
+                caricaRiepilogo().catch(() => {});
+            }, 600);
+        } catch(e) {
+            // Rollback
+            if (bbAtt) {
+                bbAtt.completata = wasCompletata;
+                bbAtt.completata_da = wasCompletata ? (currentUser || '?') : null;
+                bbAtt.completata_il = wasCompletata ? new Date().toISOString() : null;
+                renderBoxBeatPanel();
+                aggiornaStatBoxBeat();
+            }
+            if (att) {
+                att.completata = wasCompletata;
+                att.completata_da = wasCompletata ? (currentUser || '?') : null;
+                att.completata_il = wasCompletata ? new Date().toISOString() : null;
+                renderVista();
+            }
+            showToast('Errore aggiornamento', true);
+        } finally {
+            _inflightToggles.delete(id);
+        }
+    }
+
+    // --- BoxBeat nuovo promemoria manuale ---
+    function apriModalNuovoBoxBeat() {
+        document.getElementById('bbEditId').value = '';
+        document.getElementById('bbModalTitle').textContent = 'Nuovo Promemoria Appuntamento';
+        document.getElementById('bbBtnLabel').textContent = 'Crea Promemoria';
+        document.getElementById('bbData').value = new Date().toISOString().split('T')[0];
+        document.getElementById('bbOrario').value = '';
+        document.getElementById('bbPod').value = '';
+        document.getElementById('bbEneltel').value = '';
+        document.getElementById('bbNominativo').value = '';
+        document.getElementById('bbVia').value = '';
+        document.getElementById('bbCivico').value = '';
+        document.getElementById('bbComune').value = '';
+        document.getElementById('bbNote').value = '';
+        document.getElementById('modalBoxBeat').classList.add('active');
+        setTimeout(() => document.getElementById('bbOrario').focus(), 100);
+    }
+
+    function chiudiModalBoxBeat() {
+        document.getElementById('modalBoxBeat').classList.remove('active');
+        document.getElementById('bbEditId').value = '';
+    }
+
+    async function salvaBoxBeat() {
+        const editId = document.getElementById('bbEditId').value;
+        const dataApp = document.getElementById('bbData').value;
+        const orario = document.getElementById('bbOrario').value.trim();
+
+        if (!dataApp) { showToast('Inserisci la data', true); return; }
+        if (!orario) { showToast('Inserisci l\'orario', true); return; }
+
+        const pod = document.getElementById('bbPod').value.trim();
+        const eneltel = document.getElementById('bbEneltel').value.trim();
+        const nominativo = document.getElementById('bbNominativo').value.trim();
+        const via = document.getElementById('bbVia').value.trim();
+        const civico = document.getElementById('bbCivico').value.trim();
+        const comune = document.getElementById('bbComune').value.trim();
+        const note = document.getElementById('bbNote').value.trim();
+        const provincia = document.getElementById('bbProvincia').value;
+
+        if (editId) {
+            // === MODIFICA BoxBeat esistente ===
+            // Ricostruisci titolo
+            let parti = ['BoxBeat'];
+            if (nominativo) parti.push(nominativo);
+            if (comune) parti.push('- ' + comune);
+            if (orario) parti.push('ore ' + orario);
+
+            // Ricostruisci descrizione
+            let righe = [];
+            if (pod) righe.push('POD: ' + pod);
+            if (eneltel) righe.push('ENELTEL: ' + eneltel);
+            if (nominativo) righe.push('Nominativo: ' + nominativo);
+            let indirizzo = via;
+            if (indirizzo && civico) indirizzo += ' ' + civico;
+            if (indirizzo) righe.push('Indirizzo: ' + indirizzo);
+            if (comune) righe.push('Comune: ' + comune);
+            if (note) righe.push('Note: ' + note);
+            // Mantieni origine dall'attività originale
+            const attOrig = attivitaList.find(a => a.id === editId);
+            const origineVal = attOrig?.boxbeat_data?.origine || 'manuale';
+            righe.push('Origine: ' + origineVal);
+
+            const oraInizio = orario.split('-')[0].trim();
+            const oraFine = orario.includes('-') ? orario.split('-')[1].trim() : '';
+
+            const datiUpdate = {
+                titolo: parti.join(' '),
+                data: dataApp,
+                ora: oraInizio,
+                ora_fine: oraFine,
+                descrizione: righe.join('\n'),
+                provincia: provincia,
+                // boxbeat_data viene aggiornato lato server tramite un endpoint dedicato
+            };
+
+            try {
+                // Chiudi modal e mostra toast immediatamente
+                showToast('Promemoria Appuntamento aggiornato!');
+                chiudiModalBoxBeat();
+
+                // Salva in background
+                _skipSSECount++;
+                // Aggiorna campi base via calendario API
+                const res = await fetch(`/api/calendario/${editId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(datiUpdate)
+                });
+                if (!res.ok) throw new Error();
+
+                // Aggiorna boxbeat_data strutturato
+                await fetch(`/api/boxbeat/promemoria/${editId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        pod, eneltel, nominativo, via, civico, comune, note,
+                        ora_appuntamento: orario,
+                        provincia
+                    })
+                });
+            } catch(e) {
+                showToast('Errore aggiornamento', true);
+            }
+            // Sincronizza dati reali in background
+            ricaricaTuttoInBackground();
+        } else {
+            // === CREAZIONE nuovo BoxBeat ===
+            const dati = {
+                data_appuntamento: dataApp,
+                ora_appuntamento: orario,
+                pod, eneltel, nominativo, via, civico, comune, note,
+                provincia,
+                origine: 'manuale'
+            };
+
+            try {
+                const res = await fetch('/api/boxbeat/promemoria', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(dati)
+                });
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.error || 'Errore');
+                }
+                showToast('Promemoria Appuntamento creato!');
+                chiudiModalBoxBeat();
+                // Ricarica dati in background
+                _skipSSECount++;
+                ricaricaTuttoInBackground();
+            } catch(e) {
+                showToast(e.message, true);
+            }
+        }
+    }
+
+    // --- BoxBeat Settings ---
+    function apriModalBoxBeatSettings() {
+        document.getElementById('bbSettAbilitato').checked = boxbeatSettings.abilitato !== false;
+        document.getElementById('bbSettOrario').value = boxbeatSettings.orario_scadenza || '17:00';
+        document.getElementById('bbSettNotifica').checked = boxbeatSettings.notifica_browser !== false;
+        document.getElementById('bbSettSuono').checked = boxbeatSettings.suono !== false;
+        document.getElementById('modalBoxBeatSettings').classList.add('active');
+    }
+
+    function chiudiModalBoxBeatSettings() {
+        document.getElementById('modalBoxBeatSettings').classList.remove('active');
+    }
+
+    function scaricaExcelBoxBeat() {
+        const oggi = new Date().toISOString().split('T')[0];
+        window.open(`/api/boxbeat/excel/${oggi}`, '_blank');
+    }
+
+    async function salvaBoxBeatSettings() {
+        const dati = {
+            abilitato: document.getElementById('bbSettAbilitato').checked,
+            orario_scadenza: document.getElementById('bbSettOrario').value,
+            notifica_browser: document.getElementById('bbSettNotifica').checked,
+            suono: document.getElementById('bbSettSuono').checked,
+        };
+
+        try {
+            const res = await fetch('/api/boxbeat/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(dati)
+            });
+            if (!res.ok) throw new Error();
+            boxbeatSettings = { ...boxbeatSettings, ...dati };
+            showToast('Impostazioni Promemoria salvate!');
+            chiudiModalBoxBeatSettings();
+            checkBoxBeatDeadline();
+        } catch(e) {
+            showToast('Errore salvataggio', true);
+        }
+    }
+
+    // --- BoxBeat Deadline Check & Alert ---
+    function checkBoxBeatDeadline() {
+        if (!boxbeatSettings.abilitato) {
+            document.getElementById('boxbeatAlert').classList.remove('active');
+            return;
+        }
+
+        const pendenti = boxbeatOggiList.filter(a => !a.completata).length;
+        if (pendenti === 0) {
+            document.getElementById('boxbeatAlert').classList.remove('active');
+            return;
+        }
+
+        const now = new Date();
+        const orarioScadenza = boxbeatSettings.orario_scadenza || '17:00';
+        const [ore, minuti] = orarioScadenza.split(':').map(Number);
+        const scadenza = new Date(now.getFullYear(), now.getMonth(), now.getDate(), ore, minuti);
+
+        // Mostra alert 30 minuti prima della scadenza
+        const alertTime = new Date(scadenza.getTime() - 30 * 60 * 1000);
+
+        if (now >= alertTime && !boxbeatAlertDismissed) {
+            const minutiRimasti = Math.max(0, Math.round((scadenza - now) / 60000));
+            let testoAlert;
+            if (now >= scadenza) {
+                testoAlert = `Scadenza superata! Hai ${pendenti} appuntament${pendenti === 1 ? 'o' : 'i'} da riportare.`;
+            } else {
+                testoAlert = `${pendenti} appuntament${pendenti === 1 ? 'o' : 'i'} da riportare. Scadenza tra ${minutiRimasti} minuti (${orarioScadenza}).`;
+            }
+            document.getElementById('boxbeatAlertText').textContent = testoAlert;
+            document.getElementById('boxbeatAlert').classList.add('active');
+
+            // Notifica browser (una sola volta per sessione)
+            const oggiStr = now.toISOString().split('T')[0];
+            if (boxbeatSettings.notifica_browser && 'Notification' in window && Notification.permission === 'granted') {
+                const lastNotif = localStorage.getItem('bb_last_notif');
+                if (lastNotif !== oggiStr) {
+                    new Notification('Promemoria Appuntamento', {
+                        body: testoAlert,
+                        icon: '/favicon.ico',
+                        tag: 'boxbeat-deadline'
+                    });
+                    localStorage.setItem('bb_last_notif', oggiStr);
+                }
+            }
+
+            // Suono avviso (una sola volta per sessione)
+            if (boxbeatSettings.suono) {
+                const lastSound = localStorage.getItem('bb_last_sound');
+                if (lastSound !== oggiStr) {
+                    try {
+                        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                        const osc = audioCtx.createOscillator();
+                        const gain = audioCtx.createGain();
+                        osc.connect(gain);
+                        gain.connect(audioCtx.destination);
+                        osc.frequency.value = 800;
+                        gain.gain.value = 0.3;
+                        osc.start();
+                        setTimeout(() => { osc.frequency.value = 1000; }, 200);
+                        setTimeout(() => { osc.stop(); audioCtx.close(); }, 400);
+                    } catch(e) {}
+                    localStorage.setItem('bb_last_sound', oggiStr);
+                }
+            }
+        } else if (now < alertTime) {
+            document.getElementById('boxbeatAlert').classList.remove('active');
+        }
+    }
+
+    function dismissBoxBeatAlert() {
+        boxbeatAlertDismissed = true;
+        document.getElementById('boxbeatAlert').classList.remove('active');
+    }
+
+    function toggleBoxbeatPanel(event) {
+        const panel = document.getElementById('boxbeatPanel');
+        panel.classList.toggle('collapsed');
+        // Salva preferenza in localStorage
+        localStorage.setItem('boxbeat_collapsed', panel.classList.contains('collapsed') ? '1' : '0');
+    }
+
+    // Ripristina stato collapse al caricamento
+    (function() {
+        if (localStorage.getItem('boxbeat_collapsed') === '1') {
+            const panel = document.getElementById('boxbeatPanel');
+            if (panel) panel.classList.add('collapsed');
+        }
+    })();
+
+    </script>
+</body>
+</html>

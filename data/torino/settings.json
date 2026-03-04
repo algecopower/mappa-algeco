@@ -1,0 +1,30 @@
+{
+  "operatori_vip": [
+    "AE101392",
+    "AG49808",
+    "AG18966"
+  ],
+  "colori_operatori": {
+    "AE101392": "#e74c3c",
+    "AG49808": "#f1c40f",
+    "AG18966": "#2ecc71"
+  },
+  "operatori_dict": {
+    "PAUL": "AE101392",
+    "MIHAI": "AG49808",
+    "SIDI": "AG18966"
+  },
+  "deposito": {
+    "Nome": "DEPOSITO VOLPIANO",
+    "Lat": 45.1964682,
+    "Lon": 7.7888303
+  },
+  "ora_inizio_giornata": 540,
+  "velocita_media_kmh": 35,
+  "tempo_intervento_min": 20,
+  "raggio_microzona_km": 0.5,
+  "ottimizza_per_tempo": true,
+  "data_inizio": "2025-10-01",
+  "data_fine": "2026-04-30",
+  "intervallo_sync_secondi": 180
+}

@@ -1,0 +1,4899 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2">
+    <title>Filone - Vista Excel</title>
+    <script>
+        (function() {
+            const t = localStorage.getItem('algeco_theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', t);
+        })();
+    </script>
+    <style>
+        :root {
+            --primary: #25D366;
+            --primary-dark: #128C7E;
+            --danger: #e74c3c;
+            --warning: #f39c12;
+            --success: #27ae60;
+            --info: #3498db;
+            --bg-body: #0f0f23;
+            --bg-dark: #1a1a2e;
+            --bg-card: #16213e;
+            --bg-cell: #1a1a2e;
+            --bg-cell-alt: #151528;
+            --bg-cell-hover: #252550;
+            --bg-cell-edit: #2a2a4e;
+            --bg-header: #0a0a1a;
+            --bg-input: #252550;
+            --text: #eee;
+            --text-muted: #888;
+            --text-header: #aab;
+            --border: #2a2a3e;
+            --border-light: #333355;
+            --scrollbar-bg: #1a1a2e;
+            --scrollbar-thumb: #3a3a5e;
+            --shadow: rgba(0,0,0,0.4);
+            --modified-bg: rgba(37, 211, 102, 0.08);
+            --modified-border: rgba(37, 211, 102, 0.4);
+            --frozen-shadow: 4px 0 12px rgba(0,0,0,0.4);
+        }
+        [data-theme="light"] {
+            --bg-body: #f0f2f5;
+            --bg-dark: #fff;
+            --bg-card: #fff;
+            --bg-cell: #fff;
+            --bg-cell-alt: #f8f9fa;
+            --bg-cell-hover: #e8f0fe;
+            --bg-cell-edit: #fff;
+            --bg-header: #f1f3f5;
+            --bg-input: #fff;
+            --text: #222;
+            --text-muted: #666;
+            --text-header: #555;
+            --border: #ddd;
+            --border-light: #e0e0e0;
+            --scrollbar-bg: #f0f0f0;
+            --scrollbar-thumb: #bbb;
+            --shadow: rgba(0,0,0,0.1);
+            --modified-bg: rgba(37, 211, 102, 0.08);
+            --modified-border: rgba(37, 211, 102, 0.5);
+            --frozen-shadow: 4px 0 8px rgba(0,0,0,0.1);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-body);
+            color: var(--text);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* TOOLBAR */
+        .toolbar {
+            background: var(--bg-dark);
+            border-bottom: 1px solid var(--border);
+            padding: 8px 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px 10px;
+            flex-shrink: 0;
+            z-index: 100;
+            flex-wrap: wrap;
+        }
+        .toolbar-title {
+            font-size: 1.1em;
+            font-weight: 700;
+            color: var(--primary);
+            white-space: nowrap;
+        }
+        .toolbar-sep {
+            width: 1px;
+            height: 22px;
+            background: var(--border);
+        }
+        .toolbar-info {
+            color: var(--text-muted);
+            font-size: 0.82em;
+            white-space: nowrap;
+        }
+        .toolbar-info strong { color: var(--text); }
+        .toolbar-spacer { flex: 1; min-width: 0; }
+        .toolbar-actions {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .toolbar-filters {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .tb {
+            padding: 5px 12px;
+            border: 1px solid var(--border);
+            border-radius: 5px;
+            background: var(--bg-card);
+            color: var(--text);
+            font-size: 0.82em;
+            cursor: pointer;
+            transition: border-color 0.15s, background 0.15s;
+            white-space: nowrap;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .tb:hover { border-color: var(--primary); background: var(--bg-cell-hover); }
+        .tb.primary { background: var(--primary); color: #fff; border-color: var(--primary); font-weight: 600; }
+        .tb.primary:hover { background: var(--primary-dark); }
+        .tb.primary:disabled { opacity: 0.5; cursor: default; }
+        .tb.danger { border-color: var(--danger); color: var(--danger); }
+        .tb.danger:hover { background: var(--danger); color: #fff; }
+        .search-box {
+            display: flex;
+            align-items: center;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 5px;
+            padding: 0 8px;
+            min-width: 200px;
+        }
+        .search-box:focus-within { border-color: var(--primary); }
+        .search-input {
+            border: none;
+            background: transparent;
+            color: var(--text);
+            font-size: 0.82em;
+            padding: 6px 0;
+            outline: none;
+            width: 100%;
+            margin-left: 4px;
+        }
+        .search-input::placeholder { color: var(--text-muted); }
+
+        /* GRID AREA */
+        .grid-wrap {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+        .grid-scroll {
+            position: absolute;
+            inset: 0;
+            overflow: auto;
+            will-change: scroll-position;
+        }
+        .grid-scroll::-webkit-scrollbar { width: 10px; height: 10px; }
+        .grid-scroll::-webkit-scrollbar-track { background: var(--scrollbar-bg); }
+        .grid-scroll::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 5px; }
+        .grid-scroll::-webkit-scrollbar-corner { background: var(--scrollbar-bg); }
+
+        .grid-inner {
+            position: relative;
+            min-width: max-content;
+        }
+
+        /* Sticky header */
+        .grid-header {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            display: flex;
+            background: var(--bg-header);
+            border-bottom: 2px solid var(--border-light);
+        }
+        .gh {
+            padding: 6px 10px;
+            font-size: 0.78em;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            color: var(--text-header);
+            border-right: 1px solid var(--border);
+            cursor: pointer;
+            user-select: none;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            gap: 3px;
+        }
+        .gh:hover { color: var(--primary); }
+        .gh.filtered { color: var(--primary); }
+        .sort-asc .gh-sort::after { content: ' \25B2'; color: var(--primary); font-size: 0.7em; }
+        .sort-desc .gh-sort::after { content: ' \25BC'; color: var(--primary); font-size: 0.7em; }
+        .gh-label { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+        .gh-btn {
+            margin-left: 2px;
+            padding: 0 3px;
+            font-size: 0.85em;
+            opacity: 0.5;
+            cursor: pointer;
+            border-radius: 3px;
+            flex-shrink: 0;
+        }
+        .gh-btn:hover { opacity: 1; background: var(--bg-cell-hover); }
+        .gh-btn.active { opacity: 1; color: var(--primary); }
+        .gh-sort { flex-shrink: 0; }
+        .gh-resize {
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 5px;
+            cursor: col-resize;
+            z-index: 2;
+        }
+        .gh-resize:hover, .gh-resize.dragging { background: var(--primary); opacity: 0.5; }
+        .gh { position: relative; }
+
+        /* Column manager panel */
+        .colmgr-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.4);
+            z-index: 299;
+            display: none;
+        }
+        .colmgr-overlay.show { display: block; }
+        .colmgr {
+            position: fixed;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 480px;
+            max-width: 92vw;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            box-shadow: 0 12px 40px var(--shadow);
+            z-index: 300;
+            display: none;
+            flex-direction: column;
+            max-height: 80vh;
+        }
+        .colmgr.show { display: flex; }
+        .colmgr-hdr {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 14px;
+            border-bottom: 1px solid var(--border);
+        }
+        .colmgr-hdr h3 { font-size: 0.95em; color: var(--primary); margin: 0; }
+        .colmgr-close {
+            background: none; border: none; color: var(--text-muted);
+            font-size: 1.2em; cursor: pointer; padding: 0 4px;
+        }
+        .colmgr-close:hover { color: var(--danger); }
+        .colmgr-search {
+            margin: 8px 12px 4px;
+            padding: 6px 10px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: var(--bg-input);
+            color: var(--text);
+            font-size: 0.82em;
+            outline: none;
+            width: calc(100% - 24px);
+        }
+        .colmgr-search:focus { border-color: var(--primary); }
+        .colmgr-info {
+            padding: 4px 14px;
+            font-size: 0.72em;
+            color: var(--text-muted);
+        }
+        .colmgr-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 4px 8px;
+            max-height: 50vh;
+        }
+        .colmgr-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 5px 8px;
+            border-radius: 4px;
+            font-size: 0.82em;
+            color: var(--text);
+            border: 1px solid transparent;
+            transition: background 0.1s;
+        }
+        .colmgr-row:hover { background: var(--bg-cell-hover); }
+        .colmgr-row.cm-hidden { opacity: 0.5; }
+        .colmgr-row.cm-dragging {
+            background: var(--primary);
+            color: #fff;
+            opacity: 0.9;
+            border-color: var(--primary);
+            box-shadow: 0 2px 8px var(--shadow);
+        }
+        .colmgr-row.cm-drop-above { border-top: 2px solid var(--primary); }
+        .colmgr-row.cm-drop-below { border-bottom: 2px solid var(--primary); }
+        .cm-grip {
+            cursor: grab;
+            color: var(--text-muted);
+            font-size: 1em;
+            flex-shrink: 0;
+            padding: 0 2px;
+        }
+        .cm-grip:active { cursor: grabbing; }
+        .cm-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .cm-lock { color: var(--warning); font-size: 0.85em; flex-shrink: 0; }
+        .cm-toggle {
+            position: relative;
+            width: 36px;
+            height: 20px;
+            background: var(--border);
+            border-radius: 10px;
+            cursor: pointer;
+            flex-shrink: 0;
+            transition: background 0.2s;
+        }
+        .cm-toggle.on { background: var(--primary); }
+        .cm-toggle::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 16px;
+            height: 16px;
+            background: #fff;
+            border-radius: 50%;
+            transition: left 0.2s;
+        }
+        .cm-toggle.on::after { left: 18px; }
+        .colmgr-foot {
+            display: flex;
+            gap: 6px;
+            padding: 10px 14px;
+            border-top: 1px solid var(--border);
+            justify-content: space-between;
+        }
+        .colmgr-foot button {
+            padding: 5px 14px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: var(--bg-card);
+            color: var(--text);
+            font-size: 0.78em;
+            cursor: pointer;
+        }
+        .colmgr-foot button:hover { border-color: var(--primary); }
+        .colmgr-foot button.a { background: var(--primary); color: #fff; border-color: var(--primary); }
+        .colmgr-foot button.d { border-color: var(--danger); color: var(--danger); }
+        .colmgr-foot button.d:hover { background: var(--danger); color: #fff; }
+
+        /* Hide column button in filter popup */
+        .fpop-hide {
+            width: 100%;
+            padding: 5px;
+            border: 1px solid var(--border);
+            border-radius: 3px;
+            background: var(--bg-card);
+            color: var(--text-muted);
+            font-size: 0.76em;
+            cursor: pointer;
+            margin-bottom: 6px;
+            text-align: left;
+        }
+        .fpop-hide:hover { border-color: var(--danger); color: var(--danger); }
+
+        /* Column drag reorder */
+        .col-drag-ghost {
+            position: fixed;
+            padding: 4px 14px;
+            background: var(--primary);
+            color: #fff;
+            border-radius: 4px;
+            font-size: 0.78em;
+            font-weight: 600;
+            pointer-events: none;
+            z-index: 9999;
+            white-space: nowrap;
+            box-shadow: 0 2px 12px var(--shadow);
+            opacity: 0.92;
+        }
+        .col-drag-indicator {
+            position: fixed;
+            width: 3px;
+            background: var(--primary);
+            z-index: 9998;
+            pointer-events: none;
+            border-radius: 2px;
+        }
+        .gh.dragging-col { opacity: 0.35; }
+        .gh-label { flex: 1; overflow: hidden; text-overflow: ellipsis; cursor: grab; }
+
+        /* Row number column (frozen) */
+        .col-rn {
+            position: sticky;
+            left: 0;
+            z-index: 10;
+            width: 52px;
+            min-width: 52px;
+            max-width: 52px;
+            text-align: center;
+            background: var(--bg-header);
+            border-right: 2px solid var(--border-light) !important;
+            box-shadow: var(--frozen-shadow);
+            font-size: 0.78em;
+            color: var(--text-muted);
+        }
+
+        /* Virtual body */
+        .grid-body {
+            position: relative;
+        }
+        .vrow {
+            display: flex;
+            position: absolute;
+            left: 0;
+            right: 0;
+            border-bottom: 1px solid var(--border);
+        }
+        .vrow:hover .vc { background: var(--bg-cell-hover) !important; }
+        .vc {
+            padding: 4px 10px;
+            font-size: 0.82em;
+            border-right: 1px solid var(--border);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            flex-shrink: 0;
+            cursor: cell;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .vc.editing .cell-input {
+            user-select: text;
+            -webkit-user-select: text;
+        }
+        .vc.rn {
+            position: sticky;
+            left: 0;
+            z-index: 5;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.78em;
+            border-right: 2px solid var(--border-light) !important;
+            box-shadow: var(--frozen-shadow);
+            cursor: default;
+        }
+        .vrow-even .vc { background: var(--bg-cell-alt); }
+        .vrow-even .vc.rn { background: var(--bg-cell-alt); }
+        .vrow-odd .vc { background: var(--bg-cell); }
+        .vrow-odd .vc.rn { background: var(--bg-cell); }
+        .vc.sel {
+            outline: 2px solid var(--primary);
+            outline-offset: -1px;
+            z-index: 6;
+        }
+        .vc.editing {
+            padding: 0;
+            overflow: visible;
+            z-index: 7;
+            position: relative;
+        }
+        .cell-input {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            min-width: 100px;
+            padding: 4px 10px;
+            border: 2px solid var(--primary);
+            border-radius: 3px;
+            background: var(--bg-cell-edit);
+            color: var(--text);
+            font-size: inherit;
+            font-family: inherit;
+            outline: none;
+            resize: none;
+            overflow-y: auto;
+            line-height: 1.4;
+            display: block;
+            box-shadow: 0 4px 16px var(--shadow);
+            min-height: 28px;
+            max-height: 180px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            z-index: 10;
+        }
+        .vc.mod {
+            background: var(--modified-bg) !important;
+            box-shadow: inset 3px 0 0 var(--modified-border);
+        }
+
+        .vc.protected {
+            cursor: default;
+            color: var(--text-muted);
+        }
+        .gh.protected-hdr .gh-label::before {
+            content: '\1F512 ';
+            font-size: 0.85em;
+        }
+        .gh.protected-hdr { color: var(--text-muted); }
+
+        /* STATUS BAR */
+        .status-bar {
+            background: var(--bg-dark);
+            border-top: 1px solid var(--border);
+            padding: 3px 16px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            font-size: 0.75em;
+            color: var(--text-muted);
+            flex-shrink: 0;
+        }
+        .status-bar strong { color: var(--text); }
+        .status-mod { color: var(--warning); font-weight: 600; animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
+
+        /* LOADING */
+        .loading-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0,0,0,0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            backdrop-filter: blur(2px);
+        }
+        .spinner {
+            width: 32px; height: 32px;
+            border: 3px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 10px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* TOAST */
+        .toast {
+            position: fixed;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%) translateY(80px);
+            padding: 8px 20px;
+            border-radius: 6px;
+            font-size: 0.85em;
+            font-weight: 600;
+            z-index: 9999;
+            opacity: 0;
+            transition: all 0.3s;
+            pointer-events: none;
+        }
+        .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+        .toast.success { background: var(--success); color: #fff; }
+        .toast.error { background: var(--danger); color: #fff; }
+        .toast.warning { background: var(--warning); color: #000; }
+
+        /* FILTER POPUP */
+        .fpop {
+            position: fixed;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            box-shadow: 0 8px 24px var(--shadow);
+            z-index: 200;
+            padding: 8px;
+            width: 220px;
+            max-height: 320px;
+            display: none;
+            flex-direction: column;
+        }
+        .fpop.show { display: flex; }
+        .fpop input[type=text] {
+            padding: 5px 8px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: var(--bg-input);
+            color: var(--text);
+            font-size: 0.82em;
+            margin-bottom: 4px;
+            outline: none;
+        }
+        .fpop input[type=text]:focus { border-color: var(--primary); }
+        .fpop-opts {
+            overflow-y: auto;
+            flex: 1;
+            max-height: 200px;
+        }
+        .fpop-opt {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 3px 4px;
+            font-size: 0.8em;
+            cursor: pointer;
+            border-radius: 3px;
+            color: var(--text);
+        }
+        .fpop-opt:hover { background: var(--bg-cell-hover); }
+        .fpop-acts {
+            display: flex;
+            gap: 4px;
+            margin-top: 4px;
+            padding-top: 4px;
+            border-top: 1px solid var(--border);
+        }
+        .fpop-acts button {
+            flex: 1;
+            padding: 4px;
+            border: 1px solid var(--border);
+            border-radius: 3px;
+            background: var(--bg-card);
+            color: var(--text);
+            font-size: 0.78em;
+            cursor: pointer;
+        }
+        .fpop-acts button:hover { border-color: var(--primary); }
+        .fpop-acts button.a { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+        /* Sort options in filter popup */
+        .fpop-sort {
+            display: flex;
+            gap: 3px;
+            margin-bottom: 6px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid var(--border);
+        }
+        .fpop-sort button {
+            flex: 1;
+            padding: 4px 2px;
+            border: 1px solid var(--border);
+            border-radius: 3px;
+            background: var(--bg-card);
+            color: var(--text);
+            font-size: 0.72em;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .fpop-sort button:hover { border-color: var(--primary); }
+        .fpop-sort button.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+        /* Color filter in column popup */
+        .fpop-colors {
+            display: flex; align-items: center; gap: 5px; flex-wrap: wrap;
+            padding: 5px 0; margin-bottom: 4px;
+            border-bottom: 1px solid var(--border);
+        }
+        .fpop-colors-label { font-size: 0.72em; color: var(--text-muted); white-space: nowrap; }
+        .fpop-color-btn {
+            width: 28px; height: 24px; border: 1px solid var(--border); border-radius: 3px;
+            background: var(--bg-cell); cursor: pointer; font-weight: 700; font-size: 0.82em;
+            display: flex; align-items: center; justify-content: center;
+            transition: border-color .15s;
+        }
+        .fpop-color-btn:hover { border-color: var(--primary); }
+        .fpop-color-btn.fpop-color-active { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary); }
+        .fpop-color-btn.fpop-color-clear { color: var(--danger); font-size: 0.9em; }
+
+        /* Excel Import section in VLOOKUP */
+        .vl-excel-section {
+            margin-top: 14px; padding: 12px; background: var(--bg-cell-alt);
+            border: 1px dashed var(--border); border-radius: 8px;
+        }
+        .vl-excel-section.vl-excel-loaded { border-style: solid; border-color: var(--success); }
+        .vl-excel-hdr {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 10px; cursor: pointer; user-select: none;
+        }
+        .vl-excel-hdr h4 { font-size: 0.85em; color: var(--primary); margin: 0; display: flex; align-items: center; gap: 6px; }
+        .vl-excel-hdr .vl-excel-toggle { color: var(--text-muted); font-size: 1em; transition: transform 0.2s; }
+        .vl-excel-hdr .vl-excel-toggle.open { transform: rotate(90deg); }
+        .vl-excel-content { display: none; }
+        .vl-excel-content.show { display: block; }
+        .vl-excel-dropzone {
+            border: 2px dashed var(--border); border-radius: 8px;
+            padding: 20px; text-align: center; cursor: pointer;
+            transition: all 0.2s; color: var(--text-muted); font-size: 0.82em;
+        }
+        .vl-excel-dropzone:hover, .vl-excel-dropzone.dragover {
+            border-color: var(--primary); background: rgba(52,152,219,0.05); color: var(--primary);
+        }
+        .vl-excel-dropzone input[type=file] { display: none; }
+        .vl-excel-info {
+            margin-top: 10px; padding: 8px 10px; background: var(--bg-card);
+            border: 1px solid var(--border); border-radius: 6px; font-size: 0.8em;
+        }
+        .vl-excel-info strong { color: var(--primary); }
+        .vl-excel-mapping {
+            margin-top: 10px; display: flex; flex-direction: column; gap: 8px;
+        }
+        .vl-excel-mapping-row {
+            display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+            padding: 6px 8px; background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 5px; font-size: 0.8em;
+        }
+        .vl-excel-mapping-row select {
+            padding: 4px 6px; border: 1px solid var(--border); border-radius: 3px;
+            background: var(--bg-input); color: var(--text); font-size: 0.95em; outline: none;
+            min-width: 120px;
+        }
+        .vl-excel-mapping-row select:focus { border-color: var(--primary); }
+        .vl-excel-mapping-row .vl-excel-arrow { color: var(--primary); font-weight: 700; font-size: 1.1em; }
+        .vl-excel-mapping-row .vl-excel-del { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 1em; padding: 0 4px; }
+        .vl-excel-mapping-row .vl-excel-del:hover { color: #fff; background: var(--danger); border-radius: 3px; }
+        .vl-excel-actions {
+            margin-top: 10px; display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap;
+        }
+        .vl-excel-actions button {
+            padding: 6px 14px; border: 1px solid var(--border); border-radius: 5px;
+            background: var(--bg-card); color: var(--text); font-size: 0.78em; cursor: pointer;
+        }
+        .vl-excel-actions button:hover { border-color: var(--primary); }
+        .vl-excel-actions button.a { background: var(--primary); color: #fff; border-color: var(--primary); }
+        .vl-excel-actions button.d { border-color: var(--danger); color: var(--danger); }
+        .vl-excel-actions button.d:hover { background: var(--danger); color: #fff; }
+        .vl-excel-preview { margin-top: 8px; max-height: 150px; overflow: auto; border: 1px solid var(--border); border-radius: 6px; }
+        .vl-excel-preview table { width: 100%; border-collapse: collapse; font-size: 0.78em; }
+        .vl-excel-preview th { position: sticky; top: 0; background: var(--bg-header); color: var(--text-header); padding: 4px 8px; text-align: left; font-weight: 600; border-bottom: 1px solid var(--border); white-space: nowrap; }
+        .vl-excel-preview td { padding: 3px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+        .vl-excel-preview tr:nth-child(even) { background: var(--bg-cell-alt); }
+        .vl-merge-result { margin-top: 8px; padding: 8px 10px; border-radius: 6px; font-size: 0.82em; }
+        .vl-merge-result.success { background: rgba(46,204,113,0.1); border: 1px solid var(--success); color: var(--success); }
+        .vl-merge-result.warning { background: rgba(243,156,18,0.1); border: 1px solid var(--warning); color: var(--warning); }
+        .vl-filter-btn {
+            padding: 6px 12px; border: 1px solid var(--info); border-radius: 4px;
+            background: rgba(52,152,219,0.1); color: var(--info); font-size: 0.78em;
+            cursor: pointer; font-weight: 600; white-space: nowrap;
+        }
+        .vl-filter-btn:hover { background: var(--info); color: #fff; }
+        .vl-tabs {
+            display: flex; border-bottom: 2px solid var(--border); margin-bottom: 14px; gap: 0;
+        }
+        .vl-tab {
+            padding: 8px 16px; border: none; background: none; color: var(--text-muted);
+            font-size: 0.82em; cursor: pointer; border-bottom: 2px solid transparent;
+            margin-bottom: -2px; transition: all 0.15s; font-weight: 500;
+        }
+        .vl-tab:hover { color: var(--text); }
+        .vl-tab.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 700; }
+        .vl-tab-content { display: none; }
+        .vl-tab-content.active { display: block; }
+
+        /* Filter badge in toolbar */
+        .filter-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 8px;
+            background: rgba(37,211,102,0.15);
+            border: 1px solid var(--primary);
+            border-radius: 12px;
+            font-size: 0.78em;
+            color: var(--primary);
+            font-weight: 600;
+        }
+        .filter-badge .badge-x {
+            cursor: pointer;
+            opacity: 0.7;
+            margin-left: 2px;
+        }
+        .filter-badge .badge-x:hover { opacity: 1; }
+
+        /* Multi-cell selection range */
+        .vc.sel-range {
+            background: rgba(37, 211, 102, 0.12) !important;
+        }
+        .vc.sel-range.sel {
+            background: rgba(37, 211, 102, 0.25) !important;
+        }
+        body.nosel, body.nosel * { user-select: none !important; -webkit-user-select: none !important; -moz-user-select: none !important; -ms-user-select: none !important; }
+
+        /* Find & Replace panel */
+        .fnr-overlay {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.3);
+            z-index: 399; display: none;
+        }
+        .fnr-overlay.show { display: block; }
+        .fnr-panel {
+            position: fixed; top: 60px; right: 20px;
+            width: 380px; max-width: 92vw;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            box-shadow: 0 8px 32px var(--shadow);
+            z-index: 400; display: none;
+            flex-direction: column;
+            padding: 14px 16px;
+            gap: 8px;
+        }
+        .fnr-panel.show { display: flex; }
+        .fnr-panel h3 { font-size: 0.9em; color: var(--primary); margin: 0 0 2px; }
+        .fnr-row { display: flex; gap: 6px; align-items: center; }
+        .fnr-row input[type=text] {
+            flex: 1; padding: 6px 10px;
+            border: 1px solid var(--border); border-radius: 4px;
+            background: var(--bg-input); color: var(--text);
+            font-size: 0.85em; outline: none;
+        }
+        .fnr-row input[type=text]:focus { border-color: var(--primary); }
+        .fnr-row label { font-size: 0.78em; color: var(--text-muted); display: flex; align-items: center; gap: 4px; cursor: pointer; white-space: nowrap; }
+        .fnr-btns { display: flex; gap: 4px; flex-wrap: wrap; }
+        .fnr-btns button {
+            padding: 5px 12px; border: 1px solid var(--border); border-radius: 4px;
+            background: var(--bg-card); color: var(--text); font-size: 0.78em; cursor: pointer;
+        }
+        .fnr-btns button:hover { border-color: var(--primary); }
+        .fnr-btns button.a { background: var(--primary); color: #fff; border-color: var(--primary); }
+        .fnr-btns button.d { border-color: var(--danger); color: var(--danger); }
+        .fnr-btns button.d:hover { background: var(--danger); color: #fff; }
+        .fnr-close { position: absolute; top: 8px; right: 10px; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.1em; }
+        .fnr-close:hover { color: var(--danger); }
+        .fnr-info { font-size: 0.75em; color: var(--text-muted); }
+
+        /* Conditional formatting */
+        .vc.cond-fmt { /* marker for cells matched by cond rules */ }
+
+        /* Cond format manager panel */
+        .cfm-overlay {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.4);
+            z-index: 399; display: none;
+        }
+        .cfm-overlay.show { display: block; }
+        .cfm-panel {
+            position: fixed; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 720px; max-width: 94vw;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            box-shadow: 0 12px 40px var(--shadow);
+            z-index: 400; display: none;
+            flex-direction: column;
+            max-height: 85vh;
+        }
+        .cfm-panel.show { display: flex; }
+        .cfm-hdr {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 10px 14px; border-bottom: 1px solid var(--border);
+        }
+        .cfm-hdr h3 { font-size: 0.95em; color: var(--primary); margin: 0; }
+        .cfm-close { background: none; border: none; color: var(--text-muted); font-size: 1.2em; cursor: pointer; }
+        .cfm-close:hover { color: var(--danger); }
+        .cfm-body { flex: 1; overflow-y: auto; padding: 10px 14px; }
+        .cfm-rule {
+            display: flex; align-items: center; gap: 6px;
+            padding: 6px 8px; margin-bottom: 6px;
+            border: 1px solid var(--border); border-radius: 5px;
+            background: var(--bg-cell); font-size: 0.8em;
+            flex-wrap: wrap;
+        }
+        .cfm-rule:hover { border-color: var(--primary); }
+        .cfm-rule select, .cfm-rule input[type=text] {
+            padding: 4px 6px; border: 1px solid var(--border); border-radius: 3px;
+            background: var(--bg-input); color: var(--text); font-size: 0.95em; outline: none;
+        }
+        .cfm-rule select:focus, .cfm-rule input[type=text]:focus { border-color: var(--primary); }
+        .cfm-rule input[type=color] { width: 28px; height: 24px; border: 1px solid var(--border); border-radius: 3px; cursor: pointer; padding: 0; background: none; }
+        .cfm-rule .cfm-preview {
+            padding: 2px 8px; border-radius: 3px; font-weight: 600; font-size: 0.9em; white-space: nowrap;
+        }
+        .cfm-rule .cfm-del { background: none; border: none; color: var(--danger); font-size: 1.1em; cursor: pointer; padding: 0 4px; flex-shrink: 0; }
+        .cfm-rule .cfm-del:hover { color: #fff; background: var(--danger); border-radius: 3px; }
+        .cfm-rule label { font-size: 0.85em; color: var(--text-muted); display: flex; align-items: center; gap: 3px; cursor: pointer; }
+        .cfm-empty { color: var(--text-muted); font-size: 0.82em; padding: 20px; text-align: center; }
+        .cfm-foot {
+            display: flex; gap: 6px; padding: 10px 14px;
+            border-top: 1px solid var(--border); justify-content: space-between;
+        }
+        .cfm-foot button {
+            padding: 5px 14px; border: 1px solid var(--border); border-radius: 4px;
+            background: var(--bg-card); color: var(--text); font-size: 0.78em; cursor: pointer;
+        }
+        .cfm-foot button:hover { border-color: var(--primary); }
+        .cfm-foot button.a { background: var(--primary); color: #fff; border-color: var(--primary); }
+        .cfm-foot button.d { border-color: var(--danger); color: var(--danger); }
+        .cfm-foot button.d:hover { background: var(--danger); color: #fff; }
+
+        /* Find highlight */
+        .vc.find-match {
+            box-shadow: inset 0 0 0 2px var(--info) !important;
+        }
+        .vc.find-current {
+            box-shadow: inset 0 0 0 2px var(--warning) !important;
+            background: rgba(243, 156, 18, 0.15) !important;
+        }
+
+        /* Status bar stats */
+        .status-bar .st-stats { color: var(--info); font-weight: 600; }
+
+        /* VLOOKUP (Cerca Vert) Panel */
+        .vl-overlay {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.45);
+            z-index: 399; display: none;
+        }
+        .vl-overlay.show { display: block; }
+        .vl-panel {
+            position: fixed; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 900px; max-width: 95vw;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            box-shadow: 0 16px 48px var(--shadow);
+            z-index: 400; display: none;
+            flex-direction: column;
+            max-height: 85vh;
+        }
+        .vl-panel.show { display: flex; }
+        .vl-hdr {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 12px 16px; border-bottom: 1px solid var(--border);
+        }
+        .vl-hdr h3 { font-size: 1em; color: var(--primary); margin: 0; display: flex; align-items: center; gap: 8px; }
+        .vl-close { background: none; border: none; color: var(--text-muted); font-size: 1.3em; cursor: pointer; padding: 0 4px; }
+        .vl-close:hover { color: var(--danger); }
+        .vl-body { padding: 14px 16px; overflow-y: auto; flex: 1; }
+        .vl-config {
+            display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap;
+            margin-bottom: 14px;
+        }
+        .vl-field { display: flex; flex-direction: column; gap: 4px; }
+        .vl-field label { font-size: 0.72em; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+        .vl-field select, .vl-field input[type=text] {
+            padding: 7px 10px; border: 1px solid var(--border); border-radius: 5px;
+            background: var(--bg-input); color: var(--text); font-size: 0.85em; outline: none;
+            min-width: 140px;
+        }
+        .vl-field select:focus, .vl-field input[type=text]:focus { border-color: var(--primary); }
+        .vl-field.vl-search-field { flex: 1; min-width: 180px; position: relative; }
+        .vl-field.vl-search-field input { width: 100%; }
+        .vl-match-type {
+            display: flex; gap: 2px; border: 1px solid var(--border); border-radius: 5px; overflow: hidden;
+        }
+        .vl-match-type button {
+            padding: 7px 10px; border: none; background: var(--bg-input); color: var(--text-muted);
+            font-size: 0.78em; cursor: pointer; white-space: nowrap; transition: all 0.15s;
+        }
+        .vl-match-type button:hover { color: var(--text); background: var(--bg-cell-hover); }
+        .vl-match-type button.active { background: var(--primary); color: #fff; font-weight: 600; }
+        .vl-ret-cols {
+            display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 12px;
+            padding: 8px; background: var(--bg-cell-alt); border-radius: 6px; border: 1px solid var(--border);
+            max-height: 100px; overflow-y: auto;
+        }
+        .vl-ret-cols-label { font-size: 0.72em; color: var(--text-muted); font-weight: 600; text-transform: uppercase; width: 100%; margin-bottom: 2px; }
+        .vl-chip {
+            display: inline-flex; align-items: center; gap: 4px;
+            padding: 3px 8px; border-radius: 12px;
+            font-size: 0.75em; cursor: pointer; transition: all 0.15s;
+            border: 1px solid var(--border); background: var(--bg-card); color: var(--text-muted);
+            user-select: none;
+        }
+        .vl-chip:hover { border-color: var(--primary); }
+        .vl-chip.active { background: var(--primary); color: #fff; border-color: var(--primary); font-weight: 600; }
+        .vl-divider { height: 1px; background: var(--border); margin: 6px 0 10px; }
+        .vl-results-hdr {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 8px;
+        }
+        .vl-results-hdr span { font-size: 0.82em; color: var(--text-muted); }
+        .vl-results-hdr strong { color: var(--primary); }
+        .vl-results-actions { display: flex; gap: 4px; }
+        .vl-results-actions button {
+            padding: 4px 10px; border: 1px solid var(--border); border-radius: 4px;
+            background: var(--bg-card); color: var(--text); font-size: 0.75em; cursor: pointer;
+        }
+        .vl-results-actions button:hover { border-color: var(--primary); }
+        .vl-results-actions button.a { background: var(--primary); color: #fff; border-color: var(--primary); }
+        .vl-table-wrap {
+            max-height: 340px; overflow: auto; border: 1px solid var(--border); border-radius: 6px;
+        }
+        .vl-table {
+            width: 100%; border-collapse: collapse; font-size: 0.82em;
+        }
+        .vl-table thead th {
+            position: sticky; top: 0; z-index: 2;
+            background: var(--bg-header); color: var(--text-header);
+            padding: 6px 10px; text-align: left; font-weight: 600; font-size: 0.9em;
+            border-bottom: 2px solid var(--border-light); white-space: nowrap;
+        }
+        .vl-table tbody tr {
+            cursor: pointer; transition: background 0.1s;
+        }
+        .vl-table tbody tr:nth-child(even) { background: var(--bg-cell-alt); }
+        .vl-table tbody tr:hover { background: var(--bg-cell-hover); }
+        .vl-table tbody td {
+            padding: 5px 10px; border-bottom: 1px solid var(--border);
+            max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .vl-table tbody td.vl-key-cell { color: var(--primary); font-weight: 600; }
+        .vl-table tbody tr:hover td { color: var(--text); }
+        .vl-empty {
+            text-align: center; padding: 30px; color: var(--text-muted); font-size: 0.85em;
+        }
+        .vl-empty .vl-icon { font-size: 2em; margin-bottom: 8px; opacity: 0.5; }
+        .vl-suggestions {
+            position: absolute; top: 100%; left: 0; right: 0; z-index: 10;
+            background: var(--bg-card); border: 1px solid var(--border); border-top: none;
+            border-radius: 0 0 5px 5px; box-shadow: 0 4px 16px var(--shadow);
+            max-height: 180px; overflow-y: auto; display: none;
+        }
+        .vl-suggestions.show { display: block; }
+        .vl-sug-item {
+            padding: 5px 10px; font-size: 0.82em; cursor: pointer; color: var(--text);
+            border-bottom: 1px solid var(--border);
+        }
+        .vl-sug-item:hover, .vl-sug-item.active { background: var(--bg-cell-hover); color: var(--primary); }
+        .vl-sug-item:last-child { border-bottom: none; }
+        .vl-copy-btn {
+            background: none; border: none; color: var(--text-muted); cursor: pointer;
+            font-size: 0.85em; padding: 2px 4px; border-radius: 3px;
+        }
+        .vl-copy-btn:hover { color: var(--primary); background: var(--bg-cell-hover); }
+        .vl-multi-toggle {
+            display: flex; gap: 2px; border: 1px solid var(--border); border-radius: 5px; overflow: hidden;
+        }
+        .vl-multi-toggle button {
+            padding: 7px 10px; border: none; background: var(--bg-input); color: var(--text-muted);
+            font-size: 0.78em; cursor: pointer; white-space: nowrap; transition: all 0.15s;
+        }
+        .vl-multi-toggle button:hover { color: var(--text); background: var(--bg-cell-hover); }
+        .vl-multi-toggle button.active { background: var(--primary); color: #fff; font-weight: 600; }
+        .vl-field textarea {
+            padding: 7px 10px; border: 1px solid var(--border); border-radius: 5px;
+            background: var(--bg-input); color: var(--text); font-size: 0.85em; outline: none;
+            min-width: 180px; width: 100%; resize: vertical; font-family: inherit;
+            min-height: 60px; max-height: 150px;
+        }
+        .vl-field textarea:focus { border-color: var(--primary); }
+        .vl-multi-info {
+            font-size: 0.72em; color: var(--text-muted); margin-top: 2px;
+        }
+        .vl-multi-info strong { color: var(--primary); }
+        .vl-foot {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 10px 16px; border-top: 1px solid var(--border);
+            font-size: 0.75em; color: var(--text-muted);
+        }
+        .vl-foot kbd {
+            display: inline-flex; padding: 1px 5px; background: var(--bg-input);
+            border: 1px solid var(--border); border-radius: 3px; font-size: 0.9em;
+            font-family: inherit;
+        }
+
+        @media (max-width: 768px) {
+            .toolbar { flex-wrap: wrap; gap: 6px; padding: 6px 10px; }
+            .search-box { min-width: 140px; flex: 1; }
+            .hide-mobile { display: none; }
+            .vl-panel { width: 98vw; }
+            .vl-config { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <div class="toolbar-title">&#x1F4CA; Filone</div>
+        <div class="toolbar-sep"></div>
+        <span class="toolbar-info" id="infoRighe">Caricamento...</span>
+        <div class="toolbar-sep hide-mobile"></div>
+        <div class="search-box">
+            <span style="color:var(--text-muted);font-size:0.85em">&#x1F50D;</span>
+            <input type="text" class="search-input" id="globalSearch" placeholder="Cerca ovunque..." autocomplete="off">
+        </div>
+        <div class="toolbar-spacer"></div>
+        <div class="toolbar-filters">
+            <span id="activeFilters"></span>
+        </div>
+        <div class="toolbar-actions">
+            <button class="tb" id="btnUndo" onclick="undo()" style="display:none" title="Annulla (Ctrl+Z)">&#x21A9;</button>
+            <button class="tb" id="btnRedo" onclick="redo()" style="display:none" title="Ripristina (Ctrl+Y)">&#x21AA;</button>
+            <button class="tb" onclick="openFindReplace()" title="Trova e Sostituisci (Ctrl+H)">&#x1F50D; Sostituisci</button>
+            <button class="tb" onclick="openVlookup()" title="Cerca Vert / VLOOKUP (Ctrl+L)">&#x1F50D; Cerca Vert</button>
+            <div class="toolbar-sep"></div>
+            <button class="tb" id="btnHiddenCols" onclick="openColManager()" title="Gestione colonne">&#x2630; Colonne</button>
+            <button class="tb" onclick="openCondFormat()" title="Formattazione condizionale">&#x1F3A8; Formato</button>
+            <div class="toolbar-sep"></div>
+            <button class="tb" id="btnRefresh" onclick="manualRefresh()" title="Ricarica dati dal server (F5)">&#x1F504; Aggiorna</button>
+            <button class="tb primary" id="btnSave" onclick="saveAll()" disabled>&#x1F4BE; Salva (<span id="changeCount">0</span>)</button>
+        </div>
+    </div>
+
+    <div class="grid-wrap" id="gridWrap">
+        <div class="loading-overlay" id="loadingOverlay">
+            <div style="text-align:center">
+                <div class="spinner"></div>
+                <div>Caricamento filone...</div>
+            </div>
+        </div>
+        <div class="grid-scroll" id="gridScroll">
+            <div class="grid-inner" id="gridInner">
+                <div class="grid-header" id="gridHeader"></div>
+                <div class="grid-body" id="gridBody"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="status-bar">
+        <span id="stRows">Righe: <strong>-</strong></span>
+        <span id="stCols">Colonne: <strong>-</strong></span>
+        <span id="stVisible">Visibili: <strong>-</strong></span>
+        <span id="stCell">&mdash;</span>
+        <span style="flex:1"></span>
+        <span id="stMod"></span>
+    </div>
+
+    <div class="toast" id="toast"></div>
+    <div class="fpop" id="filterPopup"></div>
+    <div class="colmgr-overlay" id="colmgrOverlay" onclick="closeColManager()"></div>
+    <div class="colmgr" id="colmgrPanel">
+        <div class="colmgr-hdr">
+            <h3>&#x2630; Gestione Colonne</h3>
+            <button class="colmgr-close" onclick="closeColManager()">&times;</button>
+        </div>
+        <input type="text" class="colmgr-search" id="colmgrSearch" placeholder="Cerca colonna..." autocomplete="off">
+        <div class="colmgr-info" id="colmgrInfo"></div>
+        <div class="colmgr-list" id="colmgrList"></div>
+        <div class="colmgr-foot">
+            <button class="d" onclick="cmShowAll()">Mostra tutte</button>
+            <button onclick="cmResetOrder()">&#x21BA; Reset ordine</button>
+            <button class="a" onclick="closeColManager()">Chiudi</button>
+        </div>
+    </div>
+    <div class="cfm-overlay" id="cfmOverlay" onclick="closeCondFormat()"></div>
+    <div class="cfm-panel" id="cfmPanel">
+        <div class="cfm-hdr">
+            <h3>&#x1F3A8; Formattazione Condizionale</h3>
+            <button class="cfm-close" onclick="closeCondFormat()">&times;</button>
+        </div>
+        <div class="cfm-body" id="cfmBody"></div>
+        <div class="cfm-foot">
+            <button class="d" onclick="cfmClearAll()">&#x1F5D1; Elimina tutte</button>
+            <div style="display:flex;gap:6px">
+                <button onclick="cfmAddRule()">+ Nuova regola</button>
+                <button class="a" onclick="closeCondFormat()">Chiudi</button>
+            </div>
+        </div>
+    </div>
+    <!-- VLOOKUP Panel -->
+    <div class="vl-overlay" id="vlOverlay" onclick="closeVlookup()"></div>
+    <div class="vl-panel" id="vlPanel">
+        <div class="vl-hdr">
+            <h3>&#x1F50D; Cerca Vert <span style="font-size:0.7em;color:var(--text-muted);font-weight:400">(VLOOKUP)</span></h3>
+            <button class="vl-close" onclick="closeVlookup()">&times;</button>
+        </div>
+        <div class="vl-body">
+            <div class="vl-tabs">
+                <button class="vl-tab active" data-tab="search" onclick="vlSwitchTab('search')">&#x1F50D; Cerca &amp; Filtra</button>
+                <button class="vl-tab" data-tab="import" onclick="vlSwitchTab('import')">&#x1F4E5; Importa Excel</button>
+            </div>
+            <!-- TAB 1: Cerca & Filtra -->
+            <div class="vl-tab-content active" id="vlTabSearch">
+            <div class="vl-config">
+                <div class="vl-field">
+                    <label>&#x1F511; Colonna di ricerca</label>
+                    <select id="vlSearchCol" onchange="vlOnConfigChange()"></select>
+                </div>
+                <div class="vl-field">
+                    <label>&#x1F522; Modalit&agrave; ricerca</label>
+                    <div class="vl-multi-toggle" id="vlModeToggle">
+                        <button class="active" data-mode="single" onclick="vlSetMode('single')">Singolo</button>
+                        <button data-mode="multi" onclick="vlSetMode('multi')">Multi-valore</button>
+                    </div>
+                </div>
+                <div class="vl-field vl-search-field" id="vlSearchSingleWrap">
+                    <label>&#x1F50E; Valore da cercare</label>
+                    <input type="text" id="vlSearchVal" placeholder="Digita un valore..." autocomplete="off" oninput="vlOnSearchInput()" onkeydown="vlOnSearchKeydown(event)">
+                    <div class="vl-suggestions" id="vlSuggestions"></div>
+                </div>
+                <div class="vl-field vl-search-field" id="vlSearchMultiWrap" style="display:none">
+                    <label>&#x1F50E; Valori da cercare (uno per riga, oppure separati da virgola o ;)</label>
+                    <textarea id="vlSearchMultiVal" placeholder="Valore1&#10;Valore2&#10;Valore3&#10;...oppure: Valore1, Valore2, Valore3" autocomplete="off" oninput="vlOnSearchInput()"></textarea>
+                    <div class="vl-multi-info" id="vlMultiInfo"></div>
+                </div>
+                <div class="vl-field">
+                    <label>&#x2696; Tipo di corrispondenza</label>
+                    <div class="vl-match-type" id="vlMatchType">
+                        <button class="active" data-match="exact" onclick="vlSetMatch('exact')">Esatta</button>
+                        <button data-match="contains" onclick="vlSetMatch('contains')">Contiene</button>
+                        <button data-match="starts" onclick="vlSetMatch('starts')">Inizia con</button>
+                    </div>
+                </div>
+            </div>
+            <div class="vl-ret-cols" id="vlRetCols">
+                <div class="vl-ret-cols-label">&#x1F4CB; Colonne da restituire (clicca per selezionare)</div>
+            </div>
+            <div class="vl-divider"></div>
+            <div class="vl-results-hdr" id="vlResultsHdr" style="display:none">
+                <span id="vlResultsCount"></span>
+                <div class="vl-results-actions">
+                    <button class="vl-filter-btn" onclick="vlApplyAsFilter()" title="Filtra il filone mostrando solo le righe trovate">&#x1F50E; Filtra sul filone</button>
+                    <button onclick="vlCopyResults()" title="Copia risultati">&#x1F4CB; Copia</button>
+                    <button onclick="vlExportCSV()" title="Esporta come CSV">&#x1F4E5; CSV</button>
+                </div>
+            </div>
+            <div class="vl-table-wrap" id="vlTableWrap" style="display:none">
+                <table class="vl-table">
+                    <thead id="vlTableHead"></thead>
+                    <tbody id="vlTableBody"></tbody>
+                </table>
+            </div>
+            <div class="vl-empty" id="vlEmpty">
+                <div class="vl-icon">&#x1F50D;</div>
+                <div>Seleziona una colonna di ricerca, digita un valore e scegli le colonne da restituire.</div>
+                <div style="margin-top:6px;font-size:0.9em;color:var(--text-muted)">&#x1F4A1; Come il CERCA.VERT di Excel, ma pi&ugrave; veloce e intuitivo!</div>
+            </div>
+            </div>
+            <!-- TAB 2: Importa Excel -->
+            <div class="vl-tab-content" id="vlTabImport">
+                <div class="vl-excel-section" id="vlExcelSection">
+                    <p style="font-size:0.82em;color:var(--text-muted);margin:0 0 10px">
+                        &#x1F4A1; Carica un file Excel esterno, seleziona la colonna chiave per il match (es. POD),
+                        poi mappa le colonne da importare verso le colonne del filone. I dati verranno scritti
+                        dove c&rsquo;&egrave; corrispondenza.
+                    </p>
+                    <div class="vl-excel-dropzone" id="vlExcelDropzone" onclick="qs('#vlExcelFileInput').click()">
+                        <div style="font-size:1.5em;margin-bottom:6px">&#x1F4C2;</div>
+                        <div><strong>Clicca</strong> o <strong>trascina</strong> qui un file Excel (.xlsx, .xls, .csv)</div>
+                        <input type="file" id="vlExcelFileInput" accept=".xlsx,.xls,.csv" onchange="vlOnExcelFileSelected(this)">
+                    </div>
+                    <div id="vlExcelLoaded" style="display:none">
+                        <div class="vl-excel-info" id="vlExcelFileInfo"></div>
+                        <div style="margin-top:10px">
+                            <div class="vl-config" style="margin-bottom:8px">
+                                <div class="vl-field">
+                                    <label>&#x1F511; Colonna chiave Excel (per match)</label>
+                                    <select id="vlExcelKeyCol" onchange="vlExcelPreview()"></select>
+                                </div>
+                                <div class="vl-field">
+                                    <label>&#x1F511; Colonna chiave Filone (per match)</label>
+                                    <select id="vlFiloneKeyCol" onchange="vlExcelPreview()"></select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="vl-excel-mapping" id="vlExcelMapping">
+                            <div style="display:flex;align-items:center;justify-content:space-between">
+                                <label style="font-size:0.72em;color:var(--text-muted);font-weight:600;text-transform:uppercase">&#x1F504; Mappatura colonne (Excel &#x2192; Filone)</label>
+                                <button style="padding:3px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg-card);color:var(--text);font-size:0.75em;cursor:pointer" onclick="vlExcelAddMapping()">+ Aggiungi</button>
+                            </div>
+                        </div>
+                        <div class="vl-excel-preview" id="vlExcelPreviewWrap" style="display:none">
+                            <table><thead id="vlExcelPreviewHead"></thead><tbody id="vlExcelPreviewBody"></tbody></table>
+                        </div>
+                        <div id="vlMergeResult"></div>
+                        <div class="vl-excel-actions">
+                            <button class="d" onclick="vlExcelClear()">&#x1F5D1; Rimuovi file</button>
+                            <button onclick="vlExcelPreview()">&#x1F441; Anteprima</button>
+                            <button class="a" onclick="vlExcelMerge()" id="vlExcelMergeBtn">&#x1F504; Esegui Merge</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="vl-foot">
+            <span>&#x1F4A1; Clicca su una riga per navigare | &#x1F50E; Filtra per lavorare sul filone | &#x1F4E5; Importa dati da Excel</span>
+            <span><kbd>Ctrl</kbd>+<kbd>L</kbd> per aprire</span>
+        </div>
+    </div>
+
+    <div class="fnr-overlay" id="fnrOverlay" onclick="closeFindReplace()"></div>
+    <div class="fnr-panel" id="fnrPanel">
+        <button class="fnr-close" onclick="closeFindReplace()">&times;</button>
+        <h3>&#x1F50D; Trova e Sostituisci</h3>
+        <div class="fnr-row">
+            <input type="text" id="fnrFind" placeholder="Cerca..." autocomplete="off">
+        </div>
+        <div class="fnr-row">
+            <input type="text" id="fnrReplace" placeholder="Sostituisci con..." autocomplete="off">
+        </div>
+        <div class="fnr-row">
+            <label style="font-size:0.82em;color:var(--text-muted);margin-right:4px">Ambito:</label>
+            <select id="fnrScope" style="padding:3px 6px;border:1px solid var(--border);border-radius:3px;background:var(--bg-input);color:var(--text);font-size:0.82em;min-width:120px;outline:none">
+                <option value="all">Tutte le colonne</option>
+            </select>
+        </div>
+        <div class="fnr-row">
+            <label><input type="checkbox" id="fnrCase"> Maiusc/minusc</label>
+            <label><input type="checkbox" id="fnrExact"> Parola esatta</label>
+        </div>
+        <div class="fnr-btns">
+            <button onclick="fnrFindNext()">Trova &#x25BC;</button>
+            <button onclick="fnrFindPrev()">Trova &#x25B2;</button>
+            <button class="a" onclick="fnrReplaceOne()">Sostituisci</button>
+            <button class="d" onclick="fnrReplaceAll()">Sost. tutti</button>
+        </div>
+        <div class="fnr-info" id="fnrInfo"></div>
+    </div>
+
+<script>
+// ============================================================
+// CONFIG
+// ============================================================
+const ROW_H = 28;
+const OVERSCAN = 10;
+const COL_W_DEFAULT = 120;
+const COL_W_MIN = 60;
+const COL_W_MAX = 400;
+const RN_W = 52;
+const HEADER_H = 34;
+
+// ============================================================
+// STATE
+// ============================================================
+let headers = [];
+let rawData = [];
+let filtered = [];          // indices into rawData after filter+search+sort
+let colWidths = [];
+let sortCol = -1;
+let sortDir = 'asc';
+let pending = {};           // "row:col" -> {row, col, old, val}
+let colFilters = {};        // colName -> Set(values)
+let colorFilterCol = '';     // column name for color filter
+let colorFilterColor = '';   // textColor value to filter by ('' = no filter)
+let podFilterSet = null;    // Set di valori filtro attivi, null = nessun filtro
+let podColName = '';        // nome colonna POD (auto-detected)
+let vlFilterCol = '';       // nome colonna usata per il filtro dal Cerca Vert
+let colTypes = {};          // colName -> 'date'|'time'|'number'|'text'
+let hiddenCols = new Set(); // set of hidden column indices
+let protectedCols = new Set(); // set of protected (read-only) column names (lowercase)
+let unlockedCols = new Set(); // columns the user has manually unlocked this session
+let colOrder = [];       // colOrder[visPos] = origIdx
+let colOrderMap = {};    // colOrderMap[origIdx] = visPos
+let selRow = -1, selCol = -1;
+let editing = false;
+let editInput = null;
+
+// Multi-cell selection
+let selAnchorRow = -1, selAnchorCol = -1;
+let selRange = null; // {viMin, viMax, vpMin, vpMax}
+let isDragging = false;
+
+// Undo/Redo
+let undoStack = [];
+let redoStack = [];
+let undoGroupId = 0;
+
+// Find & Replace
+let fnrMatches = [];
+let fnrMatchSet = new Set();
+let fnrCurrentIdx = -1;
+
+// Virtual scroll
+let visStart = -1, visEnd = -1;
+let rowPool = [];
+let activeRows = new Map(); // visIdx -> DOM node
+
+// Row index for quick lookup  _row -> rawData index
+let rowIndex = {};
+
+// ============================================================
+// INIT
+// ============================================================
+document.addEventListener('DOMContentLoaded', loadData);
+
+async function loadData() {
+    try {
+        const r = await fetch('/api/filone');
+        if (r.status === 401) { window.location.href = '/login'; return; }
+        const d = await r.json();
+        if (d.error) throw new Error(d.error);
+        headers = d.headers;
+        rawData = d.data;
+        // Load protected columns from server (normalize to lowercase)
+        if (d.protectedCols && d.protectedCols.length) {
+            protectedCols = new Set(d.protectedCols.map(function(c) { return c.toLowerCase(); }));
+        }
+        buildRowIndex();
+        detectColTypes();
+        initCondFormat();
+        detectPodColumn();
+        initColWidths();
+        initColOrder();
+        loadHiddenCols();
+        applyHiddenCols();
+        buildHeader();
+        applyFilters();
+        updateHiddenColsBtn();
+        hideLoading();
+        qs('#infoRighe').innerHTML = '<strong>' + rawData.length + '</strong> righe &times; <strong>' + headers.length + '</strong> colonne';
+    } catch (e) {
+        qs('.loading-overlay div').innerHTML = '&#x274C; ' + esc(e.message) + '<br><button onclick="loadData()" style="margin-top:10px;padding:6px 16px;cursor:pointer">Riprova</button>';
+    }
+}
+
+function buildRowIndex() {
+    rowIndex = {};
+    for (let i = 0; i < rawData.length; i++) rowIndex[rawData[i]._row] = i;
+}
+
+// ============================================================
+// COLUMN TYPE DETECTION
+// ============================================================
+var RE_DATE  = /^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/;
+var RE_DATE_ISO = /^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/;
+var RE_TIME  = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/;
+
+function detectColTypes() {
+    colTypes = {};
+    for (var c = 0; c < headers.length; c++) {
+        var cn = headers[c];
+        var dateCount = 0, timeCount = 0, numCount = 0, total = 0;
+        var sample = Math.min(rawData.length, 200);
+        for (var r = 0; r < sample; r++) {
+            var v = (rawData[r][cn] != null ? rawData[r][cn] : '').toString().trim();
+            if (!v) continue;
+            total++;
+            if (RE_DATE.test(v) || RE_DATE_ISO.test(v)) dateCount++;
+            else if (RE_TIME.test(v)) timeCount++;
+            else if (!isNaN(parseFloat(v)) && isFinite(v)) numCount++;
+        }
+        if (total === 0) { colTypes[cn] = 'text'; continue; }
+        var threshold = total * 0.5;
+        if (dateCount >= threshold) colTypes[cn] = 'date';
+        else if (timeCount >= threshold) colTypes[cn] = 'time';
+        else if (numCount >= threshold) colTypes[cn] = 'number';
+        else colTypes[cn] = 'text';
+    }
+}
+
+function detectPodColumn() {
+    podColName = '';
+    for (var c = 0; c < headers.length; c++) {
+        var h = headers[c].toUpperCase().trim();
+        if (h === 'POD' || h === 'CODICE POD' || h === 'COD. POD' || h === 'COD POD') {
+            podColName = headers[c];
+            break;
+        }
+    }
+    // Fallback: look for column containing POD-like values (IT001E...)
+    if (!podColName) {
+        for (var c = 0; c < headers.length; c++) {
+            var sample = Math.min(rawData.length, 20);
+            var podLike = 0;
+            for (var r = 0; r < sample; r++) {
+                var v = (rawData[r][headers[c]] || '').toString().trim();
+                if (/^IT\d{3}E\d{8,}$/i.test(v)) podLike++;
+            }
+            if (podLike >= sample * 0.5 && sample > 0) {
+                podColName = headers[c];
+                break;
+            }
+        }
+    }
+}
+
+function parseDate(s) {
+    s = (s || '').toString().trim();
+    var m = s.match(RE_DATE);
+    if (m) return new Date(+m[3] + (m[3].length === 2 ? 2000 : 0), +m[2] - 1, +m[1]);
+    m = s.match(RE_DATE_ISO);
+    if (m) return new Date(+m[1], +m[2] - 1, +m[3]);
+    return null;
+}
+
+function parseTime(s) {
+    s = (s || '').toString().trim();
+    var m = s.match(RE_TIME);
+    if (m) return (+m[1]) * 60 + (+m[2]);
+    return null;
+}
+
+function hideLoading() {
+    const o = qs('#loadingOverlay');
+    o.style.opacity = '0';
+    setTimeout(function() { o.style.display = 'none'; }, 200);
+}
+
+function initColWidths() {
+    // Try to load saved widths from localStorage
+    var saved = loadColWidths();
+    if (saved && saved.length === headers.length) {
+        colWidths = saved;
+        return;
+    }
+    colWidths = headers.map(function(h, i) {
+        let maxLen = h.length;
+        const sample = Math.min(rawData.length, 100);
+        for (let r = 0; r < sample; r++) {
+            const v = (rawData[r][h] != null ? rawData[r][h] : '').toString();
+            if (v.length > maxLen) maxLen = v.length;
+        }
+        return Math.max(COL_W_MIN, Math.min(COL_W_MAX, maxLen * 8 + 20));
+    });
+}
+
+function saveColWidths() {
+    try { localStorage.setItem('filone_col_widths', JSON.stringify(colWidths)); } catch(e) {}
+}
+function loadColWidths() {
+    try {
+        var s = localStorage.getItem('filone_col_widths');
+        if (s) return JSON.parse(s);
+    } catch(e) {}
+    return null;
+}
+
+// ============================================================
+// COLUMN ORDER – PERSISTENCE
+// ============================================================
+function initColOrder() {
+    var saved = loadColOrder();
+    if (saved && saved.length === headers.length) {
+        var check = saved.slice().sort(function(a,b){return a-b;});
+        var valid = true;
+        for (var i = 0; i < check.length; i++) { if (check[i] !== i) { valid = false; break; } }
+        if (valid) { colOrder = saved; rebuildColOrderMap(); return; }
+    }
+    colOrder = headers.map(function(_, i) { return i; });
+    rebuildColOrderMap();
+}
+function rebuildColOrderMap() {
+    colOrderMap = {};
+    for (var i = 0; i < colOrder.length; i++) colOrderMap[colOrder[i]] = i;
+}
+function saveColOrder() {
+    try { localStorage.setItem('filone_col_order', JSON.stringify(colOrder)); } catch(e) {}
+}
+function loadColOrder() {
+    try {
+        var s = localStorage.getItem('filone_col_order');
+        if (s) return JSON.parse(s);
+    } catch(e) {}
+    return null;
+}
+// ============================================================
+// HIDDEN COLUMNS – PERSISTENCE
+// ============================================================
+function saveHiddenCols() {
+    try { localStorage.setItem('filone_hidden_cols', JSON.stringify(Array.from(hiddenCols))); } catch(e) {}
+}
+function loadHiddenCols() {
+    try {
+        var s = localStorage.getItem('filone_hidden_cols');
+        if (s) {
+            var arr = JSON.parse(s);
+            hiddenCols = new Set(arr.filter(function(c) { return c >= 0 && c < headers.length; }));
+        }
+    } catch(e) {}
+}
+function applyHiddenCols() {
+    var style = qs('#colHideStyle');
+    if (!style) {
+        style = document.createElement('style');
+        style.id = 'colHideStyle';
+        document.head.appendChild(style);
+    }
+    var css = '';
+    hiddenCols.forEach(function(ci) {
+        css += '.gh[data-ci="' + ci + '"],.vc[data-ci="' + ci + '"]{display:none!important;width:0!important;padding:0!important;border:0!important;}\n';
+    });
+    style.textContent = css;
+}
+function hideColumn(ci) {
+    if (ci < 0 || ci >= headers.length) return;
+    // Don't allow hiding all columns
+    if (hiddenCols.size >= headers.length - 1) {
+        toast('Impossibile nascondere tutte le colonne', 'warning');
+        return;
+    }
+    hiddenCols.add(ci);
+    saveHiddenCols();
+    applyHiddenCols();
+    updateLayout();
+    renderVisible(true);
+    updateHiddenColsBtn();
+    toast('Colonna "' + headers[ci] + '" nascosta', 'warning');
+}
+function showColumn(ci) {
+    hiddenCols.delete(ci);
+    saveHiddenCols();
+    applyHiddenCols();
+    updateLayout();
+    renderVisible(true);
+    updateHiddenColsBtn();
+    toast('Colonna "' + headers[ci] + '" ripristinata', 'success');
+}
+function showAllColumns() {
+    hiddenCols.clear();
+    saveHiddenCols();
+    applyHiddenCols();
+    updateLayout();
+    renderVisible(true);
+    updateHiddenColsBtn();
+    toast('Tutte le colonne ripristinate', 'success');
+}
+function updateHiddenColsBtn() {
+    // Badge on toolbar button
+    var btn = qs('#btnHiddenCols');
+    var n = hiddenCols.size;
+    if (n > 0) {
+        btn.innerHTML = '&#x2630; Colonne <span style=\"background:var(--warning);color:#000;border-radius:8px;padding:0 5px;font-size:0.85em;margin-left:2px\">' + n + '</span>';
+    } else {
+        btn.innerHTML = '&#x2630; Colonne';
+    }
+}
+
+function resetColWidths() {
+    localStorage.removeItem('filone_col_widths');
+    localStorage.removeItem('filone_col_order');
+    colWidths = headers.map(function(h, i) {
+        var maxLen = h.length;
+        var sample = Math.min(rawData.length, 100);
+        for (var r = 0; r < sample; r++) {
+            var v = (rawData[r][h] != null ? rawData[r][h] : '').toString();
+            if (v.length > maxLen) maxLen = v.length;
+        }
+        return Math.max(COL_W_MIN, Math.min(COL_W_MAX, maxLen * 8 + 20));
+    });
+    colOrder = headers.map(function(_, i) { return i; });
+    rebuildColOrderMap();
+    buildHeader();
+    updateLayout();
+    renderVisible(true);
+    toast('Colonne ripristinate (larghezza + ordine)', 'success');
+}
+
+// ============================================================
+// HEADER
+// ============================================================
+function buildHeader() {
+    const hdr = qs('#gridHeader');
+    let html = '<div class="gh col-rn" style="width:' + RN_W + 'px;order:-1">#</div>';
+    for (let i = 0; i < headers.length; i++) {
+        const h = headers[i];
+        var cls = '';
+        if (colFilters[h]) cls += ' filtered';
+        if (isProtected(h)) cls += ' protected-hdr';
+        var sortCls = '';
+        if (sortCol === i) sortCls = sortDir === 'asc' ? ' sort-asc' : ' sort-desc';
+        var filterActive = colFilters[h] ? ' active' : '';
+        var ord = colOrderMap[i] !== undefined ? colOrderMap[i] : i;
+        html += '<div class="gh' + cls + sortCls + '" data-ci="' + i + '" style="width:' + colWidths[i] + 'px;order:' + ord + '">'
+            + '<span class="gh-label">' + esc(h) + '</span>'
+            + '<span class="gh-sort"></span>'
+            + '<span class="gh-btn' + filterActive + '" data-filter="' + i + '" title="Filtro colonna">&#x25BC;</span>'
+            + '<span class="gh-resize" data-ri="' + i + '"></span>'
+            + '</div>';
+    }
+    hdr.innerHTML = html;
+}
+
+qs('#gridHeader')?.addEventListener?.('click', function(e) {
+    // wait for DOM
+});
+// Defer header event binding until after first buildHeader
+(function setupHeaderEvents() {
+    var hdr = qs('#gridHeader');
+    // Column resize dragging
+    hdr.addEventListener('mousedown', function(e) {
+        var handle = e.target.closest('.gh-resize[data-ri]');
+        if (!handle) return;
+        e.preventDefault();
+        e.stopPropagation();
+        var ci = +handle.dataset.ri;
+        var startX = e.clientX;
+        var startW = colWidths[ci];
+        handle.classList.add('dragging');
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+
+        function onMove(ev) {
+            var delta = ev.clientX - startX;
+            colWidths[ci] = Math.max(COL_W_MIN, Math.min(COL_W_MAX, startW + delta));
+            // Live update header cell width
+            var ghEl = hdr.querySelector('.gh[data-ci="' + ci + '"]');
+            if (ghEl) ghEl.style.width = colWidths[ci] + 'px';
+            // Live update visible body cells
+            activeRows.forEach(function(node) {
+                var cell = node.children[ci + 1];
+                if (cell) {
+                    cell.style.width = colWidths[ci] + 'px';
+                    cell.style.minWidth = colWidths[ci] + 'px';
+                }
+            });
+            // Update total width
+            var totalW = RN_W;
+            for (var j = 0; j < colWidths.length; j++) {
+                if (!hiddenCols.has(j)) totalW += colWidths[j];
+            }
+            qs('#gridInner').style.width = totalW + 'px';
+        }
+        function onUp() {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            handle.classList.remove('dragging');
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            // Persist to localStorage
+            saveColWidths();
+        }
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+    });
+
+    // Auto-fit column on double-click resize handle / select entire column
+    hdr.addEventListener('dblclick', function(e) {
+        var handle = e.target.closest('.gh-resize[data-ri]');
+        if (handle) {
+            e.preventDefault();
+            e.stopPropagation();
+            autoFitColumn(+handle.dataset.ri);
+            return;
+        }
+        // Double-click on column header label -> select entire column
+        var gh = e.target.closest('.gh[data-ci]');
+        if (!gh) return;
+        if (e.target.closest('.gh-btn')) return; // ignore filter button
+        e.preventDefault();
+        e.stopPropagation();
+        var ci = +gh.dataset.ci;
+        selectEntireColumn(ci);
+    });
+
+    hdr.addEventListener('click', function(e) {
+        // Ignore clicks on resize handle or after drag
+        if (e.target.closest('.gh-resize')) return;
+        if (colDragDone) { colDragDone = false; return; }
+        // Filter button click
+        var filterBtn = e.target.closest('.gh-btn[data-filter]');
+        if (filterBtn) {
+            var ci = +filterBtn.dataset.filter;
+            var rect = filterBtn.getBoundingClientRect();
+            openFilter(ci, rect.left, rect.bottom + 2);
+            return;
+        }
+    });
+
+    // Column reorder drag
+    var colDragDone = false;
+    hdr.addEventListener('mousedown', function(e) {
+        if (e.target.closest('.gh-resize') || e.target.closest('.gh-btn')) return;
+        if (e.button !== 0) return;
+        var gh = e.target.closest('.gh[data-ci]');
+        if (!gh) return;
+
+        var dragCI = +gh.dataset.ci;
+        var startX = e.clientX;
+        var moved = false;
+
+        var ghost = document.createElement('div');
+        ghost.className = 'col-drag-ghost';
+        ghost.textContent = headers[dragCI];
+        ghost.style.display = 'none';
+        document.body.appendChild(ghost);
+
+        var indicator = document.createElement('div');
+        indicator.className = 'col-drag-indicator';
+        indicator.style.display = 'none';
+        document.body.appendChild(indicator);
+
+        var dropVis = -1;
+
+        function onMove(ev) {
+            if (!moved && Math.abs(ev.clientX - startX) < 6) return;
+            if (!moved) {
+                moved = true;
+                gh.classList.add('dragging-col');
+                document.body.style.cursor = 'grabbing';
+                document.body.style.userSelect = 'none';
+            }
+            ghost.style.display = 'block';
+            ghost.style.left = (ev.clientX + 12) + 'px';
+            ghost.style.top = (ev.clientY - 14) + 'px';
+
+            dropVis = colOrder.length;
+            for (var k = 0; k < colOrder.length; k++) {
+                var ci2 = colOrder[k];
+                if (hiddenCols.has(ci2)) continue;
+                var el = hdr.querySelector('.gh[data-ci="' + ci2 + '"]');
+                if (!el) continue;
+                var rect = el.getBoundingClientRect();
+                if (ev.clientX < rect.left + rect.width / 2) {
+                    dropVis = k;
+                    indicator.style.left = (rect.left - 1) + 'px';
+                    indicator.style.top = rect.top + 'px';
+                    indicator.style.height = rect.height + 'px';
+                    indicator.style.display = 'block';
+                    return;
+                }
+            }
+            // Past last column
+            for (var k2 = colOrder.length - 1; k2 >= 0; k2--) {
+                if (!hiddenCols.has(colOrder[k2])) {
+                    var el2 = hdr.querySelector('.gh[data-ci="' + colOrder[k2] + '"]');
+                    if (el2) {
+                        var rect2 = el2.getBoundingClientRect();
+                        indicator.style.left = (rect2.right - 1) + 'px';
+                        indicator.style.top = rect2.top + 'px';
+                        indicator.style.height = rect2.height + 'px';
+                        indicator.style.display = 'block';
+                    }
+                    break;
+                }
+            }
+        }
+
+        function onUp() {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            gh.classList.remove('dragging-col');
+            ghost.remove();
+            indicator.remove();
+
+            if (moved && dropVis >= 0) {
+                var from = colOrder.indexOf(dragCI);
+                if (from >= 0 && from !== dropVis && !(from + 1 === dropVis)) {
+                    colOrder.splice(from, 1);
+                    if (dropVis > from) dropVis--;
+                    colOrder.splice(dropVis, 0, dragCI);
+                    rebuildColOrderMap();
+                    saveColOrder();
+                    buildHeader();
+                    renderVisible(true);
+                }
+                colDragDone = true;
+                setTimeout(function() { colDragDone = false; }, 50);
+            }
+        }
+
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+    });
+
+    hdr.addEventListener('contextmenu', function(e) {
+        var gh = e.target.closest('.gh[data-ci]');
+        if (!gh) return;
+        e.preventDefault();
+        openFilter(+gh.dataset.ci, e.clientX, e.clientY);
+    });
+})();
+
+// ============================================================
+// FILTER + SORT + SEARCH
+// ============================================================
+function applyFilters() {
+    var q = qs('#globalSearch').value.toLowerCase().trim();
+    filtered = [];
+
+    for (var i = 0; i < rawData.length; i++) {
+        var row = rawData[i];
+        var pass = true;
+
+        // Cerca Vert / POD filter
+        if (podFilterSet) {
+            var filterColName = vlFilterCol || podColName;
+            if (filterColName) {
+                var podVal = (row[filterColName] != null ? row[filterColName] : '').toString().trim().toUpperCase();
+                if (!podFilterSet.has(podVal)) { pass = false; }
+            }
+        }
+        if (!pass) continue;
+
+        // Column filters
+        for (var cn in colFilters) {
+            var val = (row[cn] != null ? row[cn] : '').toString().trim();
+            if (!colFilters[cn].has(val)) { pass = false; break; }
+        }
+        if (!pass) continue;
+
+        // Color filter
+        if (colorFilterCol && colorFilterColor) {
+            var cfVal = (row[colorFilterCol] != null ? row[colorFilterCol] : '').toString().trim();
+            var cfRules = condRulesByCol[colorFilterCol];
+            var cfMatch = false;
+            if (cfRules) {
+                for (var cfr = 0; cfr < cfRules.length; cfr++) {
+                    if (evalCondRule(cfRules[cfr], cfVal) && cfRules[cfr].textColor === colorFilterColor) { cfMatch = true; break; }
+                }
+            }
+            if (!cfMatch) { pass = false; }
+        }
+        if (!pass) continue;
+
+        // Global search
+        if (q) {
+            var found = false;
+            for (var c = 0; c < headers.length; c++) {
+                var v = (row[headers[c]] != null ? row[headers[c]] : '').toString().toLowerCase();
+                if (v.indexOf(q) >= 0) { found = true; break; }
+                var ck = row._row + ':' + headers[c];
+                if (pending[ck] && pending[ck].val.toLowerCase().indexOf(q) >= 0) { found = true; break; }
+            }
+            if (!found) continue;
+        }
+
+        filtered.push(i);
+    }
+
+    // Smart sort by column type
+    if (sortCol >= 0) {
+        var scn = headers[sortCol];
+        var sdir = sortDir;
+        var ctype = colTypes[scn] || 'text';
+
+        filtered.sort(function(a, b) {
+            var va = getDisplayVal(rawData[a], scn);
+            var vb = getDisplayVal(rawData[b], scn);
+
+            var result = 0;
+
+            if (ctype === 'date') {
+                var da = parseDate(va), db = parseDate(vb);
+                if (da && db) result = da.getTime() - db.getTime();
+                else if (da) result = -1;
+                else if (db) result = 1;
+                else result = va.localeCompare(vb, undefined, { numeric: true, sensitivity: 'base' });
+            } else if (ctype === 'time') {
+                var ta = parseTime(va), tb = parseTime(vb);
+                if (ta !== null && tb !== null) result = ta - tb;
+                else if (ta !== null) result = -1;
+                else if (tb !== null) result = 1;
+                else result = va.localeCompare(vb, undefined, { numeric: true, sensitivity: 'base' });
+            } else if (ctype === 'number') {
+                var na = parseFloat(va), nb = parseFloat(vb);
+                if (!isNaN(na) && !isNaN(nb)) result = na - nb;
+                else if (!isNaN(na)) result = -1;
+                else if (!isNaN(nb)) result = 1;
+                else result = va.localeCompare(vb, undefined, { numeric: true, sensitivity: 'base' });
+            } else {
+                // text: natural locale compare
+                result = va.localeCompare(vb, undefined, { numeric: true, sensitivity: 'base' });
+            }
+
+            return sdir === 'asc' ? result : -result;
+        });
+    }
+
+    updateLayout();
+    visStart = -1; visEnd = -1;
+    renderVisible(true);
+    updateStatus();
+    updateActiveFilterBadges();
+}
+
+function getDisplayVal(row, colName) {
+    var ck = row._row + ':' + colName;
+    return pending[ck] ? pending[ck].val : (row[colName] != null ? row[colName] : '').toString();
+}
+
+// Search debounce
+var searchTimer;
+qs('#globalSearch').addEventListener('input', function() {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(applyFilters, 200);
+});
+
+// ============================================================
+// VIRTUAL SCROLL LAYOUT
+// ============================================================
+function updateLayout() {
+    var totalW = RN_W;
+    for (var i = 0; i < colWidths.length; i++) {
+        if (!hiddenCols.has(i)) totalW += colWidths[i];
+    }
+    var totalH = filtered.length * ROW_H;
+
+    var inner = qs('#gridInner');
+    inner.style.width = totalW + 'px';
+    inner.style.height = (totalH + HEADER_H) + 'px';
+
+    var body = qs('#gridBody');
+    body.style.top = HEADER_H + 'px';
+    body.style.height = totalH + 'px';
+
+    // Return all active rows to pool
+    activeRows.forEach(function(node) {
+        node.style.display = 'none';
+        rowPool.push(node);
+    });
+    activeRows.clear();
+}
+
+// ============================================================
+// RENDER VISIBLE ROWS
+// ============================================================
+function renderVisible(force) {
+    var scroll = qs('#gridScroll');
+    var scrollTop = scroll.scrollTop - HEADER_H;
+    if (scrollTop < 0) scrollTop = 0;
+    var viewH = scroll.clientHeight;
+
+    var startIdx = Math.max(0, Math.floor(scrollTop / ROW_H) - OVERSCAN);
+    var endIdx = Math.min(filtered.length, Math.ceil((scrollTop + viewH) / ROW_H) + OVERSCAN);
+
+    if (!force && startIdx === visStart && endIdx === visEnd) return;
+
+    // Recycle rows outside new range
+    activeRows.forEach(function(node, idx) {
+        if (idx < startIdx || idx >= endIdx) {
+            node.style.display = 'none';
+            rowPool.push(node);
+            activeRows.delete(idx);
+        }
+    });
+
+    // Create/reuse rows in new range
+    var body = qs('#gridBody');
+    for (var vi = startIdx; vi < endIdx; vi++) {
+        if (activeRows.has(vi)) {
+            // Only refill if force
+            if (force) {
+                var exNode = activeRows.get(vi);
+                var exDi = filtered[vi];
+                if (exDi !== undefined) fillRow(exNode, rawData[exDi], vi);
+            }
+            continue;
+        }
+        var dataIdx = filtered[vi];
+        if (dataIdx === undefined) continue;
+        var row = rawData[dataIdx];
+
+        var node = rowPool.pop();
+        if (!node) {
+            node = createRowNode();
+            body.appendChild(node);
+        }
+
+        fillRow(node, row, vi);
+        node.style.display = 'flex';
+        node.style.top = (vi * ROW_H) + 'px';
+        node.style.height = ROW_H + 'px';
+        node.dataset.vi = vi;
+        node.dataset.rn = row._row;
+        activeRows.set(vi, node);
+    }
+
+    visStart = startIdx;
+    visEnd = endIdx;
+}
+
+function createRowNode() {
+    var div = document.createElement('div');
+    div.className = 'vrow';
+
+    var rn = document.createElement('div');
+    rn.className = 'vc rn';
+    rn.style.width = RN_W + 'px';
+    rn.style.minWidth = RN_W + 'px';
+    rn.style.order = '-1';
+    div.appendChild(rn);
+
+    for (var i = 0; i < headers.length; i++) {
+        var c = document.createElement('div');
+        c.className = 'vc';
+        c.dataset.ci = i;
+        div.appendChild(c);
+    }
+
+    return div;
+}
+
+function fillRow(node, row, visIdx) {
+    node.className = 'vrow ' + (visIdx % 2 === 0 ? 'vrow-even' : 'vrow-odd');
+    node.dataset.rn = row._row;
+    node.dataset.vi = visIdx;
+    var cells = node.children;
+
+    cells[0].textContent = row._row;
+
+    for (var i = 0; i < headers.length; i++) {
+        var cell = cells[i + 1];
+        if (!cell) continue;
+        var cn = headers[i];
+        var ck = row._row + ':' + cn;
+        var val = pending[ck] ? pending[ck].val : (row[cn] != null ? row[cn] : '');
+
+        // Only update textContent if no active edit input inside
+        if (!editing || !(+node.dataset.rn === selRow && i === selCol)) {
+            cell.textContent = val;
+        }
+        cell.style.width = colWidths[i] + 'px';
+        cell.style.minWidth = colWidths[i] + 'px';
+        cell.style.order = colOrderMap[i] !== undefined ? colOrderMap[i] : i;
+        cell.title = val;
+        // Reset inline conditional styles (cells are reused)
+        cell.style.color = '';
+        cell.style.backgroundColor = '';
+        cell.style.fontWeight = '';
+
+        var cls = 'vc';
+        if (isProtected(cn)) cls += ' protected';
+        if (pending[ck]) cls += ' mod';
+        if (row._row === selRow && i === selCol) cls += ' sel';
+        if (isInSelRange(visIdx, i)) cls += ' sel-range';
+        if (editing && row._row === selRow && i === selCol) cls += ' editing';
+        // Conditional formatting (inline styles from dynamic rules)
+        var condRule = getCondStyle(i, val);
+        if (condRule) {
+            if (condRule.textColor) cell.style.color = condRule.textColor;
+            if (condRule.bgColor) cell.style.backgroundColor = condRule.bgColor;
+            if (condRule.bold) cell.style.fontWeight = '700';
+        }
+        // Find & Replace highlight
+        if (fnrMatchSet.size > 0 && fnrMatchSet.has(row._row + ':' + i)) {
+            cls += ' find-match';
+            if (fnrCurrentIdx >= 0 && fnrMatches[fnrCurrentIdx] && fnrMatches[fnrCurrentIdx].rn === row._row && fnrMatches[fnrCurrentIdx].ci === i) cls += ' find-current';
+        }
+        cell.className = cls;
+    }
+}
+
+// Scroll handler with rAF throttle
+var scrollRaf = 0;
+qs('#gridScroll').addEventListener('scroll', function() {
+    if (scrollRaf) return;
+    scrollRaf = requestAnimationFrame(function() {
+        renderVisible(false);
+        scrollRaf = 0;
+    });
+}, { passive: true });
+
+// ============================================================
+// CELL CLICK/DBLCLICK (delegation)
+// ============================================================
+qs('#gridBody').addEventListener('mousedown', function(e) {
+    if (e.button !== 0) return;
+
+    // If clicking inside the active edit textarea, let native cursor positioning work
+    if (editing && editInput && (e.target === editInput || editInput.contains(e.target))) {
+        e.stopPropagation();
+        return;
+    }
+
+    var vc = e.target.closest('.vc[data-ci]');
+    if (!vc) return;
+    var vrow = vc.parentElement;
+    var ci = +vc.dataset.ci;
+    var rn = +vrow.dataset.rn;
+
+    if (e.shiftKey && selAnchorRow >= 0) {
+        extendSelection(rn, ci);
+        return;
+    }
+
+    selectCell(rn, ci);
+    isDragging = true;
+    // Prevent text selection immediately when starting drag
+    if (!document.body.classList.contains('nosel')) document.body.classList.add('nosel');
+});
+
+qs('#gridBody').addEventListener('mousemove', function(e) {
+    if (!isDragging) return;
+    var vc = e.target.closest('.vc[data-ci]');
+    if (!vc) return;
+    var vrow = vc.parentElement;
+    var ci = +vc.dataset.ci;
+    var rn = +vrow.dataset.rn;
+
+    if (rn !== selRow || ci !== selCol) {
+        if (!document.body.classList.contains('nosel')) document.body.classList.add('nosel');
+        selRow = rn;
+        selCol = ci;
+        computeSelRange();
+        renderVisible(true);
+        updateSelectionStatus();
+    }
+});
+
+document.addEventListener('mouseup', function() {
+    if (isDragging) {
+        isDragging = false;
+        document.body.classList.remove('nosel');
+    }
+});
+
+qs('#gridBody').addEventListener('dblclick', function(e) {
+    // Double-click on row number -> select entire row
+    var rnCell = e.target.closest('.vc.rn');
+    if (rnCell) {
+        var vrow = rnCell.parentElement;
+        var rn = +vrow.dataset.rn;
+        selectEntireRow(rn);
+        return;
+    }
+    var vc = e.target.closest('.vc[data-ci]');
+    if (!vc) return;
+    var vrow = vc.parentElement;
+    startEdit(+vrow.dataset.rn, +vc.dataset.ci);
+});
+
+function selectCell(rn, ci, noRedraw) {
+    if (editing) commitEdit();
+    selRow = rn;
+    selCol = ci;
+    selAnchorRow = rn;
+    selAnchorCol = ci;
+    selRange = null;
+
+    var cn = headers[ci];
+    var val = getDisplayValByRn(rn, cn);
+    qs('#stCell').textContent = 'Riga ' + rn + ' \u2022 ' + cn + ': ' + val;
+
+    if (!noRedraw) renderVisible(true);
+}
+
+function extendSelection(rn, ci) {
+    if (editing) commitEdit();
+    selRow = rn;
+    selCol = ci;
+    computeSelRange();
+    renderVisible(true);
+    updateSelectionStatus();
+}
+
+function computeSelRange() {
+    if (selAnchorRow < 0 || selRow < 0) { selRange = null; return; }
+    if (selAnchorRow === selRow && selAnchorCol === selCol) { selRange = null; return; }
+
+    var vi1 = -1, vi2 = -1;
+    for (var i = 0; i < filtered.length; i++) {
+        if (rawData[filtered[i]]._row === selAnchorRow) vi1 = i;
+        if (rawData[filtered[i]]._row === selRow) vi2 = i;
+        if (vi1 >= 0 && vi2 >= 0) break;
+    }
+    if (vi1 < 0 || vi2 < 0) { selRange = null; return; }
+
+    var vp1 = colOrderMap[selAnchorCol] !== undefined ? colOrderMap[selAnchorCol] : selAnchorCol;
+    var vp2 = colOrderMap[selCol] !== undefined ? colOrderMap[selCol] : selCol;
+
+    selRange = {
+        viMin: Math.min(vi1, vi2), viMax: Math.max(vi1, vi2),
+        vpMin: Math.min(vp1, vp2), vpMax: Math.max(vp1, vp2)
+    };
+}
+
+function selectEntireColumn(ci) {
+    if (editing) commitEdit();
+    if (filtered.length === 0) return;
+    // Select from first to last visible row, single column
+    var firstRn = rawData[filtered[0]]._row;
+    var lastRn = rawData[filtered[filtered.length - 1]]._row;
+    selAnchorRow = firstRn;
+    selAnchorCol = ci;
+    selRow = lastRn;
+    selCol = ci;
+    computeSelRange();
+    // If only one row, force selRange for full visual feedback
+    if (!selRange && filtered.length === 1) {
+        var vp = colOrderMap[ci] !== undefined ? colOrderMap[ci] : ci;
+        selRange = { viMin: 0, viMax: 0, vpMin: vp, vpMax: vp };
+    }
+    renderVisible(true);
+    updateSelectionStatus();
+    toast('\uD83D\uDCCA Colonna "' + headers[ci] + '" selezionata (' + filtered.length + ' celle)', 'info');
+}
+
+function selectEntireRow(rn) {
+    if (editing) commitEdit();
+    // Find visible columns (first and last non-hidden)
+    var firstCi = -1, lastCi = -1;
+    for (var i = 0; i < colOrder.length; i++) {
+        var ci = colOrder[i];
+        if (hiddenCols.has(ci)) continue;
+        if (firstCi < 0) firstCi = ci;
+        lastCi = ci;
+    }
+    if (firstCi < 0) return;
+    selAnchorRow = rn;
+    selAnchorCol = firstCi;
+    selRow = rn;
+    selCol = lastCi;
+    computeSelRange();
+    // Force selRange for single-row visual feedback
+    if (!selRange) {
+        var vi = -1;
+        for (var i = 0; i < filtered.length; i++) {
+            if (rawData[filtered[i]]._row === rn) { vi = i; break; }
+        }
+        if (vi < 0) return;
+        var vpMin = colOrderMap[firstCi] !== undefined ? colOrderMap[firstCi] : firstCi;
+        var vpMax = colOrderMap[lastCi] !== undefined ? colOrderMap[lastCi] : lastCi;
+        selRange = { viMin: vi, viMax: vi, vpMin: Math.min(vpMin, vpMax), vpMax: Math.max(vpMin, vpMax) };
+    }
+    renderVisible(true);
+    updateSelectionStatus();
+    var visibleCols = 0;
+    for (var i = 0; i < colOrder.length; i++) { if (!hiddenCols.has(colOrder[i])) visibleCols++; }
+    toast('\uD83D\uDCCA Riga ' + rn + ' selezionata (' + visibleCols + ' celle)', 'info');
+}
+
+function isInSelRange(visIdx, ci) {
+    if (!selRange) return false;
+    var vp = colOrderMap[ci] !== undefined ? colOrderMap[ci] : ci;
+    return visIdx >= selRange.viMin && visIdx <= selRange.viMax && vp >= selRange.vpMin && vp <= selRange.vpMax;
+}
+
+function updateSelectionStatus() {
+    if (!selRange) {
+        if (selRow >= 0 && selCol >= 0) {
+            var cn = headers[selCol];
+            var val = getDisplayValByRn(selRow, cn);
+            qs('#stCell').textContent = 'Riga ' + selRow + ' \u2022 ' + cn + ': ' + val;
+        }
+        return;
+    }
+    var count = 0, numVals = [];
+    for (var vi = selRange.viMin; vi <= selRange.viMax; vi++) {
+        var row = rawData[filtered[vi]];
+        for (var vp = selRange.vpMin; vp <= selRange.vpMax; vp++) {
+            var ci = colOrder[vp];
+            if (hiddenCols.has(ci)) continue;
+            var val = getDisplayVal(row, headers[ci]);
+            count++;
+            var n = parseFloat(val);
+            if (!isNaN(n) && isFinite(val)) numVals.push(n);
+        }
+    }
+    var text = count + ' celle selezionate';
+    if (numVals.length > 0) {
+        var sum = numVals.reduce(function(a, b) { return a + b; }, 0);
+        var avg = sum / numVals.length;
+        text += ' \u2502 \u03A3 ' + sum.toFixed(2) + ' \u2502 Media ' + avg.toFixed(2) + ' \u2502 Min ' + Math.min.apply(null, numVals) + ' \u2502 Max ' + Math.max.apply(null, numVals);
+    }
+    qs('#stCell').innerHTML = '<span class="st-stats">' + text + '</span>';
+}
+
+function getDisplayValByRn(rn, cn) {
+    var ck = rn + ':' + cn;
+    if (pending[ck]) return pending[ck].val;
+    var idx = rowIndex[rn];
+    if (idx !== undefined) return (rawData[idx][cn] != null ? rawData[idx][cn] : '').toString();
+    return '';
+}
+
+// ============================================================
+// EDITING
+// ============================================================
+function startEdit(rn, ci) {
+    // Block editing on protected columns (unless unlocked)
+    if (isProtected(headers[ci])) {
+        if (!confirm('\uD83D\uDD12 La colonna "' + headers[ci] + '" è protetta.\n\nVuoi sbloccarla per questa sessione?')) {
+            return;
+        }
+        unlockedCols.add(headers[ci].toLowerCase());
+        // Refresh visuals to remove lock styling
+        buildHeader();
+        renderVisible(true);
+        toast('\uD83D\uDD13 Colonna "' + headers[ci] + '" sbloccata per questa sessione', 'success');
+    }
+    if (editing) commitEdit();
+    selectCell(rn, ci);
+
+    var cn = headers[ci];
+    var val = getDisplayValByRn(rn, cn);
+
+    var cellNode = null;
+    activeRows.forEach(function(node) {
+        if (+node.dataset.rn === rn) cellNode = node.children[ci + 1];
+    });
+    if (!cellNode) return;
+
+    editing = true;
+    cellNode.className = cellNode.className.replace(' editing', '') + ' editing';
+    cellNode.textContent = '';
+
+    var input = document.createElement('textarea');
+    input.className = 'cell-input';
+    input.value = val;
+    // Auto-size: start at row height, grow if content is longer
+    input.style.height = ROW_H + 'px';
+    input.rows = 1;
+    cellNode.appendChild(input);
+    editInput = input;
+
+    // Auto-expand textarea height based on content
+    function autoResize() {
+        input.style.height = ROW_H + 'px';
+        var needed = Math.max(ROW_H, Math.min(input.scrollHeight, 180));
+        input.style.height = needed + 'px';
+    }
+    autoResize();
+    input.addEventListener('input', autoResize);
+
+    input.focus();
+    input.select();
+
+    input.addEventListener('keydown', function(e) {
+        // Enter without Shift confirms and moves down; Shift+Enter inserts newline
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commitEdit(); movesel(1, 0); }
+        else if (e.key === 'Tab') { e.preventDefault(); commitEdit(); movesel(0, e.shiftKey ? -1 : 1); }
+        else if (e.key === 'Escape') { e.preventDefault(); cancelEdit(); }
+        else if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+            e.preventDefault(); e.stopPropagation(); commitEdit(); undo(); return;
+        }
+        else if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+            e.preventDefault(); e.stopPropagation(); commitEdit(); redo(); return;
+        }
+        e.stopPropagation();
+    });
+
+    // Prevent mousedown inside textarea from triggering grid cell selection
+    input.addEventListener('mousedown', function(e) {
+        e.stopPropagation();
+    });
+
+    input.addEventListener('blur', function() {
+        setTimeout(function() { if (editing && editInput === input) commitEdit(); }, 80);
+    });
+}
+
+function commitEdit() {
+    if (!editing || !editInput) return;
+    var val = editInput.value;
+    var cn = headers[selCol];
+    var ck = selRow + ':' + cn;
+
+    var idx = rowIndex[selRow];
+    var serverVal = idx !== undefined ? (rawData[idx][cn] != null ? rawData[idx][cn] : '').toString() : '';
+
+    // Undo stack: record old value (from pending or server)
+    var oldVal = pending[ck] ? pending[ck].val : serverVal;
+
+    if (val !== serverVal) {
+        pending[ck] = { row: selRow, col: cn, old: serverVal, val: val };
+    } else {
+        delete pending[ck];
+    }
+
+    // Push to undo only if value actually changed
+    if (val !== oldVal) {
+        undoGroupId++;
+        undoStack.push({ rn: selRow, cn: cn, oldVal: oldVal, newVal: val, group: undoGroupId });
+        redoStack = [];
+    }
+
+    editing = false;
+    editInput = null;
+    refreshRowByRn(selRow);
+    updateChangeCount();
+}
+
+function cancelEdit() {
+    editing = false;
+    editInput = null;
+    refreshRowByRn(selRow);
+}
+
+function refreshRowByRn(rn) {
+    activeRows.forEach(function(node, vi) {
+        if (+node.dataset.rn === rn) {
+            var di = filtered[vi];
+            if (di !== undefined) fillRow(node, rawData[di], vi);
+        }
+    });
+}
+
+// ============================================================
+// KEYBOARD NAVIGATION
+// ============================================================
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'F5') {
+        e.preventDefault();
+        manualRefresh();
+        return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        if (Object.keys(pending).length > 0) saveAll();
+        return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (editing) commitEdit();
+        undo();
+        return;
+    }
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (editing) commitEdit();
+        redo();
+        return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'c' && !editing && document.activeElement.tagName !== 'INPUT') {
+        // Let native copy event handle it
+        return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'v' && !editing && document.activeElement.tagName !== 'INPUT') {
+        // Let native paste event handle it
+        return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'h') {
+        e.preventDefault();
+        openFindReplace();
+        return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'l') {
+        e.preventDefault();
+        openVlookup();
+        return;
+    }
+    if (e.key === 'Escape' && qs('#vlPanel').classList.contains('show')) {
+        closeVlookup();
+        return;
+    }
+    if (e.key === 'Escape' && qs('#fnrPanel').classList.contains('show')) {
+        closeFindReplace();
+        return;
+    }
+
+    if (editing) return;
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if (selRow < 0) return;
+
+    if (e.key === 'ArrowDown') { e.preventDefault(); movesel(1, 0, e.shiftKey); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); movesel(-1, 0, e.shiftKey); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); movesel(0, 1, e.shiftKey); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); movesel(0, -1, e.shiftKey); }
+    else if (e.key === 'Enter' || e.key === 'F2') { e.preventDefault(); startEdit(selRow, selCol); }
+    else if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        if (selRange) {
+            // Bulk clear all cells in the selected range
+            var changedRows = new Set();
+            undoGroupId++;
+            for (var vi = selRange.viMin; vi <= selRange.viMax; vi++) {
+                var di = filtered[vi];
+                if (di === undefined) continue;
+                var rn = rawData[di]._row;
+                for (var vp = selRange.vpMin; vp <= selRange.vpMax; vp++) {
+                    var ci = colOrder[vp];
+                    if (ci === undefined || hiddenCols.has(ci)) continue;
+                    var cn = headers[ci];
+                    if (isProtected(cn)) continue;
+                    var ck = rn + ':' + cn;
+                    var serverVal = (rawData[di][cn] != null ? rawData[di][cn] : '').toString();
+                    var oldVal = pending[ck] ? pending[ck].val : serverVal;
+                    if (oldVal === '') continue; // already empty
+                    if ('' !== serverVal) {
+                        pending[ck] = { row: rn, col: cn, old: serverVal, val: '' };
+                    } else {
+                        delete pending[ck];
+                    }
+                    undoStack.push({ rn: rn, cn: cn, oldVal: oldVal, newVal: '', group: undoGroupId });
+                    changedRows.add(rn);
+                }
+            }
+            if (changedRows.size > 0) {
+                redoStack = [];
+                changedRows.forEach(function(rn) { refreshRowByRn(rn); });
+                updateChangeCount();
+            }
+        } else {
+            startEdit(selRow, selCol);
+            if (editInput) editInput.value = '';
+        }
+    } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        startEdit(selRow, selCol);
+        if (editInput) { editInput.value = e.key; editInput.setSelectionRange(1, 1); }
+    }
+});
+
+function movesel(dr, dc, extend) {
+    var curVi = -1;
+    for (var i = 0; i < filtered.length; i++) {
+        if (rawData[filtered[i]]._row === selRow) { curVi = i; break; }
+    }
+    if (curVi < 0 && filtered.length > 0) curVi = 0;
+    if (curVi < 0) return;
+
+    var ni = curVi + dr;
+
+    // Navigate in visual order
+    var curVisPos = colOrderMap[selCol] !== undefined ? colOrderMap[selCol] : 0;
+    var newVisPos = curVisPos + dc;
+
+    // Skip hidden columns in visual order
+    if (dc !== 0) {
+        var guard = 0;
+        while (newVisPos >= 0 && newVisPos < colOrder.length && hiddenCols.has(colOrder[newVisPos]) && guard < colOrder.length) {
+            newVisPos += (dc > 0 ? 1 : -1); guard++;
+        }
+    }
+    if (newVisPos < 0) {
+        newVisPos = colOrder.length - 1; ni--;
+        while (newVisPos >= 0 && hiddenCols.has(colOrder[newVisPos])) newVisPos--;
+    }
+    if (newVisPos >= colOrder.length) {
+        newVisPos = 0; ni++;
+        while (newVisPos < colOrder.length && hiddenCols.has(colOrder[newVisPos])) newVisPos++;
+    }
+    if (newVisPos < 0 || newVisPos >= colOrder.length || hiddenCols.has(colOrder[newVisPos])) return;
+
+    var nc = colOrder[newVisPos];
+    ni = Math.max(0, Math.min(filtered.length - 1, ni));
+
+    var newRow = rawData[filtered[ni]]._row;
+    if (extend) {
+        extendSelection(newRow, nc);
+    } else {
+        selectCell(newRow, nc);
+    }
+    ensureVisible(ni, nc);
+}
+
+function ensureVisible(vi, ci) {
+    var scroll = qs('#gridScroll');
+
+    // Vertical scrolling
+    var y = vi * ROW_H + HEADER_H;
+    var viewTop = scroll.scrollTop;
+    var viewBot = viewTop + scroll.clientHeight;
+    if (y < viewTop + HEADER_H) scroll.scrollTop = y - HEADER_H;
+    else if (y + ROW_H > viewBot) scroll.scrollTop = y + ROW_H - scroll.clientHeight;
+
+    // Horizontal scrolling
+    if (ci !== undefined) {
+        var visPos = colOrderMap[ci] !== undefined ? colOrderMap[ci] : ci;
+        // Calculate x offset of the target column
+        var x = RN_W;
+        for (var vp = 0; vp < visPos; vp++) {
+            var origIdx = colOrder[vp];
+            if (!hiddenCols.has(origIdx)) x += colWidths[origIdx];
+        }
+        var cellW = colWidths[ci] || COL_W_DEFAULT;
+        var viewLeft = scroll.scrollLeft;
+        var viewRight = viewLeft + scroll.clientWidth;
+        if (x < viewLeft + RN_W) scroll.scrollLeft = x - RN_W;
+        else if (x + cellW > viewRight) scroll.scrollLeft = x + cellW - scroll.clientWidth;
+    }
+}
+
+// ============================================================
+// SAVE
+// ============================================================
+async function saveAll() {
+    var changes = Object.values(pending);
+    if (!changes.length) return;
+
+    var btn = qs('#btnSave');
+    btn.disabled = true;
+    var origHtml = btn.innerHTML;
+
+    var perRow = {};
+    changes.forEach(function(c) {
+        if (!perRow[c.row]) perRow[c.row] = {};
+        perRow[c.row][c.col] = c.val;
+    });
+
+    var totalRows = Object.keys(perRow).length;
+    var totalCells = changes.length;
+
+    // Usa bulk API se ci sono molte modifiche (>3 righe), altrimenti singola per riga
+    if (totalRows > 3) {
+        btn.textContent = '\u23F3 Salvo ' + totalRows + ' righe...';
+        try {
+            var r = await fetch('/api/filone/bulk', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ rows: perRow })
+            });
+            var res = await r.json();
+            if (r.ok && res.success) {
+                // Aggiorna rawData e pulisci pending
+                for (var rn in perRow) {
+                    var di = rowIndex[+rn];
+                    if (di !== undefined) {
+                        for (var col in perRow[rn]) rawData[di][col] = perRow[rn][col];
+                    }
+                }
+                pending = {};
+                btn.disabled = false;
+                undoStack = [];
+                redoStack = [];
+                updateChangeCount();
+                renderVisible(true);
+                toast('\u2705 ' + totalRows + ' righe (' + totalCells + ' celle) salvate \u2013 sync mappa...', 'success');
+                triggerMapSync();
+            } else {
+                btn.disabled = false;
+                toast('\u274C Errore bulk: ' + (res.error || 'sconosciuto'), 'error');
+            }
+        } catch (ex) {
+            btn.disabled = false;
+            toast('\u274C Errore di rete durante il salvataggio', 'error');
+        }
+    } else {
+        // Pochi cambiamenti: salva riga per riga (come prima)
+        var ok = 0, fail = 0;
+        var entries = Object.entries(perRow);
+        for (var e = 0; e < entries.length; e++) {
+            var rn = entries[e][0];
+            var fields = entries[e][1];
+            btn.textContent = '\u23F3 ' + (e + 1) + '/' + totalRows;
+            try {
+                var r = await fetch('/api/filone/row/' + rn, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(fields)
+                });
+                var res = await r.json();
+                if (r.ok && res.success) {
+                    ok++;
+                    var di = rowIndex[+rn];
+                    if (di !== undefined) {
+                        for (var col in fields) rawData[di][col] = fields[col];
+                    }
+                    for (var k in pending) {
+                        if (k.indexOf(rn + ':') === 0) delete pending[k];
+                    }
+                } else fail++;
+            } catch (ex) { fail++; }
+        }
+        btn.disabled = false;
+        undoStack = [];
+        redoStack = [];
+        updateChangeCount();
+        renderVisible(true);
+        if (!fail) {
+            toast('\u2705 ' + ok + ' righe salvate \u2013 sync mappa...', 'success');
+            triggerMapSync();
+        } else {
+            toast('\u26A0\uFE0F ' + ok + ' OK, ' + fail + ' errori', 'warning');
+            if (ok > 0) triggerMapSync();
+        }
+    }
+}
+
+function triggerMapSync() {
+    fetch('/api/filone/sync', { method: 'POST' }).then(function(r) {
+        return r.json();
+    }).then(function(d) {
+        if (d.success) toast('\uD83D\uDDFA\uFE0F Mappa aggiornata!', 'success');
+    }).catch(function() { /* silent */ });
+}
+
+function undo() {
+    if (!undoStack.length) return;
+    var last = undoStack[undoStack.length - 1];
+    var grp = last.group;
+    var count = 0;
+
+    // Pop all actions in the same group
+    while (undoStack.length && undoStack[undoStack.length - 1].group === grp) {
+        var action = undoStack.pop();
+        redoStack.push(action);
+
+        var ck = action.rn + ':' + action.cn;
+        var idx = rowIndex[action.rn];
+        var serverVal = idx !== undefined ? (rawData[idx][action.cn] != null ? rawData[idx][action.cn] : '').toString() : '';
+
+        if (action.oldVal !== serverVal) {
+            pending[ck] = { row: action.rn, col: action.cn, old: serverVal, val: action.oldVal };
+        } else {
+            delete pending[ck];
+        }
+        count++;
+    }
+
+    renderVisible(true);
+    updateChangeCount();
+    toast('\u21A9 Annullat' + (count > 1 ? 'e ' + count + ' modifiche' : 'o'), 'warning');
+}
+
+function redo() {
+    if (!redoStack.length) return;
+    var last = redoStack[redoStack.length - 1];
+    var grp = last.group;
+    var count = 0;
+
+    // Pop all actions in the same group
+    while (redoStack.length && redoStack[redoStack.length - 1].group === grp) {
+        var action = redoStack.pop();
+        undoStack.push(action);
+
+        var ck = action.rn + ':' + action.cn;
+        var idx = rowIndex[action.rn];
+        var serverVal = idx !== undefined ? (rawData[idx][action.cn] != null ? rawData[idx][action.cn] : '').toString() : '';
+
+        if (action.newVal !== serverVal) {
+            pending[ck] = { row: action.rn, col: action.cn, old: serverVal, val: action.newVal };
+        } else {
+            delete pending[ck];
+        }
+        count++;
+    }
+
+    renderVisible(true);
+    updateChangeCount();
+    toast('\u21AA Ripristinat' + (count > 1 ? 'e ' + count + ' modifiche' : 'o'), 'success');
+}
+
+function updateChangeCount() {
+    var n = Object.keys(pending).length;
+    // Rebuild button innerHTML (may have been destroyed by save progress)
+    qs('#btnSave').innerHTML = '\uD83D\uDCBE Salva (<span id="changeCount">' + n + '</span>)';
+    qs('#btnSave').disabled = n === 0;
+    qs('#btnUndo').style.display = undoStack.length > 0 ? '' : 'none';
+    qs('#btnRedo').style.display = redoStack.length > 0 ? '' : 'none';
+    qs('#stMod').innerHTML = n > 0
+        ? '<span class="status-mod">\u25CF ' + n + ' modifiche non salvate</span>'
+        : '';
+}
+
+// ============================================================
+// COLUMN FILTERS
+// ============================================================
+function openFilter(ci, x, y) {
+    var cn = headers[ci];
+    var pop = qs('#filterPopup');
+    var ctype = colTypes[cn] || 'text';
+
+    // Sort options
+    var sortAscLabel = 'A \u2192 Z';
+    var sortDescLabel = 'Z \u2192 A';
+    if (ctype === 'date') { sortAscLabel = 'Meno rec.'; sortDescLabel = 'Pi\u00F9 rec.'; }
+    else if (ctype === 'time') { sortAscLabel = 'Prima'; sortDescLabel = 'Dopo'; }
+    else if (ctype === 'number') { sortAscLabel = '1 \u2192 9'; sortDescLabel = '9 \u2192 1'; }
+
+    var typeIcon = ctype === 'date' ? '\uD83D\uDCC5' : ctype === 'time' ? '\u23F0' : ctype === 'number' ? '#' : 'Aa';
+    var sortAscActive = sortCol === ci && sortDir === 'asc' ? ' active' : '';
+    var sortDescActive = sortCol === ci && sortDir === 'desc' ? ' active' : '';
+
+    // Unique values — solo quelli visibili con gli ALTRI filtri attivi (come Excel/Sheets)
+    var vals = new Set();
+    var q = qs('#globalSearch').value.toLowerCase().trim();
+    for (var i = 0; i < rawData.length; i++) {
+        var row = rawData[i];
+        var pass = true;
+        // Cerca Vert / POD filter
+        if (podFilterSet) {
+            var filterColName = vlFilterCol || podColName;
+            if (filterColName) {
+                var podVal = (row[filterColName] != null ? row[filterColName] : '').toString().trim().toUpperCase();
+                if (!podFilterSet.has(podVal)) pass = false;
+            }
+        }
+        if (!pass) continue;
+        // Other column filters (skip the current column's own filter)
+        for (var fcn in colFilters) {
+            if (fcn === cn) continue; // non applicare il filtro della colonna stessa
+            var fval = (row[fcn] != null ? row[fcn] : '').toString().trim();
+            if (!colFilters[fcn].has(fval)) { pass = false; break; }
+        }
+        if (!pass) continue;
+        // Color filter
+        if (colorFilterCol && colorFilterColor && colorFilterCol !== cn) {
+            var cfVal = (row[colorFilterCol] != null ? row[colorFilterCol] : '').toString().trim();
+            var cfRules = condRulesByCol[colorFilterCol];
+            var cfMatch = false;
+            if (cfRules) {
+                for (var cfr = 0; cfr < cfRules.length; cfr++) {
+                    if (evalCondRule(cfRules[cfr], cfVal) && cfRules[cfr].textColor === colorFilterColor) { cfMatch = true; break; }
+                }
+            }
+            if (!cfMatch) pass = false;
+        }
+        if (!pass) continue;
+        // Global search
+        if (q) {
+            var found = false;
+            for (var c = 0; c < headers.length; c++) {
+                var v = (row[headers[c]] != null ? row[headers[c]] : '').toString().toLowerCase();
+                if (v.indexOf(q) >= 0) { found = true; break; }
+            }
+            if (!found) continue;
+        }
+        vals.add((row[cn] != null ? row[cn] : '').toString().trim());
+    }
+    var sorted = Array.from(vals);
+
+    // Smart sort unique values by type
+    sorted.sort(function(a, b) {
+        if (ctype === 'date') {
+            var da = parseDate(a), db = parseDate(b);
+            if (da && db) return da.getTime() - db.getTime();
+            if (da) return -1; if (db) return 1;
+        } else if (ctype === 'time') {
+            var ta = parseTime(a), tb = parseTime(b);
+            if (ta !== null && tb !== null) return ta - tb;
+            if (ta !== null) return -1; if (tb !== null) return 1;
+        } else if (ctype === 'number') {
+            var na = parseFloat(a), nb = parseFloat(b);
+            if (!isNaN(na) && !isNaN(nb)) return na - nb;
+            if (!isNaN(na)) return -1; if (!isNaN(nb)) return 1;
+        }
+        return a.localeCompare(b, undefined, { numeric: true });
+    });
+
+    var cur = colFilters[cn];
+
+    var html = '<div class="fpop-sort">';
+    html += '<button' + sortAscActive + ' onclick="fpSort(' + ci + ',\'asc\')">\u25B2 ' + sortAscLabel + '</button>';
+    html += '<button' + sortDescActive + ' onclick="fpSort(' + ci + ',\'desc\')">\u25BC ' + sortDescLabel + '</button>';
+    html += '<span title="Tipo: ' + ctype + '" style="max-width:36px;padding:6px 10px;font-size:13px;opacity:.55;cursor:default;user-select:none">' + typeIcon + '</span>';
+    html += '</div>';
+    html += '<button class="fpop-hide" onclick="hideColumn(' + ci + ');fpClose()">&#x1F441;&#x200D;&#x1F5E8; Nascondi colonna &laquo;' + esc(cn) + '&raquo;</button>';
+
+    // Color filter section — collect distinct cond format colors (solo righe visibili con altri filtri)
+    var colColors = {}; // textColor -> count
+    var rules = condRulesByCol[cn];
+    if (rules && rules.length > 0) {
+        // Usa lo stesso set 'vals' già filtrato per iterare solo sulle righe rilevanti
+        vals.forEach(function(rv) {
+            for (var rr = 0; rr < rules.length; rr++) {
+                if (evalCondRule(rules[rr], rv) && rules[rr].textColor) {
+                    var c2 = rules[rr].textColor;
+                    colColors[c2] = (colColors[c2] || 0) + 1;
+                    break;
+                }
+            }
+        });
+    }
+    var colorKeys = Object.keys(colColors);
+    if (colorKeys.length > 0) {
+        html += '<div class="fpop-colors">';
+        html += '<span class="fpop-colors-label">🎨 Filtra per colore:</span>';
+        var activeColor = (colorFilterCol === cn) ? colorFilterColor : '';
+        for (var ck = 0; ck < colorKeys.length; ck++) {
+            var cc = colorKeys[ck];
+            var isActive = (activeColor === cc) ? ' fpop-color-active' : '';
+            html += '<button class="fpop-color-btn' + isActive + '" style="color:' + cc + '" onclick="fpColorFilter(' + ci + ',\'' + cc.replace(/'/g, "\\'") + '\')" title="' + colColors[cc] + ' righe">A</button>';
+        }
+        if (activeColor) {
+            html += '<button class="fpop-color-btn fpop-color-clear" onclick="fpColorClear()" title="Rimuovi filtro colore">\u2715</button>';
+        }
+        html += '</div>';
+    }
+
+    html += '<input type="text" placeholder="Cerca ' + esc(cn) + '..." id="fpSearch">';
+    html += '<div class="fpop-opts" id="fpOpts">';
+    for (var s = 0; s < sorted.length; s++) {
+        var v = sorted[s];
+        var chk = !cur || cur.has(v) ? ' checked' : '';
+        html += '<label class="fpop-opt" data-v="' + esc(v) + '"><input type="checkbox"' + chk + ' value="' + esc(v) + '"> ' + (v === '' ? '(vuoto)' : esc(v)) + '</label>';
+    }
+    html += '</div>';
+    html += '<div class="fpop-acts">';
+    html += '<button onclick="fpAll()">Tutti</button>';
+    html += '<button onclick="fpNone()">Nessuno</button>';
+    html += '<button class="a" onclick="fpApply(' + ci + ')">OK</button>';
+    html += '<button onclick="fpClear(' + ci + ')">&#x2715;</button>';
+    html += '</div>';
+
+    pop.innerHTML = html;
+    pop.classList.add('show');
+
+    var left = Math.min(x, window.innerWidth - 230);
+    var top = Math.min(y, window.innerHeight - 340);
+    pop.style.left = left + 'px';
+    pop.style.top = top + 'px';
+
+    qs('#fpSearch').focus();
+    qs('#fpSearch').addEventListener('input', function(e) {
+        var q = e.target.value.toLowerCase();
+        var opts = document.querySelectorAll('#fpOpts .fpop-opt');
+        for (var o = 0; o < opts.length; o++) {
+            opts[o].style.display = (opts[o].dataset.v || '').toLowerCase().indexOf(q) >= 0 ? '' : 'none';
+        }
+    });
+}
+
+function fpSort(ci, dir) {
+    sortCol = ci;
+    sortDir = dir;
+    fpClose();
+    buildHeader();
+    applyFilters();
+}
+
+function fpColorFilter(ci, color) {
+    colorFilterCol = headers[ci];
+    colorFilterColor = color;
+    fpClose();
+    buildHeader();
+    applyFilters();
+}
+
+function fpColorClear() {
+    colorFilterCol = '';
+    colorFilterColor = '';
+    fpClose();
+    buildHeader();
+    applyFilters();
+}
+
+function fpAll() {
+    var boxes = document.querySelectorAll('#fpOpts input[type=checkbox]');
+    for (var i = 0; i < boxes.length; i++) {
+        if (boxes[i].closest('.fpop-opt').style.display !== 'none') boxes[i].checked = true;
+    }
+}
+function fpNone() {
+    var boxes = document.querySelectorAll('#fpOpts input[type=checkbox]');
+    for (var i = 0; i < boxes.length; i++) {
+        if (boxes[i].closest('.fpop-opt').style.display !== 'none') boxes[i].checked = false;
+    }
+}
+
+function fpApply(ci) {
+    var cn = headers[ci];
+    var sel = new Set();
+    var checked = document.querySelectorAll('#fpOpts input:checked');
+    for (var i = 0; i < checked.length; i++) sel.add(checked[i].value);
+    var total = document.querySelectorAll('#fpOpts input[type=checkbox]').length;
+    if (sel.size === total) delete colFilters[cn];
+    else colFilters[cn] = sel;
+    fpClose();
+    buildHeader();
+    applyFilters();
+}
+
+function fpClear(ci) {
+    delete colFilters[headers[ci]];
+    fpClose();
+    buildHeader();
+    applyFilters();
+}
+
+function fpClose() { qs('#filterPopup').classList.remove('show'); }
+
+document.addEventListener('click', function(e) {
+    var pop = qs('#filterPopup');
+    if (pop.classList.contains('show') && !pop.contains(e.target) && !e.target.closest('.gh')) fpClose();
+});
+
+// ============================================================
+// STATUS
+// ============================================================
+function updateStatus() {
+    qs('#stRows').innerHTML = 'Righe: <strong>' + rawData.length + '</strong>';
+    qs('#stCols').innerHTML = 'Colonne: <strong>' + headers.length + '</strong>';
+    qs('#stVisible').innerHTML = 'Visibili: <strong>' + filtered.length + '</strong>';
+}
+
+// ============================================================
+// UTILS
+// ============================================================
+function qs(s) { return document.querySelector(s); }
+function esc(s) { return s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+function isProtected(colName) {
+    return protectedCols.has(colName.toLowerCase()) && !unlockedCols.has(colName.toLowerCase());
+}
+function toast(msg, type) {
+    var t = qs('#toast');
+    t.textContent = msg;
+    t.className = 'toast ' + type + ' show';
+    setTimeout(function() { t.classList.remove('show'); }, 2500);
+}
+function toggleTheme() {
+    var d = document.documentElement;
+    var n = (d.getAttribute('data-theme') || 'dark') === 'dark' ? 'light' : 'dark';
+    d.setAttribute('data-theme', n);
+    localStorage.setItem('algeco_theme', n);
+}
+
+window.onbeforeunload = function(e) {
+    if (Object.keys(pending).length) { e.preventDefault(); e.returnValue = ''; }
+};
+
+// ============================================================
+// VLOOKUP FILTER (Filtra sul filone dai risultati Cerca Vert)
+// ============================================================
+function vlApplyAsFilter() {
+    if (vlResults.length === 0) { toast('Nessun risultato da filtrare', 'warning'); return; }
+    var searchCI = +qs('#vlSearchCol').value;
+    var cn = headers[searchCI];
+    var vals = new Set();
+    for (var i = 0; i < vlResults.length; i++) {
+        var v = vlResults[i].keyVal.trim().toUpperCase();
+        if (v) vals.add(v);
+    }
+    if (vals.size === 0) { toast('Nessun valore valido per il filtro', 'warning'); return; }
+    podFilterSet = vals;
+    vlFilterCol = cn;
+    closeVlookup();
+    applyFilters();
+    toast('\uD83D\uDD0E Filtro applicato: ' + vals.size + ' valori sulla colonna ' + cn, 'success');
+}
+
+function clearVlFilter() {
+    podFilterSet = null;
+    vlFilterCol = '';
+    applyFilters();
+    toast('Filtro Cerca Vert rimosso', 'warning');
+}
+
+// ============================================================
+// ACTIVE FILTER BADGES
+// ============================================================
+function updateActiveFilterBadges() {
+    var container = qs('#activeFilters');
+    var html = '';
+
+    // Column filters badges
+    for (var cn in colFilters) {
+        var count = colFilters[cn].size;
+        html += '<span class="filter-badge">' + esc(cn) + ': ' + count + ' val <span class="badge-x" onclick="removeColFilter(\'' + esc(cn).replace(/'/g, "\\'") + '\')">\u2715</span></span>';
+    }
+
+    // Cerca Vert filter badge
+    if (podFilterSet) {
+        var filterLabel = vlFilterCol || podColName || 'Cerca Vert';
+        html += '<span class="filter-badge">\uD83D\uDD0D ' + esc(filterLabel) + ': ' + podFilterSet.size + ' <span class="badge-x" onclick="clearVlFilterQuick()">\u2715</span></span>';
+    }
+
+    // Color filter badge
+    if (colorFilterCol && colorFilterColor) {
+        html += '<span class="filter-badge">\uD83C\uDFA8 <span style="color:' + colorFilterColor + ';font-weight:700">A</span> ' + esc(colorFilterCol) + ' <span class="badge-x" onclick="clearColorFilterQuick()">\u2715</span></span>';
+    }
+
+    container.innerHTML = html;
+}
+
+function removeColFilter(cn) {
+    delete colFilters[cn];
+    buildHeader();
+    applyFilters();
+}
+
+function clearVlFilterQuick() {
+    podFilterSet = null;
+    vlFilterCol = '';
+    applyFilters();
+}
+
+function clearColorFilterQuick() {
+    colorFilterCol = '';
+    colorFilterColor = '';
+    buildHeader();
+    applyFilters();
+}
+
+// ============================================================
+// COLUMN MANAGER PANEL
+// ============================================================
+function openColManager() {
+    qs('#colmgrOverlay').classList.add('show');
+    qs('#colmgrPanel').classList.add('show');
+    qs('#colmgrSearch').value = '';
+    buildColManagerList();
+    qs('#colmgrSearch').focus();
+}
+function closeColManager() {
+    qs('#colmgrOverlay').classList.remove('show');
+    qs('#colmgrPanel').classList.remove('show');
+}
+
+function buildColManagerList() {
+    var list = qs('#colmgrList');
+    var html = '';
+    for (var k = 0; k < colOrder.length; k++) {
+        var ci = colOrder[k];
+        var h = headers[ci];
+        var vis = !hiddenCols.has(ci);
+        var prot = isProtected(h);
+        html += '<div class="colmgr-row' + (vis ? '' : ' cm-hidden') + '" data-ci="' + ci + '" data-pos="' + k + '">';
+        html += '<span class="cm-grip" title="Trascina per riordinare">&#x2261;</span>';
+        html += '<span class="cm-name">' + esc(h) + '</span>';
+        if (prot) html += '<span class="cm-lock" title="Colonna protetta">&#x1F512;</span>';
+        html += '<div class="cm-toggle' + (vis ? ' on' : '') + '" data-ci="' + ci + '" title="' + (vis ? 'Nascondi' : 'Mostra') + '"></div>';
+        html += '</div>';
+    }
+    list.innerHTML = html;
+    updateColManagerInfo();
+    setupColManagerDrag();
+}
+
+function updateColManagerInfo() {
+    var vis = headers.length - hiddenCols.size;
+    qs('#colmgrInfo').textContent = vis + ' visibili su ' + headers.length + ' • Trascina \u2261 per riordinare';
+}
+
+function setupColManagerDrag() {
+    var list = qs('#colmgrList');
+
+    // Toggle visibility
+    list.addEventListener('click', function(e) {
+        var tog = e.target.closest('.cm-toggle');
+        if (!tog) return;
+        var ci = +tog.dataset.ci;
+        if (hiddenCols.has(ci)) {
+            hiddenCols.delete(ci);
+            tog.classList.add('on');
+            tog.title = 'Nascondi';
+            tog.parentElement.classList.remove('cm-hidden');
+        } else {
+            if (hiddenCols.size >= headers.length - 1) {
+                toast('Devi lasciare almeno una colonna visibile', 'warning');
+                return;
+            }
+            hiddenCols.add(ci);
+            tog.classList.remove('on');
+            tog.title = 'Mostra';
+            tog.parentElement.classList.add('cm-hidden');
+        }
+        saveHiddenCols();
+        applyHiddenCols();
+        updateLayout();
+        renderVisible(true);
+        updateHiddenColsBtn();
+        updateColManagerInfo();
+    });
+
+    // Drag and drop reorder
+    var dragEl = null;
+    var dragCI = -1;
+
+    list.addEventListener('mousedown', function(e) {
+        var grip = e.target.closest('.cm-grip');
+        if (!grip) return;
+        var row = grip.parentElement;
+        dragCI = +row.dataset.ci;
+        dragEl = row;
+        e.preventDefault();
+
+        var startY = e.clientY;
+        var moved = false;
+
+        function onMove(ev) {
+            if (!moved && Math.abs(ev.clientY - startY) < 4) return;
+            if (!moved) {
+                moved = true;
+                dragEl.classList.add('cm-dragging');
+                document.body.style.cursor = 'grabbing';
+                document.body.style.userSelect = 'none';
+            }
+            // Find drop target
+            var rows = list.querySelectorAll('.colmgr-row');
+            rows.forEach(function(r) { r.classList.remove('cm-drop-above', 'cm-drop-below'); });
+            for (var i = 0; i < rows.length; i++) {
+                if (rows[i] === dragEl) continue;
+                var rect = rows[i].getBoundingClientRect();
+                if (ev.clientY < rect.top + rect.height / 2) {
+                    rows[i].classList.add('cm-drop-above');
+                    return;
+                } else if (ev.clientY >= rect.top + rect.height / 2 && ev.clientY < rect.bottom) {
+                    rows[i].classList.add('cm-drop-below');
+                    return;
+                }
+            }
+        }
+
+        function onUp(ev) {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            if (!moved) return;
+            dragEl.classList.remove('cm-dragging');
+
+            // Find where to drop
+            var rows = list.querySelectorAll('.colmgr-row');
+            var dropPos = -1;
+            for (var i = 0; i < rows.length; i++) {
+                if (rows[i].classList.contains('cm-drop-above')) {
+                    dropPos = +rows[i].dataset.pos;
+                    break;
+                }
+                if (rows[i].classList.contains('cm-drop-below')) {
+                    dropPos = +rows[i].dataset.pos + 1;
+                    break;
+                }
+            }
+            rows.forEach(function(r) { r.classList.remove('cm-drop-above', 'cm-drop-below'); });
+
+            if (dropPos >= 0) {
+                var from = colOrder.indexOf(dragCI);
+                if (from >= 0 && from !== dropPos && from + 1 !== dropPos) {
+                    colOrder.splice(from, 1);
+                    if (dropPos > from) dropPos--;
+                    colOrder.splice(dropPos, 0, dragCI);
+                    rebuildColOrderMap();
+                    saveColOrder();
+                    buildHeader();
+                    renderVisible(true);
+                    buildColManagerList();
+                }
+            }
+            dragEl = null;
+            dragCI = -1;
+        }
+
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+    });
+}
+
+// Search/filter in column manager
+qs('#colmgrSearch').addEventListener('input', function() {
+    var q = this.value.toLowerCase().trim();
+    var rows = qs('#colmgrList').querySelectorAll('.colmgr-row');
+    rows.forEach(function(r) {
+        var ci = +r.dataset.ci;
+        var name = headers[ci].toLowerCase();
+        r.style.display = (!q || name.indexOf(q) >= 0) ? '' : 'none';
+    });
+});
+
+function cmShowAll() {
+    hiddenCols.clear();
+    saveHiddenCols();
+    applyHiddenCols();
+    updateLayout();
+    renderVisible(true);
+    updateHiddenColsBtn();
+    buildColManagerList();
+    toast('Tutte le colonne visibili', 'success');
+}
+
+function cmResetOrder() {
+    colOrder = headers.map(function(_, i) { return i; });
+    rebuildColOrderMap();
+    saveColOrder();
+    buildHeader();
+    renderVisible(true);
+    buildColManagerList();
+    toast('Ordine colonne ripristinato', 'success');
+}
+
+// ============================================================
+// COPY / PASTE (native events, no permission needed)
+// ============================================================
+function getSelectionText() {
+    var text = '';
+    if (selRange) {
+        for (var vi = selRange.viMin; vi <= selRange.viMax; vi++) {
+            var row = rawData[filtered[vi]];
+            var parts = [];
+            for (var vp = selRange.vpMin; vp <= selRange.vpMax; vp++) {
+                var ci = colOrder[vp];
+                if (hiddenCols.has(ci)) continue;
+                parts.push(getDisplayVal(row, headers[ci]));
+            }
+            text += parts.join('\t') + '\n';
+        }
+    } else if (selRow >= 0 && selCol >= 0) {
+        text = getDisplayValByRn(selRow, headers[selCol]);
+    }
+    return text;
+}
+
+document.addEventListener('copy', function(e) {
+    if (editing) return;
+    if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') return;
+    if (selRow < 0) return;
+    var text = getSelectionText();
+    if (!text) return;
+    e.preventDefault();
+    e.clipboardData.setData('text/plain', text);
+    toast('\uD83D\uDCCB Copiato', 'success');
+});
+
+document.addEventListener('paste', function(e) {
+    if (editing) return;
+    if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') return;
+    if (selRow < 0 || selCol < 0) return;
+    e.preventDefault();
+    var text = e.clipboardData.getData('text/plain');
+    if (!text) return;
+
+    var lines = text.split('\n').filter(function(l) { return l.length > 0; });
+    var pasteCount = 0;
+    var pasteGroup = ++undoGroupId;
+
+    // Determina se il clipboard contiene un singolo valore
+    var isSingleValue = (lines.length === 1 && lines[0].split('\t').length === 1);
+
+    // Se c'è una selezione range e il clipboard è un singolo valore,
+    // riempi tutte le celle selezionate con quel valore
+    if (selRange && isSingleValue) {
+        var fillVal = lines[0].trim();
+        for (var vi = selRange.viMin; vi <= selRange.viMax; vi++) {
+            if (vi >= filtered.length) break;
+            var row = rawData[filtered[vi]];
+            var rn = row._row;
+            for (var vp = selRange.vpMin; vp <= selRange.vpMax; vp++) {
+                if (vp >= colOrder.length) break;
+                var ci = colOrder[vp];
+                if (hiddenCols.has(ci)) continue;
+                var cn = headers[ci];
+                if (isProtected(cn)) continue;
+                applyEdit(rn, cn, fillVal, pasteGroup);
+                pasteCount++;
+            }
+        }
+    } else {
+        // Comportamento standard: incolla griglia dal punto selezionato
+        var startVi = -1;
+        for (var i = 0; i < filtered.length; i++) {
+            if (rawData[filtered[i]]._row === selRow) { startVi = i; break; }
+        }
+        if (startVi < 0) return;
+        var startVp = colOrderMap[selCol] !== undefined ? colOrderMap[selCol] : selCol;
+
+        for (var li = 0; li < lines.length; li++) {
+            var vi = startVi + li;
+            if (vi >= filtered.length) break;
+            var row = rawData[filtered[vi]];
+            var rn = row._row;
+            var parts = lines[li].split('\t');
+            for (var pi = 0; pi < parts.length; pi++) {
+                var vp = startVp + pi;
+                if (vp >= colOrder.length) break;
+                var ci = colOrder[vp];
+                if (hiddenCols.has(ci)) continue;
+                var cn = headers[ci];
+                if (isProtected(cn)) continue;
+                applyEdit(rn, cn, parts[pi], pasteGroup);
+                pasteCount++;
+            }
+        }
+    }
+    renderVisible(true);
+    toast('\uD83D\uDCCB Incollate ' + pasteCount + ' celle', 'success');
+});
+
+// ============================================================
+// APPLY EDIT HELPER (used by paste, find-replace)
+// ============================================================
+function applyEdit(rn, cn, newVal, groupTag) {
+    var ck = rn + ':' + cn;
+    var idx = rowIndex[rn];
+    var serverVal = idx !== undefined ? (rawData[idx][cn] != null ? rawData[idx][cn] : '').toString() : '';
+    var oldVal = pending[ck] ? pending[ck].val : serverVal;
+
+    if (newVal !== oldVal) {
+        undoStack.push({ rn: rn, cn: cn, oldVal: oldVal, newVal: newVal, group: groupTag || ++undoGroupId });
+    }
+
+    if (newVal !== serverVal) {
+        pending[ck] = { row: rn, col: cn, old: serverVal, val: newVal };
+    } else {
+        delete pending[ck];
+    }
+
+    redoStack = [];
+    refreshRowByRn(rn);
+    updateChangeCount();
+}
+
+// ============================================================
+// FIND & REPLACE
+// ============================================================
+function openFindReplace() {
+    qs('#fnrOverlay').classList.add('show');
+    qs('#fnrPanel').classList.add('show');
+    // Populate scope select
+    var scopeSel = qs('#fnrScope');
+    var curScope = scopeSel.value;
+    var html = '<option value="all">Tutte le colonne</option>';
+    for (var i = 0; i < colOrder.length; i++) {
+        var ci = colOrder[i];
+        if (hiddenCols.has(ci)) continue;
+        html += '<option value="' + ci + '">' + esc(headers[ci]) + '</option>';
+    }
+    scopeSel.innerHTML = html;
+    // If a column was selected, pre-select it in scope
+    if (selCol >= 0 && curScope === 'all') {
+        scopeSel.value = selCol;
+    } else if (curScope !== 'all') {
+        scopeSel.value = curScope;
+    }
+    var findInput = qs('#fnrFind');
+    if (selRow >= 0 && selCol >= 0 && !selRange) {
+        var v = getDisplayValByRn(selRow, headers[selCol]);
+        if (v) { findInput.value = v; }
+    }
+    findInput.focus();
+    findInput.select();
+}
+
+function closeFindReplace() {
+    qs('#fnrOverlay').classList.remove('show');
+    qs('#fnrPanel').classList.remove('show');
+    fnrMatches = [];
+    fnrMatchSet = new Set();
+    fnrCurrentIdx = -1;
+    renderVisible(true);
+}
+
+function fnrBuildMatches() {
+    var search = qs('#fnrFind').value;
+    if (!search) { fnrMatches = []; fnrMatchSet = new Set(); return; }
+    var caseSensitive = qs('#fnrCase').checked;
+    var exact = qs('#fnrExact').checked;
+    if (!caseSensitive) search = search.toLowerCase();
+
+    fnrMatches = [];
+    fnrMatchSet = new Set();
+    var scopeVal = qs('#fnrScope').value;
+    var scopeCI = scopeVal === 'all' ? -1 : +scopeVal;
+    for (var vi = 0; vi < filtered.length; vi++) {
+        var row = rawData[filtered[vi]];
+        for (var vp = 0; vp < colOrder.length; vp++) {
+            var ci = colOrder[vp];
+            if (hiddenCols.has(ci)) continue;
+            if (scopeCI >= 0 && ci !== scopeCI) continue;
+            var val = getDisplayVal(row, headers[ci]);
+            var cmpVal = caseSensitive ? val : val.toLowerCase();
+            var match = exact ? (cmpVal === search) : (cmpVal.indexOf(search) >= 0);
+            if (match) {
+                fnrMatches.push({ vi: vi, ci: ci, rn: row._row });
+                fnrMatchSet.add(row._row + ':' + ci);
+            }
+        }
+    }
+    var scopeLabel = scopeCI >= 0 ? ' (colonna: ' + headers[scopeCI] + ')' : '';
+    qs('#fnrInfo').textContent = fnrMatches.length + ' risultati trovati' + scopeLabel;
+}
+
+function fnrFindNext() {
+    fnrBuildMatches();
+    if (!fnrMatches.length) { qs('#fnrInfo').textContent = 'Nessun risultato'; renderVisible(true); return; }
+    fnrCurrentIdx = (fnrCurrentIdx + 1) % fnrMatches.length;
+    fnrGoToCurrent();
+}
+
+function fnrFindPrev() {
+    fnrBuildMatches();
+    if (!fnrMatches.length) { qs('#fnrInfo').textContent = 'Nessun risultato'; renderVisible(true); return; }
+    fnrCurrentIdx = (fnrCurrentIdx - 1 + fnrMatches.length) % fnrMatches.length;
+    fnrGoToCurrent();
+}
+
+function fnrGoToCurrent() {
+    var m = fnrMatches[fnrCurrentIdx];
+    selRow = m.rn;
+    selCol = m.ci;
+    selAnchorRow = m.rn;
+    selAnchorCol = m.ci;
+    selRange = null;
+    ensureVisible(m.vi, m.ci);
+    renderVisible(true);
+    qs('#fnrInfo').textContent = (fnrCurrentIdx + 1) + ' di ' + fnrMatches.length;
+}
+
+function fnrReplaceOne() {
+    if (fnrCurrentIdx < 0 || !fnrMatches.length) { fnrFindNext(); return; }
+    var m = fnrMatches[fnrCurrentIdx];
+    var cn = headers[m.ci];
+    if (isProtected(cn)) { toast('Colonna protetta', 'warning'); fnrFindNext(); return; }
+
+    var replaceWith = qs('#fnrReplace').value;
+    var search = qs('#fnrFind').value;
+    var caseSensitive = qs('#fnrCase').checked;
+    var exact = qs('#fnrExact').checked;
+
+    var oldVal = getDisplayValByRn(m.rn, cn);
+    var newVal;
+    if (exact) {
+        newVal = replaceWith;
+    } else {
+        if (caseSensitive) {
+            newVal = oldVal.replace(search, replaceWith);
+        } else {
+            var re = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+            newVal = oldVal.replace(re, replaceWith);
+        }
+    }
+
+    applyEdit(m.rn, cn, newVal);
+    renderVisible(true);
+    fnrFindNext();
+}
+
+function fnrReplaceAll() {
+    fnrBuildMatches();
+    if (!fnrMatches.length) { qs('#fnrInfo').textContent = 'Nessun risultato'; return; }
+
+    var replaceWith = qs('#fnrReplace').value;
+    var search = qs('#fnrFind').value;
+    var caseSensitive = qs('#fnrCase').checked;
+    var exact = qs('#fnrExact').checked;
+    var count = 0;
+    var replaceGroup = ++undoGroupId;
+
+    for (var i = 0; i < fnrMatches.length; i++) {
+        var m = fnrMatches[i];
+        var cn = headers[m.ci];
+        if (isProtected(cn)) continue;
+        var oldVal = getDisplayValByRn(m.rn, cn);
+        var newVal;
+        if (exact) {
+            newVal = replaceWith;
+        } else {
+            if (caseSensitive) {
+                newVal = oldVal.split(search).join(replaceWith);
+            } else {
+                var re = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+                newVal = oldVal.replace(re, replaceWith);
+            }
+        }
+        if (newVal !== oldVal) {
+            applyEdit(m.rn, cn, newVal, replaceGroup);
+            count++;
+        }
+    }
+
+    fnrMatches = [];
+    fnrMatchSet = new Set();
+    fnrCurrentIdx = -1;
+    renderVisible(true);
+    qs('#fnrInfo').textContent = count + ' sostituzioni effettuate';
+    toast('\uD83D\uDD04 ' + count + ' sostituzioni', 'success');
+}
+
+// Enter key in find input triggers find next
+qs('#fnrFind').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); fnrFindNext(); }
+    if (e.key === 'Escape') { e.preventDefault(); closeFindReplace(); }
+});
+qs('#fnrReplace').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); fnrReplaceOne(); }
+    if (e.key === 'Escape') { e.preventDefault(); closeFindReplace(); }
+});
+
+// ============================================================
+// AUTO-FIT COLUMN WIDTH (double-click resize handle)
+// ============================================================
+var _measureCanvas = null;
+function autoFitColumn(ci) {
+    var cn = headers[ci];
+    if (!_measureCanvas) _measureCanvas = document.createElement('canvas');
+    var ctx = _measureCanvas.getContext('2d');
+    ctx.font = '13.12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+
+    // Measure header text
+    var maxW = ctx.measureText(cn.toUpperCase()).width + 36;
+
+    // Measure data (sample up to 500 rows)
+    var sample = Math.min(rawData.length, 500);
+    for (var r = 0; r < sample; r++) {
+        var val = getDisplayVal(rawData[r], cn);
+        var w = ctx.measureText(val).width + 24;
+        if (w > maxW) maxW = w;
+    }
+
+    colWidths[ci] = Math.max(COL_W_MIN, Math.min(COL_W_MAX, Math.ceil(maxW)));
+    saveColWidths();
+
+    var ghEl = qs('#gridHeader').querySelector('.gh[data-ci="' + ci + '"]');
+    if (ghEl) ghEl.style.width = colWidths[ci] + 'px';
+
+    updateLayout();
+    renderVisible(true);
+    toast('Colonna "' + cn + '" adattata (' + colWidths[ci] + 'px)', 'success');
+}
+
+// ============================================================
+// CONDITIONAL FORMATTING (custom rules, localStorage)
+// ============================================================
+var condRules = []; // [{col, op, value, textColor, bgColor, bold}]
+var condRulesByCol = {}; // colName -> [rules]
+
+function initCondFormat() {
+    loadCondRules();
+    rebuildCondRulesByCol();
+}
+
+function rebuildCondRulesByCol() {
+    condRulesByCol = {};
+    for (var i = 0; i < condRules.length; i++) {
+        var r = condRules[i];
+        if (!condRulesByCol[r.col]) condRulesByCol[r.col] = [];
+        condRulesByCol[r.col].push(r);
+    }
+}
+
+function saveCondRules() {
+    try { localStorage.setItem('filone_cond_rules', JSON.stringify(condRules)); } catch(e) {}
+}
+
+function loadCondRules() {
+    try {
+        var s = localStorage.getItem('filone_cond_rules');
+        if (s) condRules = JSON.parse(s);
+    } catch(e) { condRules = []; }
+}
+
+function evalCondRule(rule, cellVal) {
+    var v = (cellVal || '').toString().trim();
+    var rv = (rule.value || '').toString().trim();
+    var vLow = v.toLowerCase(), rvLow = rv.toLowerCase();
+
+    switch (rule.op) {
+        case 'eq': return vLow === rvLow;
+        case 'neq': return vLow !== rvLow;
+        case 'contains': return vLow.indexOf(rvLow) >= 0;
+        case 'notcontains': return vLow.indexOf(rvLow) < 0;
+        case 'startswith': return vLow.indexOf(rvLow) === 0;
+        case 'endswith': return vLow.slice(-rvLow.length) === rvLow;
+        case 'empty': return v === '';
+        case 'notempty': return v !== '';
+        case 'gt': return parseFloat(v) > parseFloat(rv);
+        case 'lt': return parseFloat(v) < parseFloat(rv);
+        case 'gte': return parseFloat(v) >= parseFloat(rv);
+        case 'lte': return parseFloat(v) <= parseFloat(rv);
+    }
+    return false;
+}
+
+function getCondStyle(ci, val) {
+    var cn = headers[ci];
+    var rules = condRulesByCol[cn];
+    if (!rules) return null;
+    for (var i = 0; i < rules.length; i++) {
+        if (evalCondRule(rules[i], val)) return rules[i];
+    }
+    return null;
+}
+
+// ============================================================
+// COND FORMAT MANAGER UI
+// ============================================================
+var CFM_OPS = [
+    { v: 'eq', label: '= uguale a' },
+    { v: 'neq', label: '\u2260 diverso da' },
+    { v: 'contains', label: 'contiene' },
+    { v: 'notcontains', label: 'non contiene' },
+    { v: 'startswith', label: 'inizia con' },
+    { v: 'endswith', label: 'finisce con' },
+    { v: 'empty', label: '\u00E8 vuoto' },
+    { v: 'notempty', label: 'non \u00E8 vuoto' },
+    { v: 'gt', label: '> maggiore di' },
+    { v: 'lt', label: '< minore di' },
+    { v: 'gte', label: '\u2265 maggiore o uguale' },
+    { v: 'lte', label: '\u2264 minore o uguale' }
+];
+var CFM_NO_VALUE_OPS = new Set(['empty', 'notempty']);
+
+function openCondFormat() {
+    qs('#cfmOverlay').classList.add('show');
+    qs('#cfmPanel').classList.add('show');
+    cfmRender();
+}
+
+function closeCondFormat() {
+    qs('#cfmOverlay').classList.remove('show');
+    qs('#cfmPanel').classList.remove('show');
+    // Save & refresh
+    saveCondRules();
+    rebuildCondRulesByCol();
+    renderVisible(true);
+}
+
+function cfmRender() {
+    var body = qs('#cfmBody');
+    if (condRules.length === 0) {
+        body.innerHTML = '<div class="cfm-empty">Nessuna regola. Clicca <b>+ Nuova regola</b> per aggiungerne una.</div>';
+        return;
+    }
+    var html = '';
+    for (var i = 0; i < condRules.length; i++) {
+        var r = condRules[i];
+        html += '<div class="cfm-rule" data-idx="' + i + '">';
+
+        // Column select
+        html += '<select data-field="col" onchange="cfmChange(' + i + ',\'col\',this.value)">';
+        for (var c = 0; c < headers.length; c++) {
+            html += '<option value="' + esc(headers[c]) + '"' + (r.col === headers[c] ? ' selected' : '') + '>' + esc(headers[c]) + '</option>';
+        }
+        html += '</select>';
+
+        // Operation select
+        html += '<select data-field="op" onchange="cfmChange(' + i + ',\'op\',this.value)">';
+        for (var o = 0; o < CFM_OPS.length; o++) {
+            html += '<option value="' + CFM_OPS[o].v + '"' + (r.op === CFM_OPS[o].v ? ' selected' : '') + '>' + CFM_OPS[o].label + '</option>';
+        }
+        html += '</select>';
+
+        // Value input (hidden for empty/notempty)
+        var hideVal = CFM_NO_VALUE_OPS.has(r.op) ? ' style="display:none"' : '';
+        html += '<input type="text" data-field="value" value="' + esc(r.value) + '" placeholder="valore"' + hideVal + ' onchange="cfmChange(' + i + ',\'value\',this.value)" style="width:90px' + (CFM_NO_VALUE_OPS.has(r.op) ? ';display:none' : '') + '">';
+
+        // Text color
+        html += '<label title="Colore testo">A <input type="color" value="' + (r.textColor || '#ffffff') + '" onchange="cfmChange(' + i + ',\'textColor\',this.value)"></label>';
+
+        // Background color
+        html += '<label title="Colore sfondo"><span style="background:' + (r.bgColor || 'transparent') + ';padding:1px 4px;border-radius:2px;border:1px solid var(--border);font-weight:700;font-size:0.85em;line-height:1">A</span> <input type="color" value="' + (r.bgColor || '#1a1a2e') + '" onchange="cfmChange(' + i + ',\'bgColor\',this.value)"></label>';
+
+        // Bold
+        html += '<label title="Grassetto"><input type="checkbox"' + (r.bold ? ' checked' : '') + ' onchange="cfmChange(' + i + ',\'bold\',this.checked)"> <b>Grassetto</b></label>';
+
+        // Preview
+        var pStyle = 'color:' + (r.textColor || '#fff');
+        if (r.bgColor) pStyle += ';background:' + r.bgColor;
+        if (r.bold) pStyle += ';font-weight:700';
+        html += '<span class="cfm-preview" style="' + pStyle + '">Abc</span>';
+
+        // Delete button
+        html += '<button class="cfm-del" onclick="cfmDelete(' + i + ')" title="Elimina regola">\u2715</button>';
+
+        html += '</div>';
+    }
+    body.innerHTML = html;
+}
+
+function cfmChange(idx, field, value) {
+    if (idx < 0 || idx >= condRules.length) return;
+    condRules[idx][field] = value;
+    saveCondRules();
+    rebuildCondRulesByCol();
+    // Re-render if op changed (to show/hide value input)
+    if (field === 'op') cfmRender();
+    // Update preview inline
+    if (field === 'textColor' || field === 'bgColor' || field === 'bold') {
+        var ruleEl = qs('.cfm-rule[data-idx="' + idx + '"]');
+        if (ruleEl) {
+            var preview = ruleEl.querySelector('.cfm-preview');
+            if (preview) {
+                var r = condRules[idx];
+                preview.style.color = r.textColor || '#fff';
+                preview.style.background = r.bgColor || 'transparent';
+                preview.style.fontWeight = r.bold ? '700' : '400';
+            }
+        }
+    }
+    renderVisible(true);
+}
+
+function cfmAddRule() {
+    condRules.push({
+        col: headers[0] || '',
+        op: 'eq',
+        value: '',
+        textColor: '#27ae60',
+        bgColor: '',
+        bold: true
+    });
+    saveCondRules();
+    rebuildCondRulesByCol();
+    cfmRender();
+}
+
+function cfmDelete(idx) {
+    condRules.splice(idx, 1);
+    saveCondRules();
+    rebuildCondRulesByCol();
+    cfmRender();
+    renderVisible(true);
+}
+
+function cfmClearAll() {
+    if (!confirm('Eliminare tutte le regole di formattazione condizionale?')) return;
+    condRules = [];
+    saveCondRules();
+    rebuildCondRulesByCol();
+    cfmRender();
+    renderVisible(true);
+    toast('Regole eliminate', 'warning');
+}
+
+// ============================================================
+// VLOOKUP (CERCA VERT) - Ricerca intuitiva
+// ============================================================
+var vlMatchMode = 'exact'; // 'exact', 'contains', 'starts'
+var vlSearchMode = 'single'; // 'single' or 'multi'
+var vlReturnCols = new Set(); // set of column indices to return
+var vlResults = []; // [{dataIdx, rowNum, values:{colName: val}}]
+var vlSugIdx = -1; // active suggestion index
+
+function vlSetMode(mode) {
+    vlSearchMode = mode;
+    var btns = qs('#vlModeToggle').querySelectorAll('button');
+    btns.forEach(function(b) { b.classList.toggle('active', b.dataset.mode === mode); });
+    if (mode === 'single') {
+        qs('#vlSearchSingleWrap').style.display = '';
+        qs('#vlSearchMultiWrap').style.display = 'none';
+    } else {
+        qs('#vlSearchSingleWrap').style.display = 'none';
+        qs('#vlSearchMultiWrap').style.display = '';
+        qs('#vlSuggestions').classList.remove('show');
+    }
+    vlRunSearch();
+}
+
+function vlGetSearchValues() {
+    if (vlSearchMode === 'single') {
+        var v = qs('#vlSearchVal').value.trim();
+        return v ? [v] : [];
+    } else {
+        var raw = qs('#vlSearchMultiVal').value;
+        // Split by newline, comma, or semicolon
+        var parts = raw.split(/[\n,;]+/);
+        var vals = [];
+        var seen = new Set();
+        for (var i = 0; i < parts.length; i++) {
+            var p = parts[i].trim();
+            if (p && !seen.has(p.toLowerCase())) {
+                seen.add(p.toLowerCase());
+                vals.push(p);
+            }
+        }
+        // Update info
+        var infoEl = qs('#vlMultiInfo');
+        if (vals.length > 0) {
+            infoEl.innerHTML = '&#x1F4CA; <strong>' + vals.length + '</strong> valor' + (vals.length === 1 ? 'e' : 'i') + ' da cercare';
+        } else {
+            infoEl.innerHTML = '';
+        }
+        return vals;
+    }
+}
+
+function openVlookup() {
+    qs('#vlOverlay').classList.add('show');
+    qs('#vlPanel').classList.add('show');
+    vlBuildSearchColSelect();
+    vlBuildReturnChips();
+    // Se c'è una cella selezionata, pre-compila (solo in modalità singola)
+    if (vlSearchMode === 'single' && selRow >= 0 && selCol >= 0) {
+        var val = getDisplayValByRn(selRow, headers[selCol]);
+        if (val) qs('#vlSearchVal').value = val;
+        qs('#vlSearchCol').value = selCol;
+    }
+    if (vlSearchMode === 'single') qs('#vlSearchVal').focus();
+    else qs('#vlSearchMultiVal').focus();
+    vlRunSearch();
+}
+
+function closeVlookup() {
+    qs('#vlOverlay').classList.remove('show');
+    qs('#vlPanel').classList.remove('show');
+    qs('#vlSuggestions').classList.remove('show');
+}
+
+function vlBuildSearchColSelect() {
+    var sel = qs('#vlSearchCol');
+    var currentVal = sel.value;
+    var html = '';
+    for (var i = 0; i < headers.length; i++) {
+        if (hiddenCols.has(i)) continue;
+        html += '<option value="' + i + '">' + esc(headers[i]) + '</option>';
+    }
+    sel.innerHTML = html;
+    // Restore or set to POD column or selected column
+    if (currentVal && sel.querySelector('option[value="' + currentVal + '"]')) {
+        sel.value = currentVal;
+    } else if (selCol >= 0) {
+        sel.value = selCol;
+    } else if (podColName) {
+        for (var j = 0; j < headers.length; j++) {
+            if (headers[j] === podColName) { sel.value = j; break; }
+        }
+    }
+}
+
+function vlBuildReturnChips() {
+    var container = qs('#vlRetCols');
+    var html = '<div class="vl-ret-cols-label">&#x1F4CB; Colonne da restituire (clicca per selezionare)</div>';
+    var searchCI = +qs('#vlSearchCol').value;
+    
+    // Auto-select up to 5 cols if nothing selected
+    if (vlReturnCols.size === 0) {
+        var count = 0;
+        for (var i = 0; i < headers.length; i++) {
+            if (hiddenCols.has(i) || i === searchCI) continue;
+            vlReturnCols.add(i);
+            count++;
+            if (count >= 5) break;
+        }
+    }
+    
+    for (var i = 0; i < headers.length; i++) {
+        if (hiddenCols.has(i)) continue;
+        var ci = i;
+        var isSearch = (ci === searchCI);
+        var isActive = vlReturnCols.has(ci);
+        var cls = 'vl-chip' + (isActive ? ' active' : '');
+        if (isSearch) cls += ' vl-chip-search';
+        html += '<span class="' + cls + '" data-ci="' + ci + '" onclick="vlToggleRetCol(' + ci + ')"';
+        if (isSearch) html += ' style="border-color:var(--warning);color:var(--warning);opacity:0.5;pointer-events:none" title="Colonna di ricerca (sempre inclusa)"';
+        html += '>' + esc(headers[i]) + '</span>';
+    }
+    container.innerHTML = html;
+}
+
+function vlToggleRetCol(ci) {
+    if (vlReturnCols.has(ci)) vlReturnCols.delete(ci);
+    else vlReturnCols.add(ci);
+    vlBuildReturnChips();
+    vlRunSearch();
+}
+
+function vlSetMatch(mode) {
+    vlMatchMode = mode;
+    var btns = qs('#vlMatchType').querySelectorAll('button');
+    btns.forEach(function(b) { b.classList.toggle('active', b.dataset.match === mode); });
+    vlRunSearch();
+}
+
+function vlOnConfigChange() {
+    vlBuildReturnChips();
+    vlRunSearch();
+}
+
+function vlOnSearchInput() {
+    vlRunSearch();
+    vlShowSuggestions();
+}
+
+function vlOnSearchKeydown(e) {
+    var sug = qs('#vlSuggestions');
+    var items = sug.querySelectorAll('.vl-sug-item');
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        vlSugIdx = Math.min(vlSugIdx + 1, items.length - 1);
+        vlHighlightSug(items);
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        vlSugIdx = Math.max(vlSugIdx - 1, -1);
+        vlHighlightSug(items);
+    } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (vlSugIdx >= 0 && items[vlSugIdx]) {
+            qs('#vlSearchVal').value = items[vlSugIdx].textContent;
+            sug.classList.remove('show');
+            vlSugIdx = -1;
+        }
+        vlRunSearch();
+    } else if (e.key === 'Escape') {
+        sug.classList.remove('show');
+        vlSugIdx = -1;
+    }
+}
+
+function vlHighlightSug(items) {
+    items.forEach(function(item, i) { item.classList.toggle('active', i === vlSugIdx); });
+    if (vlSugIdx >= 0 && items[vlSugIdx]) items[vlSugIdx].scrollIntoView({ block: 'nearest' });
+}
+
+function vlShowSuggestions() {
+    var sug = qs('#vlSuggestions');
+    // Suggestions only work in single mode
+    if (vlSearchMode === 'multi') { sug.classList.remove('show'); return; }
+    var val = qs('#vlSearchVal').value.trim();
+    if (!val || val.length < 1) { sug.classList.remove('show'); return; }
+    
+    var ci = +qs('#vlSearchCol').value;
+    var cn = headers[ci];
+    var valLow = val.toLowerCase();
+    
+    // Collect unique matching values (max 12)
+    var seen = new Set();
+    var matches = [];
+    for (var i = 0; i < rawData.length && matches.length < 12; i++) {
+        var rv = (rawData[i][cn] != null ? rawData[i][cn] : '').toString().trim();
+        var rvLow = rv.toLowerCase();
+        if (seen.has(rvLow)) continue;
+        if (rvLow.indexOf(valLow) >= 0) {
+            seen.add(rvLow);
+            matches.push(rv);
+        }
+    }
+    
+    if (matches.length === 0) { sug.classList.remove('show'); return; }
+    
+    // Sort: exact first, then starts with, then contains
+    matches.sort(function(a, b) {
+        var aLow = a.toLowerCase(), bLow = b.toLowerCase();
+        var aExact = aLow === valLow, bExact = bLow === valLow;
+        if (aExact !== bExact) return aExact ? -1 : 1;
+        var aStarts = aLow.indexOf(valLow) === 0, bStarts = bLow.indexOf(valLow) === 0;
+        if (aStarts !== bStarts) return aStarts ? -1 : 1;
+        return a.localeCompare(b, undefined, { numeric: true });
+    });
+    
+    var html = '';
+    for (var j = 0; j < matches.length; j++) {
+        html += '<div class="vl-sug-item" onmousedown="vlSelectSuggestion(this)">' + esc(matches[j]) + '</div>';
+    }
+    sug.innerHTML = html;
+    sug.classList.add('show');
+    vlSugIdx = -1;
+}
+
+function vlSelectSuggestion(el) {
+    qs('#vlSearchVal').value = el.textContent;
+    qs('#vlSuggestions').classList.remove('show');
+    vlSugIdx = -1;
+    vlRunSearch();
+}
+
+// Close suggestions when clicking outside
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.vl-search-field')) {
+        qs('#vlSuggestions').classList.remove('show');
+    }
+});
+
+function vlRunSearch() {
+    var searchValues = vlGetSearchValues();
+    var searchCI = +qs('#vlSearchCol').value;
+    var cn = headers[searchCI];
+    
+    if (searchValues.length === 0) {
+        vlResults = [];
+        vlRenderResults();
+        return;
+    }
+    
+    // Pre-compute lowercase search values
+    var searchLows = searchValues.map(function(v) { return v.toLowerCase(); });
+    vlResults = [];
+    
+    // Track which search values were found (for multi-mode stats)
+    var foundValues = new Set();
+    
+    for (var i = 0; i < rawData.length; i++) {
+        var row = rawData[i];
+        var cellVal = (row[cn] != null ? row[cn] : '').toString().trim();
+        var cellLow = cellVal.toLowerCase();
+        
+        var match = false;
+        for (var s = 0; s < searchLows.length; s++) {
+            switch (vlMatchMode) {
+                case 'exact': match = cellLow === searchLows[s]; break;
+                case 'contains': match = cellLow.indexOf(searchLows[s]) >= 0; break;
+                case 'starts': match = cellLow.indexOf(searchLows[s]) === 0; break;
+            }
+            if (match) { foundValues.add(searchLows[s]); break; }
+        }
+        
+        if (match) {
+            var result = { dataIdx: i, rowNum: row._row, keyVal: cellVal, values: {} };
+            vlReturnCols.forEach(function(retCI) {
+                var retCN = headers[retCI];
+                result.values[retCN] = (row[retCN] != null ? row[retCN] : '').toString();
+            });
+            vlResults.push(result);
+            if (vlResults.length >= 1000) break; // cap results (higher for multi)
+        }
+    }
+    
+    // Store stats for rendering
+    vlLastSearchCount = searchValues.length;
+    vlLastFoundCount = foundValues.size;
+    vlLastNotFound = [];
+    if (vlSearchMode === 'multi') {
+        for (var nf = 0; nf < searchLows.length; nf++) {
+            if (!foundValues.has(searchLows[nf])) vlLastNotFound.push(searchValues[nf]);
+        }
+    }
+    
+    vlRenderResults();
+}
+var vlLastSearchCount = 0;
+var vlLastFoundCount = 0;
+var vlLastNotFound = [];
+
+function vlRenderResults() {
+    var hdrEl = qs('#vlResultsHdr');
+    var tableWrap = qs('#vlTableWrap');
+    var emptyEl = qs('#vlEmpty');
+    var thead = qs('#vlTableHead');
+    var tbody = qs('#vlTableBody');
+    
+    var searchValues = vlGetSearchValues();
+    var hasSearch = searchValues.length > 0;
+    
+    if (!hasSearch) {
+        hdrEl.style.display = 'none';
+        tableWrap.style.display = 'none';
+        emptyEl.style.display = '';
+        emptyEl.innerHTML = '<div class="vl-icon">&#x1F50D;</div>' +
+            '<div>Seleziona una colonna di ricerca, digita un valore e scegli le colonne da restituire.</div>' +
+            '<div style="margin-top:6px;font-size:0.9em;color:var(--text-muted)">&#x1F4A1; Come il CERCA.VERT di Excel, ma pi&ugrave; veloce e intuitivo!</div>';
+        return;
+    }
+    
+    if (vlResults.length === 0) {
+        hdrEl.style.display = 'none';
+        tableWrap.style.display = 'none';
+        emptyEl.style.display = '';
+        var noResMsg = vlSearchMode === 'multi'
+            ? '<div class="vl-icon">&#x1F6AB;</div><div>Nessun risultato trovato per i <strong>' + searchValues.length + '</strong> valori cercati</div>'
+            : '<div class="vl-icon">&#x1F6AB;</div><div>Nessun risultato trovato per &laquo;<strong>' + esc(searchValues[0]) + '</strong>&raquo;</div>';
+        emptyEl.innerHTML = noResMsg + '<div style="margin-top:6px;font-size:0.9em">Prova a cambiare il tipo di corrispondenza o il valore cercato.</div>';
+        return;
+    }
+    
+    emptyEl.style.display = 'none';
+    hdrEl.style.display = '';
+    tableWrap.style.display = '';
+    
+    // Results count
+    var searchCI = +qs('#vlSearchCol').value;
+    var countHtml = '<strong>' + vlResults.length + '</strong> risultat' + (vlResults.length === 1 ? 'o' : 'i') +
+        ' trovati nella colonna &laquo;<strong>' + esc(headers[searchCI]) + '</strong>&raquo;';
+    if (vlSearchMode === 'multi' && vlLastSearchCount > 1) {
+        countHtml += ' &mdash; <span style="color:var(--success)">&#x2705; ' + vlLastFoundCount + '/' + vlLastSearchCount + ' valori trovati</span>';
+        if (vlLastNotFound.length > 0 && vlLastNotFound.length <= 10) {
+            countHtml += '<br><span style="color:var(--warning);font-size:0.9em">&#x26A0; Non trovati: ' + vlLastNotFound.map(function(v){return '&laquo;' + esc(v) + '&raquo;';}).join(', ') + '</span>';
+        } else if (vlLastNotFound.length > 10) {
+            countHtml += '<br><span style="color:var(--warning);font-size:0.9em">&#x26A0; ' + vlLastNotFound.length + ' valori non trovati</span>';
+        }
+    }
+    if (vlResults.length >= 1000) countHtml += ' <span style="color:var(--warning)">(limite 1000)</span>';
+    qs('#vlResultsCount').innerHTML = countHtml;
+    
+    // Build return columns list (ordered)
+    var retColsList = [];
+    for (var vp = 0; vp < colOrder.length; vp++) {
+        var ci = colOrder[vp];
+        if (vlReturnCols.has(ci) && !hiddenCols.has(ci) && ci !== searchCI) {
+            retColsList.push(ci);
+        }
+    }
+    
+    // Table header
+    var thHtml = '<tr><th style="width:50px">#</th><th>&#x1F511; ' + esc(headers[searchCI]) + '</th>';
+    for (var k = 0; k < retColsList.length; k++) {
+        thHtml += '<th>' + esc(headers[retColsList[k]]) + '</th>';
+    }
+    thHtml += '<th style="width:40px"></th></tr>';
+    thead.innerHTML = thHtml;
+    
+    // Table body
+    var tbHtml = '';
+    for (var r = 0; r < vlResults.length; r++) {
+        var res = vlResults[r];
+        tbHtml += '<tr data-rn="' + res.rowNum + '" data-sci="' + searchCI + '" onclick="vlGoToRow(this)">';
+        tbHtml += '<td style="color:var(--text-muted);font-size:0.9em">' + res.rowNum + '</td>';
+        tbHtml += '<td class="vl-key-cell">' + esc(res.keyVal) + '</td>';
+        for (var k = 0; k < retColsList.length; k++) {
+            var retCN = headers[retColsList[k]];
+            var cellVal = res.values[retCN] || '';
+            tbHtml += '<td title="' + esc(cellVal) + '">' + esc(cellVal);
+            // Copy single value button
+            tbHtml += ' <button class="vl-copy-btn" onclick="event.stopPropagation();vlCopySingle(\'' + esc(cellVal).replace(/'/g, "\\'") + '\')" title="Copia valore">&#x1F4CB;</button>';
+            tbHtml += '</td>';
+        }
+        tbHtml += '<td><span style="color:var(--primary);font-size:0.85em" title="Vai alla riga">&#x2197;</span></td>';
+        tbHtml += '</tr>';
+    }
+    tbody.innerHTML = tbHtml;
+}
+
+function vlGoToRow(tr) {
+    var rn = +tr.dataset.rn;
+    var sci = +tr.dataset.sci;
+    
+    // Find visible index in filtered data
+    var vi = -1;
+    for (var i = 0; i < filtered.length; i++) {
+        if (rawData[filtered[i]]._row === rn) { vi = i; break; }
+    }
+    
+    if (vi < 0) {
+        // Row not visible (filtered out) — clear filters first
+        toast('Riga ' + rn + ' filtrata. Rimuovo filtri...', 'warning');
+        colFilters = {};
+        podFilterSet = null;
+        vlFilterCol = '';
+        colorFilterCol = '';
+        colorFilterColor = '';
+        qs('#globalSearch').value = '';
+        buildHeader();
+        applyFilters();
+        // Find again
+        for (var j = 0; j < filtered.length; j++) {
+            if (rawData[filtered[j]]._row === rn) { vi = j; break; }
+        }
+    }
+    
+    if (vi >= 0) {
+        closeVlookup();
+        selectCell(rn, sci);
+        ensureVisible(vi, sci);
+        renderVisible(true);
+        toast('Riga ' + rn + ' selezionata', 'success');
+    }
+}
+
+function vlCopySingle(val) {
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(val).then(function() { toast('Valore copiato!', 'success'); });
+    } else {
+        vlFallbackCopy(val);
+        toast('Valore copiato!', 'success');
+    }
+}
+
+function vlCopyResults() {
+    if (!vlResults.length) return;
+    var searchCI = +qs('#vlSearchCol').value;
+    var retColsList = [];
+    for (var vp = 0; vp < colOrder.length; vp++) {
+        var ci = colOrder[vp];
+        if (vlReturnCols.has(ci) && !hiddenCols.has(ci) && ci !== searchCI) retColsList.push(ci);
+    }
+    
+    // Header row
+    var lines = [headers[searchCI] + '\t' + retColsList.map(function(ci) { return headers[ci]; }).join('\t')];
+    // Data rows
+    for (var r = 0; r < vlResults.length; r++) {
+        var res = vlResults[r];
+        var parts = [res.keyVal];
+        for (var k = 0; k < retColsList.length; k++) {
+            parts.push(res.values[headers[retColsList[k]]] || '');
+        }
+        lines.push(parts.join('\t'));
+    }
+    var text = lines.join('\n');
+    
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(function() {
+            toast('\uD83D\uDCCB ' + vlResults.length + ' risultati copiati!', 'success');
+        });
+    } else {
+        vlFallbackCopy(text);
+        toast('\uD83D\uDCCB ' + vlResults.length + ' risultati copiati!', 'success');
+    }
+}
+
+function vlExportCSV() {
+    if (!vlResults.length) return;
+    var searchCI = +qs('#vlSearchCol').value;
+    var retColsList = [];
+    for (var vp = 0; vp < colOrder.length; vp++) {
+        var ci = colOrder[vp];
+        if (vlReturnCols.has(ci) && !hiddenCols.has(ci) && ci !== searchCI) retColsList.push(ci);
+    }
+    
+    var csvLines = [];
+    // Header
+    var hdr = ['"Riga"', '"' + headers[searchCI].replace(/"/g, '""') + '"'];
+    for (var k = 0; k < retColsList.length; k++) hdr.push('"' + headers[retColsList[k]].replace(/"/g, '""') + '"');
+    csvLines.push(hdr.join(';'));
+    // Data
+    for (var r = 0; r < vlResults.length; r++) {
+        var res = vlResults[r];
+        var row = ['"' + res.rowNum + '"', '"' + res.keyVal.replace(/"/g, '""') + '"'];
+        for (var k2 = 0; k2 < retColsList.length; k2++) {
+            var v = (res.values[headers[retColsList[k2]]] || '').replace(/"/g, '""');
+            row.push('"' + v + '"');
+        }
+        csvLines.push(row.join(';'));
+    }
+    
+    var blob = new Blob([csvLines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'cerca_vert_risultati.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast('\uD83D\uDCE5 CSV esportato (' + vlResults.length + ' righe)', 'success');
+}
+
+function vlFallbackCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+}
+
+// ============================================================
+// VLOOKUP TABS
+// ============================================================
+function vlSwitchTab(tab) {
+    var tabs = document.querySelectorAll('.vl-tab');
+    tabs.forEach(function(t) { t.classList.toggle('active', t.dataset.tab === tab); });
+    var contents = document.querySelectorAll('.vl-tab-content');
+    contents.forEach(function(c) { c.classList.toggle('active', c.id === (tab === 'search' ? 'vlTabSearch' : 'vlTabImport')); });
+}
+
+// ============================================================
+// EXCEL IMPORT & MERGE (within VLOOKUP panel)
+// ============================================================
+var vlExcelData = null;     // [{col1: val, col2: val, ...}, ...]
+var vlExcelHeaders = [];    // ['col1', 'col2', ...]
+var vlExcelFileName = '';
+var vlExcelMappings = [];   // [{excelCol, filoneCol}, ...]
+
+// Drag & Drop
+(function() {
+    var dropzone = document.getElementById('vlExcelDropzone');
+    if (!dropzone) return;
+    dropzone.addEventListener('dragover', function(e) {
+        e.preventDefault(); e.stopPropagation();
+        dropzone.classList.add('dragover');
+    });
+    dropzone.addEventListener('dragleave', function(e) {
+        e.preventDefault(); e.stopPropagation();
+        dropzone.classList.remove('dragover');
+    });
+    dropzone.addEventListener('drop', function(e) {
+        e.preventDefault(); e.stopPropagation();
+        dropzone.classList.remove('dragover');
+        var files = e.dataTransfer.files;
+        if (files.length > 0) vlLoadExcelFile(files[0]);
+    });
+})();
+
+function vlOnExcelFileSelected(input) {
+    if (input.files && input.files.length > 0) {
+        vlLoadExcelFile(input.files[0]);
+    }
+}
+
+function vlLoadExcelFile(file) {
+    vlExcelFileName = file.name;
+    var ext = file.name.split('.').pop().toLowerCase();
+
+    if (ext === 'csv') {
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            vlParseCSV(e.target.result);
+        };
+        reader.readAsText(file, 'UTF-8');
+    } else if (ext === 'xlsx' || ext === 'xls') {
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            vlParseXLSX(e.target.result);
+        };
+        reader.readAsArrayBuffer(file);
+    } else {
+        toast('Formato file non supportato. Usa .xlsx, .xls o .csv', 'error');
+    }
+}
+
+function vlParseCSV(text) {
+    var lines = text.split(/\r?\n/);
+    if (lines.length < 2) { toast('File CSV vuoto o con una sola riga', 'warning'); return; }
+
+    // Detect separator: ; or , or \t
+    var firstLine = lines[0];
+    var sep = ';';
+    if (firstLine.indexOf('\t') >= 0 && firstLine.split('\t').length > firstLine.split(';').length) sep = '\t';
+    else if (firstLine.indexOf(',') >= 0 && firstLine.split(',').length > firstLine.split(';').length) sep = ',';
+
+    vlExcelHeaders = lines[0].split(sep).map(function(h) { return h.replace(/^["']|["']$/g, '').trim(); });
+    vlExcelData = [];
+
+    for (var i = 1; i < lines.length; i++) {
+        var line = lines[i].trim();
+        if (!line) continue;
+        var parts = line.split(sep);
+        var row = {};
+        for (var j = 0; j < vlExcelHeaders.length; j++) {
+            var val = (parts[j] || '').replace(/^["']|["']$/g, '').trim();
+            row[vlExcelHeaders[j]] = val;
+        }
+        vlExcelData.push(row);
+    }
+
+    vlExcelFileLoaded();
+}
+
+function vlParseXLSX(buffer) {
+    // Use SheetJS (XLSX) library - load dynamically if not available
+    if (typeof XLSX === 'undefined') {
+        var script = document.createElement('script');
+        script.src = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
+        script.onload = function() { vlDoParseXLSX(buffer); };
+        script.onerror = function() { toast('Errore nel caricamento della libreria Excel. Prova con un file CSV.', 'error'); };
+        document.head.appendChild(script);
+    } else {
+        vlDoParseXLSX(buffer);
+    }
+}
+
+function vlDoParseXLSX(buffer) {
+    try {
+        var wb = XLSX.read(buffer, { type: 'array' });
+        var sheetName = wb.SheetNames[0];
+        var sheet = wb.Sheets[sheetName];
+        var json = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+        if (json.length === 0) { toast('Il foglio Excel \u00e8 vuoto', 'warning'); return; }
+
+        vlExcelHeaders = Object.keys(json[0]);
+        vlExcelData = json.map(function(row) {
+            var r = {};
+            for (var k in row) { r[k] = (row[k] != null ? row[k] : '').toString().trim(); }
+            return r;
+        });
+
+        vlExcelFileLoaded();
+    } catch(e) {
+        toast('Errore nella lettura del file Excel: ' + e.message, 'error');
+    }
+}
+
+function vlExcelFileLoaded() {
+    qs('#vlExcelLoaded').style.display = '';
+    qs('#vlExcelSection').classList.add('vl-excel-loaded');
+    qs('#vlExcelDropzone').style.display = 'none';
+
+    // File info
+    qs('#vlExcelFileInfo').innerHTML = '\uD83D\uDCC4 <strong>' + esc(vlExcelFileName) + '</strong> &mdash; ' +
+        '<strong>' + vlExcelData.length + '</strong> righe &times; <strong>' + vlExcelHeaders.length + '</strong> colonne';
+
+    // Populate key column selects
+    var excelKeyHtml = '';
+    for (var i = 0; i < vlExcelHeaders.length; i++) {
+        var sel = vlExcelHeaders[i].toUpperCase().indexOf('POD') >= 0 ? ' selected' : '';
+        excelKeyHtml += '<option value="' + esc(vlExcelHeaders[i]) + '"' + sel + '>' + esc(vlExcelHeaders[i]) + '</option>';
+    }
+    qs('#vlExcelKeyCol').innerHTML = excelKeyHtml;
+
+    var filoneKeyHtml = '';
+    for (var j = 0; j < headers.length; j++) {
+        var sel2 = '';
+        if (podColName && headers[j] === podColName) sel2 = ' selected';
+        else if (headers[j].toUpperCase().indexOf('POD') >= 0) sel2 = ' selected';
+        filoneKeyHtml += '<option value="' + esc(headers[j]) + '"' + sel2 + '>' + esc(headers[j]) + '</option>';
+    }
+    qs('#vlFiloneKeyCol').innerHTML = filoneKeyHtml;
+
+    // Clear old mappings and add one default
+    vlExcelMappings = [];
+    vlExcelAddMapping();
+    qs('#vlMergeResult').innerHTML = '';
+
+    toast('\uD83D\uDCC2 File caricato: ' + vlExcelData.length + ' righe', 'success');
+}
+
+function vlExcelAddMapping() {
+    vlExcelMappings.push({ excelCol: '', filoneCol: '' });
+    vlExcelRenderMappings();
+}
+
+function vlExcelRemoveMapping(idx) {
+    vlExcelMappings.splice(idx, 1);
+    vlExcelRenderMappings();
+}
+
+function vlExcelRenderMappings() {
+    var container = qs('#vlExcelMapping');
+    var html = '<div style="display:flex;align-items:center;justify-content:space-between">' +
+        '<label style="font-size:0.72em;color:var(--text-muted);font-weight:600;text-transform:uppercase">&#x1F504; Mappatura colonne (Excel &#x2192; Filone)</label>' +
+        '<button style="padding:3px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg-card);color:var(--text);font-size:0.75em;cursor:pointer" onclick="vlExcelAddMapping()">+ Aggiungi</button>' +
+        '</div>';
+
+    for (var i = 0; i < vlExcelMappings.length; i++) {
+        html += '<div class="vl-excel-mapping-row">';
+
+        // Excel column select
+        html += '<select onchange="vlExcelMappingChange(' + i + ', \'excel\', this.value)">';
+        html += '<option value="">-- Colonna Excel --</option>';
+        for (var e = 0; e < vlExcelHeaders.length; e++) {
+            var sel = vlExcelMappings[i].excelCol === vlExcelHeaders[e] ? ' selected' : '';
+            html += '<option value="' + esc(vlExcelHeaders[e]) + '"' + sel + '>' + esc(vlExcelHeaders[e]) + '</option>';
+        }
+        html += '</select>';
+
+        html += '<span class="vl-excel-arrow">&#x2192;</span>';
+
+        // Filone column select
+        html += '<select onchange="vlExcelMappingChange(' + i + ', \'filone\', this.value)">';
+        html += '<option value="">-- Colonna Filone --</option>';
+        for (var f = 0; f < headers.length; f++) {
+            var sel2 = vlExcelMappings[i].filoneCol === headers[f] ? ' selected' : '';
+            html += '<option value="' + esc(headers[f]) + '"' + sel2 + '>' + esc(headers[f]) + '</option>';
+        }
+        html += '</select>';
+
+        html += '<button class="vl-excel-del" onclick="vlExcelRemoveMapping(' + i + ')" title="Rimuovi">&times;</button>';
+        html += '</div>';
+    }
+    container.innerHTML = html;
+}
+
+function vlExcelMappingChange(idx, type, val) {
+    if (type === 'excel') vlExcelMappings[idx].excelCol = val;
+    else vlExcelMappings[idx].filoneCol = val;
+}
+
+function vlExcelPreview() {
+    var excelKey = qs('#vlExcelKeyCol').value;
+    var filoneKey = qs('#vlFiloneKeyCol').value;
+
+    if (!vlExcelData || !excelKey || !filoneKey) {
+        qs('#vlExcelPreviewWrap').style.display = 'none';
+        return;
+    }
+
+    // Build index of Excel data by key
+    var excelIndex = {};
+    for (var i = 0; i < vlExcelData.length; i++) {
+        var k = (vlExcelData[i][excelKey] || '').toString().trim().toUpperCase();
+        if (k) excelIndex[k] = vlExcelData[i];
+    }
+
+    // Find matches
+    var matchCount = 0;
+    var noMatchCount = 0;
+    var previewRows = [];
+    var maxPreview = 10;
+
+    for (var r = 0; r < rawData.length && previewRows.length < maxPreview; r++) {
+        var fKey = (rawData[r][filoneKey] || '').toString().trim().toUpperCase();
+        if (excelIndex[fKey]) {
+            matchCount++;
+            previewRows.push({ filoneRow: rawData[r], excelRow: excelIndex[fKey], key: fKey });
+        }
+    }
+    // Count total matches
+    for (var r2 = previewRows.length > 0 ? maxPreview : 0; r2 < rawData.length; r2++) {
+        var fk2 = (rawData[r2][filoneKey] || '').toString().trim().toUpperCase();
+        if (excelIndex[fk2]) matchCount++;
+    }
+    // Fix: avoid double counting
+    matchCount = 0;
+    for (var r3 = 0; r3 < rawData.length; r3++) {
+        var fk3 = (rawData[r3][filoneKey] || '').toString().trim().toUpperCase();
+        if (excelIndex[fk3]) matchCount++;
+    }
+
+    // Render preview
+    var wrap = qs('#vlExcelPreviewWrap');
+    if (previewRows.length === 0) {
+        wrap.style.display = 'none';
+        qs('#vlMergeResult').innerHTML = '<div class="vl-merge-result warning">\u26A0 Nessuna corrispondenza trovata tra <strong>' +
+            esc(filoneKey) + '</strong> del filone e <strong>' + esc(excelKey) + '</strong> dell\'Excel.</div>';
+        return;
+    }
+
+    wrap.style.display = '';
+    var validMappings = vlExcelMappings.filter(function(m) { return m.excelCol && m.filoneCol; });
+
+    // Header
+    var thHtml = '<tr><th>Chiave</th>';
+    for (var m = 0; m < validMappings.length; m++) {
+        thHtml += '<th style="color:var(--info)">' + esc(validMappings[m].excelCol) + ' (Excel)</th>';
+        thHtml += '<th style="color:var(--warning)">' + esc(validMappings[m].filoneCol) + ' (Filone attuale)</th>';
+    }
+    thHtml += '</tr>';
+    qs('#vlExcelPreviewHead').innerHTML = thHtml;
+
+    // Body
+    var tbHtml = '';
+    for (var p = 0; p < previewRows.length; p++) {
+        var pr = previewRows[p];
+        tbHtml += '<tr><td><strong>' + esc(pr.key) + '</strong></td>';
+        for (var m2 = 0; m2 < validMappings.length; m2++) {
+            var newVal = (pr.excelRow[validMappings[m2].excelCol] || '').toString();
+            var oldVal = (pr.filoneRow[validMappings[m2].filoneCol] || '').toString();
+            var changed = newVal !== oldVal;
+            tbHtml += '<td style="' + (changed ? 'color:var(--success);font-weight:600' : '') + '">' + esc(newVal) + '</td>';
+            tbHtml += '<td style="' + (changed ? 'color:var(--text-muted);text-decoration:line-through' : '') + '">' + esc(oldVal) + '</td>';
+        }
+        tbHtml += '</tr>';
+    }
+    qs('#vlExcelPreviewBody').innerHTML = tbHtml;
+
+    qs('#vlMergeResult').innerHTML = '<div class="vl-merge-result success">\u2705 <strong>' + matchCount + '</strong> corrispondenze trovate su <strong>' +
+        rawData.length + '</strong> righe del filone (' + vlExcelData.length + ' righe nell\'Excel)' +
+        (validMappings.length > 0 ? ' &mdash; ' + validMappings.length + ' colonn' + (validMappings.length === 1 ? 'a' : 'e') + ' da aggiornare' : '') + '</div>';
+}
+
+function vlExcelMerge() {
+    if (!vlExcelData || vlExcelData.length === 0) { toast('Nessun file Excel caricato', 'warning'); return; }
+
+    var excelKey = qs('#vlExcelKeyCol').value;
+    var filoneKey = qs('#vlFiloneKeyCol').value;
+    if (!excelKey || !filoneKey) { toast('Seleziona le colonne chiave per il match', 'warning'); return; }
+
+    var validMappings = vlExcelMappings.filter(function(m) { return m.excelCol && m.filoneCol; });
+    if (validMappings.length === 0) { toast('Aggiungi almeno una mappatura colonne', 'warning'); return; }
+
+    // Check for protected columns
+    var protectedHit = [];
+    for (var pm = 0; pm < validMappings.length; pm++) {
+        if (protectedCols.has(validMappings[pm].filoneCol.toLowerCase()) && !unlockedCols.has(validMappings[pm].filoneCol.toLowerCase())) {
+            protectedHit.push(validMappings[pm].filoneCol);
+        }
+    }
+    if (protectedHit.length > 0) {
+        toast('\u26A0 Colonne protette: ' + protectedHit.join(', ') + '. Sblocca prima dal men\u00f9 colonne.', 'error');
+        return;
+    }
+
+    // Build Excel index
+    var excelIndex = {};
+    for (var i = 0; i < vlExcelData.length; i++) {
+        var k = (vlExcelData[i][excelKey] || '').toString().trim().toUpperCase();
+        if (k) excelIndex[k] = vlExcelData[i];
+    }
+
+    // Merge
+    var updated = 0;
+    var cellsChanged = 0;
+    for (var r = 0; r < rawData.length; r++) {
+        var fKey = (rawData[r][filoneKey] || '').toString().trim().toUpperCase();
+        var exRow = excelIndex[fKey];
+        if (!exRow) continue;
+
+        var rowChanged = false;
+        for (var m = 0; m < validMappings.length; m++) {
+            var newVal = (exRow[validMappings[m].excelCol] || '').toString().trim();
+            var colName = validMappings[m].filoneCol;
+            var oldVal = (rawData[r][colName] != null ? rawData[r][colName] : '').toString();
+
+            if (newVal !== oldVal) {
+                // Apply change as pending edit (same as manual edit)
+                var rowNum = rawData[r]._row;
+                var key = rowNum + ':' + colName;
+                if (!pending[key]) {
+                    pending[key] = { row: rowNum, col: colName, old: oldVal, val: newVal };
+                } else {
+                    pending[key].val = newVal;
+                }
+                rawData[r][colName] = newVal;
+                cellsChanged++;
+                rowChanged = true;
+            }
+        }
+        if (rowChanged) updated++;
+    }
+
+    if (cellsChanged > 0) {
+        qs('#changeCount').textContent = Object.keys(pending).length;
+        qs('#btnSave').disabled = false;
+        applyFilters();
+        renderVisible(true);
+        toast('\uD83D\uDD04 Merge completato: ' + updated + ' righe aggiornate, ' + cellsChanged + ' celle modificate', 'success');
+        qs('#vlMergeResult').innerHTML = '<div class="vl-merge-result success">\u2705 Merge completato! <strong>' + updated +
+            '</strong> righe, <strong>' + cellsChanged + '</strong> celle modificate. Ricorda di <strong>salvare</strong> le modifiche.</div>';
+    } else {
+        toast('Nessuna modifica necessaria: i dati sono gi\u00e0 aggiornati', 'info');
+        qs('#vlMergeResult').innerHTML = '<div class="vl-merge-result warning">\u2139 Nessuna modifica: i dati del filone corrispondono gi\u00e0 all\'Excel.</div>';
+    }
+}
+
+function vlExcelClear() {
+    vlExcelData = null;
+    vlExcelHeaders = [];
+    vlExcelFileName = '';
+    vlExcelMappings = [];
+    qs('#vlExcelLoaded').style.display = 'none';
+    qs('#vlExcelDropzone').style.display = '';
+    qs('#vlExcelSection').classList.remove('vl-excel-loaded');
+    qs('#vlExcelFileInput').value = '';
+    qs('#vlMergeResult').innerHTML = '';
+    qs('#vlExcelPreviewWrap').style.display = 'none';
+    toast('File Excel rimosso', 'warning');
+}
+
+// ============================================================
+// SSE - Aggiornamento in tempo reale dal server
+// ============================================================
+(function() {
+    var evtSource = null;
+    var reconnectTimer = null;
+    var reconnectDelay = 2000;
+    var _sseRefreshing = false;
+
+    function connectSSE() {
+        if (evtSource) { try { evtSource.close(); } catch(e) {} }
+        try {
+            evtSource = new EventSource('/api/events');
+        } catch(e) { return; }
+
+        evtSource.addEventListener('connected', function() {
+            reconnectDelay = 2000;
+        });
+
+        evtSource.addEventListener('sync_complete', function() {
+            refreshFiloneData();
+        });
+
+        evtSource.onerror = function() {
+            try { evtSource.close(); } catch(e) {}
+            clearTimeout(reconnectTimer);
+            reconnectTimer = setTimeout(connectSSE, reconnectDelay);
+            reconnectDelay = Math.min(reconnectDelay * 1.5, 30000);
+        };
+    }
+
+    async function refreshFiloneData() {
+        if (_sseRefreshing) return;
+        _sseRefreshing = true;
+        try {
+            var r = await fetch('/api/filone');
+            if (!r.ok) return;
+            var d = await r.json();
+            if (d.error || !d.data) return;
+
+            var newData = d.data;
+
+            // Se ci sono modifiche pendenti, mantienile sopra i dati nuovi
+            var hasPending = Object.keys(pending).length > 0;
+            var pendingByRow = {};
+            if (hasPending) {
+                for (var k in pending) {
+                    var p = pending[k];
+                    if (!pendingByRow[p.row]) pendingByRow[p.row] = {};
+                    pendingByRow[p.row][p.col] = p;
+                }
+            }
+
+            // Aggiorna rawData: per ogni riga nuova, sovrascrivi il dato locale
+            // tranne i campi con modifiche pendenti (non ancora salvate)
+            var newIndex = {};
+            for (var i = 0; i < newData.length; i++) {
+                newIndex[newData[i]._row] = i;
+            }
+
+            // Strategia: usa i nuovi dati come base
+            // Se la riga esiste anche nei vecchi dati e ha pending, applica pending
+            for (var rn in pendingByRow) {
+                var ni = newIndex[+rn];
+                if (ni === undefined) continue;
+                for (var col in pendingByRow[rn]) {
+                    var pe = pendingByRow[rn][col];
+                    // Aggiorna old reference al valore server attuale
+                    pe.old = (newData[ni][col] != null ? newData[ni][col] : '').toString();
+                    // Applica il valore pendente visivamente
+                    newData[ni][col] = pe.val;
+                }
+            }
+
+            // Rimpiazza dati
+            rawData = newData;
+            buildRowIndex();
+
+            // Aggiorna headers se cambiati
+            if (d.headers && d.headers.length && d.headers.join(',') !== headers.join(',')) {
+                headers = d.headers;
+                detectColTypes();
+                initColWidths();
+                initColOrder();
+                buildHeader();
+            }
+
+            applyFilters();
+            qs('#infoRighe').innerHTML = '<strong>' + rawData.length + '</strong> righe &times; <strong>' + headers.length + '</strong> colonne';
+
+            if (hasPending) {
+                toast('\uD83D\uDD04 Dati aggiornati (modifiche pendenti mantenute)', 'info');
+            } else {
+                toast('\uD83D\uDD04 Dati aggiornati dal server', 'success');
+            }
+        } catch(e) {
+            // Silenzioso - riproverà al prossimo evento
+        } finally {
+            _sseRefreshing = false;
+        }
+    }
+
+    // Esponi la funzione di refresh globalmente per il bottone manuale
+    window._sseRefreshFilone = refreshFiloneData;
+
+    // Avvia connessione SSE dopo il caricamento iniziale
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function() { setTimeout(connectSSE, 1000); });
+    } else {
+        setTimeout(connectSSE, 1000);
+    }
+})();
+
+// Refresh manuale dal bottone toolbar
+async function manualRefresh() {
+    var btn = qs('#btnRefresh');
+    btn.disabled = true;
+    btn.innerHTML = '&#x23F3; Aggiorno...';
+    try {
+        await window._sseRefreshFilone();
+    } catch(e) {
+        toast('\u274C Errore durante l\'aggiornamento', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '&#x1F504; Aggiorna';
+    }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+{
+  "deposito": {
+    "nome": "DEPOSITO PAVIA",
+    "lat": 45.2221001,
+    "lon": 9.2254115
+  },
+  "coloriTecnici": {
+    "ALESSANDRO": "#e74c3c",
+    "MELEK": "#f1c40f",
+    "BRAHIM": "#2ecc71"
+  },
+  "matricoleVip": [
+    "ALESSANDRO",
+    "MELEK",
+    "BRAHIM"
+  ],
+  "operatoriDict": {
+    "ALESSANDRO": "ALESSANDRO",
+    "MELEK": "MELEK",
+    "BRAHIM": "BRAHIM"
+  },
+  "provincia": "PAVIA",
+  "refreshInterval": 185000
+}

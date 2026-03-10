@@ -23,10 +23,17 @@ import urllib.request
 import urllib.error
 import shutil
 import glob
+import platform
+
+IS_WINDOWS = platform.system() == 'Windows'
+IS_LINUX = platform.system() == 'Linux'
 
 # Configura encoding UTF-8
-sys.stdout.reconfigure(encoding='utf-8')
-sys.stderr.reconfigure(encoding='utf-8')
+try:
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
+except (AttributeError, Exception):
+    pass  # Linux default UTF-8, Python < 3.7 non ha reconfigure
 
 # Directory dello script
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -81,29 +88,43 @@ if not IS_CHILD_PROCESS:
     processo_tunnel = None
     
     def trova_cloudflared():
-        """Trova cloudflared. Ritorna il percorso o None."""
+        """Trova cloudflared. Ritorna il percorso o None. Cross-platform."""
         path = shutil.which('cloudflared')
         if path:
             return path
         
-        percorsi = [
-            r"C:\Program Files\cloudflared\cloudflared.exe",
-            r"C:\Program Files (x86)\cloudflared\cloudflared.exe",
-            os.path.expanduser(r"~\cloudflared\cloudflared.exe"),
-        ]
-        for p in percorsi:
-            if os.path.exists(p):
-                return p
-        
-        winget_path = os.path.join(
-            os.environ.get('LOCALAPPDATA', ''),
-            'Microsoft', 'WinGet', 'Packages'
-        )
-        if os.path.exists(winget_path):
-            pattern = os.path.join(winget_path, '*cloudflared*', 'cloudflared.exe')
-            matches = glob.glob(pattern)
-            if matches:
-                return matches[0]
+        if IS_WINDOWS:
+            # Percorsi tipici Windows
+            percorsi = [
+                r"C:\Program Files\cloudflared\cloudflared.exe",
+                r"C:\Program Files (x86)\cloudflared\cloudflared.exe",
+                os.path.expanduser(os.path.join('~', 'cloudflared', 'cloudflared.exe')),
+            ]
+            for p in percorsi:
+                if os.path.exists(p):
+                    return p
+            
+            # Cerca anche in WinGet
+            winget_path = os.path.join(
+                os.environ.get('LOCALAPPDATA', ''),
+                'Microsoft', 'WinGet', 'Packages'
+            )
+            if os.path.exists(winget_path):
+                pattern = os.path.join(winget_path, '*cloudflared*', 'cloudflared.exe')
+                matches = glob.glob(pattern)
+                if matches:
+                    return matches[0]
+        else:
+            # Percorsi tipici Linux
+            percorsi = [
+                '/usr/local/bin/cloudflared',
+                '/usr/bin/cloudflared',
+                os.path.expanduser('~/cloudflared'),
+                os.path.expanduser('~/.cloudflared/bin/cloudflared'),
+            ]
+            for p in percorsi:
+                if os.path.exists(p):
+                    return p
         return None
     
     CLOUDFLARED_PATH = None
@@ -117,7 +138,12 @@ if not IS_CHILD_PROCESS:
         print("\n" + "="*60)
         print("⚠️  CLOUDFLARED NON TROVATO")
         print("="*60)
-        print("\nInstalla con: winget install Cloudflare.cloudflared")
+        if IS_WINDOWS:
+            print("\nInstalla con: winget install Cloudflare.cloudflared")
+        else:
+            print("\nInstalla con:")
+            print("   curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o cloudflared.deb")
+            print("   sudo dpkg -i cloudflared.deb")
         print("Oppure scarica da: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/")
         print("="*60)
         return False
@@ -153,7 +179,7 @@ if not IS_CHILD_PROCESS:
             return False
     
     def avvia_osrm_automaticamente():
-        """Tenta di avviare Docker Desktop e il container osrm-server automaticamente."""
+        """Tenta di avviare Docker e il container osrm-server automaticamente. Cross-platform."""
         CONTAINER_NAME = "osrm-server"
         
         # 1. Verifica se Docker è disponibile
@@ -172,39 +198,52 @@ if not IS_CHILD_PROCESS:
             docker_running = False
         
         if not docker_running:
-            print("   🐳 Docker Desktop non in esecuzione, tentativo di avvio...")
-            # Tenta di avviare Docker Desktop su Windows
-            docker_desktop = os.path.join(
-                os.environ.get("ProgramFiles", "C:\\Program Files"),
-                "Docker", "Docker", "Docker Desktop.exe"
-            )
-            if not os.path.exists(docker_desktop):
-                # Prova percorso alternativo
-                docker_desktop = shutil.which("Docker Desktop")
-            
-            if docker_desktop and os.path.exists(docker_desktop):
+            if IS_LINUX:
+                # Linux: prova ad avviare Docker via systemd
+                print("   🐳 Docker non in esecuzione, tentativo avvio via systemd...")
                 try:
-                    subprocess.Popen([docker_desktop], cwd=SCRIPT_DIR)
-                    print("   ⏳ Attesa avvio Docker Desktop...")
-                    # Attendi che il daemon Docker sia pronto (max 60s)
-                    for i in range(60):
-                        time.sleep(2)
-                        try:
-                            check = subprocess.run(
-                                ["docker", "info"], capture_output=True, timeout=5
-                            )
-                            if check.returncode == 0:
-                                print(f"   ✅ Docker Desktop avviato ({(i+1)*2}s)")
-                                docker_running = True
-                                break
-                        except Exception:
-                            pass
-                        if i > 0 and i % 10 == 0:
-                            print(f"      ({(i+1)*2}s...)")
+                    subprocess.run(["sudo", "systemctl", "start", "docker"], timeout=15)
+                    time.sleep(3)
+                    check = subprocess.run(["docker", "info"], capture_output=True, timeout=10)
+                    if check.returncode == 0:
+                        print("   ✅ Docker avviato via systemd")
+                        docker_running = True
+                    else:
+                        print("   ❌ Docker non si è avviato")
                 except Exception as e:
-                    print(f"   ❌ Errore avvio Docker Desktop: {e}")
+                    print(f"   ❌ Errore avvio Docker: {e}")
             else:
-                print("   ❌ Docker Desktop non trovato, avvialo manualmente")
+                # Windows: prova ad avviare Docker Desktop
+                print("   🐳 Docker Desktop non in esecuzione, tentativo di avvio...")
+                docker_desktop = os.path.join(
+                    os.environ.get("ProgramFiles", "C:\\Program Files"),
+                    "Docker", "Docker", "Docker Desktop.exe"
+                )
+                if not os.path.exists(docker_desktop):
+                    docker_desktop = shutil.which("Docker Desktop")
+                
+                if docker_desktop and os.path.exists(docker_desktop):
+                    try:
+                        subprocess.Popen([docker_desktop], cwd=SCRIPT_DIR)
+                        print("   ⏳ Attesa avvio Docker Desktop...")
+                        for i in range(60):
+                            time.sleep(2)
+                            try:
+                                check = subprocess.run(
+                                    ["docker", "info"], capture_output=True, timeout=5
+                                )
+                                if check.returncode == 0:
+                                    print(f"   ✅ Docker Desktop avviato ({(i+1)*2}s)")
+                                    docker_running = True
+                                    break
+                            except Exception:
+                                pass
+                            if i > 0 and i % 10 == 0:
+                                print(f"      ({(i+1)*2}s...)")
+                    except Exception as e:
+                        print(f"   ❌ Errore avvio Docker Desktop: {e}")
+                else:
+                    print("   ❌ Docker Desktop non trovato, avvialo manualmente")
             
             if not docker_running:
                 print("   ❌ Docker non si è avviato in tempo")

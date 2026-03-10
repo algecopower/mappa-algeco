@@ -26,7 +26,7 @@
   "raggio_microzona_km": 0.5,
   "ottimizza_per_tempo": true,
   "data_inizio": "2025-10-01",
-  "data_fine": "2026-04-30",
+  "data_fine": "",
   "intervallo_sync_secondi": 180,
   "mappatura_colonne": {
     "comune": "Località"

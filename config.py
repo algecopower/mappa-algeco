@@ -319,7 +319,7 @@ CREDENZIALI_JSON = 'credenziali.json'
 
 # --- FILTRO DATE ---
 DATA_INIZIO = '2025-10-01'
-DATA_FINE = '2026-03-31'
+DATA_FINE = ''  # Vuoto = illimitata (mostra tutti i contatori fino all'ultima data disponibile)
 
 # --- CONFIGURAZIONE CALCOLO DISTANZE ---
 # Server OSRM locale (Docker) - molto più veloce e senza limiti

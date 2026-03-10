@@ -152,8 +152,11 @@ def prepara_dati_contatori(df, report):
 
     # Calcola range date visibili di default: da oggi a DATA_FINE dal config
     oggi = datetime.now().date()
-    # Usa DATA_FINE dal config (formato 'YYYY-MM-DD')
-    data_fine_visibile = datetime.strptime(DATA_FINE, '%Y-%m-%d').date()
+    # Usa DATA_FINE dal config (formato 'YYYY-MM-DD'), se vuoto = illimitata
+    if DATA_FINE:
+        data_fine_visibile = datetime.strptime(DATA_FINE, '%Y-%m-%d').date()
+    else:
+        data_fine_visibile = datetime(9999, 12, 31).date()
 
     # ================================================================
     # PRE-CALCOLA l'ordine per ogni combinazione data/tecnico
@@ -264,7 +267,10 @@ def calcola_ordine_percorsi(df):
     # Le date passate non servono, le date future oltre DATA_FINE non sono visibili
     # ================================================================
     oggi = datetime.now().date()
-    data_fine = datetime.strptime(DATA_FINE, '%Y-%m-%d').date()
+    if DATA_FINE:
+        data_fine = datetime.strptime(DATA_FINE, '%Y-%m-%d').date()
+    else:
+        data_fine = None  # Illimitata
     
     # Conta combinazioni da processare (solo date nel range visibile)
     combinazioni = []
@@ -272,7 +278,7 @@ def calcola_ordine_percorsi(df):
         # Verifica se la data è nel range visibile
         try:
             data_dt = datetime.strptime(str(data), '%Y-%m-%d').date()
-            if data_dt < oggi or data_dt > data_fine:
+            if data_dt < oggi or (data_fine and data_dt > data_fine):
                 continue  # Salta date fuori range
         except Exception:
             continue  # Salta date non valide
@@ -3826,6 +3832,10 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                         <div class="settings-field">
                             <label>Data fine</label>
                             <input type="date" id="settings_data_fine">
+                            <label style="display:inline-flex;align-items:center;gap:6px;margin-top:6px;cursor:pointer;font-size:13px;font-weight:normal;">
+                                <input type="checkbox" id="settings_data_fine_illimitata" onchange="toggleDataFineIllimitata(this.checked)">
+                                ♾️ Illimitata (fino all'ultima data disponibile)
+                            </label>
                         </div>
                     </div>
                     <p style="font-size: 12px; color: var(--text-secondary); margin-top: 8px;">
@@ -3927,7 +3937,8 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         }}
 
         // Usa DATA_FINE dal config (importato dalla variabile Python)
-        const dataFineVisibile = '{DATA_FINE}';
+        // Se vuoto = illimitata (mostra tutti i contatori futuri)
+        const dataFineVisibile = '{DATA_FINE}' || '9999-12-31';
 
         // Helper: ottiene la data di oggi in formato YYYY-MM-DD (ricalcolata ogni volta)
         // NOTA: usa componenti locali, NON toISOString() che converte in UTC
@@ -3943,6 +3954,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         // Helper: verifica se una data è nel range visibile (usa data corrente)
         function isDataVisibile(dataStr) {{
             const oggiStr = getOggiStr();
+            if (dataFineVisibile === '9999-12-31') return dataStr >= oggiStr;
             return dataStr >= oggiStr && dataStr <= dataFineVisibile;
         }}
 
@@ -3960,6 +3972,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             const oggiStr = getOggiStr();
             contatoriVisibili = contatori.filter(c => {{
                 // Ricalcola visibilità in real-time (solo contatori con data valida da oggi in avanti)
+                if (dataFineVisibile === '9999-12-31') return c.data && c.data >= oggiStr;
                 return c.data && c.data >= oggiStr && c.data <= dataFineVisibile;
             }});
             zoneVisibili = zone.map(z => {{
@@ -4270,9 +4283,10 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         }}
 
         function getLCLsPerZona(zona) {{
+            const source = filterSchedulabili ? getContatoriSchedulabili() : contatoriVisibili;
             const comuniLower = zona.comuni.map(c => c.toLowerCase());
             const lcls = new Set();
-            contatoriVisibili.forEach(c => {{
+            source.forEach(c => {{
                 if (comuniLower.includes(c.comune.toLowerCase())) {{
                     if (c.lcl && c.lcl.trim() !== '') {{
                         lcls.add(c.lcl);
@@ -10048,7 +10062,11 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             
             // Date
             document.getElementById('settings_data_inizio').value = s.data_inizio || '';
+            const isIllimitata = !s.data_fine;
+            document.getElementById('settings_data_fine_illimitata').checked = isIllimitata;
             document.getElementById('settings_data_fine').value = s.data_fine || '';
+            document.getElementById('settings_data_fine').disabled = isIllimitata;
+            document.getElementById('settings_data_fine').style.opacity = isIllimitata ? '0.5' : '1';
             
             // Sync
             document.getElementById('settings_intervallo_sync').value = s.intervallo_sync_secondi || 180;
@@ -10057,6 +10075,13 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             mappaturaColonneDefault = s.mappatura_colonne_default || {{}};
             mappaturaColonneCustom = s.mappatura_colonne || {{}};
             colonneFilone = s.colonne_filone || [];
+        }}
+        
+        function toggleDataFineIllimitata(checked) {{
+            const input = document.getElementById('settings_data_fine');
+            input.disabled = checked;
+            input.style.opacity = checked ? '0.5' : '1';
+            if (checked) input.value = '';
         }}
         
         function aggiungiRigaOperatore(matricola, nome, colore) {{
@@ -10137,7 +10162,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                 raggio_microzona_km: parseFloat(document.getElementById('settings_raggio_microzona').value) || 0.5,
                 ottimizza_per_tempo: document.getElementById('settings_ottimizza_tempo').checked,
                 data_inizio: document.getElementById('settings_data_inizio').value,
-                data_fine: document.getElementById('settings_data_fine').value,
+                data_fine: document.getElementById('settings_data_fine_illimitata').checked ? '' : document.getElementById('settings_data_fine').value,
                 intervallo_sync_secondi: parseInt(document.getElementById('settings_intervallo_sync').value) || 180,
                 mappatura_colonne: raccogliMappaturaColonne(),
             }};

@@ -2294,6 +2294,40 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             display: none;
         }}
 
+        /* Print Tappe Button */
+        .print-tappe-button {{
+            position: fixed;
+            bottom: 12px;
+            right: 250px;
+            background: linear-gradient(135deg, #43b89c 0%, #3a7bd5 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 14px;
+            z-index: 9998;
+            box-shadow: 0 4px 15px rgba(67, 184, 156, 0.4);
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }}
+
+        .print-tappe-button:hover {{
+            transform: scale(1.05);
+            box-shadow: 0 6px 20px rgba(67, 184, 156, 0.5);
+        }}
+
+        .print-tappe-button:active {{
+            transform: scale(0.98);
+        }}
+
+        .print-tappe-button.hidden {{
+            display: none;
+        }}
+
         /* Gestionale FAB Button */
         .gestionale-fab {{
             position: fixed;
@@ -3467,6 +3501,11 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
     <!-- Print Button -->
     <button class="print-button" id="printButton" onclick="openPrintPreview()">
         🖨️ Stampa Mappa
+    </button>
+
+    <!-- Print Tappe Button -->
+    <button class="print-tappe-button hidden" id="printTappeButton" onclick="stampaTappe()">
+        📋 Stampa Tappe
     </button>
 
     <!-- Gestionale Button -->
@@ -8539,6 +8578,344 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         }});
 
         // ============================================================
+        // STAMPA TAPPE (foglio tecnici)
+        // ============================================================
+
+        function stampaTappe() {{
+            if (currentView !== 'operatore') {{
+                alert('La stampa tappe è disponibile solo nella vista percorso operatore.');
+                return;
+            }}
+
+            // Recupero contatori dell'operatore per la data corrente
+            let contatoriOp = contatori.filter(c =>
+                c.data === currentData &&
+                (c.tecnico || 'TUTTI') === currentOperatore
+            );
+
+            if (currentLCL) {{
+                contatoriOp = contatoriOp.filter(c => c.lcl === currentLCL);
+            }}
+
+            if (contatoriOp.length === 0) {{
+                alert('Nessuna tappa da stampare.');
+                return;
+            }}
+
+            // Per gli appuntamenti: sposta l'orario appuntamento nella colonna Orari
+            // e crea una copia di lavoro per non modificare i dati originali
+            const listaTappe = contatoriOp.map(c => {{
+                const copia = {{ ...c }};
+                if (copia.is_appuntamento && copia.ora_appuntamento) {{
+                    copia._orari_display = copia.ora_appuntamento;
+                }} else {{
+                    copia._orari_display = copia.orari_lettere || '';
+                }}
+                return copia;
+            }});
+
+            // Funzione helper per estrarre minuti dall'orario per ordinamento
+            function estraiMinutiOrario(orarioStr) {{
+                if (!orarioStr || orarioStr.trim() === '') return 99999; // senza orario → in fondo
+
+                // Cerca primo orario nel formato HH:MM o H:MM o H.MM o HH.MM
+                const match = orarioStr.match(/(\d{{1,2}})[:.h](\d{{2}})/);
+                if (match) {{
+                    return parseInt(match[1]) * 60 + parseInt(match[2]);
+                }}
+
+                // Cerca solo ora (es: "8", "10")
+                const matchOra = orarioStr.match(/\b(\d{{1,2}})\b/);
+                if (matchOra) {{
+                    const ore = parseInt(matchOra[1]);
+                    if (ore >= 0 && ore <= 23) return ore * 60;
+                }}
+
+                return 99999;
+            }}
+
+            // Ordina per orario
+            listaTappe.sort((a, b) => {{
+                const minA = estraiMinutiOrario(a._orari_display);
+                const minB = estraiMinutiOrario(b._orari_display);
+                if (minA !== minB) return minA - minB;
+                // A parità di orario, mantieni ordine percorso
+                return (a.ordine_tappa || 999) - (b.ordine_tappa || 999);
+            }});
+
+            // Info operatore e data
+            const nomeOp = currentOperatore === 'TUTTI' ? 'Senza Operatore' : getDisplayName(currentOperatore);
+            const dataFormattata = formatDate(currentData);
+            const isPavia = PROVINCIA === 'pavia';
+
+            // Costruisci tabella HTML stampabile
+            let righeHtml = '';
+            listaTappe.forEach((c, idx) => {{
+                const isApp = c.is_appuntamento;
+                const bgColor = isApp ? '#fff3cd' : (idx % 2 === 0 ? '#ffffff' : '#f8f9fa');
+                const appLabel = isApp ? ' ☎️' : '';
+
+                righeHtml += `
+                    <tr style="background: ${{bgColor}};">
+                        <td style="text-align:center; font-weight:600;">${{idx + 1}}</td>
+                        <td contenteditable="true">${{c.tipo_ce || ''}}</td>
+                        <td contenteditable="true" style="font-weight:${{isApp ? '700' : '400'}}; color:${{isApp ? '#d63384' : '#333'}};">${{c._orari_display}}${{appLabel}}</td>
+                        <td contenteditable="true">${{c.note_app || ''}}</td>
+                        <td contenteditable="true" style="font-family:monospace;">${{c.pod || ''}}</td>
+                        <td contenteditable="true" style="font-family:monospace;">${{c.eneltel || ''}}</td>
+                        <td contenteditable="true">${{c.cliente || ''}}</td>
+                        <td contenteditable="true">${{c.via || ''}}</td>
+                        <td contenteditable="true" style="text-align:center;">${{c.civico || ''}}</td>
+                        <td contenteditable="true">${{c.comune || ''}}</td>
+                        <td contenteditable="true">${{c.note || ''}}</td>
+                    </tr>
+                `;
+            }});
+
+            const totApp = listaTappe.filter(c => c.is_appuntamento).length;
+
+            const htmlStampa = `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Tappe ${{nomeOp}} - ${{dataFormattata}}</title>
+    <style>
+        @page {{
+            size: A4 landscape;
+            margin: 6mm;
+        }}
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 11px;
+            color: #333;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }}
+        .header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 10px;
+            background: #2c3e50;
+            color: white;
+            border-radius: 6px;
+            margin-bottom: 6px;
+        }}
+        .header h1 {{
+            font-size: 14px;
+            font-weight: 700;
+        }}
+        .header .info {{
+            font-size: 11px;
+            text-align: right;
+        }}
+        .header .info span {{
+            display: inline-block;
+            margin-left: 12px;
+            background: rgba(255,255,255,0.15);
+            padding: 2px 8px;
+            border-radius: 10px;
+        }}
+        .table-wrapper {{
+            overflow-x: auto;
+            width: 100%;
+        }}
+        table {{
+            border-collapse: collapse;
+            font-size: 10.5px;
+            width: 100%;
+        }}
+        thead {{ display: table-header-group; }}
+        tbody {{ display: table-row-group; }}
+        tr {{ page-break-inside: avoid; }}
+        th {{
+            background: #34495e;
+            color: white;
+            padding: 5px 6px;
+            text-align: center;
+            font-weight: 600;
+            font-size: 9px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            white-space: nowrap;
+            position: relative;
+            border-right: 2px solid rgba(255,255,255,0.15);
+        }}
+        th:last-child {{ border-right: none; }}
+        /* Resize handle */
+        th .resize-handle {{
+            position: absolute;
+            right: -4px;
+            top: 0;
+            bottom: 0;
+            width: 8px;
+            cursor: col-resize;
+            background: transparent;
+            z-index: 10;
+        }}
+        th .resize-handle:hover,
+        th .resize-handle.active {{
+            background: rgba(58,123,213,0.5);
+        }}
+        td {{
+            padding: 4px 3px;
+            border-bottom: 1px solid #dee2e6;
+            vertical-align: middle;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            white-space: normal;
+            text-align: center;
+        }}
+        td[contenteditable] {{
+            cursor: text;
+            transition: background 0.15s;
+        }}
+        td[contenteditable]:focus {{
+            outline: 2px solid #3a7bd5;
+            outline-offset: -1px;
+            background: #eaf3ff !important;
+        }}
+        tr:hover {{ background: #e8f4fd !important; }}
+        .footer {{
+            margin-top: 6px;
+            text-align: center;
+            font-size: 8px;
+            color: #999;
+        }}
+        @media print {{
+            .no-print {{ display: none !important; }}
+            body {{ font-size: 10.5px; }}
+            .header {{ margin-bottom: 4px; }}
+            th .resize-handle {{ display: none; }}
+            th {{ border-right: 1px solid rgba(255,255,255,0.1); }}
+            .table-wrapper {{ overflow: visible; }}
+        }}
+        .print-bar {{
+            text-align: center;
+            padding: 10px;
+            margin-bottom: 10px;
+            background: #f0f0f0;
+            border-radius: 6px;
+        }}
+        .print-bar button {{
+            padding: 10px 30px;
+            font-size: 14px;
+            font-weight: 600;
+            background: #2c3e50;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+        }}
+        .print-bar button:hover {{ background: #1a252f; }}
+    </style>
+</head>
+<body>
+    <div class="print-bar no-print">
+        <button onclick="window.print()">🖨️ Stampa</button>
+    </div>
+    <div class="header">
+        <h1>📋 Tappe - ${{nomeOp}}</h1>
+        <div class="info">
+            <span>📅 ${{dataFormattata}}</span>
+            <span>📍 ${{listaTappe.length}} tappe</span>
+            ${{totApp > 0 ? '<span>☎️ ' + totApp + ' app.</span>' : ''}}
+        </div>
+    </div>
+    <div class="table-wrapper">
+    <table>
+        <thead>
+            <tr>
+                <th style="text-align:center;">#</th>
+                <th>Tipo Mis.</th>
+                <th>Orario</th>
+                <th>Note</th>
+                <th>POD</th>
+                <th>Eneltel</th>
+                <th>Nominativo</th>
+                <th>Indirizzo</th>
+                <th style="text-align:center;">Civ.</th>
+                <th>Comune</th>
+                <th>Pos. Mis.</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${{righeHtml}}
+        </tbody>
+    </table>
+    </div>
+    <div class="footer">
+        Generato il ${{new Date().toLocaleDateString('it-IT')}} alle ${{new Date().toLocaleTimeString('it-IT', {{hour:'2-digit', minute:'2-digit'}})}}
+    </div>
+</body>
+</html>
+<scr` + `ipt>
+(function() {{
+    const table = document.querySelector('table');
+    const ths = Array.from(document.querySelectorAll('thead th'));
+    let frozen = false;
+
+    function freezeWidths() {{
+        if (frozen) return;
+        // Read all widths first (avoid layout thrashing)
+        const colWidths = ths.map(th => th.offsetWidth);
+        const tableW = colWidths.reduce((s, w) => s + w, 0);
+        // Lock table to fixed layout with explicit pixel widths
+        table.style.tableLayout = 'fixed';
+        table.style.width = tableW + 'px';
+        ths.forEach((th, i) => {{ th.style.width = colWidths[i] + 'px'; }});
+        frozen = true;
+    }}
+
+    ths.forEach((th) => {{
+        const handle = document.createElement('div');
+        handle.className = 'resize-handle';
+        th.appendChild(handle);
+
+        handle.addEventListener('mousedown', function(e) {{
+            e.preventDefault();
+            e.stopPropagation();
+            freezeWidths();
+
+            const startX = e.pageX;
+            const startColW = th.offsetWidth;
+            const startTableW = table.offsetWidth;
+            handle.classList.add('active');
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+
+            function onMove(ev) {{
+                const diff = ev.pageX - startX;
+                const newColW = Math.max(24, startColW + diff);
+                th.style.width = newColW + 'px';
+                table.style.width = (startTableW - startColW + newColW) + 'px';
+            }}
+            function onUp() {{
+                handle.classList.remove('active');
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup', onUp);
+            }}
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+        }});
+    }});
+}})()
+</scr` + `ipt>`;
+
+            // Apri nuova finestra e stampa
+            const printWindow = window.open('', '_blank');
+            if (printWindow) {{
+                printWindow.document.write(htmlStampa);
+                printWindow.document.close();
+            }} else {{
+                alert('Impossibile aprire la finestra di stampa. Controlla il blocco popup.');
+            }}
+        }}
+
+        // ============================================================
         // PRINT FUNCTIONALITY
         // ============================================================
         let printMap = null;
@@ -9527,10 +9904,13 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         // Mostra/nascondi pulsante stampa in base alla vista
         function updatePrintButtonVisibility() {{
             const btn = document.getElementById('printButton');
+            const btnTappe = document.getElementById('printTappeButton');
             if (currentView === 'operatore') {{
                 btn.classList.remove('hidden');
+                btnTappe.classList.remove('hidden');
             }} else {{
                 btn.classList.add('hidden');
+                btnTappe.classList.add('hidden');
             }}
         }}
 

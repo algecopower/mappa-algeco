@@ -1663,6 +1663,60 @@
         "ora_appuntamento": "10:00-13:00",
         "data_pianificata": "2026-03-10"
       }
+    },
+    {
+      "id": "ae63dc21",
+      "titolo": "Appuntamento HELVETIA SPA - MONCALIERI ore 09:00-09:30",
+      "data": "2026-03-10",
+      "ora": "09:00",
+      "ora_fine": "09:30",
+      "descrizione": "POD: IT001E00000070\nENELTEL: 19757919\nNominativo: HELVETIA SPA\nIndirizzo: S.CROCE 19\nComune: MONCALIERI\nOrigine: contatore",
+      "categoria": "boxbeat",
+      "provincia": "TORINO",
+      "creato_da": "giada",
+      "creato_il": "2026-03-10T09:24:38.266209",
+      "completata": true,
+      "completata_da": "giada",
+      "completata_il": "2026-03-10T09:56:31.060530",
+      "boxbeat_data": {
+        "pod": "IT001E00000070",
+        "eneltel": "19757919",
+        "nominativo": "HELVETIA SPA",
+        "via": "S.CROCE",
+        "civico": "19",
+        "comune": "MONCALIERI",
+        "note": "",
+        "origine": "contatore",
+        "ora_appuntamento": "09:00-09:30",
+        "data_pianificata": ""
+      }
+    },
+    {
+      "id": "c27c24d5",
+      "titolo": "Appuntamento PIERPAOLO MOCCI  392 355 4527 - NICHELINO ore 12:00-15:00",
+      "data": "2026-03-11",
+      "ora": "12:00",
+      "ora_fine": "15:00",
+      "descrizione": "POD: IT001E01937304\nENELTEL: 19373045\nNominativo: PIERPAOLO MOCCI  392 355 4527\nIndirizzo: PALESTRINA 15\nComune: NICHELINO\nOrigine: contatore",
+      "categoria": "boxbeat",
+      "provincia": "TORINO",
+      "creato_da": "giada",
+      "creato_il": "2026-03-10T11:03:01.953189",
+      "completata": false,
+      "completata_da": null,
+      "completata_il": null,
+      "boxbeat_data": {
+        "pod": "IT001E01937304",
+        "eneltel": "19373045",
+        "nominativo": "PIERPAOLO MOCCI  392 355 4527",
+        "via": "PALESTRINA",
+        "civico": "15",
+        "comune": "NICHELINO",
+        "note": "",
+        "origine": "contatore",
+        "ora_appuntamento": "12:00-15:00",
+        "data_pianificata": "2026-03-11"
+      }
     }
   ]
 }

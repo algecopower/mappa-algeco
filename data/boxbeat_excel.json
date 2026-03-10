@@ -1,1 +1,38 @@
-{}
+{
+  "2026-03-10": [
+    {
+      "id": "14a89f2d",
+      "data_appuntamento": "2026-03-10",
+      "orario": "09:00-09:30",
+      "pod": "IT001E00000070",
+      "eneltel": "19757919",
+      "nominativo": "HELVETIA SPA",
+      "via": "S.CROCE",
+      "civico": "19",
+      "comune": "MONCALIERI",
+      "note": "",
+      "data_pianificata": "",
+      "origine": "contatore",
+      "provincia": "TORINO",
+      "creato_da": "giada",
+      "registrato_il": "2026-03-10T09:24:38.269857"
+    },
+    {
+      "id": "7a9a94a0",
+      "data_appuntamento": "2026-03-11",
+      "orario": "12:00-15:00",
+      "pod": "IT001E01937304",
+      "eneltel": "19373045",
+      "nominativo": "PIERPAOLO MOCCI  392 355 4527",
+      "via": "PALESTRINA",
+      "civico": "15",
+      "comune": "NICHELINO",
+      "note": "",
+      "data_pianificata": "2026-03-11",
+      "origine": "contatore",
+      "provincia": "TORINO",
+      "creato_da": "giada",
+      "registrato_il": "2026-03-10T11:03:01.956676"
+    }
+  ]
+}

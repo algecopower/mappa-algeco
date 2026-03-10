@@ -79,99 +79,93 @@
             }
         }
     },
-  "templates": {
-    "wa_conferma": {
-      "label": "WA Conferma",
-      "icon": "fab fa-whatsapp",
-      "type": "whatsapp",
-      "fields": [
-        "nome",
-        "indirizzo",
-        "comune",
-        "data"
-      ],
-      "body": "Gentile {nome},\nvi contattiamo per confermare la sostituzione del vostro contatore di energia elettrica presso Via {indirizzo} ({comune}), come da precedente comunicazione inviata a mezzo posta, prevista per il giorno:\n\n*{data}*\n\nLa manutenzione, richiesta da E-Distribuzione, è obbligatoria ed è svolta in attuazione di provvedimenti normativi che prevedono l’utilizzo di sistemi di misurazione conformi ai requisiti stabiliti dal D.Lgs. 102/2014, di recepimento della direttiva europea 2012/27/UE sull’efficienza energetica.\nIl vostro contratto di fornitura NON subirà alcuna variazione: verrà sostituito esclusivamente il dispositivo di misura. Ricordiamo inoltre che l’intervento è totalmente gratuito.\nPer maggiori informazioni potete consultare il seguente link:\nhttps://www.e-distribuzione.it/open-meter.html\n\nVi chiediamo gentilmente di rispondere a questo messaggio per confermare la presa visione.\nPer eventuali chiarimenti o assistenza, potete contattarci a questo numero o scriverci all’indirizzo {email_tecnico}.\n\nCordiali saluti,\nAlgeco Power"
-    },
-
-    "wa_sollecito": {
-      "label": "WA Sollecito",
-      "icon": "fab fa-whatsapp",
-      "type": "whatsapp",
-      "fields": [
-        "nome",
-        "indirizzo",
-        "comune",
-        "data"
-      ],
-      "body": "Gentile {nome},\ncome da precedente comunicazione inviata a mezzo posta, vi informiamo che in data *{data}* E-Distribuzione ha effettuato un tentativo di sostituzione del contatore di energia elettrica presso Via {indirizzo} ({comune}).\n\nPoiché per l’accesso al contatore è necessaria la vostra presenza, vi chiediamo cortesemente di contattarci a questo numero o tramite e-mail all’indirizzo {email_tecnico} al fine di concordare un nuovo appuntamento.\n\nRestiamo a disposizione per eventuali chiarimenti o necessità.\n\nCordiali saluti,\nUfficio Tecnico"
-    },
-
-    "wa_spiegone": {
-      "label": "Spiegone",
-      "icon": "fas fa-info-circle",
-      "type": "whatsapp",
-      "fields": [
-        "pod",
-        "eneltel",
-        "matricola"
-      ],
-      "info": "Template informativo dettagliato per spiegare la sostituzione. Puoi scegliere la chiusura: con invio documentazione oppure solo dati contatore.",
-      "body": "Siamo stati incaricati di effettuare, nel vostro comune, la sostituzione dei contatori di vecchia generazione con nuovi contatori, in attuazione di adeguamenti tecnici in vigore dal 2018, finalizzati a garantire una maggiore efficienza e una maggiore precisione delle misure.\nPrecisiamo che tale intervento non è dovuto ad alcun malfunzionamento del vostro contatore.\n\nVi informiamo inoltre che il contatore è di proprietà di E-Distribuzione, l’ente che gestisce esclusivamente la rete elettrica e i dispositivi di misura. Pertanto, il vostro contratto di fornitura con il venditore di energia rimarrà invariato e non è in alcun modo collegato a questo intervento.\nL’attività è completamente gratuita, non comporta costi aggiuntivi in bolletta e avrà una durata indicativa di 15–20 minuti. L’eventuale interruzione della corrente sarà limitata a pochi istanti.\n\nÈ possibile effettuare le opportune verifiche contattando E-Distribuzione al numero 803 500 oppure presso l’ufficio tecnico del vostro Comune, dove è stata depositata la documentazione relativa alla nostra attività.\n\nDi seguito riportiamo i dati del contatore oggetto dell’intervento:\n\nPOD (presente in bolletta): {pod}\nEneltel (visualizzabile sul display del contatore): {eneltel}\nMatricola (stampata sul contatore): {matricola}\n\nRestiamo a disposizione per qualsiasi ulteriore chiarimento.\n\nCordiali saluti,\nUfficio Tecnico Algeco Power"
-    },
-
-    "wa_appuntamento1": {
-      "label": "Appuntamento 1",
-      "icon": "fas fa-calendar-check",
-      "type": "whatsapp",
-      "fields": [
-        "indirizzo",
-        "comune",
-        "data"
-      ],
-      "info": "Richiesta appuntamento - primo contatto.",
-      "body": "Salve,\n\nla contattiamo in merito a una manutenzione sul contatore di energia elettrica sito in Via {indirizzo} ({comune}), richiesta da E-Distribuzione e prevista per la giornata di *{data}*, per la quale è già stata inviata comunicazione a mezzo posta.\n\nPotrebbe gentilmente confermarci la sua disponibilità per tale data ed eventuali indicazioni per l’accesso al contatore?\n\nRestiamo in attesa di un suo riscontro e la invitiamo a contattarci a questo numero o all’indirizzo {email_tecnico} per qualsiasi informazione o chiarimento.\n\nCordiali saluti,\nUfficio Tecnico Algeco Power"
-    },
-
-    "wa_appuntamento2": {
-      "label": "Appuntamento 2",
-      "icon": "fas fa-calendar-plus",
-      "type": "whatsapp",
-      "fields": [
-        "indirizzo",
-        "comune",
-        "data"
-      ],
-      "info": "Richiesta appuntamento - secondo tentativo.",
-      "body": "Salve,\n\nla contattiamo nuovamente in merito alla sostituzione del contatore di energia elettrica sito in Via {indirizzo} ({comune}), richiesta da E-Distribuzione e già comunicata a mezzo posta.\n\nPoiché un precedente tentativo di intervento non ha avuto esito positivo, le chiediamo cortesemente se fosse possibile fissare un appuntamento per la giornata di *{data}*.\n\nRimaniamo in attesa di un suo riscontro ed eventuali indicazioni per l’accesso al contatore. Per qualsiasi informazione può contattarci a questo numero o scrivere all’indirizzo {email_tecnico}.\n\nCordiali saluti,\nUfficio Tecnico Algeco Power"
-    },
-
-    "email_societa": {
-      "label": "Email Società",
-      "icon": "fas fa-envelope",
-      "type": "email",
-      "fields": [
-        "nome_societa",
-        "nome_referente",
-        "indirizzo",
-        "comune",
-        "pod",
-        "eneltel",
-        "matricola",
-        "data",
-        "distacco"
-      ],
-      "info": "Email per società/condomini. Compila i campi e scegli se prevede distacco o meno.",
-      "subject": "{nome_societa}: SOSTITUZIONE CONTATORE E-DISTRIBUZIONE",
-      "conditionals": {
-        "distacco_text": {
-          "field": "distacco",
-          "values": {
-            "no": "Vi informiamo inoltre che durante l’intervento NON è previsto il distacco della fornitura elettrica (in allegato la specifica tecnica di riferimento).",
-            "si": "Vi informiamo inoltre che, durante l’intervento, è previsto un breve distacco della fornitura elettrica."
-          }
+    "templates": {
+        "wa_conferma": {
+            "label": "WA Conferma",
+            "icon": "fab fa-whatsapp",
+            "type": "whatsapp",
+            "fields": [
+                "nome",
+                "indirizzo",
+                "comune",
+                "data"
+            ],
+            "body": "Gentile {nome},\nvi contattiamo per confermare la sostituzione del vostro contatore di energia elettrica presso Via {indirizzo} ({comune}), come da precedente comunicazione inviata a mezzo posta, prevista per il giorno:\n\n*{data}*\n\nLa manutenzione, richiesta da E-Distribuzione, è GRATUITA e OBBLIGATORIA ed è svolta in attuazione di provvedimenti normativi che prevedono l’utilizzo di sistemi di misurazione conformi ai requisiti stabiliti dal D.Lgs. 102/2014, di recepimento della direttiva europea 2012/27/UE sull’efficienza energetica.\nIl vostro contratto di fornitura NON subirà alcuna variazione: verrà sostituito esclusivamente il dispositivo di misura.\nPer maggiori informazioni potete consultare il seguente link:\nhttps://www.e-distribuzione.it/open-meter.html\n\nVi chiediamo gentilmente di rispondere a questo messaggio per confermare la presa visione.\nPer eventuali chiarimenti o assistenza, potete contattarci a questo numero o scriverci all’indirizzo {email_tecnico}.\n\nCordiali saluti,\nAlgeco Power"
+        },
+        "wa_sollecito": {
+            "label": "WA Sollecito",
+            "icon": "fab fa-whatsapp",
+            "type": "whatsapp",
+            "fields": [
+                "nome",
+                "indirizzo",
+                "comune",
+                "data"
+            ],
+            "body": "Gentile {nome},\ncome da precedente comunicazione inviata a mezzo posta, vi informiamo che in data *{data}* un tecnico incaricato da E-Distribuzione ha effettuato un tentativo di sostituzione del contatore di energia elettrica presso Via {indirizzo} ({comune}).\n\nPoiché per l’accesso al contatore è necessaria la vostra presenza, vi chiediamo cortesemente di contattarci a questo numero o tramite e-mail all’indirizzo {email_tecnico} al fine di concordare un nuovo appuntamento.\n\nRestiamo a disposizione per eventuali chiarimenti o necessità.\n\nCordiali saluti,\nUfficio Tecnico"
+        },
+        "wa_spiegone": {
+            "label": "Spiegone",
+            "icon": "fas fa-info-circle",
+            "type": "whatsapp",
+            "fields": [
+                "pod",
+                "eneltel",
+                "matricola"
+            ],
+            "info": "Template informativo dettagliato per spiegare la sostituzione. Puoi scegliere la chiusura: con invio documentazione oppure solo dati contatore.",
+            "body": "Siamo stati incaricati di effettuare, nel vostro comune, la sostituzione dei contatori di vecchia generazione con nuovi contatori, in attuazione di adeguamenti tecnici in vigore dal 2018, finalizzati a garantire una maggiore efficienza e una maggiore precisione delle misure.\nPrecisiamo che tale intervento non è dovuto ad alcun malfunzionamento del vostro contatore.\n\nVi informiamo inoltre che il contatore è di proprietà di E-Distribuzione, l’ente che gestisce esclusivamente la rete elettrica e i dispositivi di misura. Pertanto, il vostro contratto di fornitura con il venditore di energia rimarrà invariato e non è in alcun modo collegato a questo intervento.\nL’attività è completamente gratuita, non comporta costi aggiuntivi in bolletta e avrà una durata indicativa di 15–20 minuti. L’eventuale interruzione della corrente sarà limitata a pochi istanti.\n\nÈ possibile effettuare le opportune verifiche contattando E-Distribuzione al numero 803 500 oppure presso l’ufficio tecnico del vostro Comune, dove è stata depositata la documentazione relativa alla nostra attività.\n\nDi seguito riportiamo i dati del contatore oggetto dell’intervento:\n\nPOD (presente in bolletta): {pod}\nEneltel (visualizzabile sul display del contatore): {eneltel}\nMatricola (stampata sul contatore): {matricola}\n\nRestiamo a disposizione per qualsiasi ulteriore chiarimento.\n\nCordiali saluti,\nUfficio Tecnico Algeco Power"
+        },
+        "wa_appuntamento1": {
+            "label": "Appuntamento 1",
+            "icon": "fas fa-calendar-check",
+            "type": "whatsapp",
+            "fields": [
+                "indirizzo",
+                "comune",
+                "data"
+            ],
+            "info": "Richiesta appuntamento - primo contatto.",
+            "body": "Salve,\n\nabbiamo provato a contattarla in merito a una manutenzione sul contatore di energia elettrica sito in Via {indirizzo} ({comune}), richiesta da E-Distribuzione e per la quale è già stata inviata una comunicazione a mezzo posta.\n\nChiediamo gentilmente se nella giornata di *{data}* è possibile trovare qualcuno che ci consenta l'accesso al contatore. \n\nRestiamo in attesa di un suo riscontro e la invitiamo a contattarci a questo numero o all’indirizzo {email_tecnico} per qualsiasi informazione o chiarimento.\nPer maggiori informazioni riguardo l'intervento, può visitare il seguente link: https://www.e-distribuzione.it/open-meter.html\n\nCordiali saluti,\nUfficio Tecnico Algeco Power"
+        },
+        "wa_appuntamento2": {
+            "label": "Appuntamento 2",
+            "icon": "fas fa-calendar-plus",
+            "type": "whatsapp",
+            "fields": [
+                "indirizzo",
+                "comune",
+                "data"
+            ],
+            "info": "Richiesta appuntamento - secondo tentativo.",
+            "body": "Salve,\n\nla contattiamo nuovamente in merito alla sostituzione del contatore di energia elettrica sito in Via {indirizzo} ({comune}), richiesta da E-Distribuzione e già comunicata a mezzo posta.\n\nPoiché un precedente tentativo di intervento non ha avuto esito positivo, le chiediamo cortesemente se fosse possibile fissare un appuntamento per la giornata di *{data}*.\n\nRimaniamo in attesa di un suo riscontro ed eventuali indicazioni per l’accesso al contatore. Per qualsiasi informazione può contattarci a questo numero o scrivere all’indirizzo {email_tecnico}.\nPer maggiori informazioni riguardo l'intervento, può visitare il seguente link: https://www.e-distribuzione.it/open-meter.html\n\nCordiali saluti,\nUfficio Tecnico Algeco Power"
+        },
+        "email_societa": {
+            "label": "Email Società",
+            "icon": "fas fa-envelope",
+            "type": "email",
+            "fields": [
+                "nome_societa",
+                "indirizzo",
+                "comune",
+                "pod",
+                "eneltel",
+                "matricola",
+                "data",
+                "distacco"
+            ],
+            "info": "Email per società/condomini. Compila i campi e scegli se prevede distacco o meno.",
+            "subject": "{nome_societa}: SOSTITUZIONE CONTATORE E-DISTRIBUZIONE",
+            "conditionals": {
+                "distacco_text": {
+                    "field": "distacco",
+                    "values": {
+                        "no": "Vi informiamo inoltre che durante l’intervento NON è previsto il distacco della fornitura elettrica (in allegato la specifica tecnica di riferimento).",
+                        "si": "Vi informiamo inoltre che, durante l’intervento, è previsto un breve distacco della fornitura elettrica."
+                    }
+                }
+            },
+            "body": "Buongiorno,\n\nvi contattiamo da <a href=\"https://algecopower.it\" style=\"color:#0066cc;text-decoration:underline;\">Algeco Power</a> per informarvi che in data {data} un tecnico incaricato da E-Distribuzione effettuerà un intervento di manutenzione sul contatore di energia elettrica sito presso VIA {indirizzo} ({comune}).\nNello specifico, è prevista la sostituzione del dispositivo con uno di nuova generazione.\n\nIn allegato trasmettiamo la lettera di aggiudicazione della gara che attesta il nostro incarico per conto di E-Distribuzione, unitamente ai dati del contatore oggetto dell’intervento:\n\nPOD (presente in fattura): {pod}\nEneltel (visualizzabile sul display del contatore): {eneltel}\nMatricola (stampata sul contatore): {matricola}\n\nPrecisiamo che l’attività è completamente gratuita e non comporta alcuna modifica al vostro contratto di fornitura. L’intervento è eseguito in attuazione di provvedimenti normativi che prevedono l’utilizzo di sistemi di misurazione conformi ai requisiti stabiliti dal D.Lgs. 102/2014, di recepimento della direttiva europea 2012/27/UE sull’efficienza energetica.\nPer maggiori informazioni: <a href=\"https://www.e-distribuzione.it/open-meter.html\" style=\"color:#0066cc;text-decoration:underline;\">E-Distribuzione Open Meter</a>\n\n{distacco_text}\n\nChiediamo gentilmente di darci un riscontro per confermare la data sovraindicata ed eventuali indicazioni per l’accesso al contatore.\n\nA disposizione per qualsiasi chiarimento, porgiamo cordiali saluti."
         }
-      },
-      "body": "Buongiorno,\n\ncome da accordi telefonici intercorsi con {nome_referente}, vi informiamo che in data {data} un tecnico incaricato da E-Distribuzione effettuerà un intervento di manutenzione sul contatore di energia elettrica sito presso VIA {indirizzo} ({comune}).\nNello specifico, è prevista la sostituzione del dispositivo con uno di nuova generazione.\n\nIn allegato trasmettiamo la lettera di aggiudicazione della gara che attesta il nostro incarico per conto di E-Distribuzione, unitamente ai dati del contatore oggetto dell’intervento:\n\nPOD (presente in fattura): {pod}\nEneltel (visualizzabile sul display del contatore): {eneltel}\nMatricola (stampata sul contatore): {matricola}\n\nPrecisiamo che l’attività è completamente gratuita e non comporta alcuna modifica al vostro contratto di fornitura. L’intervento è eseguito in attuazione di provvedimenti normativi che prevedono l’utilizzo di sistemi di misurazione conformi ai requisiti stabiliti dal D.Lgs. 102/2014, di recepimento della direttiva europea 2012/27/UE sull’efficienza energetica.\n\n{distacco_text}\n\nRestiamo in attesa di un vostro gentile riscontro di conferma per la data concordata ed eventuali indicazioni per l’accesso al contatore.\n\nA disposizione per qualsiasi chiarimento, porgiamo cordiali saluti."
     }
-  }
 }

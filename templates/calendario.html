@@ -1261,6 +1261,148 @@
             .attivita-actions { opacity: 1; }
             .modal-content { padding: 20px; }
         }
+
+        /* Multi-select mode */
+        .select-checkbox {
+            display: none;
+            width: 22px;
+            height: 22px;
+            min-width: 22px;
+            border: 2px solid var(--text-muted);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: transparent;
+            appearance: none;
+            -webkit-appearance: none;
+            position: relative;
+            margin: 0;
+        }
+
+        .select-mode .select-checkbox {
+            display: block;
+        }
+
+        .select-checkbox:checked {
+            background: var(--primary);
+            border-color: var(--primary);
+        }
+
+        .select-checkbox:checked::after {
+            content: '\2713';
+            color: white;
+            font-size: 14px;
+            font-weight: 700;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .select-checkbox:hover {
+            border-color: var(--primary);
+        }
+
+        .select-mode .attivita-card {
+            cursor: pointer;
+        }
+
+        .select-mode .attivita-card.selected {
+            outline: 2px solid var(--primary);
+            outline-offset: -2px;
+            background: rgba(37, 211, 102, 0.05);
+        }
+
+        .select-mode .check-btn {
+            display: none;
+        }
+
+        /* Floating selection toolbar */
+        .selection-toolbar {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            z-index: 900;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .selection-toolbar.visible {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .selection-toolbar .sel-count {
+            font-weight: 700;
+            font-size: 0.95em;
+            color: var(--primary);
+            min-width: 100px;
+        }
+
+        .selection-toolbar .sel-btn {
+            padding: 8px 16px;
+            border-radius: 10px;
+            border: none;
+            cursor: pointer;
+            font-size: 0.85em;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+
+        .selection-toolbar .sel-btn.sel-delete {
+            background: var(--danger);
+            color: white;
+        }
+
+        .selection-toolbar .sel-btn.sel-delete:hover {
+            opacity: 0.85;
+        }
+
+        .selection-toolbar .sel-btn.sel-all {
+            background: rgba(255,255,255,0.08);
+            color: var(--text);
+        }
+
+        .selection-toolbar .sel-btn.sel-all:hover {
+            background: rgba(255,255,255,0.15);
+        }
+
+        .selection-toolbar .sel-btn.sel-cancel {
+            background: transparent;
+            color: var(--text-muted);
+        }
+
+        .selection-toolbar .sel-btn.sel-cancel:hover {
+            color: var(--text);
+        }
+
+        [data-theme="light"] .selection-toolbar {
+            background: #fff;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+        }
+
+        [data-theme="light"] .selection-toolbar .sel-btn.sel-all {
+            background: #f0f0f0;
+            color: #555;
+        }
+
+        [data-theme="light"] .selection-toolbar .sel-btn.sel-all:hover {
+            background: #e0e0e0;
+        }
     </style>
 </head>
 <body>
@@ -1294,6 +1436,9 @@
                 <button class="btn btn-primary" onclick="apriModalNuova()">
                     <i class="fas fa-plus"></i>
                     Nuova Attività
+                </button>
+                <button class="btn btn-sm" id="btnSelectMode" onclick="toggleSelectMode()" title="Seleziona più attività">
+                    <i class="fas fa-check-double"></i> Seleziona
                 </button>
             </div>
         </header>
@@ -1533,11 +1678,11 @@
             <div style="font-size: 3em; margin-bottom: 16px;">
                 <i class="fas fa-trash-alt" style="color: var(--danger);"></i>
             </div>
-            <h3 style="margin-bottom: 10px;">Eliminare questa attività?</h3>
+            <h3 style="margin-bottom: 10px;" id="eliminaTitolo">Eliminare questa attività?</h3>
             <p style="color: var(--text-muted); margin-bottom: 24px;" id="eliminaMsg">L'azione non può essere annullata.</p>
             <div style="display: flex; gap: 10px; justify-content: center;">
                 <button class="btn btn-ghost" onclick="chiudiModalElimina()">Annulla</button>
-                <button class="btn btn-danger" onclick="confermaElimina()">
+                <button class="btn btn-danger" id="btnConfermaElimina" onclick="confermaElimina()">
                     <i class="fas fa-trash"></i> Elimina
                 </button>
             </div>
@@ -1663,6 +1808,20 @@
     <!-- Toast -->
     <div class="toast" id="toast"></div>
 
+    <!-- Floating Selection Toolbar -->
+    <div class="selection-toolbar" id="selectionToolbar">
+        <span class="sel-count" id="selCount">0 selezionate</span>
+        <button class="sel-btn sel-all" onclick="selezionaTutte()">
+            <i class="fas fa-check-double"></i> Tutte
+        </button>
+        <button class="sel-btn sel-delete" onclick="apriModalEliminaMultipli()">
+            <i class="fas fa-trash"></i> Elimina
+        </button>
+        <button class="sel-btn sel-cancel" onclick="toggleSelectMode()">
+            <i class="fas fa-times"></i> Annulla
+        </button>
+    </div>
+
     <script>
     // =========================================================================
     // STATO
@@ -1673,6 +1832,9 @@
     let vistaCorrente = 'lista';
     let calAnno, calMese; // Per la vista calendario
     let eliminaId = null;
+    let eliminaMultipli = false;   // true when bulk-deleting
+    let selectMode = false;
+    let selectedIds = new Set();
     let currentUser = '';
     let boxbeatSettings = {};
     let boxbeatOggiList = [];
@@ -2110,9 +2272,10 @@
         }
 
         return `
-        <div class="attivita-card ${completata}" style="border-left-color: ${colore}" onclick="apriModalModifica('${a.id}')">
+        <div class="attivita-card ${completata} ${selectedIds.has(a.id) ? 'selected' : ''}" style="border-left-color: ${colore}" onclick="${selectMode ? `toggleSelection('${a.id}')` : `apriModalModifica('${a.id}')`}" data-id="${a.id}">
             <div class="attivita-top">
                 <div style="display:flex; align-items:center; gap:10px;">
+                    <input type="checkbox" class="select-checkbox" ${selectedIds.has(a.id) ? 'checked' : ''} onclick="event.stopPropagation(); toggleSelection('${a.id}')">
                     <button class="check-btn ${checkedClass}" onclick="toggleCompleta('${a.id}', event)" title="${checkLabel}">
                         <i class="fas fa-check"></i>
                     </button>
@@ -2350,13 +2513,129 @@
 
     function apriModalElimina(id, titolo) {
         eliminaId = id;
+        eliminaMultipli = false;
+        document.getElementById('eliminaTitolo').textContent = 'Eliminare questa attività?';
         document.getElementById('eliminaMsg').textContent = `"${titolo}" verrà eliminata permanentemente.`;
+        document.getElementById('btnConfermaElimina').onclick = confermaElimina;
+        document.getElementById('modalElimina').classList.add('active');
+    }
+
+    function apriModalEliminaMultipli() {
+        if (selectedIds.size === 0) return;
+        eliminaMultipli = true;
+        const n = selectedIds.size;
+        document.getElementById('eliminaTitolo').textContent = `Eliminare ${n} attività?`;
+        document.getElementById('eliminaMsg').textContent = `${n} attività verranno eliminate permanentemente. L'azione non può essere annullata.`;
+        document.getElementById('btnConfermaElimina').onclick = confermaEliminaMultipli;
         document.getElementById('modalElimina').classList.add('active');
     }
 
     function chiudiModalElimina() {
         document.getElementById('modalElimina').classList.remove('active');
         eliminaId = null;
+        eliminaMultipli = false;
+    }
+
+    // =========================================================================
+    // MULTI-SELECT
+    // =========================================================================
+    function toggleSelectMode() {
+        selectMode = !selectMode;
+        selectedIds.clear();
+        document.getElementById('vistaLista').classList.toggle('select-mode', selectMode);
+        document.getElementById('btnSelectMode').classList.toggle('btn-primary', selectMode);
+        aggiornaSelectionToolbar();
+        renderVista();
+    }
+
+    function toggleSelection(id) {
+        if (selectedIds.has(id)) {
+            selectedIds.delete(id);
+        } else {
+            selectedIds.add(id);
+        }
+        // Aggiorna la card senza re-render completo
+        const card = document.querySelector(`.attivita-card[data-id="${id}"]`);
+        if (card) {
+            const cb = card.querySelector('.select-checkbox');
+            if (selectedIds.has(id)) {
+                card.classList.add('selected');
+                if (cb) cb.checked = true;
+            } else {
+                card.classList.remove('selected');
+                if (cb) cb.checked = false;
+            }
+        }
+        aggiornaSelectionToolbar();
+    }
+
+    function selezionaTutte() {
+        const filtrate = getAttivitaFiltrate();
+        if (selectedIds.size === filtrate.length) {
+            // Deseleziona tutte
+            selectedIds.clear();
+        } else {
+            filtrate.forEach(a => selectedIds.add(a.id));
+        }
+        renderVista();
+        aggiornaSelectionToolbar();
+    }
+
+    function aggiornaSelectionToolbar() {
+        const toolbar = document.getElementById('selectionToolbar');
+        if (selectMode) {
+            toolbar.classList.add('visible');
+            const n = selectedIds.size;
+            document.getElementById('selCount').textContent = n === 0 ? 'Nessuna selezionata' : `${n} selezionat${n === 1 ? 'a' : 'e'}`;
+        } else {
+            toolbar.classList.remove('visible');
+        }
+    }
+
+    async function confermaEliminaMultipli() {
+        if (selectedIds.size === 0) return;
+        const ids = [...selectedIds];
+        const n = ids.length;
+
+        // Optimistic UI: rimuovi subito dalla lista locale
+        const removed = [];
+        ids.forEach(id => {
+            const idx = attivitaList.findIndex(a => a.id === id);
+            if (idx !== -1) removed.push({ idx, att: attivitaList[idx] });
+        });
+        const removedBb = [];
+        ids.forEach(id => {
+            const idx = boxbeatOggiList.findIndex(a => a.id === id);
+            if (idx !== -1) removedBb.push({ idx, att: boxbeatOggiList[idx] });
+        });
+
+        attivitaList = attivitaList.filter(a => !selectedIds.has(a.id));
+        boxbeatOggiList = boxbeatOggiList.filter(a => !selectedIds.has(a.id));
+        selectedIds.clear();
+        renderVista();
+        if (removedBb.length) { renderBoxBeatPanel(); aggiornaStatBoxBeat(); }
+        aggiornaSelectionToolbar();
+        showToast(`${n} attività eliminate`);
+        chiudiModalElimina();
+
+        // Elimina in background
+        _skipSSECount++;
+        try {
+            const res = await fetch('/api/calendario/bulk-delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids })
+            });
+            if (!res.ok) throw new Error();
+        } catch(e) {
+            // Rollback
+            removed.sort((a, b) => a.idx - b.idx).forEach(r => attivitaList.splice(r.idx, 0, r.att));
+            removedBb.sort((a, b) => a.idx - b.idx).forEach(r => boxbeatOggiList.splice(r.idx, 0, r.att));
+            renderVista();
+            if (removedBb.length) { renderBoxBeatPanel(); aggiornaStatBoxBeat(); }
+            showToast('Errore eliminazione multipla', true);
+        }
+        ricaricaTuttoInBackground();
     }
 
     function selezionaCategoria(cat) {

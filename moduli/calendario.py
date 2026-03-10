@@ -234,6 +234,29 @@ def elimina_attivita(attivita_id: str) -> bool:
         return False
 
 
+def elimina_multipli(ids: list) -> int:
+    """
+    Elimina più attività in una sola operazione.
+    
+    Args:
+        ids: Lista di ID delle attività da eliminare
+    
+    Returns:
+        Numero di attività effettivamente eliminate
+    """
+    if not ids:
+        return 0
+    ids_set = set(ids)
+    with _lock:
+        data = _load_data()
+        originale = len(data["attivita"])
+        data["attivita"] = [a for a in data["attivita"] if a["id"] not in ids_set]
+        eliminati = originale - len(data["attivita"])
+        if eliminati > 0:
+            _save_data(data)
+        return eliminati
+
+
 def get_attivita_per_id(attivita_id: str) -> dict:
     """Restituisce una singola attività per ID."""
     with _lock:
@@ -912,124 +935,3 @@ def genera_excel_boxbeat(data_str: str = None, dati_filone: dict = None,
     wb.save(filepath)
     print(f"[Appuntamenti Excel] Generato {filepath} con {len(appuntamenti)} appuntamenti")
     return filepath
-
-
-def sincronizza_appuntamenti_da_filone(df):
-    """
-    Scansiona il DataFrame del filone e registra automaticamente
-    gli appuntamenti rilevati (IS_APPUNTAMENTO) che non sono ancora
-    presenti nel registro persistente degli appuntamenti già processati.
-    
-    Usa un file cache separato (cache_appuntamenti_visti.json) per ricordare
-    quali POD/ENELTEL sono già stati visti. Questo evita di ri-registrare
-    appuntamenti vecchi dopo la pulizia giornaliera di boxbeat_excel.json.
-    
-    Args:
-        df: DataFrame con colonne IS_APPUNTAMENTO, ORA_APPUNTAMENTO,
-            DATA_K, POD_K, ENEL_K, CLI_K, VIA_K, CIVICO_K, COMUNE, NOTE_APP_RAW
-    
-    Returns:
-        int: numero di nuovi appuntamenti registrati
-    """
-    if df is None or df.empty:
-        return 0
-    
-    oggi = datetime.now().strftime('%Y-%m-%d')
-    # Scansiona TUTTI gli appuntamenti nel filone (qualsiasi data)
-    mask_app = df['IS_APPUNTAMENTO'] == True
-    app_tutti = df[mask_app]
-    
-    if app_tutti.empty:
-        return 0
-    
-    # Carica il registro persistente degli appuntamenti già visti
-    chiavi_viste = _load_chiavi_viste()
-    
-    nuovi = 0
-    for _, row in app_tutti.iterrows():
-        pod = str(row.get('POD_K', '') or '').strip().upper()
-        enel = str(row.get('ENEL_K', '') or '').strip()
-        
-        # Controlla se già visto (per POD o ENELTEL)
-        gia_visto = False
-        if pod and pod in chiavi_viste:
-            gia_visto = True
-        if enel and enel in chiavi_viste:
-            gia_visto = True
-        
-        if gia_visto:
-            continue
-        
-        # Estrai orario
-        orario = ''
-        ora_app = row.get('ORA_APPUNTAMENTO')
-        if ora_app and str(ora_app) not in ('None', 'nan', ''):
-            orario = str(ora_app)
-        
-        # Determina la nota da salvare:
-        # Torino usa NOTE_APP_RAW, Pavia usa ORA_PIAN_RAW per le info appuntamento
-        nota_raw = str(row.get('NOTE_APP_RAW', '') or '')
-        ora_pian_raw = str(row.get('ORA_PIAN_RAW', '') or '')
-        nota_da_salvare = nota_raw if nota_raw else ora_pian_raw
-        
-        # Data appuntamento = data pianificata del contatore nel filone
-        data_appuntamento = str(row.get('DATA_K', '') or '').strip()
-        
-        # Ignora appuntamenti senza data
-        if not data_appuntamento:
-            continue
-        
-        # Registra il nuovo appuntamento nell'Excel
-        from config import PROVINCIA_ATTIVA as _prov_excel
-        registra_appuntamento_excel(
-            data_appuntamento=data_appuntamento,
-            orario=orario,
-            pod=pod,
-            eneltel=enel,
-            nominativo=str(row.get('CLI_K', '') or ''),
-            via=str(row.get('VIA_K', '') or ''),
-            civico=str(row.get('CIVICO_K', '') or ''),
-            comune=str(row.get('COMUNE', '') or ''),
-            note=nota_da_salvare,
-            origine='filone_sync',
-            data_pianificata=data_appuntamento,
-            creato_da='sistema',
-            provincia=_prov_excel
-        )
-        
-        # Crea anche il promemoria nel calendario
-        try:
-            from config import PROVINCIA_ATTIVA as _prov
-            crea_promemoria_boxbeat(
-                data_appuntamento=data_appuntamento,
-                ora_appuntamento=orario,
-                pod=pod,
-                eneltel=enel,
-                nominativo=str(row.get('CLI_K', '') or ''),
-                via=str(row.get('VIA_K', '') or ''),
-                civico=str(row.get('CIVICO_K', '') or ''),
-                comune=str(row.get('COMUNE', '') or ''),
-                note=nota_da_salvare,
-                provincia=_prov,
-                creato_da='sistema',
-                origine='filone_sync',
-                data_pianificata=data_appuntamento
-            )
-        except Exception as e_bb:
-            print(f"[Appuntamenti Sync] ⚠️ Errore creazione promemoria calendario: {e_bb}")
-        
-        # Segna come visto nel registro persistente
-        if pod:
-            chiavi_viste.add(pod)
-        if enel:
-            chiavi_viste.add(enel)
-        
-        nuovi += 1
-    
-    # Salva il registro aggiornato
-    _save_chiavi_viste(chiavi_viste)
-    
-    if nuovi > 0:
-        print(f"[Appuntamenti Sync] ✅ Registrati {nuovi} nuovi appuntamenti dal filone per {oggi}")
-    
-    return nuovi

@@ -303,6 +303,21 @@ def update_filone_row(row_num):
                     username_bb = session.get('user', {}).get('username', 'sconosciuto') if isinstance(session.get('user'), dict) else session.get('user', 'sconosciuto')
                     # Data appuntamento = data pianificata del contatore, fallback a oggi
                     data_app_bb = contatore_data.get('data_pianificata', '') or data_oggi
+                    _callbacks['crea_promemoria_boxbeat'](
+                        data_appuntamento=data_app_bb,
+                        ora_appuntamento=orario_trovato,
+                        pod=contatore_data.get('pod', ''),
+                        eneltel=contatore_data.get('eneltel', ''),
+                        nominativo=contatore_data.get('nominativo', ''),
+                        via=contatore_data.get('via', ''),
+                        civico=contatore_data.get('civico', ''),
+                        comune=contatore_data.get('comune', ''),
+                        note=nota_salvata,
+                        provincia=PROVINCIA_ATTIVA,
+                        creato_da=username_bb,
+                        origine='filone_manuale',
+                        data_pianificata=contatore_data.get('data_pianificata', '')
+                    )
                     _callbacks['registra_appuntamento_excel'](
                         data_appuntamento=data_app_bb,
                         orario=orario_trovato,
@@ -425,6 +440,21 @@ def update_filone_bulk():
                     if not gia_presente:
                         username_bb = session.get('user', {}).get('username', 'sconosciuto') if isinstance(session.get('user'), dict) else session.get('user', 'sconosciuto')
                         data_app_bb = contatore_data.get('data_pianificata', '') or data_oggi
+                        _callbacks['crea_promemoria_boxbeat'](
+                            data_appuntamento=data_app_bb,
+                            ora_appuntamento=orario_trovato,
+                            pod=contatore_data.get('pod', ''),
+                            eneltel=contatore_data.get('eneltel', ''),
+                            nominativo=contatore_data.get('nominativo', ''),
+                            via=contatore_data.get('via', ''),
+                            civico=contatore_data.get('civico', ''),
+                            comune=contatore_data.get('comune', ''),
+                            note=nota_salvata,
+                            provincia=PROVINCIA_ATTIVA,
+                            creato_da=username_bb,
+                            origine='filone_manuale',
+                            data_pianificata=contatore_data.get('data_pianificata', '')
+                        )
                         _callbacks['registra_appuntamento_excel'](
                             data_appuntamento=data_app_bb,
                             orario=orario_trovato,

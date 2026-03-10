@@ -507,7 +507,7 @@ from moduli.calendario import (
     crea_promemoria_boxbeat, get_promemoria_boxbeat_oggi,
     get_riepilogo_boxbeat, get_user_promemoria_settings,
     salva_user_promemoria_settings, registra_appuntamento_excel, genera_excel_boxbeat,
-    sincronizza_appuntamenti_da_filone, pulisci_boxbeat_completati
+    pulisci_boxbeat_completati
 )
 
 # Porta Flask (da variabile ambiente impostata dal launcher)
@@ -1135,14 +1135,6 @@ def sincronizza_dati():
         if df is None:
             logger.warning(f"[SYNC] ⚠️ Nessun dato caricato")
             return False
-
-        # Auto-registra appuntamenti dal filone nel registro Excel
-        try:
-            nuovi_app = sincronizza_appuntamenti_da_filone(df)
-            if nuovi_app > 0:
-                sse_notify_all('calendario_update', {'azione': 'boxbeat_sync_filone', 'nuovi': nuovi_app})
-        except Exception as e_bb_sync:
-            logger.warning(f"[SYNC] ⚠️ Errore sync appuntamenti: {e_bb_sync}")
 
         # Calcolo distanze
         logger.info("🚗 Verifica distanze (con cache)...")

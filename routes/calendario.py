@@ -15,7 +15,7 @@ from moduli.shared import (
 )
 from moduli.calendario import (
     get_attivita, crea_attivita, modifica_attivita,
-    completa_attivita, elimina_attivita, get_riepilogo,
+    completa_attivita, elimina_attivita, elimina_multipli, get_riepilogo,
     CATEGORIE_VALIDE, COLORI_CATEGORIE,
     crea_promemoria_boxbeat, get_promemoria_boxbeat_oggi,
     get_riepilogo_boxbeat, get_user_promemoria_settings,
@@ -135,6 +135,20 @@ def api_elimina_attivita(attivita_id):
         _callbacks['sse_notify_all']('calendario_update', {'azione': 'eliminata', 'id': attivita_id})
         return jsonify({'success': True})
     return jsonify({'error': 'Attività non trovata'}), 404
+
+
+@bp.route('/api/calendario/bulk-delete', methods=['POST'])
+@login_required
+def api_elimina_multipli():
+    """Elimina più attività in una sola operazione."""
+    dati = request.get_json()
+    ids = dati.get('ids', []) if dati else []
+    if not ids or not isinstance(ids, list):
+        return jsonify({'error': 'Nessun ID fornito'}), 400
+    eliminati = elimina_multipli(ids)
+    if eliminati > 0:
+        _callbacks['sse_notify_all']('calendario_update', {'azione': 'bulk_delete', 'count': eliminati})
+    return jsonify({'success': True, 'eliminati': eliminati})
 
 
 @bp.route('/api/calendario/categorie', methods=['GET'])

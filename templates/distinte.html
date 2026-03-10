@@ -1217,6 +1217,11 @@
             border-left-color: var(--info);
         }
 
+        .message-preview.email-preview a {
+            color: #0066cc;
+            text-decoration: underline;
+        }
+
         .modal-footer {
             padding: 20px;
             border-top: 1px solid var(--border);
@@ -2475,12 +2480,23 @@
 
             const fields = getFieldValues();
             const messaggio = tmpl.generate(c, fields);
-            document.getElementById('messagePreview').textContent = messaggio;
+
+            // Per email: il body può contenere tag <a> HTML per i link
+            const previewEl = document.getElementById('messagePreview');
+            if (tmpl.type === 'email') {
+                // Render HTML: converti \n in <br>, preservando i tag <a>
+                previewEl.innerHTML = messaggio.replace(/\n/g, '<br>');
+            } else {
+                previewEl.textContent = messaggio;
+            }
+
+            // Plain text version (senza tag HTML) per mailto e WhatsApp
+            const messaggioPlain = messaggio.replace(/<a[^>]*href="([^"]*?)"[^>]*>(.*?)<\/a>/gi, '$2 ($1)');
 
             // Update WhatsApp link
             if (tmpl.type === 'whatsapp') {
                 const telefono = c.telefono_formattato || c.telefono || '';
-                const waUrl = `https://wa.me/${telefono.replace('+', '')}?text=${encodeURIComponent(messaggio)}`;
+                const waUrl = `https://wa.me/${telefono.replace('+', '')}?text=${encodeURIComponent(messaggioPlain)}`;
                 document.getElementById('openWhatsappBtn').href = waUrl;
             }
 
@@ -2489,13 +2505,30 @@
                 const subject = tmpl.subject ? tmpl.subject(c, fields) : '';
                 document.getElementById('emailSubjectPreview').textContent = subject;
                 
-                const mailtoUrl = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(messaggio)}`;
+                const mailtoUrl = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(messaggioPlain)}`;
                 document.getElementById('openMailBtn').href = mailtoUrl;
             }
 
-            // Update copy button
-            document.getElementById('copyMessageBtn').onclick = () => {
-                navigator.clipboard.writeText(messaggio);
+            // Update copy button — per email copia come rich text HTML
+            document.getElementById('copyMessageBtn').onclick = async () => {
+                if (tmpl.type === 'email') {
+                    try {
+                        const htmlContent = messaggio.replace(/\n/g, '<br>');
+                        const blob = new Blob([htmlContent], { type: 'text/html' });
+                        const plainBlob = new Blob([messaggioPlain], { type: 'text/plain' });
+                        await navigator.clipboard.write([
+                            new ClipboardItem({
+                                'text/html': blob,
+                                'text/plain': plainBlob
+                            })
+                        ]);
+                    } catch (e) {
+                        // Fallback a testo normale
+                        await navigator.clipboard.writeText(messaggioPlain);
+                    }
+                } else {
+                    await navigator.clipboard.writeText(messaggioPlain);
+                }
                 showToast('Messaggio copiato negli appunti!');
                 closeModal();
             };

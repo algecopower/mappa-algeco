@@ -1974,6 +1974,28 @@ qs('#globalSearch').addEventListener('input', function() {
     searchTimer = setTimeout(applyFilters, 200);
 });
 
+// Prevent native undo/redo on search input — always redirect to cell undo stack
+qs('#globalSearch').addEventListener('keydown', function(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        undo();
+        return;
+    }
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+        e.preventDefault();
+        e.stopPropagation();
+        redo();
+        return;
+    }
+});
+// Block browser's native historyUndo/historyRedo on the search input
+qs('#globalSearch').addEventListener('beforeinput', function(e) {
+    if (e.inputType === 'historyUndo' || e.inputType === 'historyRedo') {
+        e.preventDefault();
+    }
+});
+
 // ============================================================
 // VIRTUAL SCROLL LAYOUT
 // ============================================================

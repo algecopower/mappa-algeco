@@ -2,8 +2,8 @@
 
 ## Requisiti VPS
 - **OS**: Ubuntu 22.04 LTS o 24.04 LTS
-- **RAM**: minimo 2 GB (4 GB consigliati per OSRM)
-- **Disco**: minimo 15 GB (OSRM Italia occupa ~5 GB processati)
+- **RAM**: minimo 1 GB (2 GB consigliati — OSRM nativo con --mmap usa poca RAM)
+- **Disco**: minimo 15 GB (OSRM Nord-Ovest occupa ~3 GB processati)
 - **CPU**: 2 vCPU minimo
 
 ---
@@ -41,7 +41,7 @@ sudo bash deploy_ubuntu.sh
 
 Lo script installa tutto automaticamente:
 - Python 3 + virtual environment
-- Docker + container OSRM (routing percorsi)
+- OSRM nativo compilato (routing percorsi, senza Docker, con --mmap per RAM minima)
 - Cloudflared
 - Servizi systemd per avvio automatico
 
@@ -74,28 +74,35 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 4. Installa Docker + OSRM
+### 4. Installa OSRM nativo (senza Docker)
 ```bash
-# Docker
-curl -fsSL https://get.docker.com | sh
-sudo systemctl enable docker
-sudo systemctl start docker
+# Dipendenze di compilazione
+sudo apt install -y build-essential git cmake pkg-config \
+    libbz2-dev libxml2-dev libzip-dev libboost-all-dev \
+    lua5.4 liblua5.4-dev libtbb-dev
 
-# Dati OSRM (Italia)
+# Compila OSRM
+git clone --branch v5.27.1 --single-branch https://github.com/Project-OSRM/osrm-backend.git /tmp/osrm-build
+cd /tmp/osrm-build && mkdir build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release
+make -j$(nproc)
+sudo make install
+sudo cp -r /tmp/osrm-build/profiles/ /usr/local/share/osrm/profiles/
+sudo ldconfig
+rm -rf /tmp/osrm-build
+
+# Dati OSRM (Nord-Ovest Italia)
 sudo mkdir -p /opt/osrm-data
 cd /opt/osrm-data
-wget https://download.geofabrik.de/europe/italy-latest.osm.pbf
+wget https://download.geofabrik.de/europe/italy/nord-ovest-latest.osm.pbf
 
-# Preprocessing (10-30 minuti)
-docker run -t -v /opt/osrm-data:/data osrm/osrm-backend osrm-extract -p /opt/car.lua /data/italy-latest.osm.pbf
-docker run -t -v /opt/osrm-data:/data osrm/osrm-backend osrm-partition /data/italy-latest.osrm
-docker run -t -v /opt/osrm-data:/data osrm/osrm-backend osrm-customize /data/italy-latest.osrm
+# Preprocessing (5-15 minuti)
+osrm-extract -p /usr/local/share/osrm/profiles/car.lua nord-ovest-latest.osm.pbf
+osrm-partition nord-ovest-latest.osrm
+osrm-customize nord-ovest-latest.osrm
 
-# Avvia OSRM
-docker run -d --name osrm-server --restart=always \
-    -p 5000:5000 \
-    -v /opt/osrm-data:/data \
-    osrm/osrm-backend osrm-routed --algorithm mld /data/italy-latest.osrm
+# Avvia OSRM con --mmap (RAM minima)
+osrm-routed --algorithm mld --mmap --port 5000 nord-ovest-latest.osrm &
 
 # Verifica
 curl "http://localhost:5000/route/v1/driving/7.68,45.07;7.78,45.19"
@@ -164,8 +171,8 @@ Crea `/etc/systemd/system/mappa-algeco.service`:
 ```ini
 [Unit]
 Description=Mappa Algeco - Gestionale Contatori
-After=network.target docker.service
-Requires=docker.service
+After=network.target osrm-server.service
+Requires=osrm-server.service
 
 [Service]
 Type=simple
@@ -272,12 +279,12 @@ sudo dpkg -i cloudflared.deb
 
 ### OSRM non risponde
 ```bash
-# Verifica container
-docker ps -a | grep osrm
-docker logs osrm-server
+# Verifica servizio
+sudo systemctl status osrm-server
+sudo journalctl -u osrm-server -n 50
 
 # Riavvia
-docker restart osrm-server
+sudo systemctl restart osrm-server
 ```
 
 ### "Permission denied" su credenziali.json
@@ -296,7 +303,9 @@ cat /etc/cloudflared/config.yml
 cloudflared tunnel run mappa-algeco
 ```
 
-### Memoria insufficiente (OSRM pesante)
+### Memoria insufficiente
+OSRM nativo con `--mmap` usa pochissima RAM (~200-400 MB).
+Se serve comunque più memoria:
 ```bash
 # Aggiungi swap
 sudo fallocate -l 2G /swapfile

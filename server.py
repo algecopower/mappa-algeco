@@ -179,13 +179,42 @@ if not IS_CHILD_PROCESS:
             return False
     
     def avvia_osrm_automaticamente():
-        """Tenta di avviare Docker e il container osrm-server automaticamente. Cross-platform."""
+        """Tenta di avviare OSRM automaticamente. Supporta sia nativo (systemd) che Docker."""
+        
+        # --- Tentativo 1: OSRM nativo via systemd (preferito, meno RAM) ---
+        if IS_LINUX:
+            try:
+                # Verifica se il servizio systemd esiste
+                result = subprocess.run(
+                    ["systemctl", "is-enabled", "osrm-server"],
+                    capture_output=True, text=True, timeout=5
+                )
+                if result.returncode == 0:
+                    print("   🚀 Avvio OSRM nativo via systemd...")
+                    subprocess.run(["sudo", "systemctl", "start", "osrm-server"], timeout=15)
+                    time.sleep(2)
+                    
+                    # Attendi che OSRM sia pronto (max 30s)
+                    print("   ⏳ Attesa che OSRM sia pronto...")
+                    for i in range(30):
+                        if verifica_osrm():
+                            print(f"   ✅ OSRM nativo avviato e pronto! ({i+1}s)")
+                            return True
+                        time.sleep(1)
+                        if i > 0 and i % 10 == 0:
+                            print(f"      ({i+1}s...)")
+                    print("   ❌ OSRM nativo non ha risposto in tempo")
+                    return False
+            except Exception as e:
+                print(f"   ⚠️ Servizio systemd OSRM non disponibile: {e}")
+        
+        # --- Tentativo 2: Fallback Docker (retrocompatibilità) ---
         CONTAINER_NAME = "osrm-server"
         
-        # 1. Verifica se Docker è disponibile
+        # Verifica se Docker è disponibile
         docker_cmd = shutil.which("docker")
         if not docker_cmd:
-            print("   ❌ Docker non trovato nel PATH")
+            print("   ❌ Né OSRM nativo né Docker trovati")
             return False
         
         # 2. Verifica se Docker daemon è in esecuzione
@@ -438,7 +467,7 @@ if not IS_CHILD_PROCESS:
                     print("   ✅ OSRM avviato automaticamente")
                 else:
                     print("\n⚠️ Impossibile avviare OSRM automaticamente")
-                    print("   Docker e container OSRM in esecuzione?")
+                    print("   Verifica: sudo systemctl status osrm-server")
                     risposta = input("   Continuare senza OSRM? [s/N]: ").strip().lower()
                     if risposta != 's':
                         sys.exit(1)

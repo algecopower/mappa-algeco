@@ -11,6 +11,7 @@ Colonne utilizzate dal FILONE:
 - Via Num            → VIA_K (indirizzo)
 - Comune             → COMUNE
 - telefono           → TEL_K
+- email              → EMAIL_K
 - Posizione_Mis_Ante_Sost → NOTE_K (posizione contatore)
 - Latitudine         → Lat
 - Longitudine        → Lon
@@ -292,6 +293,13 @@ def carica_dati_google_sheets():
         df['TEL_K'] = df[col_telefono].fillna('').astype(str).str.strip()
     else:
         df['TEL_K'] = ''
+    
+    # email → EMAIL_K
+    col_email = trova_colonna(df, ['email', 'EMAIL', 'Email', 'E-mail', 'e-mail', 'E-MAIL', 'Mail', 'MAIL'], chiave_mapping='email')
+    if col_email:
+        df['EMAIL_K'] = df[col_email].fillna('').astype(str).str.strip()
+    else:
+        df['EMAIL_K'] = ''
     
     # POD → POD_K
     col_pod = trova_colonna(df, ['POD', 'Pod', 'pod'], chiave_mapping='pod')

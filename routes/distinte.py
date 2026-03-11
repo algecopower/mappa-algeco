@@ -152,6 +152,7 @@ def parse_distinta_endpoint():
             idx_eneltel = trova_idx_multi('ENELTEL', 'Eneltel', 'eneltel')
             idx_data = trova_idx_multi('DATA PIAN', 'Data_pianificata')
             idx_telefono = trova_idx_multi('telefono', 'tel', 'cellulare', 'cell', 'numero telefono')
+            idx_email = trova_idx_multi('email', 'EMAIL', 'Email', 'E-mail', 'e-mail', 'Mail', 'MAIL')
             idx_nominativo = trova_idx_multi('NOMINATIVO', 'Nominativo')
             idx_indirizzo = trova_idx_multi('Indirizzo', 'Via')
             idx_civico = trova_idx_multi('Num', 'civico')
@@ -177,6 +178,7 @@ def parse_distinta_endpoint():
                             'eneltel': row[idx_eneltel].strip() if idx_eneltel is not None and idx_eneltel < len(row) else '',
                             'data_pian': row[idx_data] if idx_data is not None and idx_data < len(row) else '',
                             'telefono': row[idx_telefono] if idx_telefono is not None and idx_telefono < len(row) else '',
+                            'email': row[idx_email] if idx_email is not None and idx_email < len(row) else '',
                             'nominativo': row[idx_nominativo] if idx_nominativo is not None and idx_nominativo < len(row) else '',
                             'indirizzo': row[idx_indirizzo] if idx_indirizzo is not None and idx_indirizzo < len(row) else '',
                             'civico': row[idx_civico] if idx_civico is not None and idx_civico < len(row) else '',
@@ -221,6 +223,7 @@ def parse_distinta_endpoint():
             contatto.setdefault('note_filone', '')
             contatto.setdefault('data_pian_filone', '')
             contatto.setdefault('telefono_filone', '')
+            contatto.setdefault('email_filone', '')
             contatto.setdefault('matricola_filone', '')
             contatto.setdefault('pod_filone', '')
             contatto.setdefault('eneltel_filone', '')
@@ -231,6 +234,7 @@ def parse_distinta_endpoint():
                 contatto['note_filone'] = dati_filone[pod].get('note', '')
                 contatto['data_pian_filone'] = dati_filone[pod].get('data_pian', '')
                 contatto['telefono_filone'] = dati_filone[pod].get('telefono', '')
+                contatto['email_filone'] = dati_filone[pod].get('email', '')
                 contatto['matricola_filone'] = dati_filone[pod].get('matricola', '')
                 contatto['pod_filone'] = dati_filone[pod].get('pod', '')
                 contatto['eneltel_filone'] = dati_filone[pod].get('eneltel', '')
@@ -738,6 +742,54 @@ def salva_telefono_filone():
 
     except Exception as e:
         return _api_error(e, 'salvataggio telefono')
+
+
+@bp.route('/api/distinte/salva-email', methods=['POST'])
+@login_required
+def salva_email_filone():
+    """
+    Salva un indirizzo email nel filone per un POD.
+    Body: {"pod": "IT...", "email": "..."}
+    """
+    try:
+        data = request.json
+        pod = data.get('pod', '').strip().upper()
+        email = data.get('email', '').strip()
+
+        if not pod:
+            return jsonify({'error': 'POD mancante'}), 400
+
+        row = find_row_by_pod(pod)
+        if row is None:
+            return jsonify({'error': f'POD {pod} non trovato'}), 404
+
+        ws = get_worksheet()
+        header_map = get_header_map()
+
+        # Trova colonna EMAIL
+        col_email = None
+        for col_name in ['email', 'EMAIL', 'Email', 'E-mail', 'e-mail', 'Mail', 'MAIL']:
+            if col_name in header_map:
+                col_email = header_map[col_name]
+                break
+
+        if col_email is None:
+            return jsonify({'error': 'Colonna EMAIL non trovata nel filone'}), 400
+
+        # Salva nel filone
+        ws.update_cell(row, col_email, email)
+
+        # Triggera sync per aggiornare i JSON
+        _callbacks['trigger_sync_after_edit']()
+
+        return jsonify({
+            'success': True,
+            'email': email,
+            'message': f'Email salvata: {email}'
+        })
+
+    except Exception as e:
+        return _api_error(e, 'salvataggio email')
 
 
 # ============================================================================

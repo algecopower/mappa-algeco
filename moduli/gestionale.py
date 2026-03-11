@@ -1507,6 +1507,7 @@ def genera_js_gestionale():
             'indirizzo': 'INDIRIZZO',
             'civico': 'N. CIVICO',
             'telefono': 'TELEFONO',
+            'email': 'EMAIL',
             'posizione_mis': 'POSIZIONE',
             'operatore': 'OPERATORE',
             'smart_test': 'SMART TEST'
@@ -1922,6 +1923,7 @@ def genera_js_gestionale():
                                         'indirizzo': 'via',
                                         'civico': 'civico',
                                         'telefono': 'telefono',
+                                        'email': 'email',
                                         'posizione_mis': 'note',  // Posizione misuratore è nel campo 'note'
                                         'operatore': 'tecnico',
                                         'smart_test': 'smart_test'
@@ -2225,6 +2227,7 @@ def genera_js_gestionale():
                 'indirizzo': 'via',
                 'civico': 'civico',
                 'telefono': 'telefono',
+                'email': 'email',
                 'posizione_mis': 'note',  // Posizione misuratore viene da NOTE_K (campo 'note' nel contatore)
                 'operatore': 'tecnico',
                 'smart_test': 'smart_test'
@@ -2304,6 +2307,7 @@ def genera_js_gestionale():
                                         'indirizzo': 'via',
                                         'civico': 'civico',
                                         'telefono': 'telefono',
+                                        'email': 'email',
                                         'posizione_mis': 'note',  // Posizione misuratore è nel campo 'note'
                                         'operatore': 'tecnico',
                                         'smart_test': 'smart_test'

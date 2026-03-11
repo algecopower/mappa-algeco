@@ -141,6 +141,7 @@ CAMPI_MODIFICABILI = {
         'indirizzo': 'Indirizzo',
         'civico': 'Num',
         'telefono': 'telefono',
+        'email': 'email',
         'posizione_mis': 'Posizione_Ante_Mis',
         'operatore': 'Operatore',
     },
@@ -150,6 +151,7 @@ CAMPI_MODIFICABILI = {
         'indirizzo': 'Via',
         'civico': 'civico',
         'telefono': 'Telefono',
+        'email': 'email',
         'posizione_mis': 'Posizione misuratore',
         'operatore': 'Operatore',
     }
@@ -245,6 +247,11 @@ MAPPATURA_COLONNE_DEFAULT = {
         'label': 'Telefono',
         'descrizione': 'Numero di telefono',
         'nomi_default': ['telefono', 'TELEFONO', 'Telefono', 'TEL', 'Tel'],
+    },
+    'email': {
+        'label': 'Email',
+        'descrizione': 'Indirizzo email',
+        'nomi_default': ['email', 'EMAIL', 'Email', 'E-mail', 'e-mail', 'E-MAIL', 'Mail', 'MAIL'],
     },
     'pod': {
         'label': 'POD',

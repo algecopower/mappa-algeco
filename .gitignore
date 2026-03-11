@@ -22,6 +22,9 @@ cache/
 templates/mappa_torino.html
 templates/mappa_pavia.html
 
+# Dati mappa rigenerati automaticamente
+data/*/mappa_data.json
+
 # OS
 Thumbs.db
 Desktop.ini

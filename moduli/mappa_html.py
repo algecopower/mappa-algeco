@@ -209,6 +209,7 @@ def prepara_dati_contatori(df, report):
             'via': str(row.get('VIA_K', '')),
             'civico': str(row.get('CIVICO_K', '')),
             'telefono': str(row.get('TEL_K', '')),
+            'email': str(row.get('EMAIL_K', '')),
             'note': str(row.get('NOTE_K', '')),
             'note_app': str(row.get('NOTE_APP_RAW', '')),
             'tipo_ce': str(row.get('TIPO_CE_K', '')),

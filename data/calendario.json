@@ -947,8 +947,8 @@
     },
     {
       "id": "7a59b61a",
-      "titolo": "ATTIVITA' PER 13-14 MARZO",
-      "data": "2026-03-10",
+      "titolo": "ATTIVITA' PER 16 MARZO",
+      "data": "2026-03-11",
       "ora": "08:00",
       "ora_fine": "",
       "descrizione": "",
@@ -960,7 +960,7 @@
       "completata_da": null,
       "completata_il": null,
       "modificato_da": "giada",
-      "modificato_il": "2026-03-09T12:54:48.676342"
+      "modificato_il": "2026-03-11T09:25:34.874689"
     },
     {
       "id": "85e30158",
@@ -1378,9 +1378,9 @@
       "provincia": "TORINO",
       "creato_da": "giada",
       "creato_il": "2026-03-10T11:03:01.953189",
-      "completata": false,
-      "completata_da": null,
-      "completata_il": null,
+      "completata": true,
+      "completata_da": "giada",
+      "completata_il": "2026-03-11T09:25:54.815963",
       "boxbeat_data": {
         "pod": "IT001E01937304",
         "eneltel": "19373045",
@@ -1392,6 +1392,33 @@
         "origine": "contatore",
         "ora_appuntamento": "12:00-15:00",
         "data_pianificata": "2026-03-11"
+      }
+    },
+    {
+      "id": "49c87b3a",
+      "titolo": "Appuntamento ISABELLA MARCHISIO - MONCALIERI ore 08:00-11:00",
+      "data": "2026-03-11",
+      "ora": "08:00",
+      "ora_fine": "11:00",
+      "descrizione": "POD: IT001E00659421\nENELTEL: 6594212\nNominativo: ISABELLA MARCHISIO\nIndirizzo: PORTA PIACENTINA 64\nComune: MONCALIERI\nOrigine: contatore",
+      "categoria": "boxbeat",
+      "provincia": "TORINO",
+      "creato_da": "giada",
+      "creato_il": "2026-03-11T09:01:53.357678",
+      "completata": true,
+      "completata_da": "giada",
+      "completata_il": "2026-03-11T09:25:26.844113",
+      "boxbeat_data": {
+        "pod": "IT001E00659421",
+        "eneltel": "6594212",
+        "nominativo": "ISABELLA MARCHISIO",
+        "via": "PORTA PIACENTINA",
+        "civico": "64",
+        "comune": "MONCALIERI",
+        "note": "",
+        "origine": "contatore",
+        "ora_appuntamento": "08:00-11:00",
+        "data_pianificata": ""
       }
     }
   ]

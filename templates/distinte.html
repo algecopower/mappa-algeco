@@ -2105,6 +2105,14 @@
                             onblur="salvaTelefonoInline('${c.pod}', this.value)">
                     </div>
 
+                    <div class="phone-edit-row">
+                        <i class="fas fa-envelope phone-icon" style="color: var(--info);"></i>
+                        <input type="text" class="phone-edit-input ${c.email_filone ? 'has-phone' : ''}" id="emailEdit_${c.pod}" 
+                            value="${escapeHtml(c.email_filone || '')}" placeholder="Nessuna email sul filone"
+                            onkeydown="if(event.key==='Enter'){event.preventDefault(); salvaEmailInline('${c.pod}', this.value);}"
+                            onblur="salvaEmailInline('${c.pod}', this.value)">
+                    </div>
+
                     ${c.is_azienda ? `
                     <div class="pec-info-row no-pec">
                         <i class="fas fa-certificate pec-icon"></i>
@@ -3038,6 +3046,43 @@
                     showToast('Telefono aggiornato sul filone');
                 } else {
                     showToast(data.error || 'Errore salvataggio telefono', 'error');
+                }
+            } catch (e) {
+                showToast('Errore di connessione', 'error');
+            }
+        }
+
+        // Salva email inline (da input editabile - su Enter o blur)
+        let _lastSavedEmail = {};  // Anti-duplicato
+        async function salvaEmailInline(pod, valore) {
+            valore = (valore || '').trim();
+            
+            const contatto = contatti.find(c => c.pod === pod);
+            const currentFilone = contatto ? (contatto.email_filone || '') : '';
+            if (_lastSavedEmail[pod] === valore && currentFilone === valore) return;
+            
+            _lastSavedEmail[pod] = valore;
+            
+            const emailInput = document.getElementById(`emailEdit_${pod}`);
+            if (emailInput) {
+                emailInput.classList.toggle('has-phone', !!valore);
+            }
+            
+            try {
+                const resp = await fetch('/api/distinte/salva-email', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pod, email: valore })
+                });
+                
+                const data = await resp.json();
+                if (data.success) {
+                    if (contatto) {
+                        contatto.email_filone = data.email || valore;
+                    }
+                    showToast('Email aggiornata sul filone');
+                } else {
+                    showToast(data.error || 'Errore salvataggio email', 'error');
                 }
             } catch (e) {
                 showToast('Errore di connessione', 'error');

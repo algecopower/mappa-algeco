@@ -25,11 +25,8 @@ from moduli.distinte_manager import (
     classifica_contatti,
     confronta_con_filone,
 )
-from moduli.pec_lookup import (
-    arricchisci_contatti as arricchisci_contatti_pec,
-    genera_tutti_link_ricerca,
-    classifica_tipo_contatto,
-    is_azienda,
+from moduli.rilevamento_aziende import (
+    arricchisci_contatti,
 )
 from config import PROVINCIA_ATTIVA
 
@@ -258,13 +255,13 @@ def parse_distinta_endpoint():
                 if pod:
                     logger.info(f"[DISTINTE] POD {pod}: NON trovato in dati_filone")
 
-        # Arricchisci con info tipo contatto e link ricerca PEC
+        # Arricchisci con info tipo contatto (azienda/privato)
         try:
-            contatti = arricchisci_contatti_pec(contatti)
+            contatti = arricchisci_contatti(contatti)
             n_aziende = sum(1 for c in contatti if c.get('is_azienda'))
-            logger.info(f"[DISTINTE] PEC: {n_aziende} aziende/enti rilevati")
+            logger.info(f"[DISTINTE] Rilevate {n_aziende} aziende/enti")
         except Exception as e:
-            logger.error(f"[DISTINTE] Errore arricchimento PEC: {e}")
+            logger.error(f"[DISTINTE] Errore rilevamento aziende: {e}")
 
         return jsonify({
             'success': True,
@@ -791,34 +788,3 @@ def salva_email_filone():
     except Exception as e:
         return _api_error(e, 'salvataggio email')
 
-
-# ============================================================================
-# API PEC - Info tipo contatto e link di ricerca
-# ============================================================================
-
-@bp.route('/api/pec/info', methods=['GET'])
-@login_required
-def api_info_pec():
-    """
-    Restituisce il tipo di contatto e i link di ricerca PEC.
-    Query params: nome, comune (opzionale)
-    """
-    try:
-        nome = request.args.get('nome', '').strip()
-        comune = request.args.get('comune', '').strip()
-
-        if not nome:
-            return jsonify({'error': 'Specificare nome'}), 400
-
-        tipo = classifica_tipo_contatto(nome)
-        links = genera_tutti_link_ricerca(nome, comune)
-
-        return jsonify({
-            'success': True,
-            'tipo_contatto': tipo,
-            'is_azienda': tipo != 'privato',
-            'link_ricerca': links,
-        })
-
-    except Exception as e:
-        return _api_error(e, 'info PEC')

@@ -324,27 +324,6 @@
         .btn-search-pec:hover {
             background: #c0392b;
         }
-        .btn-ufficio-camerale {
-            background: #1a5276;
-            color: white;
-        }
-        .btn-ufficio-camerale:hover {
-            background: #154360;
-        }
-        .btn-inipec {
-            background: #2c3e50;
-            color: white;
-        }
-        .btn-inipec:hover {
-            background: #1a252f;
-        }
-        .btn-registro-imprese {
-            background: #196f3d;
-            color: white;
-        }
-        .btn-registro-imprese:hover {
-            background: #145a32;
-        }
 
         /* Badge azienda/condominio */
         .tipo-badge {
@@ -372,58 +351,7 @@
             border: 1px solid rgba(52, 152, 219, 0.3);
         }
 
-        /* PEC info row */
-        .pec-info-row {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            margin-top: 6px;
-            padding: 4px 8px;
-            border-radius: 6px;
-            font-size: 0.85em;
-        }
-        .pec-info-row.has-pec {
-            background: rgba(39, 174, 96, 0.1);
-            border: 1px solid rgba(39, 174, 96, 0.2);
-        }
-        .pec-info-row.no-pec {
-            background: rgba(231, 76, 60, 0.05);
-            border: 1px dashed rgba(231, 76, 60, 0.2);
-        }
-        .pec-info-row .pec-icon {
-            color: #e74c3c;
-            width: 16px;
-        }
-        .pec-info-row .pec-value {
-            flex: 1;
-            font-family: monospace;
-            font-size: 0.9em;
-            color: var(--text);
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-        .pec-edit-input {
-            flex: 1;
-            padding: 4px 8px;
-            border-radius: 6px;
-            border: 1px solid var(--border);
-            background: var(--bg-card);
-            color: var(--text);
-            font-size: 0.85em;
-        }
-        .pec-edit-input:focus {
-            outline: none;
-            border-color: #e74c3c;
-        }
-        .btn-mini.btn-pec {
-            background: #e74c3c;
-            color: white;
-        }
-        .btn-mini.btn-pec:hover {
-            background: #c0392b;
-            transform: scale(1.1);
-        }
+
 
         .btn:disabled {
             opacity: 0.6;
@@ -922,16 +850,18 @@
         }
 
         .contact-actions {
-            display: flex;
-            gap: 8px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+            gap: 6px;
             margin-top: 15px;
-            flex-wrap: wrap;
         }
 
         .contact-actions .btn {
-            flex: 1;
-            min-width: 100px;
+            padding: 10px 6px;
+            font-size: 13px;
+            text-align: center;
             justify-content: center;
+            white-space: nowrap;
         }
 
         /* Stili per numeri alternativi trovati */
@@ -1534,6 +1464,14 @@
                 Da fare
             </label>
 
+            <span style="width:1px;height:28px;background:var(--border);margin:0 5px;"></span>
+
+            <label>
+                <input type="checkbox" id="filterAzienda">
+                <i class="fas fa-building" style="color: #e74c3c"></i>
+                Solo Società
+            </label>
+
             <div class="stats">
                 <div class="stat-item cellulare">
                     <i class="fas fa-mobile-alt"></i>
@@ -1550,6 +1488,10 @@
                 <div class="stat-item" style="color: var(--success);">
                     <i class="fas fa-check-circle"></i>
                     <span id="countCompleted">0</span>
+                </div>
+                <div class="stat-item" style="color: #e74c3c;">
+                    <i class="fas fa-building"></i>
+                    <span id="countAzienda">0</span>
                 </div>
             </div>
 
@@ -1650,7 +1592,7 @@
                     Cerca il numero su Pagine Bianche o Google, poi inseriscilo qui sotto:
                 </p>
                 
-                <div style="display: flex; gap: 10px; margin-bottom: 20px; justify-content: center;">
+                <div style="display: flex; gap: 10px; margin-bottom: 20px; justify-content: center; flex-wrap: wrap;">
                     <a id="linkPagineBianche" href="#" target="_blank" class="btn btn-info">
                         <i class="fas fa-external-link-alt"></i>
                         Pagine Bianche
@@ -1658,6 +1600,10 @@
                     <a id="linkGoogle" href="#" target="_blank" class="btn btn-search-google">
                         <i class="fab fa-google"></i>
                         Cerca su Google
+                    </a>
+                    <a id="linkGoogleMailPec" href="#" target="_blank" class="btn btn-search-pec" style="display:none;" onclick="copiaENomeEApriFromPhone(event)">
+                        <i class="fas fa-envelope"></i>
+                        Cerca mail/PEC
                     </a>
                 </div>
                 
@@ -1684,53 +1630,6 @@
             </div>
             <div class="modal-footer">
                 <button class="btn" onclick="closePhoneModal()">Chiudi</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- PEC Search Modal -->
-    <div class="modal-overlay" id="pecSearchModal">
-        <div class="modal" style="max-width: 550px;">
-            <div class="modal-header">
-                <h3>
-                    <i class="fas fa-envelope" style="color: #e74c3c"></i>
-                    Cerca PEC / Email
-                </h3>
-                <button class="modal-close" onclick="closePecModal()">&times;</button>
-            </div>
-            <div class="modal-body">
-                <p style="margin-bottom: 15px;">
-                    <strong id="pecContactName">Nome azienda</strong>
-                    <span id="pecContactType" class="tipo-badge azienda" style="margin-left:8px"></span>
-                    <br>
-                    <span id="pecContactAddress" style="color: var(--text-muted); font-size: 0.9em;"></span>
-                </p>
-
-                <p style="margin-bottom: 15px; color: var(--text-muted); font-size: 0.9em;">
-                    Clicca sui link per cercare la PEC di questa azienda (verrà copiata automaticamente negli appunti):
-                </p>
-
-                <div style="display: flex; gap: 8px; margin-bottom: 10px; justify-content: center; flex-wrap: wrap;">
-                    <a id="linkGooglePec" href="#" target="_blank" class="btn btn-search-google" onclick="copiaENomeEApri(event)">
-                        <i class="fab fa-google"></i>
-                        Google PEC
-                    </a>
-                    <a id="linkUfficioCamerale" href="https://www.ufficiocamerale.it" target="_blank" class="btn btn-ufficio-camerale" onclick="copiaENomeEApri(event)">
-                        <i class="fas fa-landmark"></i>
-                        Ufficio Camerale
-                    </a>
-                    <a id="linkIniPec" href="https://www.inipec.gov.it/cerca-pec" target="_blank" class="btn btn-inipec" onclick="copiaENomeEApri(event)">
-                        <i class="fas fa-certificate"></i>
-                        INI-PEC
-                    </a>
-                    <a id="linkRegistroImprese" href="https://www.registroimprese.it/web/guest/home" target="_blank" class="btn btn-registro-imprese" onclick="copiaENomeEApri(event)">
-                        <i class="fas fa-building"></i>
-                        Registro Imprese
-                    </a>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn" onclick="closePecModal()">Chiudi</button>
             </div>
         </div>
     </div>
@@ -1976,8 +1875,10 @@
             const showNoPhone = document.getElementById('filterNoPhone').checked;
             const showCompleted = document.getElementById('filterCompleted').checked;
             const showNotCompleted = document.getElementById('filterNotCompleted').checked;
+            const showOnlyAzienda = document.getElementById('filterAzienda').checked;
             
             const filtered = contatti.filter(c => {
+                if (showOnlyAzienda && !c.is_azienda) return false;
                 if (c.tipo === 'cellulare' && !showCellulare) return false;
                 if (c.tipo === 'fisso' && !showFisso) return false;
                 if (c.tipo === 'senza_telefono' && !showNoPhone) return false;
@@ -1995,6 +1896,7 @@
             document.getElementById('countFisso').textContent = contatti.filter(c => c.tipo === 'fisso').length;
             document.getElementById('countNoPhone').textContent = contatti.filter(c => c.tipo === 'senza_telefono').length;
             document.getElementById('countCompleted').textContent = totalCompleted + '/' + contatti.length;
+            document.getElementById('countAzienda').textContent = contatti.filter(c => c.is_azienda).length;
             
             if (filtered.length === 0) {
                 container.innerHTML = `
@@ -2040,15 +1942,23 @@
                                 <i class="fab fa-whatsapp"></i>
                                 Messaggi / Template
                             </button>
-                        ` : c.tipo === 'fisso' ? `
-                            <a class="btn btn-warning" href="tel:${c.telefono}">
-                                <i class="fas fa-phone"></i>
-                                Chiama
+                            ${c.is_azienda ? `
+                            <a class="btn btn-search-pec" href="https://www.google.com/search?q=${encodeURIComponent('"' + (c.nome || '') + '" email PEC ' + (c.comune || ''))}" target="_blank" onclick="navigator.clipboard.writeText('${escapeHtml(c.nome || '')}').then(()=>showToast('\"${escapeHtml(c.nome || '')}\" copiato!'))">
+                                <i class="fas fa-envelope"></i>
+                                Cerca mail/PEC
                             </a>
+                            ` : ''}
+                        ` : c.tipo === 'fisso' ? `
                             <button class="btn btn-primary" onclick="showMessage('${c.pod}')" style="background: var(--info);">
                                 <i class="fas fa-envelope"></i>
                                 Template
                             </button>
+                            ${c.is_azienda ? `
+                            <a class="btn btn-search-pec" href="https://www.google.com/search?q=${encodeURIComponent('"' + (c.nome || '') + '" email PEC ' + (c.comune || ''))}" target="_blank" onclick="navigator.clipboard.writeText('${escapeHtml(c.nome || '')}').then(()=>showToast('\"${escapeHtml(c.nome || '')}\" copiato!'))">
+                                <i class="fas fa-envelope"></i>
+                                Cerca mail/PEC
+                            </a>
+                            ` : ''}
                         ` : c.tipo === 'senza_telefono' ? `
                             ${c.numeri_alternativi && c.numeri_alternativi.length > 0 ? `
                             <div class="numeri-alternativi-box">
@@ -2067,33 +1977,41 @@
                                             n.fonte
                                         }</span>
                                         <span class="numero-valore ${n.tipo}">${n.numero}</span>
-                                        ${n.tipo === 'cellulare' ? `<span class="numero-tipo-badge ${n.tipo}"><i class="fas fa-mobile-alt"></i></span>` : ''}
-                                        ${n.tipo === 'cellulare' ? `
-                                            <button class="btn-mini btn-whatsapp" onclick="event.stopPropagation(); showMessage('${c.pod}', '${n.numero}')" title="WhatsApp con template">
-                                                <i class="fab fa-whatsapp"></i>
-                                            </button>
-                                        ` : `
-                                            <a class="btn-mini btn-call" href="tel:${n.numero}" title="Chiama">
-                                                <i class="fas fa-phone"></i>
-                                            </a>
-                                            <button class="btn-mini btn-mail" onclick="event.stopPropagation(); showMessage('${c.pod}', '${n.numero}', 'fisso')" title="Email con template">
-                                                <i class="fas fa-envelope"></i>
-                                            </button>
-                                        `}
+                                        <span class="numero-tipo-badge ${n.tipo}"><i class="fas ${n.tipo === 'cellulare' ? 'fa-mobile-alt' : 'fa-phone'}"></i></span>
                                     </div>
                                 `).join('')}
                             </div>
                             ` : ''}
                             <button class="btn btn-search-phone" onclick="cercaTelefono('${c.pod}')">
                                 <i class="fas fa-search"></i>
-                                Aggiungi numero
+                                Aggiungi contatti
                             </button>
-                            ${c.is_azienda ? `
-                            <button class="btn btn-search-pec" onclick="cercaPec('${c.pod}')" style="margin-top:4px;">
-                                <i class="fas fa-certificate"></i>
-                                Cerca PEC
-                            </button>
-                            ` : ''}
+                            ${(() => {
+                                const hasCellulare = c.numeri_alternativi && c.numeri_alternativi.some(n => n.tipo === 'cellulare');
+                                const hasFisso = c.numeri_alternativi && c.numeri_alternativi.some(n => n.tipo !== 'cellulare');
+                                const firstCell = c.numeri_alternativi && c.numeri_alternativi.find(n => n.tipo === 'cellulare');
+                                const firstFisso = c.numeri_alternativi && c.numeri_alternativi.find(n => n.tipo !== 'cellulare');
+                                let btns = '';
+                                if (hasCellulare) {
+                                    btns += `<button class="btn btn-primary" onclick="showMessage('${c.pod}', '${firstCell.numero}')">
+                                        <i class="fab fa-whatsapp"></i>
+                                        Template WA
+                                    </button>`;
+                                }
+                                if (hasFisso) {
+                                    btns += `<button class="btn btn-primary" onclick="showMessage('${c.pod}', '${firstFisso.numero}', 'fisso')" style="background: var(--info);">
+                                        <i class="fas fa-envelope"></i>
+                                        Template mail
+                                    </button>`;
+                                }
+                                if (!hasCellulare && !hasFisso) {
+                                    btns += `<button class="btn btn-primary" onclick="showMessage('${c.pod}', '', 'fisso')" style="background: var(--info);">
+                                        <i class="fas fa-envelope"></i>
+                                        Template mail
+                                    </button>`;
+                                }
+                                return btns;
+                            })()}
                         ` : ''}
                     </div>
                     
@@ -2112,16 +2030,6 @@
                             onkeydown="if(event.key==='Enter'){event.preventDefault(); salvaEmailInline('${c.pod}', this.value);}"
                             onblur="salvaEmailInline('${c.pod}', this.value)">
                     </div>
-
-                    ${c.is_azienda ? `
-                    <div class="pec-info-row no-pec">
-                        <i class="fas fa-certificate pec-icon"></i>
-                        <span class="pec-value" style="color:var(--text-muted);font-style:italic;">Cerca PEC</span>
-                        <button class="btn-mini btn-pec" onclick="event.stopPropagation(); cercaPec('${c.pod}')" title="Cerca PEC">
-                            <i class="fas fa-search"></i>
-                        </button>
-                    </div>
-                    ` : ''}
 
                     <div class="checkbox-wrapper">
                         <input type="checkbox" id="completed_${c.pod}" 
@@ -2729,6 +2637,16 @@
             document.getElementById('linkPagineBianche').href = generaLinkPagineBianche(contatto);
             document.getElementById('linkGoogle').href = generaLinkGoogle(contatto);
             
+            // Mostra/nascondi link cerca mail/PEC per aziende
+            const linkMailPec = document.getElementById('linkGoogleMailPec');
+            if (contatto.is_azienda) {
+                const query = encodeURIComponent(`"${contatto.nome || ''}" email PEC ${contatto.comune || ''}`);
+                linkMailPec.href = `https://www.google.com/search?q=${query}`;
+                linkMailPec.style.display = 'inline-flex';
+            } else {
+                linkMailPec.style.display = 'none';
+            }
+            
             // Reset input
             document.getElementById('manualPhoneInput').value = '';
             
@@ -2823,59 +2741,14 @@
             currentSearchPod = null;
         }
 
-        // ========================================
-        // PEC SEARCH - Ricerca e salvataggio PEC
-        // ========================================
-
-        let currentPecPod = null;
-
-        function cercaPec(pod) {
-            const contatto = contatti.find(c => c.pod === pod);
-            if (!contatto) return;
-
-            currentPecPod = pod;
-
-            // Popola modal
-            document.getElementById('pecContactName').textContent = contatto.nome || 'Nome non disponibile';
-            const tipoBadge = document.getElementById('pecContactType');
-            const tipo = contatto.tipo_contatto || 'azienda';
-            tipoBadge.className = `tipo-badge ${tipo}`;
-            tipoBadge.textContent = tipo === 'condominio' ? '🏢 Condominio' : tipo === 'ente_pubblico' ? '🏛️ Ente' : '🏭 Azienda';
-            document.getElementById('pecContactAddress').textContent =
-                `${contatto.indirizzo || ''} ${contatto.civico || ''}, ${contatto.cap || ''} ${contatto.comune || ''}`;
-
-            // Link di ricerca
-            const links = contatto.link_pec || {};
-            const linkGoogle = document.getElementById('linkGooglePec');
-            const linkUC = document.getElementById('linkUfficioCamerale');
-
-            if (links.google_pec) {
-                linkGoogle.href = links.google_pec;
-            } else {
-                const query = encodeURIComponent(`"${contatto.nome || ''}" PEC ${contatto.comune || ''}`);
-                linkGoogle.href = `https://www.google.com/search?q=${query}`;
-            }
-            if (links.ufficio_camerale) {
-                linkUC.href = links.ufficio_camerale;
-            }
-
-            document.getElementById('pecSearchModal').classList.add('active');
-        }
-
-        function copiaENomeEApri(event) {
-            // Copia il nome dell'azienda in clipboard prima di aprire qualsiasi sito
-            const contatto = contatti.find(c => c.pod === currentPecPod);
+        function copiaENomeEApriFromPhone(event) {
+            // Copia il nome dell'azienda in clipboard prima di aprire la ricerca mail/PEC
+            const contatto = contatti.find(c => c.pod === currentSearchPod);
             if (contatto && contatto.nome) {
                 navigator.clipboard.writeText(contatto.nome).then(() => {
                     showToast('"' + contatto.nome + '" copiato! Incolla con Ctrl+V');
                 });
             }
-            // Il link si apre normalmente grazie a target="_blank"
-        }
-
-        function closePecModal() {
-            document.getElementById('pecSearchModal').classList.remove('active');
-            currentPecPod = null;
         }
 
         // Helper per escape HTML
@@ -3427,6 +3300,7 @@
         document.getElementById('filterNoPhone').addEventListener('change', renderContacts);
         document.getElementById('filterCompleted').addEventListener('change', renderContacts);
         document.getElementById('filterNotCompleted').addEventListener('change', renderContacts);
+        document.getElementById('filterAzienda').addEventListener('change', renderContacts);
 
         // Utilities
         function showLoading(show) {

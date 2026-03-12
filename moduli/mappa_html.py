@@ -1739,8 +1739,22 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             font-weight: bold;
             color: var(--text-secondary);
             user-select: none;
-            width: 20px;
+            width: 28px;
+            height: 28px;
             text-align: center;
+            line-height: 28px;
+            cursor: pointer;
+            border-radius: 50%;
+            transition: background 0.2s, color 0.2s;
+        }}
+
+        .zoom-slider-container .zoom-label:hover {{
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }}
+
+        .zoom-slider-container .zoom-label:active {{
+            transform: scale(0.9);
         }}
 
         .zoom-slider-container .zoom-value {{
@@ -3496,9 +3510,9 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
 
         <!-- Zoom Slider -->
         <div class="zoom-slider-container" id="zoomSliderContainer">
-            <span class="zoom-label">−</span>
+            <span class="zoom-label" id="zoomOut" title="Zoom out">−</span>
             <input type="range" id="zoomSlider" min="5" max="19" step="0.25" value="10">
-            <span class="zoom-label">+</span>
+            <span class="zoom-label" id="zoomIn" title="Zoom in">+</span>
             <span class="zoom-value" id="zoomValue">10.0x</span>
         </div>
     </div>
@@ -4137,6 +4151,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             zoomDelta: 0.5,
             wheelPxPerZoomLevel: 120,
             attributionControl: false,
+            zoomControl: false,
             preferCanvas: true
         }}).setView([deposito.lat, deposito.lon], 10);
         
@@ -4189,6 +4204,14 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         // Inizializza il valore dello slider
         zoomSlider.value = map.getZoom();
         zoomValue.textContent = map.getZoom().toFixed(1) + 'x';
+
+        // Pulsanti zoom +/-
+        document.getElementById('zoomOut').addEventListener('click', function() {{
+            map.zoomOut(0.5);
+        }});
+        document.getElementById('zoomIn').addEventListener('click', function() {{
+            map.zoomIn(0.5);
+        }});
         
         // Deposito
         const depositoIcon = L.divIcon({{
@@ -8048,6 +8071,9 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             html += `<div class="popup-row"><span class="popup-label">Eneltel</span><span class="popup-value">${{c.eneltel}}</span></div>`;
             html += `<div class="popup-row"><span class="popup-label">POD</span><span class="popup-value">${{c.pod}}</span></div>`;
 
+            if (c.tipo_ce) {{
+                html += `<div class="popup-row"><span class="popup-label">Tipologia</span><span class="popup-value">${{c.tipo_ce}}</span></div>`;
+            }}
             if (c.lcl) {{
                 html += `<div class="popup-row"><span class="popup-label">LCL</span><span class="popup-value">${{c.lcl}}</span></div>`;
             }}

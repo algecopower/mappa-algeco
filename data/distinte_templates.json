@@ -166,6 +166,29 @@
                 }
             },
             "body": "Buongiorno,\n\nvi contattiamo da <a href=\"https://algecopower.it\" style=\"color:#0066cc;text-decoration:underline;\">Algeco Power</a> per informarvi che in data {data} un tecnico incaricato da E-Distribuzione effettuerà un intervento di manutenzione sul contatore di energia elettrica sito presso VIA {indirizzo} ({comune}).\nNello specifico, è prevista la sostituzione del dispositivo con uno di nuova generazione.\n\nIn allegato trasmettiamo la lettera di aggiudicazione della gara che attesta il nostro incarico per conto di E-Distribuzione, unitamente ai dati del contatore oggetto dell’intervento:\n\nPOD (presente in fattura): {pod}\nEneltel (visualizzabile sul display del contatore): {eneltel}\nMatricola (stampata sul contatore): {matricola}\n\nPrecisiamo che l’attività è completamente gratuita e non comporta alcuna modifica al vostro contratto di fornitura. L’intervento è eseguito in attuazione di provvedimenti normativi che prevedono l’utilizzo di sistemi di misurazione conformi ai requisiti stabiliti dal D.Lgs. 102/2014, di recepimento della direttiva europea 2012/27/UE sull’efficienza energetica.\nPer maggiori informazioni: <a href=\"https://www.e-distribuzione.it/open-meter.html\" style=\"color:#0066cc;text-decoration:underline;\">E-Distribuzione Open Meter</a>\n\n{distacco_text}\n\nChiediamo gentilmente di darci un riscontro per confermare la data sovraindicata ed eventuali indicazioni per l’accesso al contatore.\n\nA disposizione per qualsiasi chiarimento, porgiamo cordiali saluti."
+        },
+        "email_semplificata": {
+            "label": "Email Semplificata",
+            "icon": "fas fa-envelope-open-text",
+            "type": "email",
+            "fields": [
+                "nome",
+                "pod",
+                "data",
+                "distacco"
+            ],
+            "info": "Email semplificata con allegato aggiudicazione. Il distacco si auto-compila in base alla tipologia contatore.",
+            "subject": "{nome}: SOSTITUZIONE CONTATORE E-DISTRIBUZIONE POD {pod}",
+            "conditionals": {
+                "distacco_text_semplice": {
+                    "field": "distacco",
+                    "values": {
+                        "si": "Vi informiamo che durante l’intervento sarà necessario interrompere la fornitura per qualche minuto. Qualora fosse necessaria la vostra presenza per accedere al contatore, vi chiediamo di indicarci i vostri orari di apertura.",
+                        "no": "Precisiamo che durante l’intervento NON sarà interrotta la fornitura di energia elettrica. Qualora fosse necessaria la vostra presenza per accedere al contatore, vi chiediamo di indicarci i vostri orari di apertura."
+                    }
+                }
+            },
+            "body": "Buongiorno,\nvi contattiamo da Algeco Power Srl per informarvi che la nostra società è stata incaricata da E-Distribuzione ad effettuare la sostituzione gratuita del vostro contatore in oggetto, come da comunicazioni inviate a mezzo posta nelle scorse settimane, per il giorno:\n\n{data}\n\nLa manutenzione, richiesta direttamente da E-Distribuzione, è obbligatoria e avviene in attuazione a provvedimenti normativi che stabiliscono l’uso di sistemi di misurazione che soddisfino i requisiti richiesti dal D.Lgs. 102/2014, di recepimento della direttiva europea 2012/27/UE sull’efficienza energetica.\n\n{distacco_text_semplice}\n\nAlleghiamo l’aggiudicazione del bando di gara che attesta il nostro incarico e restiamo a disposizione per chiarimenti.\n\nCordiali saluti."
         }
     }
 }

@@ -2479,12 +2479,14 @@ function commitEdit() {
     editInput = null;
     refreshRowByRn(selRow);
     updateChangeCount();
+    if (window._sseFlushPendingRefresh) window._sseFlushPendingRefresh();
 }
 
 function cancelEdit() {
     editing = false;
     editInput = null;
     refreshRowByRn(selRow);
+    if (window._sseFlushPendingRefresh) window._sseFlushPendingRefresh();
 }
 
 function refreshRowByRn(rn) {
@@ -3393,6 +3395,43 @@ document.addEventListener('copy', function(e) {
     e.preventDefault();
     e.clipboardData.setData('text/plain', text);
     toast('\uD83D\uDCCB Copiato', 'success');
+});
+
+document.addEventListener('cut', function(e) {
+    if (editing) return;
+    if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') return;
+    if (selRow < 0) return;
+    var text = getSelectionText();
+    if (!text) return;
+    e.preventDefault();
+    e.clipboardData.setData('text/plain', text);
+
+    // Svuota le celle selezionate
+    var cutGroup = ++undoGroupId;
+    var cutCount = 0;
+    if (selRange) {
+        for (var vi = selRange.viMin; vi <= selRange.viMax; vi++) {
+            var di = filtered[vi];
+            if (di === undefined) continue;
+            var rn = rawData[di]._row;
+            for (var vp = selRange.vpMin; vp <= selRange.vpMax; vp++) {
+                var ci = colOrder[vp];
+                if (ci === undefined || hiddenCols.has(ci)) continue;
+                var cn = headers[ci];
+                if (isProtected(cn)) continue;
+                applyEdit(rn, cn, '', cutGroup);
+                cutCount++;
+            }
+        }
+    } else if (selCol >= 0) {
+        var cn = headers[selCol];
+        if (!isProtected(cn)) {
+            applyEdit(selRow, cn, '', cutGroup);
+            cutCount++;
+        }
+    }
+    if (cutCount > 0) renderVisible(true);
+    toast('\u2702\uFE0F Tagliato' + (cutCount > 1 ? ' ' + cutCount + ' celle' : ''), 'success');
 });
 
 document.addEventListener('paste', function(e) {
@@ -4797,6 +4836,7 @@ function vlExcelClear() {
     var reconnectTimer = null;
     var reconnectDelay = 2000;
     var _sseRefreshing = false;
+    var _ssePendingRefresh = false;
 
     function connectSSE() {
         if (evtSource) { try { evtSource.close(); } catch(e) {} }
@@ -4822,6 +4862,11 @@ function vlExcelClear() {
 
     async function refreshFiloneData() {
         if (_sseRefreshing) return;
+        if (editing) {
+            _ssePendingRefresh = true;
+            return;
+        }
+        _ssePendingRefresh = false;
         _sseRefreshing = true;
         try {
             var r = await fetch('/api/filone');
@@ -4893,6 +4938,11 @@ function vlExcelClear() {
 
     // Esponi la funzione di refresh globalmente per il bottone manuale
     window._sseRefreshFilone = refreshFiloneData;
+
+    // Esponi il check per refresh pendente (chiamato dopo commitEdit/cancelEdit)
+    window._sseFlushPendingRefresh = function() {
+        if (_ssePendingRefresh) refreshFiloneData();
+    };
 
     // Avvia connessione SSE dopo il caricamento iniziale
     if (document.readyState === 'loading') {

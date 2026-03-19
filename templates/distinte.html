@@ -850,13 +850,15 @@
         }
 
         .contact-actions {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+            display: flex;
+            flex-wrap: wrap;
             gap: 6px;
             margin-top: 15px;
         }
 
         .contact-actions .btn {
+            flex: 1 1 0;
+            min-width: 100px;
             padding: 10px 6px;
             font-size: 13px;
             text-align: center;
@@ -866,7 +868,7 @@
 
         /* Stili per numeri alternativi trovati */
         .numeri-alternativi-box {
-            width: 100%;
+            flex: 0 0 100%;
             background: rgba(52, 152, 219, 0.1);
             border: 1px solid rgba(52, 152, 219, 0.3);
             border-radius: 8px;
@@ -2267,7 +2269,7 @@
             const contactType = tipoOverride || (numeroOverride ? 'cellulare' : (contatto.tipo || 'cellulare'));
             buildTemplateTabs(contactType);
             // Select default template based on contact type
-            const defaultTemplate = contactType === 'fisso' ? 'email_societa' : 'wa_conferma';
+            const defaultTemplate = contactType === 'fisso' ? 'email_semplificata' : 'wa_conferma';
             selectTemplate(defaultTemplate);
 
             document.getElementById('messageModal').classList.add('active');
@@ -2407,7 +2409,9 @@
             }
 
             // Plain text version (senza tag HTML) per mailto e WhatsApp
-            const messaggioPlain = messaggio.replace(/<a[^>]*href="([^"]*?)"[^>]*>(.*?)<\/a>/gi, '$2 ($1)');
+            const messaggioPlain = messaggio
+                .replace(/<a[^>]*href="([^"]*?)"[^>]*>(.*?)<\/a>/gi, '$2 ($1)')
+                .replace(/<[^>]+>/g, '');
 
             // Update WhatsApp link
             if (tmpl.type === 'whatsapp') {
@@ -2421,7 +2425,8 @@
                 const subject = tmpl.subject ? tmpl.subject(c, fields) : '';
                 document.getElementById('emailSubjectPreview').textContent = subject;
                 
-                const mailtoUrl = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(messaggioPlain)}`;
+                // mailto: apre il client con solo l'oggetto; il corpo HTML viene copiato negli appunti al click
+                const mailtoUrl = `mailto:?subject=${encodeURIComponent(subject)}`;
                 document.getElementById('openMailBtn').href = mailtoUrl;
             }
 
@@ -2464,8 +2469,23 @@
                 setTimeout(closeModal, 300);
             };
 
-            // Close modal when opening Mail + aggiungi nota "mandata mail"
-            document.getElementById('openMailBtn').onclick = (e) => {
+            // Close modal when opening Mail + copia HTML negli appunti + aggiungi nota "mandata mail"
+            document.getElementById('openMailBtn').onclick = async (e) => {
+                // Copia il corpo HTML formattato negli appunti
+                try {
+                    const htmlContent = messaggio.replace(/\n/g, '<br>');
+                    const blob = new Blob([htmlContent], { type: 'text/html' });
+                    const plainBlob = new Blob([messaggioPlain], { type: 'text/plain' });
+                    await navigator.clipboard.write([
+                        new ClipboardItem({
+                            'text/html': blob,
+                            'text/plain': plainBlob
+                        })
+                    ]);
+                } catch (err) {
+                    await navigator.clipboard.writeText(messaggioPlain);
+                }
+                showToast('Corpo mail copiato! Incolla con Ctrl+V nel messaggio.');
                 if (currentTemplatePod) {
                     aggiungiNota(currentTemplatePod, 'mandata mail');
                 }

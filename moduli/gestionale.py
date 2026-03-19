@@ -1816,10 +1816,16 @@ def genera_js_gestionale():
             statusDiv.className = 'appuntamento-status';
             
             try {{
+                // Includi il contenuto corrente delle note per non perdere modifiche non salvate
+                const noteTextareaCorrente = document.querySelector('.fullscreen-edit-input-field[data-campo="note_app"]');
+                const payload = {{ orario }};
+                if (noteTextareaCorrente) {{
+                    payload.nota_corrente = noteTextareaCorrente.value;
+                }}
                 const response = await fetch(`${{API_BASE}}/api/contatore/${{currentFullscreenEneltel}}/appuntamento`, {{
                     method: 'POST',
                     headers: {{ 'Content-Type': 'application/json' }},
-                    body: JSON.stringify({{ orario }})
+                    body: JSON.stringify(payload)
                 }});
                 
                 const result = await response.json();
@@ -2525,9 +2531,16 @@ def genera_js_gestionale():
             if (!confirm('Vuoi rimuovere l\\'appuntamento da questo contatore?')) return;
             
             try {{
+                // Includi il contenuto corrente delle note per non perdere modifiche non salvate
+                const noteTextareaCorrente = document.querySelector('.fullscreen-edit-input-field[data-campo="note_app"]');
+                const payload = {{}};
+                if (noteTextareaCorrente) {{
+                    payload.nota_corrente = noteTextareaCorrente.value;
+                }}
                 const response = await fetch(`${{API_BASE}}/api/contatore/${{eneltel}}/rimuovi-appuntamento`, {{
                     method: 'POST',
-                    headers: {{ 'Content-Type': 'application/json' }}
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify(payload)
                 }});
                 
                 const result = await response.json();

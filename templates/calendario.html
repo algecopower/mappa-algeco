@@ -1486,6 +1486,9 @@
                 </h2>
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <span class="boxbeat-badge" id="boxbeatBadge">0 pendenti</span>
+                    <button id="btnSpuntaTutti" class="btn btn-sm" style="background: #27ae60; color: white; display: none;" onclick="event.stopPropagation(); spuntaTuttiBoxBeat()" title="Segna tutti come completati">
+                        <i class="fas fa-check-double"></i> Spunta tutti
+                    </button>
                     <button class="btn btn-sm" style="background: #e91e63; color: white;" onclick="event.stopPropagation(); apriModalNuovoBoxBeat()">
                         <i class="fas fa-plus"></i> Aggiungi
                     </button>
@@ -2250,6 +2253,7 @@
         if (a.categoria === 'boxbeat' && a.boxbeat_data) {
             const bb = a.boxbeat_data;
             let fields = '';
+            if (bb.operatore) fields += `<div class="bb-field"><i class="fas fa-hard-hat"></i> <strong>Operatore:</strong> ${escapeHtml(bb.operatore)}</div>`;
             if (bb.pod) fields += `<div class="bb-field"><i class="fas fa-barcode"></i> <strong>POD:</strong> ${escapeHtml(bb.pod)}</div>`;
             if (bb.eneltel) fields += `<div class="bb-field"><i class="fas fa-hashtag"></i> <strong>ENELTEL:</strong> ${escapeHtml(bb.eneltel)}</div>`;
             if (bb.nominativo) fields += `<div class="bb-field"><i class="fas fa-user-tag"></i> <strong>Nominativo:</strong> ${escapeHtml(bb.nominativo)}</div>`;
@@ -2678,7 +2682,7 @@
 
     function escapeJsAttr(str) {
         if (!str) return '';
-        return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
+        return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r');
     }
 
     function showToast(msg, isError = false) {
@@ -2767,6 +2771,12 @@
         const pendenti = boxbeatOggiList.filter(a => !a.completata).length;
         const totali = boxbeatOggiList.length;
 
+        // Mostra/nascondi bottone "Spunta tutti"
+        const btnSpuntaTutti = document.getElementById('btnSpuntaTutti');
+        if (btnSpuntaTutti) {
+            btnSpuntaTutti.style.display = pendenti > 0 ? '' : 'none';
+        }
+
         if (pendenti === 0) {
             badge.textContent = `Tutti completati (${totali})`;
             badge.classList.add('done');
@@ -2782,6 +2792,7 @@
             const checkedClass = a.completata ? 'checked' : '';
 
             let fields = '';
+            if (bb.operatore) fields += `<div class="bb-field"><i class="fas fa-hard-hat"></i> <strong>${escapeHtml(bb.operatore)}</strong></div>`;
             if (bb.pod) fields += `<div class="bb-field"><i class="fas fa-barcode"></i> <strong>POD:</strong> ${escapeHtml(bb.pod)}</div>`;
             if (bb.eneltel) fields += `<div class="bb-field"><i class="fas fa-hashtag"></i> <strong>ENELTEL:</strong> ${escapeHtml(bb.eneltel)}</div>`;
             if (bb.nominativo) fields += `<div class="bb-field"><i class="fas fa-user-tag"></i> <strong>${escapeHtml(bb.nominativo)}</strong></div>`;
@@ -2828,6 +2839,58 @@
         });
 
         lista.innerHTML = html;
+    }
+
+    async function spuntaTuttiBoxBeat() {
+        const pendenti = boxbeatOggiList.filter(a => !a.completata);
+        if (pendenti.length === 0) { showToast('Tutti già completati'); return; }
+
+        if (!confirm(`Vuoi segnare tutti i ${pendenti.length} promemoria come completati?`)) return;
+
+        const ids = pendenti.map(a => a.id);
+
+        // Optimistic UI
+        pendenti.forEach(a => {
+            a.completata = true;
+            a.completata_da = currentUser || '?';
+            a.completata_il = new Date().toISOString();
+            const att = attivitaList.find(x => x.id === a.id);
+            if (att) {
+                att.completata = true;
+                att.completata_da = currentUser || '?';
+                att.completata_il = new Date().toISOString();
+            }
+        });
+        renderBoxBeatPanel();
+        aggiornaStatBoxBeat();
+        renderVista();
+        checkBoxBeatDeadline();
+
+        _skipSSECount++;
+        try {
+            const res = await fetch('/api/calendario/bulk-complete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids: ids })
+            });
+            if (!res.ok) throw new Error();
+            showToast(`${ids.length} promemoria completati`);
+            clearTimeout(_postToggleReloadTimer);
+            _postToggleReloadTimer = setTimeout(() => { caricaRiepilogo().catch(() => {}); }, 600);
+        } catch(e) {
+            // Rollback
+            pendenti.forEach(a => {
+                a.completata = false;
+                a.completata_da = null;
+                a.completata_il = null;
+                const att = attivitaList.find(x => x.id === a.id);
+                if (att) { att.completata = false; att.completata_da = null; att.completata_il = null; }
+            });
+            renderBoxBeatPanel();
+            aggiornaStatBoxBeat();
+            renderVista();
+            showToast('Errore completamento multiplo', true);
+        }
     }
 
     async function toggleBoxBeatCompleta(id) {

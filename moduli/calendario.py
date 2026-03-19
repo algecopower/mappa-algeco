@@ -213,6 +213,34 @@ def completa_attivita(attivita_id: str, completata_da: str = "sistema") -> dict:
         raise ValueError(f"Attività '{attivita_id}' non trovata")
 
 
+def completa_multipli(ids: list, completata_da: str = "sistema", forza_completa: bool = True) -> int:
+    """
+    Segna più attività come completate in una sola operazione.
+    
+    Args:
+        ids: Lista di ID delle attività
+        completata_da: Username di chi completa
+        forza_completa: Se True, completa solo quelle non ancora completate
+    
+    Returns:
+        Numero di attività completate
+    """
+    completati = 0
+    with _lock:
+        data = _load_data()
+        for att in data["attivita"]:
+            if att["id"] in ids:
+                if forza_completa and att.get("completata"):
+                    continue
+                att["completata"] = True
+                att["completata_da"] = completata_da
+                att["completata_il"] = datetime.now().isoformat()
+                completati += 1
+        if completati > 0:
+            _save_data(data)
+    return completati
+
+
 def elimina_attivita(attivita_id: str) -> bool:
     """
     Elimina un'attività.
@@ -810,6 +838,11 @@ def genera_excel_boxbeat(data_str: str = None, dati_filone: dict = None,
     _vie = dati_filone.get('vie', {})
     _civici = dati_filone.get('civici', {})
     _comuni = dati_filone.get('comuni', {})
+    _operatori = dati_filone.get('operatori', {})
+    
+    # Mappa inversa matricola → nome visualizzato
+    from config import OPERATORI_DICT
+    _reverse_operatori = {v: k for k, v in OPERATORI_DICT.items()}
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
@@ -906,8 +939,12 @@ def genera_excel_boxbeat(data_str: str = None, dati_filone: dict = None,
         data_pian_locale = app.get('data_pianificata', '')
         data_da_mostrare = data_pian_filone or data_app or data_pian_locale
         
+        # Operatore: recupera matricola dal filone, poi mappa a nome visualizzato
+        matricola = _da_filone(_operatori, '')
+        nome_operatore = _reverse_operatori.get(matricola, matricola)
+        
         valori = [
-            '',  # Operatore
+            nome_operatore,
             _formatta_data_it(data_da_mostrare),
             app.get('orario', ''),
             app.get('pod', ''),

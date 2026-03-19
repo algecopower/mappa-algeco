@@ -38,6 +38,7 @@ _SUFFISSI_AZIENDA = [
     r'\bDI\b',                           # DI (ditta individuale)
     r'\bAZIENDA\b',
     r'\bINTERNATIONAL\b',
+    r'\bMANAGEMENT\b',
 ]
 
 # Prefissi che indicano un ente/condominio (non persona fisica)

@@ -297,7 +297,7 @@ def register_callbacks(**kw):
 
 def _imposta_appuntamento_su_filone(row, orario, data_app='', note_extra='',
                                      origine='contatore', pod_override=None,
-                                     eneltel_override=None):
+                                     eneltel_override=None, nota_corrente=None):
     """Logica condivisa per impostare appuntamento su una riga del filone."""
     col_note = _get_colonna_note()
     ws = get_worksheet()
@@ -305,7 +305,9 @@ def _imposta_appuntamento_su_filone(row, orario, data_app='', note_extra='',
         raise ValueError(f'Colonna {col_note} non trovata')
 
     col = _header_map[col_note]
-    nota_attuale = ws.cell(row, col).value or ''
+    # Se il frontend ha inviato il contenuto corrente della textarea, usalo
+    # per non perdere eventuali modifiche non ancora salvate
+    nota_attuale = nota_corrente if nota_corrente is not None else (ws.cell(row, col).value or '')
 
     ora_pian_value = ''
 
@@ -383,7 +385,7 @@ def _imposta_appuntamento_su_filone(row, orario, data_app='', note_extra='',
     return {'nota_app': nota_app, 'nuova_nota': nuova_nota, 'ora_pian': ora_pian_value}
 
 
-def _rimuovi_appuntamento_da_filone(row):
+def _rimuovi_appuntamento_da_filone(row, nota_corrente=None):
     """Logica condivisa per rimuovere appuntamento da una riga del filone."""
     col_note = _get_colonna_note()
     ws = get_worksheet()
@@ -392,7 +394,7 @@ def _rimuovi_appuntamento_da_filone(row):
         raise ValueError(f'Colonna {col_note} non trovata')
 
     col = _header_map[col_note]
-    nota_attuale = ws.cell(row, col).value or ''
+    nota_attuale = nota_corrente if nota_corrente is not None else (ws.cell(row, col).value or '')
 
     if PROVINCIA_ATTIVA == 'PAVIA':
         # Pavia: rimuovi 'APP' (con o senza orario) e pulisci 'Ora pian'

@@ -28,7 +28,5 @@
   "data_inizio": "2025-10-01",
   "data_fine": "",
   "intervallo_sync_secondi": 180,
-  "mappatura_colonne": {
-    "comune": "Località"
-  }
+  "mappatura_colonne": {}
 }

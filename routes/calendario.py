@@ -15,7 +15,7 @@ from moduli.shared import (
 )
 from moduli.calendario import (
     get_attivita, crea_attivita, modifica_attivita,
-    completa_attivita, elimina_attivita, elimina_multipli, get_riepilogo,
+    completa_attivita, completa_multipli, elimina_attivita, elimina_multipli, get_riepilogo,
     CATEGORIE_VALIDE, COLORI_CATEGORIE,
     crea_promemoria_boxbeat, get_promemoria_boxbeat_oggi,
     get_riepilogo_boxbeat, get_user_promemoria_settings,
@@ -125,6 +125,21 @@ def api_completa_attivita(attivita_id):
         return jsonify({'success': True, 'attivita': attivita})
     except ValueError as e:
         return _api_error(e, 'completamento attività', 404)
+
+
+@bp.route('/api/calendario/bulk-complete', methods=['POST'])
+@login_required
+def api_completa_multipli():
+    """Segna più attività come completate in una sola operazione."""
+    dati = request.get_json()
+    ids = dati.get('ids', []) if dati else []
+    if not ids or not isinstance(ids, list):
+        return jsonify({'error': 'Nessun ID fornito'}), 400
+    username = session.get('user', {}).get('username', 'sconosciuto') if isinstance(session.get('user'), dict) else session.get('user', 'sconosciuto')
+    completati = completa_multipli(ids, completata_da=username)
+    if completati > 0:
+        _callbacks['sse_notify_all']('calendario_update', {'azione': 'bulk_complete', 'count': completati})
+    return jsonify({'success': True, 'completati': completati})
 
 
 @bp.route('/api/calendario/<attivita_id>', methods=['DELETE'])
@@ -347,6 +362,11 @@ def _arricchisci_boxbeat_con_filone(attivita_list: list) -> list:
     _civici = dati_filone.get('civici', {})
     _comuni = dati_filone.get('comuni', {})
     _date_pian = dati_filone.get('date_pian', {})
+    _operatori = dati_filone.get('operatori', {})
+    
+    # Mappa inversa matricola → nome visualizzato
+    from config import OPERATORI_DICT
+    _reverse_operatori = {v: k for k, v in OPERATORI_DICT.items()}
     
     for att in attivita_list:
         if att.get('categoria') != 'boxbeat':
@@ -368,6 +388,11 @@ def _arricchisci_boxbeat_con_filone(attivita_list: list) -> list:
                 if pod_key and pod_key in dizionario:
                     return dizionario[pod_key]
             return None
+        
+        # Operatore: cerca matricola nel filone e mappa a nome visualizzato
+        matricola_filone = _da_filone(_operatori)
+        if matricola_filone:
+            bb['operatore'] = _reverse_operatori.get(matricola_filone, matricola_filone)
         
         aggiornato = False
         for campo, dizionario in [('nominativo', _nominativi), ('via', _vie),
@@ -405,6 +430,7 @@ def _recupera_dati_aggiornati_dal_filone() -> dict:
         - vie:          {eneltel_or_pod: indirizzo_corrente}
         - civici:       {eneltel_or_pod: civico_corrente}
         - comuni:       {eneltel_or_pod: comune_corrente}
+        - operatori:    {eneltel_or_pod: matricola_operatore}
     
     Usato per arricchire l'Excel BoxBeat con dati scritti/modificati dopo la registrazione.
     """
@@ -415,6 +441,7 @@ def _recupera_dati_aggiornati_dal_filone() -> dict:
         'vie': {},
         'civici': {},
         'comuni': {},
+        'operatori': {},
     }
     try:
         ws = get_worksheet()
@@ -433,6 +460,7 @@ def _recupera_dati_aggiornati_dal_filone() -> dict:
         col_via_idx = None
         col_civico_idx = None
         col_comune_idx = None
+        col_operatore_idx = None
         
         for i, h in enumerate(headers_gs):
             h_upper = h.strip().upper()
@@ -463,6 +491,9 @@ def _recupera_dati_aggiornati_dal_filone() -> dict:
             # COMUNE
             if h_upper in ('COMUNE', 'LOCALITA', 'LOCALITÀ'):
                 col_comune_idx = i
+            # OPERATORE
+            if h_upper in ('OPERATORE', 'TECNICO', 'MATRICOLA'):
+                col_operatore_idx = i
         
         parse_data = None
         if col_data_idx is not None:
@@ -521,6 +552,12 @@ def _recupera_dati_aggiornati_dal_filone() -> dict:
                 com_val = row[col_comune_idx].strip() if col_comune_idx < len(row) else ''
                 if com_val:
                     _assegna(risultato['comuni'], com_val)
+            
+            # Operatore
+            if col_operatore_idx is not None:
+                op_val = row[col_operatore_idx].strip() if col_operatore_idx < len(row) else ''
+                if op_val:
+                    _assegna(risultato['operatori'], op_val)
     
     except Exception as e:
         logger.warning(f"[Appuntamenti Excel] ⚠️ Errore recupero dati aggiornati dal FILONE: {e}")

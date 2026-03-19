@@ -8702,7 +8702,6 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                         <td contenteditable="true">${{c.tipo_ce || ''}}</td>
                         <td contenteditable="true" style="font-weight:${{isApp ? '700' : '400'}}; color:${{isApp ? '#d63384' : '#333'}};">${{c._orari_display}}${{appLabel}}</td>
                         <td contenteditable="true">${{c.note_app || ''}}</td>
-                        <td contenteditable="true" style="font-family:monospace;">${{c.pod || ''}}</td>
                         <td contenteditable="true" style="font-family:monospace;">${{c.eneltel || ''}}</td>
                         <td contenteditable="true">${{c.cliente || ''}}</td>
                         <td contenteditable="true">${{c.via || ''}}</td>
@@ -8872,7 +8871,6 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                 <th>Tipo Mis.</th>
                 <th>Orario</th>
                 <th>Note</th>
-                <th>POD</th>
                 <th>Eneltel</th>
                 <th>Nominativo</th>
                 <th>Indirizzo</th>

@@ -1976,13 +1976,14 @@ qs('#globalSearch').addEventListener('input', function() {
 
 // Prevent native undo/redo on search input — always redirect to cell undo stack
 qs('#globalSearch').addEventListener('keydown', function(e) {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+    var _k = e.key.toLowerCase();
+    if ((e.ctrlKey || e.metaKey) && _k === 'z' && !e.shiftKey) {
         e.preventDefault();
         e.stopPropagation();
         undo();
         return;
     }
-    if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+    if ((e.ctrlKey || e.metaKey) && (_k === 'y' || (_k === 'z' && e.shiftKey))) {
         e.preventDefault();
         e.stopPropagation();
         redo();
@@ -2427,14 +2428,15 @@ function startEdit(rn, ci) {
     input.select();
 
     input.addEventListener('keydown', function(e) {
+        var _k = e.key.toLowerCase();
         // Enter without Shift confirms and moves down; Shift+Enter inserts newline
         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commitEdit(); movesel(1, 0); }
         else if (e.key === 'Tab') { e.preventDefault(); commitEdit(); movesel(0, e.shiftKey ? -1 : 1); }
         else if (e.key === 'Escape') { e.preventDefault(); cancelEdit(); }
-        else if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        else if ((e.ctrlKey || e.metaKey) && _k === 'z' && !e.shiftKey) {
             e.preventDefault(); e.stopPropagation(); commitEdit(); undo(); return;
         }
-        else if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+        else if ((e.ctrlKey || e.metaKey) && (_k === 'y' || (_k === 'z' && e.shiftKey))) {
             e.preventDefault(); e.stopPropagation(); commitEdit(); redo(); return;
         }
         e.stopPropagation();
@@ -2502,44 +2504,45 @@ function refreshRowByRn(rn) {
 // KEYBOARD NAVIGATION
 // ============================================================
 document.addEventListener('keydown', function(e) {
+    var _k = e.key.toLowerCase();
     if (e.key === 'F5') {
         e.preventDefault();
         manualRefresh();
         return;
     }
-    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+    if ((e.ctrlKey || e.metaKey) && _k === 's') {
         e.preventDefault();
         if (Object.keys(pending).length > 0) saveAll();
         return;
     }
-    if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+    if ((e.ctrlKey || e.metaKey) && _k === 'z' && !e.shiftKey) {
         e.preventDefault();
         e.stopPropagation();
         if (editing) commitEdit();
         undo();
         return;
     }
-    if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+    if ((e.ctrlKey || e.metaKey) && (_k === 'y' || (_k === 'z' && e.shiftKey))) {
         e.preventDefault();
         e.stopPropagation();
         if (editing) commitEdit();
         redo();
         return;
     }
-    if ((e.ctrlKey || e.metaKey) && e.key === 'c' && !editing && document.activeElement.tagName !== 'INPUT') {
+    if ((e.ctrlKey || e.metaKey) && _k === 'c' && !editing && document.activeElement.tagName !== 'INPUT') {
         // Let native copy event handle it
         return;
     }
-    if ((e.ctrlKey || e.metaKey) && e.key === 'v' && !editing && document.activeElement.tagName !== 'INPUT') {
+    if ((e.ctrlKey || e.metaKey) && _k === 'v' && !editing && document.activeElement.tagName !== 'INPUT') {
         // Let native paste event handle it
         return;
     }
-    if ((e.ctrlKey || e.metaKey) && e.key === 'h') {
+    if ((e.ctrlKey || e.metaKey) && _k === 'h') {
         e.preventDefault();
         openFindReplace();
         return;
     }
-    if ((e.ctrlKey || e.metaKey) && e.key === 'l') {
+    if ((e.ctrlKey || e.metaKey) && _k === 'l') {
         e.preventDefault();
         openVlookup();
         return;

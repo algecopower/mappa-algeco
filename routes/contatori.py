@@ -140,6 +140,7 @@ def set_appuntamento(eneltel):
         orario = data.get('orario', '')
         data_app = data.get('data_appuntamento', '')
         note_extra = data.get('note', '')
+        nota_corrente = data.get('nota_corrente')
 
         if not orario:
             return jsonify({'error': 'Orario richiesto'}), 400
@@ -150,7 +151,8 @@ def set_appuntamento(eneltel):
 
         result = _imposta_appuntamento_su_filone(
             row, orario, data_app=data_app, note_extra=note_extra,
-            origine='contatore', eneltel_override=eneltel
+            origine='contatore', eneltel_override=eneltel,
+            nota_corrente=nota_corrente
         )
         return jsonify({
             'success': True,
@@ -169,11 +171,14 @@ def set_appuntamento(eneltel):
 def remove_appuntamento(eneltel):
     """Rimuove l'appuntamento da un contatore."""
     try:
+        data = request.get_json(silent=True) or {}
+        nota_corrente = data.get('nota_corrente')
+
         row = find_row_by_eneltel(eneltel)
         if row is None:
             return jsonify({'error': f'ENELTEL {eneltel} non trovato'}), 404
 
-        result = _rimuovi_appuntamento_da_filone(row)
+        result = _rimuovi_appuntamento_da_filone(row, nota_corrente=nota_corrente)
         return jsonify({
             'success': True,
             'message': 'Appuntamento rimosso',

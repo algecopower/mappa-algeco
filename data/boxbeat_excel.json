@@ -152,6 +152,57 @@
       "provincia": "TORINO",
       "creato_da": "giada",
       "registrato_il": "2026-03-19T11:26:10.502666"
+    },
+    {
+      "id": "275279ee",
+      "data_appuntamento": "2026-03-23",
+      "orario": "11:00/14:00",
+      "pod": "IT001E01953275",
+      "eneltel": "19532755",
+      "nominativo": "DANIELA SAVINO",
+      "via": "FIUME",
+      "civico": "9",
+      "comune": "NICHELINO",
+      "note": "APP 11:00/14:00. conferma wa // 19/03 mandato wa",
+      "data_pianificata": "2026-03-23",
+      "origine": "filone_manuale",
+      "provincia": "TORINO",
+      "creato_da": "giada",
+      "registrato_il": "2026-03-19T12:27:35.832923"
+    },
+    {
+      "id": "6ae4b979",
+      "data_appuntamento": "2026-03-21",
+      "orario": "10:00/13:00",
+      "pod": "IT001E01948701",
+      "eneltel": "19487016",
+      "nominativo": "LUDMILA TURCANU",
+      "via": "AVOGADRO",
+      "civico": "17",
+      "comune": "NICHELINO",
+      "note": "APP 10:00/13:00. conferma wa // 19/03 mandato wa",
+      "data_pianificata": "2026-03-21",
+      "origine": "filone_manuale",
+      "provincia": "TORINO",
+      "creato_da": "giada",
+      "registrato_il": "2026-03-19T12:33:47.347142"
+    },
+    {
+      "id": "ac10864b",
+      "data_appuntamento": "2026-03-24",
+      "orario": "9:00/12:00",
+      "pod": "IT001E01938542",
+      "eneltel": "19385426",
+      "nominativo": "SILVANA VALLE",
+      "via": "MARTIRI",
+      "civico": "15",
+      "comune": "NICHELINO",
+      "note": "APP 9:00/12:00.  chiedere del sig. Loris presso My Kitchen, è un'attività vicina e ci aprono loro // 19/03 mandato wa",
+      "data_pianificata": "2026-03-24",
+      "origine": "filone_manuale",
+      "provincia": "TORINO",
+      "creato_da": "giada",
+      "registrato_il": "2026-03-19T12:59:39.795515"
     }
   ]
 }

@@ -8675,12 +8675,36 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                 return 99999;
             }}
 
-            // Ordina per orario
+            // Estrae i minuti dell'orario di FINE dalla stringa (secondo orario trovato)
+            function estraiMinutiFineOrario(orarioStr) {{
+                if (!orarioStr || orarioStr.trim() === '') return 99999;
+
+                // Cerca tutti gli orari nel formato HH:MM o H:MM o H.MM o HH.MM
+                const matches = [...orarioStr.matchAll(/(\d{{1,2}})[:.h](\d{{2}})/g)];
+                if (matches.length >= 2) {{
+                    return parseInt(matches[1][1]) * 60 + parseInt(matches[1][2]);
+                }}
+
+                // Cerca tutte le ore semplici (es: "dalle 8 alle 11")
+                const matchOre = [...orarioStr.matchAll(/\b(\d{{1,2}})\b/g)];
+                if (matchOre.length >= 2) {{
+                    const ore = parseInt(matchOre[matchOre.length - 1][1]);
+                    if (ore >= 0 && ore <= 23) return ore * 60;
+                }}
+
+                return 99999;
+            }}
+
+            // Ordina per orario: prima per inizio, poi per fascia più stretta (fine anticipata)
             listaTappe.sort((a, b) => {{
                 const minA = estraiMinutiOrario(a._orari_display);
                 const minB = estraiMinutiOrario(b._orari_display);
                 if (minA !== minB) return minA - minB;
-                // A parità di orario, mantieni ordine percorso
+                // A parità di orario di inizio, prima la fascia più stretta (fine minore)
+                const fineA = estraiMinutiFineOrario(a._orari_display);
+                const fineB = estraiMinutiFineOrario(b._orari_display);
+                if (fineA !== fineB) return fineA - fineB;
+                // A ulteriore parità, mantieni ordine percorso
                 return (a.ordine_tappa || 999) - (b.ordine_tappa || 999);
             }});
 

@@ -82,7 +82,6 @@ Il **Gestionale Mappa Contatori** è un sistema web per la gestione operativa de
 | Software                                      | Scopo                                             |
 | --------------------------------------------- | ------------------------------------------------- |
 | **Cloudflare Tunnel** (`cloudflared`) | Accesso remoto da Internet                        |
-| **Ollama**                              | Rilevamento intelligente appuntamenti (AI locale) |
 
 ### File necessari
 
@@ -493,7 +492,6 @@ python gestione_utenti.py --reset --username nomeutente --password nuovapassword
 Dipendenze esterne:
   • Google Sheets API (gspread + Service Account) — lettura/scrittura FILONE
   • OSRM Docker (:5000)     — calcolo distanze e percorsi stradali reali
-  • Ollama (:11434, opz.)   — AI per rilevamento appuntamenti
 ```
 
 ### Principi architetturali
@@ -547,7 +545,6 @@ mappa_algeco_nuova/
 │
 └── moduli/                      # Moduli Python del backend
     ├── __init__.py              # Re-export API pubbliche
-    ├── ai_detector.py           # Rilevamento appuntamenti (regex + AI)
     ├── auth.py                  # Autenticazione e gestione sessioni
     ├── cache.py                 # Cache persistente distanze
     ├── data_loader.py           # Caricamento dati da Google Sheets
@@ -585,7 +582,7 @@ Google Sheets (FILONE)
         ├─ Scarica foglio via gspread
         ├─ Normalizza colonne (trova_colonna fuzzy match)
         ├─ Filtra: rimuove ESITO OK, date fuori range, no coordinate
-        ├─ Rileva appuntamenti (ai_detector.py)
+        ├─ Rileva appuntamenti (regex su NOTE APP)
         └─ Risultato: pandas DataFrame pulito
         │
         ▼
@@ -681,26 +678,6 @@ from moduli import carica_cache, salva_cache, carica_dati_google_sheets, genera_
 - Rimuove righe senza coordinate GPS valide
 - Filtra per operatori VIP (`MATRICOLE_VIP`)
 - Filtra per range date (`DATA_INIZIO` — `DATA_FINE`)
-
----
-
-### `moduli/ai_detector.py`
-
-**Scopo:** Rilevamento intelligente degli appuntamenti dalle note. Usa una cascata di regex, con fallback opzionale a un LLM locale (Ollama).
-
-| Funzione                                                      | Descrizione                                  |
-| ------------------------------------------------------------- | -------------------------------------------- |
-| `rileva_appuntamento(nota, usa_ai)`                         | Torino: ritorna `(is_app, orario, metodo)` |
-| `rileva_appuntamenti_batch(note_list)`                      | Batch per Torino                             |
-| `rileva_appuntamento_pavia(ora_pian)`                       | Pavia: ritorna `bool`                      |
-| `estrai_orario_pavia(ora_pian)`                             | Estrae orario dal formato Pavia              |
-| `rileva_appuntamenti_batch_pavia(ora_pian_list, data_list)` | Batch per Pavia                              |
-
-**Logica Torino:** cerca pattern come "APP 10:00", "confermato ore 14", "appuntamento 9.30-11.00" nella colonna `NOTE APP`.
-
-**Logica Pavia:** se `Ora pian` contiene un orario specifico (es. "10:30") e NON è nel formato "dalle X alle Y", è un appuntamento.
-
-**AI (opzionale):** se `ABILITA_AI_APPUNTAMENTI=True`, le note ambigue vengono inviate a Ollama (phi3:mini) per classificazione. Risultati cachati con `@lru_cache(maxsize=500)`.
 
 ---
 
@@ -1010,7 +987,6 @@ PROVINCE = {
         'operatori_dict': {'Nome': 'MATRICOLA'},     # Per dropdown gestionale
         'file_report': 'report_torino.xlsx',
         'file_mappa': 'mappa_torino.html',
-        'logica_appuntamenti': 'torino',             # 'torino' o 'pavia'
         'ora_inizio_giornata': 9 * 60,               # Minuti da mezzanotte
     },
     'PAVIA': { ... }
@@ -1195,7 +1171,6 @@ PROVINCE = {
         'operatori_dict': {'Operatore 1': 'OP1', 'Operatore 2': 'OP2'},
         'file_report': 'report_nuova.xlsx',
         'file_mappa': 'mappa_nuova.html',
-        'logica_appuntamenti': 'torino',    # o 'pavia'
         'ora_inizio_giornata': 8 * 60,
     },
 }

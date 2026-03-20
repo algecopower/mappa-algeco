@@ -7,17 +7,20 @@
   "coloriTecnici": {
     "ALESSANDRO": "#e74c3c",
     "MELEK": "#f1c40f",
-    "BRAHIM": "#2ecc71"
+    "BRAHIM": "#2ecc71",
+    "PAUL": "#3498db"
   },
   "matricoleVip": [
     "ALESSANDRO",
     "MELEK",
-    "BRAHIM"
+    "BRAHIM",
+    "PAUL"
   ],
   "operatoriDict": {
     "ALESSANDRO": "ALESSANDRO",
     "MELEK": "MELEK",
-    "BRAHIM": "BRAHIM"
+    "BRAHIM": "BRAHIM",
+    "PAUL": "PAUL"
   },
   "provincia": "PAVIA",
   "refreshInterval": 185000

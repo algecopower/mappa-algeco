@@ -16,7 +16,7 @@ from moduli.shared import (
     find_row_by_eneltel, find_row_by_pod,
     _imposta_appuntamento_su_filone, _rimuovi_appuntamento_da_filone,
     _api_error, _get_colonna_note, _get_username,
-    _trova_indice_colonna, _trova_indice_multi,
+    _trova_indice_multi,
     _callbacks, _sheets_retry,
 )
 from moduli.distinte_manager import (
@@ -141,25 +141,22 @@ def parse_distinta_endpoint():
             all_data = ws.get_all_values()
             headers = all_data[0] if all_data else []
 
-            # Trova indici colonne (usa helper condivisi)
-            trova_idx = lambda nome: _trova_indice_colonna(headers, nome)
-            trova_idx_multi = lambda *nomi: _trova_indice_multi(headers, *nomi)
+            # Trova indici colonne (usa helper condivisi + mappatura personalizzata)
 
-            idx_pod = trova_idx('POD')
-            idx_eneltel = trova_idx_multi('ENELTEL', 'Eneltel', 'eneltel')
-            idx_data = trova_idx_multi('DATA PIAN', 'Data_pianificata')
-            idx_telefono = trova_idx_multi('telefono', 'tel', 'cellulare', 'cell', 'numero telefono')
-            idx_email = trova_idx_multi('email', 'EMAIL', 'Email', 'E-mail', 'e-mail', 'Mail', 'MAIL')
-            idx_nominativo = trova_idx_multi('NOMINATIVO', 'Nominativo')
-            idx_indirizzo = trova_idx_multi('Indirizzo', 'Via')
-            idx_civico = trova_idx_multi('Num', 'civico')
-            idx_comune = trova_idx_multi('COMUNE', 'Comune')
-            idx_note = trova_idx_multi('NOTE APP', 'NOTE')
-            idx_codice_ante = trova_idx_multi('Codice_Ante_Sostituzione', 'Codice misuratore in opera')
-            idx_matricola_ante = trova_idx_multi('Matricola_Ante_Sostituzione', 'Matricola misuratore in opera')
-            idx_tipologia = trova_idx_multi('Tipo_Misuratore', 'TIPOLOGIA CE')
-            idx_posizione = trova_idx_multi('Posizione_Mis_Ante_Sost', 'Posizione_Ante_Mis', 'Posizione misuratore', 'POSIZIONE', 'Posizione')
-            idx_ora_pian = trova_idx_multi('Ora pian', 'ORA PIAN', 'ORA_PIAN') if PROVINCIA_ATTIVA == 'PAVIA' else None
+            idx_pod = _trova_indice_multi(headers, 'POD', 'Pod', 'pod', chiave_mapping='pod')
+            idx_eneltel = _trova_indice_multi(headers, 'ENELTEL', 'Eneltel', 'eneltel', chiave_mapping='eneltel')
+            idx_data = _trova_indice_multi(headers, 'DATA PIAN', 'DATA_PIAN', 'PROG', 'Prog', chiave_mapping='data_pianificata')
+            idx_telefono = _trova_indice_multi(headers, 'telefono', 'TELEFONO', 'Telefono', 'TEL', 'Tel', chiave_mapping='telefono')
+            idx_email = _trova_indice_multi(headers, 'email', 'EMAIL', 'Email', 'E-mail', 'e-mail', 'Mail', 'MAIL', chiave_mapping='email')
+            idx_nominativo = _trova_indice_multi(headers, 'NOMINATIVO', 'Nominativo', 'CLIENTE', 'Cliente', chiave_mapping='nominativo')
+            idx_indirizzo = _trova_indice_multi(headers, 'Indirizzo', 'Via', 'VIA', chiave_mapping='indirizzo')
+            idx_civico = _trova_indice_multi(headers, 'Num', 'NUM', 'civico', 'CIVICO', chiave_mapping='civico')
+            idx_comune = _trova_indice_multi(headers, 'COMUNE', 'Comune', chiave_mapping='comune')
+            idx_note = _trova_indice_multi(headers, 'NOTE APP', 'NOTE_APP', 'NOTE', 'Note', chiave_mapping='note_appuntamento')
+            idx_codice_ante = _trova_indice_multi(headers, 'Codice_Ante_Sostituzione', 'Codice misuratore in opera', chiave_mapping='codice_ante')
+            idx_matricola_ante = _trova_indice_multi(headers, 'Matricola_Ante_Sostituzione', 'Matricola misuratore in opera', chiave_mapping='matricola_ante')
+            idx_tipologia = _trova_indice_multi(headers, 'Tipo_Misuratore', 'TIPOLOGIA CE', 'Tipologia CE', chiave_mapping='tipo_misuratore')
+            idx_posizione = _trova_indice_multi(headers, 'Posizione_Mis_Ante_Sost', 'Posizione_Ante_Mis', 'Posizione misuratore', 'POSIZIONE', 'Posizione', chiave_mapping='posizione_misuratore')
 
             for row in all_data[1:]:
                 if idx_pod is not None and idx_pod < len(row):
@@ -184,7 +181,6 @@ def parse_distinta_endpoint():
                             'matricola': matricola_completa,
                             'tipologia': row[idx_tipologia].strip() if idx_tipologia is not None and idx_tipologia < len(row) else '',
                             'posizione': row[idx_posizione].strip() if idx_posizione is not None and idx_posizione < len(row) else '',
-                            'ora_pian': row[idx_ora_pian].strip() if idx_ora_pian is not None and idx_ora_pian < len(row) else '',
                         }
 
             # Confronta distinta con filone
@@ -226,7 +222,6 @@ def parse_distinta_endpoint():
             contatto.setdefault('eneltel_filone', '')
             contatto.setdefault('tipologia_contatore', '')
             contatto.setdefault('posizione_contatore', '')
-            contatto.setdefault('ora_pian_filone', '')
             if pod in dati_filone:
                 contatto['note_filone'] = dati_filone[pod].get('note', '')
                 contatto['data_pian_filone'] = dati_filone[pod].get('data_pian', '')
@@ -237,7 +232,6 @@ def parse_distinta_endpoint():
                 contatto['eneltel_filone'] = dati_filone[pod].get('eneltel', '')
                 contatto['tipologia_contatore'] = dati_filone[pod].get('tipologia', '')
                 contatto['posizione_contatore'] = dati_filone[pod].get('posizione', '')
-                contatto['ora_pian_filone'] = dati_filone[pod].get('ora_pian', '')
                 # Se il nome dalla distinta è vuoto, usa il nominativo dal filone
                 if not contatto.get('nome', '').strip():
                     nominativo_filone = dati_filone[pod].get('nominativo', '').strip()
@@ -356,8 +350,8 @@ def salva_nota_distinte():
         ws = get_worksheet()
         header_map = get_header_map()
 
-        # Colonna note
-        col_note = 'NOTE APP' if PROVINCIA_ATTIVA == 'TORINO' else 'NOTE'
+        # Colonna note (cerca dinamicamente)
+        col_note = _get_colonna_note()
 
         if col_note not in header_map:
             return jsonify({'error': f'Colonna {col_note} non trovata'}), 400
@@ -392,53 +386,6 @@ def salva_nota_distinte():
 
     except Exception as e:
         return _api_error(e, 'salvataggio nota distinte')
-
-
-@bp.route('/api/distinte/salva-ora-pian', methods=['POST'])
-@login_required
-def salva_ora_pian_distinte():
-    """
-    Salva il valore della colonna 'Ora pian' nel filone (solo Pavia).
-    Body: {"pod": "IT...", "ora_pian": "10:00-12:00"}
-    """
-    try:
-        data = request.json
-        pod = data.get('pod', '').strip().upper()
-        ora_pian = data.get('ora_pian', '').strip()
-
-        if not pod:
-            return jsonify({'error': 'POD mancante'}), 400
-
-        if PROVINCIA_ATTIVA != 'PAVIA':
-            return jsonify({'error': 'Ora pian è disponibile solo per Pavia'}), 400
-
-        row = find_row_by_pod(pod)
-        if row is None:
-            return jsonify({'error': f'POD {pod} non trovato'}), 404
-
-        ws = get_worksheet()
-        header_map = get_header_map()
-
-        col_ora_pian = None
-        for nome in ['Ora pian', 'ORA PIAN', 'ORA_PIAN']:
-            if nome in header_map:
-                col_ora_pian = header_map[nome]
-                break
-
-        if col_ora_pian is None:
-            return jsonify({'error': 'Colonna Ora pian non trovata'}), 400
-
-        ws.update_cell(row, col_ora_pian, ora_pian)
-
-        _callbacks['trigger_sync_after_edit']()
-
-        return jsonify({
-            'success': True,
-            'ora_pian': ora_pian
-        })
-
-    except Exception as e:
-        return _api_error(e, 'salvataggio ora pian distinte')
 
 
 @bp.route('/api/distinte/strikethrough-telefono', methods=['POST'])
@@ -600,8 +547,7 @@ def set_appuntamento_distinte():
         return jsonify({
             'success': True,
             'message': f"Appuntamento impostato: {result['nota_app']}",
-            'nota': result['nuova_nota'],
-            'ora_pian': result.get('ora_pian', '')
+            'nota': result['nuova_nota']
         })
 
     except ValueError as ve:
@@ -629,8 +575,7 @@ def remove_appuntamento_distinte():
         return jsonify({
             'success': True,
             'message': 'Appuntamento rimosso',
-            'nota': result['nuova_nota'],
-            'ora_pian': result.get('ora_pian', '')
+            'nota': result['nuova_nota']
         })
 
     except ValueError as ve:

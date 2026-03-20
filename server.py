@@ -923,9 +923,11 @@ def get_settings():
     """Restituisce tutte le impostazioni configurabili + colonne filone."""
     import config
     
-    # Recupera le intestazioni colonne dal foglio Google
+    # Recupera le intestazioni colonne fresche dal foglio Google
     colonne_filone = []
     try:
+        # Forza refresh per avere sempre gli header aggiornati
+        get_worksheet(force_refresh=True)
         h = get_headers()
         if h:
             colonne_filone = list(h)

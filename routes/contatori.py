@@ -33,25 +33,75 @@ from config import (
     MODALITA_TEST,
     MATRICOLE_VIP,
     DEPOSITO,
+    MAPPATURA_COLONNE,
+    MAPPATURA_COLONNE_DEFAULT,
 )
 
 logger = logging.getLogger('mappa_algeco')
 
 # Colonne protette nella vista Excel (non modificabili dall'utente)
+# Centralizzate: stesse colonne per entrambe le province
+_COLONNE_PROTETTE_BASE = [
+    'LCL', 'TIPO_MISURATORE', 'MOT. RICH.', 'MID', 'TIPOLOGIA ZONA',
+    'POD', 'ENELTEL', 'CODICE_ANTE_SOSTITUZIONE', 'MATRICOLA_ANTE_SOSTITUZIONE',
+    'MATRICOLA CE INST', 'COD.', 'DATA INSTALLAZIONE', 'ESITO'
+]
 COLONNE_PROTETTE_FILONE = {
-    'TORINO': [
-        'LCL', 'TIPO_MISURATORE', 'MOT. RICH.', 'MID', 'TIPOLOGIA ZONA',
-        'POD', 'ENELTEL', 'CODICE_ANTE_SOSTITUZIONE', 'MATRICOLA_ANTE_SOSTITUZIONE',
-        'MATRICOLA CE INST', 'COD.', 'DATA INSTALLAZIONE', 'ESITO'
-    ],
-    'PAVIA': [
-        'LCL', 'INIZIO LCL', 'FINE LCL', 'NDIS', 'TIPOLOGIA CE',
-        'ENELTEL', 'POD', 'CODICE MISURATORE IN OPERA', 'MATRICOLA MISURATORE IN OPERA',
-        'DATA INSTALLAZIONE', 'ESITO', 'CODICE POST', 'MATRICOLA POST'
-    ]
+    'TORINO': _COLONNE_PROTETTE_BASE,
+    'PAVIA': _COLONNE_PROTETTE_BASE + ['PR'],  # PR è in sola lettura per Pavia
 }
 
 bp = Blueprint('contatori', __name__)
+
+
+def _find_value_in_row(data, chiave_mapping):
+    """Trova il valore di un campo dal dict raw Sheets usando la mappatura colonne."""
+    # Prima controlla mappatura personalizzata
+    if MAPPATURA_COLONNE.get(chiave_mapping):
+        nome = MAPPATURA_COLONNE[chiave_mapping]
+        for k, v in data.items():
+            if k.strip().lower() == nome.strip().lower():
+                return str(v).strip() if v else ''
+    # Poi controlla i nomi default
+    defaults = MAPPATURA_COLONNE_DEFAULT.get(chiave_mapping, {})
+    nomi = defaults.get('nomi_default', [])
+    for nome in nomi:
+        for k, v in data.items():
+            if k.strip().lower() == nome.strip().lower():
+                return str(v).strip() if v else ''
+    return ''
+
+
+def _format_row_to_contatore(data):
+    """Converte il dict raw Sheets (header→valore) nel formato contatore frontend."""
+    from moduli.percorso import normalizza_eneltel, estrai_orario
+
+    eneltel_raw = _find_value_in_row(data, 'eneltel')
+    note_app_raw = _find_value_in_row(data, 'note_appuntamento')
+
+    is_appuntamento = bool(re.search(r'\bapp\b', note_app_raw, re.IGNORECASE)) if note_app_raw else False
+    ora_appuntamento = estrai_orario(note_app_raw) if is_appuntamento else None
+
+    return {
+        'eneltel': eneltel_raw,
+        'id': normalizza_eneltel(eneltel_raw) or '',
+        'pod': _find_value_in_row(data, 'pod'),
+        'cliente': _find_value_in_row(data, 'nominativo'),
+        'comune': _find_value_in_row(data, 'comune'),
+        'localita': _find_value_in_row(data, 'localita'),
+        'via': _find_value_in_row(data, 'indirizzo'),
+        'civico': _find_value_in_row(data, 'civico'),
+        'telefono': _find_value_in_row(data, 'telefono'),
+        'email': _find_value_in_row(data, 'email'),
+        'note': _find_value_in_row(data, 'posizione_misuratore'),
+        'note_app': note_app_raw,
+        'tipo_ce': _find_value_in_row(data, 'tipo_misuratore'),
+        'orari_lettere': _find_value_in_row(data, 'orari_lettere'),
+        'lcl': _find_value_in_row(data, 'lcl'),
+        'is_appuntamento': is_appuntamento,
+        'ora_appuntamento': ora_appuntamento,
+        'smart_test': _find_value_in_row(data, 'smart_test'),
+    }
 
 
 @bp.route('/api/contatore/<eneltel>')
@@ -77,7 +127,8 @@ def get_contatore(eneltel):
     return jsonify({
         'eneltel': eneltel,
         'row': row,
-        'data': data
+        'data': data,
+        'contatore': _format_row_to_contatore(data)
     })
 
 
@@ -252,8 +303,7 @@ def update_filone_row(row_num):
             ws.batch_update(updates)
 
         # === RILEVAMENTO APPUNTAMENTI MANUALI ===
-        # Torino: "APP HH:MM" nella colonna NOTE APP / NOTE
-        # Pavia: orario diretto (es. "9:00", "8/10") nella colonna "Ora pian"
+        # "APP HH:MM" nella colonna NOTE APP (logica unificata)
         try:
             orario_trovato = None
             nota_salvata = ''
@@ -265,7 +315,7 @@ def update_filone_row(row_num):
 
                 col_upper = col_name.upper().strip()
 
-                # --- TORINO: cerca "APP HH:MM" in NOTE APP / NOTE ---
+                # Cerca "APP HH:MM" in NOTE APP / NOTE
                 if col_upper in ('NOTE APP', 'NOTE', 'NOTE_APP'):
                     match_app = re.search(
                         r'APP\s+(\d{1,2}[:.]\d{2}(?:\s*[-/]\s*\d{1,2}[:.]\d{2})?)',
@@ -274,15 +324,6 @@ def update_filone_row(row_num):
                     if match_app:
                         orario_trovato = match_app.group(1).replace('.', ':')
                         nota_salvata = val_str
-
-                # --- PAVIA: orario diretto in "Ora pian" ---
-                if col_upper in ('ORA PIAN', 'ORA_PIAN'):
-                    from moduli.ai_detector import rileva_appuntamento_pavia, estrai_orario_pavia
-                    if rileva_appuntamento_pavia(val_str):
-                        orario_estratto = estrai_orario_pavia(val_str)
-                        if orario_estratto:
-                            orario_trovato = orario_estratto
-                            nota_salvata = val_str
 
             if orario_trovato:
                 # Estrai dati contatore dalla riga
@@ -411,6 +452,7 @@ def update_filone_bulk():
                         continue
                     col_upper = col_name.upper().strip()
 
+                    # Cerca "APP HH:MM" in NOTE APP / NOTE (logica unificata)
                     if col_upper in ('NOTE APP', 'NOTE', 'NOTE_APP'):
                         match_app = re.search(
                             r'APP\s+(\d{1,2}[:.]\d{2}(?:\s*[-/]\s*\d{1,2}[:.]\d{2})?)',
@@ -419,14 +461,6 @@ def update_filone_bulk():
                         if match_app:
                             orario_trovato = match_app.group(1).replace('.', ':')
                             nota_salvata = val_str
-
-                    if col_upper in ('ORA PIAN', 'ORA_PIAN'):
-                        from moduli.ai_detector import rileva_appuntamento_pavia, estrai_orario_pavia
-                        if rileva_appuntamento_pavia(val_str):
-                            orario_estratto = estrai_orario_pavia(val_str)
-                            if orario_estratto:
-                                orario_trovato = orario_estratto
-                                nota_salvata = val_str
 
                 if orario_trovato:
                     contatore_data = _callbacks['extract_contatore_data'](row_num)
@@ -613,15 +647,15 @@ def genera_orari_lettere():
         ws = get_worksheet(force_refresh=True)
         _header_map = get_header_map()
 
-        # Determina colonna destinazione
-        if PROVINCIA_ATTIVA == 'PAVIA':
-            col_dest_name = 'Ora pian'  # Orari lettere vanno in Ora pian
-        else:
-            col_dest_name = 'Orari'
+        # Determina colonna destinazione (unificata: Orari, con fallback a Ora pian)
+        col_dest_name = None
+        for nome in ['Orari', 'ORARI']:
+            if nome in _header_map:
+                col_dest_name = nome
+                break
 
-        # Trova colonna destinazione
-        if col_dest_name not in _header_map:
-            return jsonify({'error': f"Colonna '{col_dest_name}' non trovata nel FILONE. Crea prima la colonna."}), 400
+        if col_dest_name is None:
+            return jsonify({'error': "Colonna 'Orari' non trovata nel FILONE. Crea prima la colonna."}), 400
 
         col_dest_idx = _header_map[col_dest_name]
 

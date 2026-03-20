@@ -2075,17 +2075,6 @@
                         </div>
                     </div>
                     
-                    ${provincia === 'PAVIA' ? `
-                    <div class="note-actions" style="margin-top: 4px;">
-                        <input type="text" class="note-display ${c.ora_pian_filone ? 'has-note' : ''}" id="oraPianDisplay_${c.pod}" 
-                            value="${escapeHtml(c.ora_pian_filone || '')}" placeholder="Ora pian (vuoto)"
-                            onkeydown="if(event.key==='Enter'){event.preventDefault(); salvaOraPian('${c.pod}', this.value);}" 
-                            onblur="salvaOraPian('${c.pod}', this.value)">
-                        <span style="font-size: 11px; color: var(--text-muted); padding: 2px 6px;">
-                            <i class="fas fa-clock"></i> Ora pian
-                        </span>
-                    </div>
-                    ` : ''}
                     
                     <div class="appuntamento-section">
                         <div class="appuntamento-title">
@@ -2112,7 +2101,7 @@
                                 <i class="fas fa-check"></i>
                                 Fissa
                             </button>
-                            <button class="btn-appuntamento" id="btnRimuoviApp_${c.pod}" onclick="rimuoviAppuntamento('${c.pod}')" style="background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%); ${(c.note_filone || '').toUpperCase().includes('APP') || (c.ora_pian_filone || '') ? '' : 'display: none;'}">
+                            <button class="btn-appuntamento" id="btnRimuoviApp_${c.pod}" onclick="rimuoviAppuntamento('${c.pod}')" style="background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%); ${(c.note_filone || '').toUpperCase().includes('APP') ? '' : 'display: none;'}">
                                 <i class="fas fa-trash"></i>
                                 Rimuovi
                             </button>
@@ -3022,40 +3011,6 @@
             }
         }
 
-        // Salva Ora pian (solo Pavia - da input editabile su Enter o blur)
-        let _lastSavedOraPian = {};
-        async function salvaOraPian(pod, valore) {
-            valore = (valore || '').trim();
-            
-            // Evita salvataggio se non cambiato
-            if (_lastSavedOraPian[pod] === valore) return;
-            _lastSavedOraPian[pod] = valore;
-            
-            // Aggiorna classe
-            const oraPianDisplay = document.getElementById(`oraPianDisplay_${pod}`);
-            if (oraPianDisplay) {
-                oraPianDisplay.classList.toggle('has-note', !!valore);
-            }
-            
-            // Salva sul filone
-            try {
-                const resp = await fetch('/api/distinte/salva-ora-pian', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pod, ora_pian: valore })
-                });
-                
-                const data = await resp.json();
-                if (data.success) {
-                    showToast('Ora pian salvata');
-                } else {
-                    showToast(data.error || 'Errore salvataggio ora pian', 'error');
-                }
-            } catch (e) {
-                showToast('Errore di connessione', 'error');
-            }
-        }
-
         // Chiudi dropdown quando si clicca fuori
         document.addEventListener('click', function(e) {
             if (!e.target.closest('.btn-add-note')) {
@@ -3162,15 +3117,6 @@
                         }
                     }
                     
-                    // Per Pavia: aggiorna anche il campo Ora pian
-                    if (provincia === 'PAVIA' && data.ora_pian !== undefined) {
-                        const oraPianDisplay = document.getElementById(`oraPianDisplay_${pod}`);
-                        if (oraPianDisplay) {
-                            oraPianDisplay.value = data.ora_pian;
-                            oraPianDisplay.classList.toggle('has-note', !!data.ora_pian);
-                        }
-                    }
-                    
                     // Mostra il pulsante rimuovi appuntamento
                     const btnRimuovi = document.getElementById(`btnRimuoviApp_${pod}`);
                     if (btnRimuovi) {
@@ -3228,15 +3174,6 @@
                             noteDisplay.value = data.nota;
                             noteDisplay.title = data.nota;
                             noteDisplay.classList.toggle('has-note', !!data.nota);
-                        }
-                    }
-                    
-                    // Per Pavia: pulisci anche il campo Ora pian
-                    if (provincia === 'PAVIA') {
-                        const oraPianDisplay = document.getElementById(`oraPianDisplay_${pod}`);
-                        if (oraPianDisplay) {
-                            oraPianDisplay.value = '';
-                            oraPianDisplay.classList.remove('has-note');
                         }
                     }
                     

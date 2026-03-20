@@ -469,13 +469,10 @@ def _recupera_dati_aggiornati_dal_filone() -> dict:
                 col_eneltel_idx = i
             if h_upper == 'POD':
                 col_pod_idx = i
-            # NOTE
-            if PROVINCIA_ATTIVA == 'TORINO' and h_upper == 'NOTE APP':
-                col_note_idx = i
-            elif PROVINCIA_ATTIVA != 'TORINO' and h_upper == 'NOTE':
-                col_note_idx = i
-            if col_note_idx is None and h_upper == 'NOTE':
-                col_note_idx = i
+            # NOTE (cerca tra i nomi possibili)
+            if h_upper in ('NOTE APP', 'NOTE_APP', 'NOTE APPUNTAMENTO', 'NOTE'):
+                if col_note_idx is None:
+                    col_note_idx = i
             # NOMINATIVO
             if h_upper in ('NOMINATIVO', 'CLIENTE', 'NOME'):
                 col_nom_idx = i

@@ -156,8 +156,15 @@ def _trova_indice_colonna(headers, nome):
     return None
 
 
-def _trova_indice_multi(headers, *nomi):
-    """Cerca tra più nomi colonna, restituisce il primo indice trovato (0-based)."""
+def _trova_indice_multi(headers, *nomi, chiave_mapping=None):
+    """Cerca tra più nomi colonna, restituisce il primo indice trovato (0-based).
+    Se chiave_mapping è specificata, controlla prima la mappatura personalizzata."""
+    from config import MAPPATURA_COLONNE
+    if chiave_mapping and MAPPATURA_COLONNE.get(chiave_mapping):
+        nome_custom = MAPPATURA_COLONNE[chiave_mapping]
+        r = _trova_indice_colonna(headers, nome_custom)
+        if r is not None:
+            return r
     for nome in nomi:
         r = _trova_indice_colonna(headers, nome)
         if r is not None:
@@ -166,8 +173,19 @@ def _trova_indice_multi(headers, *nomi):
 
 
 def _get_colonna_note():
-    """Restituisce il nome della colonna note in base alla provincia."""
-    return 'NOTE APP' if PROVINCIA_ATTIVA == 'TORINO' else 'NOTE'
+    """Restituisce il nome della colonna note, cercando tra i nomi possibili."""
+    if not _worksheet_initialized:
+        get_worksheet()
+    from config import MAPPATURA_COLONNE
+    # Se c'è una mappatura personalizzata, usala
+    nome_custom = MAPPATURA_COLONNE.get('note_appuntamento')
+    if nome_custom and nome_custom in _header_map:
+        return nome_custom
+    # Cerca tra i nomi noti
+    for nome in ['NOTE APP', 'NOTE_APP', 'NOTE APPUNTAMENTO', 'NOTE', 'Note']:
+        if nome in _header_map:
+            return nome
+    return 'NOTE APP'  # fallback
 
 
 def _get_username():
@@ -309,45 +327,18 @@ def _imposta_appuntamento_su_filone(row, orario, data_app='', note_extra='',
     # per non perdere eventuali modifiche non ancora salvate
     nota_attuale = nota_corrente if nota_corrente is not None else (ws.cell(row, col).value or '')
 
-    ora_pian_value = ''
+    # Logica unificata: APP + orario nelle note
+    nota_app = f"APP {orario}"
 
-    if PROVINCIA_ATTIVA == 'PAVIA':
-        # Pavia: scrive solo 'APP' nelle note e l'orario in 'Ora pian'
-        nota_app = 'APP'
-        ora_pian_value = orario
+    if 'APP' in nota_attuale.upper():
+        nota_attuale = re.sub(
+            r'APP\s*\d{1,2}[:.]\d{2}(?:\s*[-/]\s*\d{1,2}[:.]\d{2})?',
+            '', nota_attuale, flags=re.IGNORECASE
+        )
+        nota_attuale = nota_attuale.strip(' /|-')
 
-        # Rimuovi eventuale APP precedente (con o senza orario)
-        if 'APP' in nota_attuale.upper():
-            nota_attuale = re.sub(
-                r'APP\s*(?:\d{1,2}[:.]\d{2}(?:\s*[-/]\s*\d{1,2}[:.]\d{2})?)?',
-                '', nota_attuale, flags=re.IGNORECASE
-            )
-            nota_attuale = nota_attuale.strip(' /|-')
-
-        nuova_nota = f"{nota_app} // {nota_attuale}" if nota_attuale else nota_app
-        ws.update_cell(row, col, nuova_nota)
-
-        # Scrivi orario in colonna 'Ora pian'
-        col_ora_pian = None
-        for nome in ['Ora pian', 'ORA PIAN', 'ORA_PIAN']:
-            if nome in _header_map:
-                col_ora_pian = _header_map[nome]
-                break
-        if col_ora_pian:
-            ws.update_cell(row, col_ora_pian, orario)
-    else:
-        # Torino: comportamento originale (APP + orario nelle note)
-        nota_app = f"APP {orario}"
-
-        if 'APP' in nota_attuale.upper():
-            nota_attuale = re.sub(
-                r'APP\s*\d{1,2}[:.]\d{2}(?:\s*[-/]\s*\d{1,2}[:.]\d{2})?',
-                '', nota_attuale, flags=re.IGNORECASE
-            )
-            nota_attuale = nota_attuale.strip(' /|-')
-
-        nuova_nota = f"{nota_app} // {nota_attuale}" if nota_attuale else nota_app
-        ws.update_cell(row, col, nuova_nota)
+    nuova_nota = f"{nota_app} // {nota_attuale}" if nota_attuale else nota_app
+    ws.update_cell(row, col, nuova_nota)
 
     # Auto-crea promemoria Appuntamento
     try:
@@ -382,7 +373,7 @@ def _imposta_appuntamento_su_filone(row, orario, data_app='', note_extra='',
         logger.error(f"[Appuntamento] Errore auto-creazione promemoria: {bb_err}")
 
     _callbacks['trigger_sync_after_edit']()
-    return {'nota_app': nota_app, 'nuova_nota': nuova_nota, 'ora_pian': ora_pian_value}
+    return {'nota_app': nota_app, 'nuova_nota': nuova_nota}
 
 
 def _rimuovi_appuntamento_da_filone(row, nota_corrente=None):
@@ -396,36 +387,17 @@ def _rimuovi_appuntamento_da_filone(row, nota_corrente=None):
     col = _header_map[col_note]
     nota_attuale = nota_corrente if nota_corrente is not None else (ws.cell(row, col).value or '')
 
-    if PROVINCIA_ATTIVA == 'PAVIA':
-        # Pavia: rimuovi 'APP' (con o senza orario) e pulisci 'Ora pian'
-        nuova_nota = re.sub(
-            r'APP\s*(?:\d{1,2}[:.]\d{2}(?:\s*[-/]\s*\d{1,2}[:.]\d{2})?)?',
-            '', nota_attuale, flags=re.IGNORECASE
-        )
-        nuova_nota = re.sub(r'\s*//\s*', ' // ', nuova_nota).strip(' /|-')
-        nuova_nota = re.sub(r'^//\s*|\s*//\s*$', '', nuova_nota).strip()
-        ws.update_cell(row, col, nuova_nota)
-
-        # Pulisci colonna 'Ora pian'
-        col_ora_pian = None
-        for nome in ['Ora pian', 'ORA PIAN', 'ORA_PIAN']:
-            if nome in _header_map:
-                col_ora_pian = _header_map[nome]
-                break
-        if col_ora_pian:
-            ws.update_cell(row, col_ora_pian, '')
-    else:
-        # Torino: rimuovi 'APP orario' dalle note
-        nuova_nota = re.sub(
-            r'APP\s*\d{1,2}[:.]\d{2}(?:\s*[-/]\s*\d{1,2}[:.]\d{2})?',
-            '', nota_attuale, flags=re.IGNORECASE
-        )
-        nuova_nota = re.sub(r'\s*//\s*', ' // ', nuova_nota).strip(' /|-')
-        nuova_nota = re.sub(r'^//\s*|\s*//\s*$', '', nuova_nota).strip()
-        ws.update_cell(row, col, nuova_nota)
+    # Logica unificata: rimuovi 'APP orario' dalle note
+    nuova_nota = re.sub(
+        r'APP\s*\d{1,2}[:.]\d{2}(?:\s*[-/]\s*\d{1,2}[:.]\d{2})?',
+        '', nota_attuale, flags=re.IGNORECASE
+    )
+    nuova_nota = re.sub(r'\s*//\s*', ' // ', nuova_nota).strip(' /|-')
+    nuova_nota = re.sub(r'^//\s*|\s*//\s*$', '', nuova_nota).strip()
+    ws.update_cell(row, col, nuova_nota)
 
     _callbacks['trigger_sync_after_edit']()
-    return {'nuova_nota': nuova_nota, 'ora_pian': ''}
+    return {'nuova_nota': nuova_nota}
 
 
 # ============================================================================

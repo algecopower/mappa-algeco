@@ -22,6 +22,7 @@ logger = logging.getLogger('mappa_algeco')
 # Ogni pattern gestisce: attaccato (SRL), con punti (S.R.L.), con spazi (S R L),
 # con punti e spazi (S. R. L.), maiuscolo/minuscolo.
 _SUFFISSI_AZIENDA = [
+    r'\bS\.?\s*R\.?\s*L\.?\s*S\.?\b',     # SRLS, S.R.L.S., S R L S
     r'\bS\.?\s*R\.?\s*L\.?\b',           # SRL, S.R.L., S R L, S. R. L.
     r'\bS\.?\s*P\.?\s*A\.?\b',           # SPA, S.P.A., S P A, S. P. A.
     r'\bS\.?\s*A\.?\s*S\.?\b',           # SAS, S.A.S., S A S

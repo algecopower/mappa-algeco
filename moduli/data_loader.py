@@ -48,24 +48,9 @@ except ImportError:
 
 
 
-# Configurazione logica appuntamenti per provincia
-try:
-    from config import LOGICA_APPUNTAMENTI, COLONNA_ORA_PIAN
-except ImportError:
-    LOGICA_APPUNTAMENTI = 'torino'
-    COLONNA_ORA_PIAN = None
-
-try:
-    from config import USA_LOCALITA_COME_COMUNE
-except ImportError:
-    USA_LOCALITA_COME_COMUNE = False
+from config import USA_LOCALITA_COME_COMUNE
 
 from .percorso import normalizza_eneltel, estrai_orario
-from .ai_detector import (
-    rileva_appuntamenti_batch,
-    rileva_appuntamenti_batch_pavia,
-    estrai_orario_pavia
-)
 
 
 def trova_colonna(df, nomi_possibili, default=None, chiave_mapping=None):
@@ -378,101 +363,51 @@ def carica_dati_google_sheets():
     logger.info(f"   🌍 Coordinate: {coord_ok} OK, {coord_mancanti} mancanti")
 
     # ================================================================
-    # APPUNTAMENTI - Rilevamento in base alla provincia
+    # APPUNTAMENTI - Logica unificata (colonne standardizzate)
     # ================================================================
+    # Usa colonna "NOTE APP" con parola chiave "APP" per rilevare appuntamenti
+    col_note_app = trova_colonna(df, ['NOTE APP', 'NOTE_APP', 'Note App', 'NOTE APPUNTAMENTO', 'NOTE', 'Note'], chiave_mapping='note_appuntamento')
 
-    if LOGICA_APPUNTAMENTI == 'pavia':
-        # ---- LOGICA PAVIA ----
-        # Usa colonna "Ora pian": è appuntamento se orario NON è "dalle x alle x"
-        col_ora_pian = trova_colonna(df, [COLONNA_ORA_PIAN, 'Ora pian', 'ORA PIAN', 'ora pian'], chiave_mapping='ora_pianificata') if COLONNA_ORA_PIAN else None
+    if col_note_app:
+        df['NOTE_APP_RAW'] = df[col_note_app].fillna('').astype(str).str.strip()
+    else:
+        df['NOTE_APP_RAW'] = ''
 
-        if col_ora_pian:
-            df['ORA_PIAN_RAW'] = df[col_ora_pian].fillna('').astype(str).str.strip()
-            logger.info(f"   📋 Logica Pavia: usando colonna '{col_ora_pian}'")
-        else:
-            df['ORA_PIAN_RAW'] = ''
-            logger.warning(f"   ⚠️ Colonna 'Ora pian' non trovata")
+    # Rileva appuntamenti con regex ("APP" nelle note)
+    import re as _re_app
+    _pat_app = _re_app.compile(r'\bapp\b', _re_app.IGNORECASE)
+    df['IS_APPUNTAMENTO'] = df['NOTE_APP_RAW'].apply(lambda n: bool(_pat_app.search(n)) if n else False)
 
-        # Rileva appuntamenti con logica Pavia
-        ora_pian_list = df['ORA_PIAN_RAW'].tolist()
-        risultati_appuntamenti = rileva_appuntamenti_batch_pavia(ora_pian_list)
-        df['IS_APPUNTAMENTO'] = risultati_appuntamenti
+    # Estrai orario appuntamento
+    def trova_orario(row):
+        if not row['IS_APPUNTAMENTO']:
+            return None
+        return estrai_orario(row['NOTE_APP_RAW'])
 
-        # Estrai orario con logica Pavia
-        df['ORA_APPUNTAMENTO'] = df['ORA_PIAN_RAW'].apply(estrai_orario_pavia)
-        df['ORA_PIAN'] = df['ORA_PIAN_RAW']  # Campo separato per Ora pianificazione
-        df['DETTAGLIO_APP'] = df['ORA_PIAN_RAW']
-        
-        # Pavia: estrai orari lettere dal campo "Ora pian" quando è formato "dalle x alle x"
+    df['ORA_APPUNTAMENTO'] = df.apply(trova_orario, axis=1)
+    df['DETTAGLIO_APP'] = df['NOTE_APP_RAW']
+    
+    # Leggi colonna "Orari" per le fasce orarie delle lettere
+    # Solo valori in formato "dalle x alle x" vengono considerati
+    col_orari = trova_colonna(df, ['Orari', 'ORARI', 'orari', 'Orari lettere', 'ORARI LETTERE'], chiave_mapping='orari_lettere')
+    if col_orari:
+        orari_raw = df[col_orari].fillna('').astype(str).str.strip()
+        # Pulisci valori non validi
+        orari_raw[orari_raw.str.upper().isin(['NAN', 'NONE', 'NULL'])] = ''
+        # Tieni solo valori nel formato "dalle x alle x"
         pattern_dalle_alle = re.compile(
             r'dalle?\s*\d{1,2}(?:[:.]\d{2})?\s*alle?\s*\d{1,2}(?:[:.]\d{2})?',
             re.IGNORECASE
         )
-        def estrai_orari_lettere_pavia(ora_pian):
-            if not ora_pian or str(ora_pian).strip() == '':
-                return ''
-            testo = str(ora_pian).strip()
-            if pattern_dalle_alle.search(testo):
-                return testo
-            return ''
-        
-        df['ORARI_LETTERE'] = df['ORA_PIAN_RAW'].apply(estrai_orari_lettere_pavia)
+        df['ORARI_LETTERE'] = orari_raw.apply(
+            lambda v: v if v and pattern_dalle_alle.search(v) else ''
+        )
         orari_lettere_count = (df['ORARI_LETTERE'] != '').sum()
         if orari_lettere_count > 0:
-            logger.info(f"   📬 Orari lettere (Pavia): {orari_lettere_count} contatori con fascia oraria")
-        
-        # Per Pavia, cerca anche una colonna Note separata
-        col_note_pavia = trova_colonna(df, ['NOTE', 'Note', 'note', 'Annotazioni', 'ANNOTAZIONI'], chiave_mapping='note_appuntamento')
-        if col_note_pavia:
-            df['NOTE_APP_RAW'] = df[col_note_pavia].fillna('').astype(str).str.strip()
-        else:
-            df['NOTE_APP_RAW'] = ''  # Nessuna colonna note separata
-
+            logger.info(f"   📬 Orari lettere: {orari_lettere_count} contatori con fascia oraria")
     else:
-        # ---- LOGICA TORINO (default) ----
-        # Usa colonna "NOTE APP" con parola chiave "APP"
-        col_note_app = trova_colonna(df, ['NOTE APP', 'NOTE_APP', 'Note App', 'NOTE APPUNTAMENTO', 'NOTE', 'Note'], chiave_mapping='note_appuntamento')
-
-        if col_note_app:
-            df['NOTE_APP_RAW'] = df[col_note_app].fillna('').astype(str).str.strip()
-        else:
-            df['NOTE_APP_RAW'] = ''
-
-        # Rileva appuntamenti con regex
-        note_list = df['NOTE_APP_RAW'].tolist()
-        risultati_appuntamenti = rileva_appuntamenti_batch(note_list)
-        df['IS_APPUNTAMENTO'] = risultati_appuntamenti
-
-        # Estrai orario appuntamento
-        def trova_orario(row):
-            if not row['IS_APPUNTAMENTO']:
-                return None
-            return estrai_orario(row['NOTE_APP_RAW'])
-
-        df['ORA_APPUNTAMENTO'] = df.apply(trova_orario, axis=1)
-        df['DETTAGLIO_APP'] = df['NOTE_APP_RAW']
-        
-        # Torino: leggi colonna "Orari" per le fasce orarie delle lettere
-        # Solo valori in formato "dalle x alle x" vengono considerati
-        col_orari = trova_colonna(df, ['Orari', 'ORARI', 'orari', 'Orari lettere', 'ORARI LETTERE'], chiave_mapping='orari_lettere')
-        if col_orari:
-            orari_raw = df[col_orari].fillna('').astype(str).str.strip()
-            # Pulisci valori non validi
-            orari_raw[orari_raw.str.upper().isin(['NAN', 'NONE', 'NULL'])] = ''
-            # Tieni solo valori nel formato "dalle x alle x"
-            pattern_dalle_alle_to = re.compile(
-                r'dalle?\s*\d{1,2}(?:[:.]\d{2})?\s*alle?\s*\d{1,2}(?:[:.]\d{2})?',
-                re.IGNORECASE
-            )
-            df['ORARI_LETTERE'] = orari_raw.apply(
-                lambda v: v if v and pattern_dalle_alle_to.search(v) else ''
-            )
-            orari_lettere_count = (df['ORARI_LETTERE'] != '').sum()
-            if orari_lettere_count > 0:
-                logger.info(f"   📬 Orari lettere (Torino): {orari_lettere_count} contatori con fascia oraria")
-        else:
-            df['ORARI_LETTERE'] = ''
-            logger.warning("   ⚠️ Colonna 'Orari' non trovata nel FILONE")
+        df['ORARI_LETTERE'] = ''
+        logger.warning("   ⚠️ Colonna 'Orari' non trovata nel FILONE")
 
     # ================================================================
     # FILTRI

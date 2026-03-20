@@ -12,7 +12,7 @@ from flask import Blueprint, request, jsonify
 
 from moduli.auth import login_required
 from moduli.shared import (
-    get_worksheet, _trova_indice_colonna, _api_error,
+    get_worksheet, _trova_indice_multi, _api_error,
 )
 from config import PROVINCIA_ATTIVA, COLONNE_SIGILLI
 
@@ -39,31 +39,22 @@ def get_sigilli_pending():
 
         # Configurazione colonne per provincia
         cfg = COLONNE_SIGILLI.get(PROVINCIA_ATTIVA, {})
-        col_sigillo = cfg.get('colonna_sigillo', 'SIGILLO')
-        col_data_inst = cfg.get('colonna_data_inst', 'Data Installazione')
-        col_operatore = cfg.get('colonna_operatore', 'Operatore')
-        col_esito = cfg.get('colonna_esito', 'Esito')
         esito_ok = cfg.get('esito_ok_valore', 'Esito OK')
 
-        # Colonna tipologia misuratore (diversa per provincia)
-        col_tipologia = 'Tipo_Misuratore' if PROVINCIA_ATTIVA == 'TORINO' else 'TIPOLOGIA CE'
-
-        # Trova indici colonne (usa helper condiviso)
-        trova_idx = lambda nome: _trova_indice_colonna(headers, nome)
-
-        idx_pod = trova_idx('POD')
-        idx_eneltel = trova_idx('ENELTEL')
-        idx_cliente = trova_idx('NOMINATIVO') or trova_idx('Cliente') or trova_idx('CLIENTE')
-        idx_indirizzo = trova_idx('Via') or trova_idx('VIA') or trova_idx('INDIRIZZO')
-        idx_comune = trova_idx('COMUNE') or trova_idx('Comune')
-        idx_sigillo = trova_idx(col_sigillo)
-        idx_data_inst = trova_idx(col_data_inst)
-        idx_operatore = trova_idx(col_operatore)
-        idx_esito = trova_idx(col_esito)
-        idx_tipologia = trova_idx(col_tipologia)
+        # Trova indici colonne (usa helper condiviso + mappatura personalizzata)
+        idx_pod = _trova_indice_multi(headers, 'POD', 'Pod', 'pod', chiave_mapping='pod')
+        idx_eneltel = _trova_indice_multi(headers, 'ENELTEL', 'Eneltel', 'eneltel', chiave_mapping='eneltel')
+        idx_cliente = _trova_indice_multi(headers, 'NOMINATIVO', 'Nominativo', 'Cliente', 'CLIENTE', chiave_mapping='nominativo')
+        idx_indirizzo = _trova_indice_multi(headers, 'Indirizzo', 'Via', 'VIA', chiave_mapping='indirizzo')
+        idx_comune = _trova_indice_multi(headers, 'COMUNE', 'Comune', chiave_mapping='comune')
+        idx_sigillo = _trova_indice_multi(headers, 'SIGILLO', 'Sigillo', 'sigillo', chiave_mapping='sigillo')
+        idx_data_inst = _trova_indice_multi(headers, 'Data Installazione', 'DATA INSTALLAZIONE', chiave_mapping='data_installazione')
+        idx_operatore = _trova_indice_multi(headers, 'Operatore', 'OPERATORE', chiave_mapping='operatore')
+        idx_esito = _trova_indice_multi(headers, 'Esito', 'ESITO', chiave_mapping='esito')
+        idx_tipologia = _trova_indice_multi(headers, 'Tipo_Misuratore', 'TIPOLOGIA CE', 'Tipologia CE', chiave_mapping='tipo_misuratore')
 
         if idx_esito is None:
-            return jsonify({'error': f'Colonna {col_esito} non trovata'}), 400
+            return jsonify({'error': 'Colonna Esito non trovata'}), 400
 
         # Filtra contatori: Esito OK + Operatore + Data Installazione + Sigillo vuoto
         # + (Semidiretti OPPURE ENELTEL termina con A/B)
@@ -189,17 +180,10 @@ def salva_sigillo(eneltel):
             return jsonify({'error': f'Contatore {eneltel} non trovato'}), 404
 
         # Trova colonna SIGILLO
-        cfg = COLONNE_SIGILLI.get(PROVINCIA_ATTIVA, {})
-        col_sigillo = cfg.get('colonna_sigillo', 'SIGILLO')
-
-        idx_sigillo = None
-        for i, h in enumerate(headers):
-            if h.strip().upper() == col_sigillo.upper():
-                idx_sigillo = i
-                break
+        idx_sigillo = _trova_indice_multi(headers, 'SIGILLO', 'Sigillo', 'sigillo', chiave_mapping='sigillo')
 
         if idx_sigillo is None:
-            return jsonify({'error': f'Colonna {col_sigillo} non trovata'}), 400
+            return jsonify({'error': 'Colonna SIGILLO non trovata'}), 400
 
         # Calcola riferimento cella (A1 notation)
         col_letter = gspread.utils.rowcol_to_a1(1, idx_sigillo + 1)[:-1]  # Rimuovi il numero riga
@@ -240,27 +224,21 @@ def get_matricole_pending():
 
         # Configurazione colonne per provincia
         cfg = COLONNE_SIGILLI.get(PROVINCIA_ATTIVA, {})
-        col_matricola = cfg.get('colonna_matricola', 'Matricola')
-        col_data_inst = cfg.get('colonna_data_inst', 'Data Installazione')
-        col_operatore = cfg.get('colonna_operatore', 'Operatore')
-        col_esito = cfg.get('colonna_esito', 'Esito')
         esito_ok = cfg.get('esito_ok_valore', 'Esito OK')
 
-        # Trova indici colonne (usa helper condiviso)
-        trova_idx = lambda nome: _trova_indice_colonna(headers, nome)
-
-        idx_pod = trova_idx('POD')
-        idx_eneltel = trova_idx('ENELTEL')
-        idx_cliente = trova_idx('NOMINATIVO') or trova_idx('Cliente') or trova_idx('CLIENTE')
-        idx_indirizzo = trova_idx('Via') or trova_idx('VIA') or trova_idx('INDIRIZZO')
-        idx_comune = trova_idx('COMUNE') or trova_idx('Comune')
-        idx_matricola = trova_idx(col_matricola)
-        idx_data_inst = trova_idx(col_data_inst)
-        idx_operatore = trova_idx(col_operatore)
-        idx_esito = trova_idx(col_esito)
+        # Trova indici colonne (usa helper condiviso + mappatura personalizzata)
+        idx_pod = _trova_indice_multi(headers, 'POD', 'Pod', 'pod', chiave_mapping='pod')
+        idx_eneltel = _trova_indice_multi(headers, 'ENELTEL', 'Eneltel', 'eneltel', chiave_mapping='eneltel')
+        idx_cliente = _trova_indice_multi(headers, 'NOMINATIVO', 'Nominativo', 'Cliente', 'CLIENTE', chiave_mapping='nominativo')
+        idx_indirizzo = _trova_indice_multi(headers, 'Indirizzo', 'Via', 'VIA', chiave_mapping='indirizzo')
+        idx_comune = _trova_indice_multi(headers, 'COMUNE', 'Comune', chiave_mapping='comune')
+        idx_matricola = _trova_indice_multi(headers, 'Matricola CE inst', 'Matricola misuratore installato', chiave_mapping='matricola_installata')
+        idx_data_inst = _trova_indice_multi(headers, 'Data Installazione', 'DATA INSTALLAZIONE', chiave_mapping='data_installazione')
+        idx_operatore = _trova_indice_multi(headers, 'Operatore', 'OPERATORE', chiave_mapping='operatore')
+        idx_esito = _trova_indice_multi(headers, 'Esito', 'ESITO', chiave_mapping='esito')
 
         if idx_esito is None:
-            return jsonify({'error': f'Colonna {col_esito} non trovata'}), 400
+            return jsonify({'error': 'Colonna Esito non trovata'}), 400
 
         # Filtra contatori: Esito OK + Operatore + Data Installazione + Matricola vuota
         # NESSUN filtro tipologia per le matricole
@@ -349,11 +327,7 @@ def salva_matricola(eneltel):
         headers = all_data[0] if all_data else []
 
         # Trova indice colonna ENELTEL
-        idx_eneltel = None
-        for i, h in enumerate(headers):
-            if h.strip().upper() == 'ENELTEL':
-                idx_eneltel = i
-                break
+        idx_eneltel = _trova_indice_multi(headers, 'ENELTEL', 'Eneltel', 'eneltel', chiave_mapping='eneltel')
 
         if idx_eneltel is None:
             return jsonify({'error': 'Colonna ENELTEL non trovata'}), 400
@@ -369,17 +343,10 @@ def salva_matricola(eneltel):
             return jsonify({'error': f'Contatore {eneltel} non trovato'}), 404
 
         # Trova colonna Matricola
-        cfg = COLONNE_SIGILLI.get(PROVINCIA_ATTIVA, {})
-        col_matricola = cfg.get('colonna_matricola', 'Matricola')
-
-        idx_matricola = None
-        for i, h in enumerate(headers):
-            if h.strip().upper() == col_matricola.upper():
-                idx_matricola = i
-                break
+        idx_matricola = _trova_indice_multi(headers, 'Matricola CE inst', 'Matricola misuratore installato', chiave_mapping='matricola_installata')
 
         if idx_matricola is None:
-            return jsonify({'error': f'Colonna {col_matricola} non trovata'}), 400
+            return jsonify({'error': 'Colonna Matricola non trovata'}), 400
 
         # Calcola riferimento cella (A1 notation)
         col_letter = gspread.utils.rowcol_to_a1(1, idx_matricola + 1)[:-1]

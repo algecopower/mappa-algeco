@@ -2,17 +2,20 @@
   "operatori_vip": [
     "ALESSANDRO",
     "MELEK",
-    "BRAHIM"
+    "BRAHIM",
+    "PAUL"
   ],
   "colori_operatori": {
     "ALESSANDRO": "#e74c3c",
     "MELEK": "#f1c40f",
-    "BRAHIM": "#2ecc71"
+    "BRAHIM": "#2ecc71",
+    "PAUL": "#3498db"
   },
   "operatori_dict": {
     "ALESSANDRO": "ALESSANDRO",
     "MELEK": "MELEK",
-    "BRAHIM": "BRAHIM"
+    "BRAHIM": "BRAHIM",
+    "PAUL": "PAUL"
   },
   "deposito": {
     "Nome": "DEPOSITO PAVIA",

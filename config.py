@@ -69,8 +69,6 @@ PROVINCE = {
             'Operatore 3 (AG18966)': 'AG18966',
         },
         'file_mappa': os.path.join('templates', 'mappa_torino.html'),
-        # Logica appuntamenti: cerca "APP" nella colonna NOTE APP
-        'logica_appuntamenti': 'torino',
         # Orario inizio giornata tecnici (9:00 per Torino)
         'ora_inizio_giornata': 9 * 60,  # 9:00 in minuti
         # Orario fine giornata tecnici (17:00 per Torino)
@@ -79,7 +77,7 @@ PROVINCE = {
     'PAVIA': {
         'nome': 'Pavia',
         'id_foglio': '1vyEooPBbmWf3D44NC-zRtZGjYMoUITOlGWX7fZf4wm0',
-        'gid_scheda': 445238966,
+        'gid_scheda': 198162274,
         'deposito': {'Nome': 'DEPOSITO PAVIA', 'Lat': 45.2221001, 'Lon': 9.2254115},
         'operatori_vip': ['ALESSANDRO', 'MELEK', 'BRAHIM'],
         'colori_operatori': {
@@ -94,9 +92,6 @@ PROVINCE = {
             'Brahim': 'BRAHIM',
         },
         'file_mappa': os.path.join('templates', 'mappa_pavia.html'),
-        # Logica appuntamenti: colonna "Ora pian" con orario NON in formato "dalle x alle x"
-        'logica_appuntamenti': 'pavia',
-        'colonna_ora_pian': 'Ora pian',
         # Usa la colonna Località come Comune per raggruppamento zone
         'usa_localita_come_comune': True,
         # Orario inizio giornata tecnici (8:00 per Pavia)
@@ -126,35 +121,25 @@ MATRICOLE_VIP = _provincia['operatori_vip']
 COLORI_TECNICI = _provincia['colori_operatori']
 OPERATORI_DICT = _provincia.get('operatori_dict', {})  # Per dropdown gestionale
 FILE_MAPPA = _provincia['file_mappa']
-LOGICA_APPUNTAMENTI = _provincia.get('logica_appuntamenti', 'torino')
-COLONNA_ORA_PIAN = _provincia.get('colonna_ora_pian', None)
 ORA_INIZIO_GIORNATA = _provincia.get('ora_inizio_giornata', 8 * 60)  # Default 8:00
 ORA_FINE_GIORNATA = _provincia.get('ora_fine_giornata', 17 * 60)  # Default 17:00
 USA_LOCALITA_COME_COMUNE = _provincia.get('usa_localita_come_comune', False)
 
-# Campi modificabili per provincia (usati dal gestionale)
+# Campi modificabili (centralizzati - colonne unificate tra province)
+_CAMPI_MODIFICABILI_COMUNI = {
+    'data_pian': 'DATA PIAN',
+    'note_app': 'NOTE APP',
+    'nominativo': 'NOMINATIVO',
+    'indirizzo': 'Indirizzo',
+    'civico': 'Num',
+    'telefono': 'telefono',
+    'email': 'email',
+    'posizione_mis': 'Posizione_Ante_Mis',
+    'operatore': 'Operatore',
+}
 CAMPI_MODIFICABILI = {
-    'TORINO': {
-        'data_pian': 'DATA PIAN',
-        'note_app': 'NOTE APP',
-        'nominativo': 'NOMINATIVO',
-        'indirizzo': 'Indirizzo',
-        'civico': 'Num',
-        'telefono': 'telefono',
-        'email': 'email',
-        'posizione_mis': 'Posizione_Ante_Mis',
-        'operatore': 'Operatore',
-    },
-    'PAVIA': {
-        'note_app': 'NOTE',
-        'nominativo': 'Nominativo',
-        'indirizzo': 'Via',
-        'civico': 'civico',
-        'telefono': 'Telefono',
-        'email': 'email',
-        'posizione_mis': 'Posizione misuratore',
-        'operatore': 'Operatore',
-    }
+    'TORINO': _CAMPI_MODIFICABILI_COMUNI,
+    'PAVIA': _CAMPI_MODIFICABILI_COMUNI,
 }
 
 # Campi per import BOXBEAT (Enel)
@@ -290,17 +275,12 @@ MAPPATURA_COLONNE_DEFAULT = {
     },
     'note_appuntamento': {
         'label': 'Note Appuntamento',
-        'descrizione': 'Note / appuntamento (Torino: NOTE APP, Pavia: NOTE)',
+        'descrizione': 'Colonna note / appuntamenti',
         'nomi_default': ['NOTE APP', 'NOTE_APP', 'Note App', 'NOTE APPUNTAMENTO', 'NOTE', 'Note'],
-    },
-    'ora_pianificata': {
-        'label': 'Ora Pianificata',
-        'descrizione': 'Orario pianificato (usato da Pavia)',
-        'nomi_default': ['Ora pian', 'ORA PIAN', 'ora pian'],
     },
     'orari_lettere': {
         'label': 'Orari Lettere',
-        'descrizione': 'Fasce orarie delle lettere (usato da Torino)',
+        'descrizione': 'Fasce orarie delle lettere',
         'nomi_default': ['Orari', 'ORARI', 'orari', 'Orari lettere', 'ORARI LETTERE'],
     },
     'esito': {
@@ -310,8 +290,38 @@ MAPPATURA_COLONNE_DEFAULT = {
     },
     'smart_test': {
         'label': 'Smart Test',
-        'descrizione': 'Esito smart test (solo Torino)',
+        'descrizione': 'Esito smart test',
         'nomi_default': ['SMART TEST', 'Smart Test', 'smart test'],
+    },
+    'sigillo': {
+        'label': 'Sigillo',
+        'descrizione': 'Numero sigillo applicato',
+        'nomi_default': ['SIGILLO', 'Sigillo', 'sigillo'],
+    },
+    'data_installazione': {
+        'label': 'Data Installazione',
+        'descrizione': 'Data effettiva dell\'installazione',
+        'nomi_default': ['Data Installazione', 'DATA INSTALLAZIONE', 'Data_Installazione'],
+    },
+    'codice_ante': {
+        'label': 'Codice Misuratore Ante',
+        'descrizione': 'Codice misuratore in opera (prima della sostituzione)',
+        'nomi_default': ['Codice_Ante_Sostituzione', 'Codice misuratore in opera', 'CODICE ANTE'],
+    },
+    'matricola_ante': {
+        'label': 'Matricola Misuratore Ante',
+        'descrizione': 'Matricola misuratore in opera (prima della sostituzione)',
+        'nomi_default': ['Matricola_Ante_Sostituzione', 'Matricola misuratore in opera', 'MATRICOLA ANTE'],
+    },
+    'matricola_installata': {
+        'label': 'Matricola CE Installato',
+        'descrizione': 'Matricola del contatore installato',
+        'nomi_default': ['Matricola CE inst', 'Matricola misuratore installato', 'MATRICOLA CE INST'],
+    },
+    'codice_installato': {
+        'label': 'Codice CE Installato',
+        'descrizione': 'Codice del contatore installato',
+        'nomi_default': ['cod.', 'Codice misuratore installat', 'CODICE CE INST'],
     },
 }
 

@@ -214,7 +214,7 @@ def prepara_dati_contatori(df, report):
             'note_app': str(row.get('NOTE_APP_RAW', '')),
             'tipo_ce': str(row.get('TIPO_CE_K', '')),
             'posizione_mis': str(row.get('POSIZIONE_MIS', '')),
-            'ora_pianificazione': str(row.get('ORA_PIAN', '')) if row.get('ORA_PIAN') else '',
+
             'orari_lettere': str(row.get('ORARI_LETTERE', '')) if row.get('ORARI_LETTERE') else '',
             'data': data_str,
             'tecnico': str(row.get('TEC_K', 'TUTTI')),
@@ -4194,6 +4194,77 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             zoomValue.textContent = zoom.toFixed(1) + 'x';
         }});
 
+        // ============================================================
+        // FETCH DATI AGGIORNATI DA SHEETS ALL'APERTURA POPUP
+        // ============================================================
+        map.on('popupopen', async function(e) {{
+            const popup = e.popup;
+            const popupEl = popup.getElement();
+            if (!popupEl) return;
+
+            const contentEl = popupEl.querySelector('.popup-content[data-eneltel]');
+            if (!contentEl) return;
+
+            const eneltel = contentEl.dataset.eneltel;
+            if (!eneltel) return;
+
+            // Mostra indicatore di caricamento
+            let loadingEl = document.createElement('div');
+            loadingEl.className = 'popup-loading-indicator';
+            loadingEl.innerHTML = '🔄 Aggiornamento da Sheets...';
+            loadingEl.style.cssText = 'text-align:center;padding:4px 8px;font-size:11px;color:var(--text-secondary,#999);background:var(--bg-secondary,rgba(0,0,0,0.1));border-radius:6px;margin-bottom:6px;';
+            contentEl.prepend(loadingEl);
+
+            try {{
+                const resp = await fetch(`${{window.location.origin}}/api/contatore/${{encodeURIComponent(eneltel)}}`);
+                if (!resp.ok) throw new Error('Fetch failed');
+                const result = await resp.json();
+
+                if (result.contatore) {{
+                    const fresh = result.contatore;
+
+                    // Aggiorna il contatore locale nell'array globale
+                    const idx = contatori.findIndex(c => c.eneltel === eneltel);
+                    const localC = idx >= 0 ? contatori[idx] : null;
+                    if (localC) {{
+                        localC.cliente = fresh.cliente || localC.cliente;
+                        localC.comune = fresh.comune || localC.comune;
+                        localC.localita = fresh.localita ?? localC.localita;
+                        localC.via = fresh.via || localC.via;
+                        localC.civico = fresh.civico ?? localC.civico;
+                        localC.telefono = fresh.telefono ?? localC.telefono;
+                        localC.email = fresh.email ?? localC.email;
+                        localC.note = fresh.note ?? localC.note;
+                        localC.note_app = fresh.note_app ?? localC.note_app;
+                        localC.tipo_ce = fresh.tipo_ce ?? localC.tipo_ce;
+                        localC.orari_lettere = fresh.orari_lettere ?? localC.orari_lettere;
+                        localC.lcl = fresh.lcl ?? localC.lcl;
+                        localC.pod = fresh.pod || localC.pod;
+                        localC.is_appuntamento = fresh.is_appuntamento;
+                        localC.ora_appuntamento = fresh.ora_appuntamento;
+                        localC.smart_test = fresh.smart_test ?? localC.smart_test;
+                    }}
+
+                    // Aggiorna anche il pinnedContatore se è lo stesso
+                    if (pinnedContatore && pinnedContatore.eneltel === eneltel && localC) {{
+                        Object.assign(pinnedContatore, localC);
+                    }}
+
+                    // Ri-renderizza il popup con i dati aggiornati
+                    const num = contentEl.dataset.popupNum || '';
+                    const colore = contentEl.dataset.popupColore || '#3498db';
+                    const cRef = localC || fresh;
+                    popup.setContent(createContatorePopup(cRef, num, colore));
+                }}
+            }} catch (err) {{
+                console.warn('⚠️ Aggiornamento popup da Sheets fallito:', err.message);
+                // Rimuovi l'indicatore di caricamento in caso di errore
+                const el = popupEl.querySelector('.popup-loading-indicator');
+                if (el) el.textContent = '⚠️ Aggiornamento non riuscito';
+                setTimeout(() => {{ const el2 = popupEl.querySelector('.popup-loading-indicator'); if (el2) el2.remove(); }}, 2000);
+            }}
+        }});
+
         // Aggiorna mappa quando lo slider viene trascinato
         zoomSlider.addEventListener('input', function() {{
             const zoom = parseFloat(this.value);
@@ -8033,7 +8104,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         }}
 
         function createContatorePopup(c, num, colore, prevPoint) {{
-            let html = `<div class="popup-content">`;
+            let html = `<div class="popup-content" data-eneltel="${{c.eneltel}}" data-popup-num="${{num}}" data-popup-colore="${{colore}}">`;
 
             if (c.is_appuntamento) {{
                 html += `<div class="popup-app">☎️ APPUNTAMENTO ${{c.ora_appuntamento || ''}}
@@ -8079,9 +8150,6 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             }}
             if (c.telefono) {{
                 html += `<div class="popup-row"><span class="popup-label">Telefono</span><span class="popup-value">${{c.telefono}}</span></div>`;
-            }}
-            if (c.ora_pianificazione) {{
-                html += `<div class="popup-row"><span class="popup-label">Ora pian.</span><span class="popup-value">${{c.ora_pianificazione}}</span></div>`;
             }}
             if (c.orari_lettere) {{
                 html += `<div class="popup-row"><span class="popup-label">Orari lettera</span><span class="popup-value" style="color: #7ec8e3;">✉️ ${{c.orari_lettere}}</span></div>`;

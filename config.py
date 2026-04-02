@@ -36,18 +36,6 @@ if PROVINCIA_ATTIVA not in ['TORINO', 'PAVIA']:
     PROVINCIA_ATTIVA = _PROVINCIA_DEFAULT
 
 # ============================================================================
-# MODALITÀ TEST (usa foglio di prova invece di produzione)
-# Imposta MODALITA_TEST = True per lavorare su una copia del FILONE
-# ============================================================================
-MODALITA_TEST = False
-
-# Fogli di TEST (copie per sviluppo sicuro)
-FOGLI_TEST = {
-    'TORINO': '1sdvUFF7zxU77OcJeuZ41i8Cgv9N1chQIwb6ZmWD9jdw',
-    'PAVIA': None,  # Aggiungi ID quando crei la copia per Pavia
-}
-
-# ============================================================================
 # CONFIGURAZIONI PER PROVINCIA
 # ============================================================================
 PROVINCE = {
@@ -106,14 +94,7 @@ PROVINCE = {
 # ============================================================================
 _provincia = PROVINCE[PROVINCIA_ATTIVA]
 
-# Usa foglio TEST se modalità test attiva
-if MODALITA_TEST and FOGLI_TEST.get(PROVINCIA_ATTIVA):
-    ID_FOGLIO_GOOGLE = FOGLI_TEST[PROVINCIA_ATTIVA]
-    print(f"⚠️  MODALITÀ TEST ATTIVA - Usando foglio di prova")
-else:
-    ID_FOGLIO_GOOGLE = _provincia['id_foglio']
-    if MODALITA_TEST:
-        print(f"⚠️  Foglio test non configurato per {PROVINCIA_ATTIVA}, uso produzione")
+ID_FOGLIO_GOOGLE = _provincia['id_foglio']
 
 GID_SCHEDA = _provincia['gid_scheda']
 DEPOSITO = _provincia['deposito']

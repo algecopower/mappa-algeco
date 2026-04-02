@@ -1104,7 +1104,7 @@
             <button class="tb" onclick="openCondFormat()" title="Formattazione condizionale">&#x1F3A8; Formato</button>
             <div class="toolbar-sep"></div>
             <button class="tb" id="btnRefresh" onclick="manualRefresh()" title="Ricarica dati dal server (F5)">&#x1F504; Aggiorna</button>
-            <button class="tb primary" id="btnSave" onclick="saveAll()" disabled>&#x1F4BE; Salva (<span id="changeCount">0</span>)</button>
+            <button class="tb primary" id="btnSave" onclick="saveAll()" disabled title="Salva modifiche (Ctrl+S)">&#x1F4BE; Salva (<span id="changeCount">0</span>)</button>
         </div>
     </div>
 
@@ -1356,6 +1356,9 @@ let editInput = null;
 let selAnchorRow = -1, selAnchorCol = -1;
 let selRange = null; // {viMin, viMax, vpMin, vpMax}
 let isDragging = false;
+let _clickEditPending = false;
+let _clickEditTarget = null;
+let _dragExtended = false;
 
 // Undo/Redo
 let undoStack = [];
@@ -1866,12 +1869,17 @@ function applyFilters() {
     var q = qs('#globalSearch').value.toLowerCase().trim();
     filtered = [];
 
+    // Rows with pending edits bypass filters so they don't disappear while editing
+    var pendingRows = new Set();
+    for (var pk in pending) { pendingRows.add(pending[pk].row); }
+
     for (var i = 0; i < rawData.length; i++) {
         var row = rawData[i];
         var pass = true;
+        var hasPending = pendingRows.has(row._row);
 
-        // Cerca Vert / POD filter
-        if (podFilterSet) {
+        // Cerca Vert / POD filter (skip for rows with pending edits)
+        if (!hasPending && podFilterSet) {
             var filterColName = vlFilterCol || podColName;
             if (filterColName) {
                 var podVal = (row[filterColName] != null ? row[filterColName] : '').toString().trim().toUpperCase();
@@ -1880,15 +1888,17 @@ function applyFilters() {
         }
         if (!pass) continue;
 
-        // Column filters
-        for (var cn in colFilters) {
-            var val = (row[cn] != null ? row[cn] : '').toString().trim();
-            if (!colFilters[cn].has(val)) { pass = false; break; }
+        // Column filters (skip for rows with pending edits)
+        if (!hasPending) {
+            for (var cn in colFilters) {
+                var val = (row[cn] != null ? row[cn] : '').toString().trim();
+                if (!colFilters[cn].has(val)) { pass = false; break; }
+            }
+            if (!pass) continue;
         }
-        if (!pass) continue;
 
-        // Color filter
-        if (colorFilterCol && colorFilterColor) {
+        // Color filter (skip for rows with pending edits)
+        if (!hasPending && colorFilterCol && colorFilterColor) {
             var cfVal = (row[colorFilterCol] != null ? row[colorFilterCol] : '').toString().trim();
             var cfRules = condRulesByCol[colorFilterCol];
             var cfMatch = false;
@@ -2185,8 +2195,12 @@ qs('#gridBody').addEventListener('mousedown', function(e) {
         return;
     }
 
+    var wasAlreadySelected = (!editing && rn === selRow && ci === selCol);
     selectCell(rn, ci);
     isDragging = true;
+    _clickEditPending = wasAlreadySelected;
+    _clickEditTarget = { rn: rn, ci: ci };
+    _dragExtended = false;
     // Prevent text selection immediately when starting drag
     if (!document.body.classList.contains('nosel')) document.body.classList.add('nosel');
 });
@@ -2203,6 +2217,7 @@ qs('#gridBody').addEventListener('mousemove', function(e) {
         if (!document.body.classList.contains('nosel')) document.body.classList.add('nosel');
         selRow = rn;
         selCol = ci;
+        _dragExtended = true;
         computeSelRange();
         renderVisible(true);
         updateSelectionStatus();
@@ -2213,6 +2228,12 @@ document.addEventListener('mouseup', function() {
     if (isDragging) {
         isDragging = false;
         document.body.classList.remove('nosel');
+        if (_clickEditPending && !_dragExtended && _clickEditTarget) {
+            var t = _clickEditTarget;
+            setTimeout(function() { startEdit(t.rn, t.ci, false); }, 0);
+        }
+        _clickEditPending = false;
+        _clickEditTarget = null;
     }
 });
 
@@ -2378,7 +2399,8 @@ function getDisplayValByRn(rn, cn) {
 // ============================================================
 // EDITING
 // ============================================================
-function startEdit(rn, ci) {
+function startEdit(rn, ci, selectAll) {
+    if (selectAll === undefined) selectAll = true;
     // Block editing on protected columns (unless unlocked)
     if (isProtected(headers[ci])) {
         if (!confirm('\uD83D\uDD12 La colonna "' + headers[ci] + '" è protetta.\n\nVuoi sbloccarla per questa sessione?')) {
@@ -2425,7 +2447,12 @@ function startEdit(rn, ci) {
     input.addEventListener('input', autoResize);
 
     input.focus();
-    input.select();
+    if (selectAll) {
+        input.select();
+    } else {
+        var len = input.value.length;
+        input.setSelectionRange(len, len);
+    }
 
     input.addEventListener('keydown', function(e) {
         var _k = e.key.toLowerCase();
@@ -2433,6 +2460,11 @@ function startEdit(rn, ci) {
         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commitEdit(); movesel(1, 0); }
         else if (e.key === 'Tab') { e.preventDefault(); commitEdit(); movesel(0, e.shiftKey ? -1 : 1); }
         else if (e.key === 'Escape') { e.preventDefault(); cancelEdit(); }
+        else if ((e.ctrlKey || e.metaKey) && _k === 's') {
+            e.preventDefault(); e.stopPropagation(); commitEdit();
+            if (Object.keys(pending).length > 0) saveAll();
+            return;
+        }
         else if ((e.ctrlKey || e.metaKey) && _k === 'z' && !e.shiftKey) {
             e.preventDefault(); e.stopPropagation(); commitEdit(); undo(); return;
         }
@@ -2481,14 +2513,22 @@ function commitEdit() {
     editInput = null;
     refreshRowByRn(selRow);
     updateChangeCount();
-    if (window._sseFlushPendingRefresh) window._sseFlushPendingRefresh();
+    _scheduleSSEFlush();
 }
 
 function cancelEdit() {
     editing = false;
     editInput = null;
     refreshRowByRn(selRow);
-    if (window._sseFlushPendingRefresh) window._sseFlushPendingRefresh();
+    _scheduleSSEFlush();
+}
+
+var _sseFlushTimer = null;
+function _scheduleSSEFlush() {
+    clearTimeout(_sseFlushTimer);
+    _sseFlushTimer = setTimeout(function() {
+        if (!editing && window._sseFlushPendingRefresh) window._sseFlushPendingRefresh();
+    }, 300);
 }
 
 function refreshRowByRn(rn) {
@@ -2564,7 +2604,8 @@ document.addEventListener('keydown', function(e) {
     else if (e.key === 'ArrowUp') { e.preventDefault(); movesel(-1, 0, e.shiftKey); }
     else if (e.key === 'ArrowRight') { e.preventDefault(); movesel(0, 1, e.shiftKey); }
     else if (e.key === 'ArrowLeft') { e.preventDefault(); movesel(0, -1, e.shiftKey); }
-    else if (e.key === 'Enter' || e.key === 'F2') { e.preventDefault(); startEdit(selRow, selCol); }
+    else if (e.key === 'F2') { e.preventDefault(); startEdit(selRow, selCol, false); }
+    else if (e.key === 'Enter') { e.preventDefault(); startEdit(selRow, selCol); }
     else if (e.key === 'Delete' || e.key === 'Backspace') {
         e.preventDefault();
         if (selRange) {
@@ -3220,8 +3261,11 @@ function updateColManagerInfo() {
     qs('#colmgrInfo').textContent = vis + ' visibili su ' + headers.length + ' • Trascina \u2261 per riordinare';
 }
 
+var _colmgrListenersAttached = false;
 function setupColManagerDrag() {
     var list = qs('#colmgrList');
+    if (_colmgrListenersAttached) return;
+    _colmgrListenersAttached = true;
 
     // Toggle visibility
     list.addEventListener('click', function(e) {
@@ -4864,13 +4908,34 @@ function vlExcelClear() {
     }
 
     async function refreshFiloneData() {
-        if (_sseRefreshing) return;
-        if (editing) {
-            _ssePendingRefresh = true;
-            return;
-        }
+        if (_sseRefreshing) { _ssePendingRefresh = true; return; }
         _ssePendingRefresh = false;
         _sseRefreshing = true;
+
+        // Salva stato editing corrente per ripristinarlo dopo il refresh
+        var wasEditing = editing;
+        var editRn = selRow, editCi = selCol;
+        var editVal = null;
+        var editSelStart = null, editSelEnd = null;
+        if (wasEditing && editInput) {
+            editVal = editInput.value;
+            editSelStart = editInput.selectionStart;
+            editSelEnd = editInput.selectionEnd;
+            // Annulla editing silenziosamente (senza commit)
+            // Registra il valore corrente come pending temporaneo per non perdere il filtro
+            var tmpCn = headers[editCi];
+            var tmpCk = editRn + ':' + tmpCn;
+            if (!pending[tmpCk]) {
+                var tmpIdx = rowIndex[editRn];
+                var tmpServerVal = tmpIdx !== undefined ? (rawData[tmpIdx][tmpCn] != null ? rawData[tmpIdx][tmpCn] : '').toString() : '';
+                if (editVal !== tmpServerVal) {
+                    pending[tmpCk] = { row: editRn, col: tmpCn, old: tmpServerVal, val: editVal };
+                }
+            }
+            editing = false;
+            editInput = null;
+        }
+
         try {
             var r = await fetch('/api/filone');
             if (!r.ok) return;
@@ -4927,24 +4992,46 @@ function vlExcelClear() {
             applyFilters();
             qs('#infoRighe').innerHTML = '<strong>' + rawData.length + '</strong> righe &times; <strong>' + headers.length + '</strong> colonne';
 
-            if (hasPending) {
+            // Ripristina editing se l'utente stava modificando una cella
+            if (wasEditing && editRn >= 0 && editCi >= 0 && rowIndex[editRn] !== undefined) {
+                startEdit(editRn, editCi, false);
+                if (editInput && editVal !== null) {
+                    editInput.value = editVal;
+                    if (editSelStart !== null) {
+                        editInput.setSelectionRange(editSelStart, editSelEnd);
+                    }
+                }
+            } else if (hasPending) {
                 toast('\uD83D\uDD04 Dati aggiornati (modifiche pendenti mantenute)', 'info');
             } else {
                 toast('\uD83D\uDD04 Dati aggiornati dal server', 'success');
             }
         } catch(e) {
-            // Silenzioso - riproverà al prossimo evento
+            // Se il refresh fallisce e l'utente stava editando, ripristina comunque
+            if (wasEditing && editRn >= 0 && editCi >= 0) {
+                startEdit(editRn, editCi, false);
+                if (editInput && editVal !== null) {
+                    editInput.value = editVal;
+                    if (editSelStart !== null) {
+                        editInput.setSelectionRange(editSelStart, editSelEnd);
+                    }
+                }
+            }
         } finally {
             _sseRefreshing = false;
+            if (_ssePendingRefresh) refreshFiloneData();
         }
     }
 
     // Esponi la funzione di refresh globalmente per il bottone manuale
     window._sseRefreshFilone = refreshFiloneData;
 
-    // Esponi il check per refresh pendente (chiamato dopo commitEdit/cancelEdit)
+    // Esponi il check per refresh pendente (chiamato con delay dopo commitEdit/cancelEdit)
     window._sseFlushPendingRefresh = function() {
-        if (_ssePendingRefresh) refreshFiloneData();
+        if (_ssePendingRefresh) {
+            _ssePendingRefresh = false;
+            refreshFiloneData();
+        }
     };
 
     // Avvia connessione SSE dopo il caricamento iniziale

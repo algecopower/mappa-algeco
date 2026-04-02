@@ -469,8 +469,8 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
     operatori_dict_json = json.dumps(OPERATORI_DICT, ensure_ascii=False)
     lcl_json = json.dumps(lcl_list, ensure_ascii=False)
     
-    # Check ogni 10 secondi per rilevare subito i nuovi dati (leggero, è solo un fetch JSON)
-    refresh_interval = 10000
+    # Fallback polling ogni 60s (usato solo se SSE non è disponibile)
+    refresh_interval = 60000
     
     # Genera opzioni LCL PRIMA della f-string per evitare problemi di concatenazione
     lcl_options_html = ''.join([f'<option value="{lcl}">{lcl}</option>' for lcl in lcl_list])
@@ -4208,13 +4208,6 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             const eneltel = contentEl.dataset.eneltel;
             if (!eneltel) return;
 
-            // Mostra indicatore di caricamento
-            let loadingEl = document.createElement('div');
-            loadingEl.className = 'popup-loading-indicator';
-            loadingEl.innerHTML = '🔄 Aggiornamento da Sheets...';
-            loadingEl.style.cssText = 'text-align:center;padding:4px 8px;font-size:11px;color:var(--text-secondary,#999);background:var(--bg-secondary,rgba(0,0,0,0.1));border-radius:6px;margin-bottom:6px;';
-            contentEl.prepend(loadingEl);
-
             try {{
                 const resp = await fetch(`${{window.location.origin}}/api/contatore/${{encodeURIComponent(eneltel)}}`);
                 if (!resp.ok) throw new Error('Fetch failed');
@@ -4250,18 +4243,16 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                         Object.assign(pinnedContatore, localC);
                     }}
 
-                    // Ri-renderizza il popup con i dati aggiornati
-                    const num = contentEl.dataset.popupNum || '';
-                    const colore = contentEl.dataset.popupColore || '#3498db';
-                    const cRef = localC || fresh;
-                    popup.setContent(createContatorePopup(cRef, num, colore));
+                    // Ri-renderizza il popup solo se ancora aperto
+                    if (popup.isOpen()) {{
+                        const num = contentEl.dataset.popupNum || '';
+                        const colore = contentEl.dataset.popupColore || '#3498db';
+                        const cRef = localC || fresh;
+                        popup.setContent(createContatorePopup(cRef, num, colore));
+                    }}
                 }}
             }} catch (err) {{
                 console.warn('⚠️ Aggiornamento popup da Sheets fallito:', err.message);
-                // Rimuovi l'indicatore di caricamento in caso di errore
-                const el = popupEl.querySelector('.popup-loading-indicator');
-                if (el) el.textContent = '⚠️ Aggiornamento non riuscito';
-                setTimeout(() => {{ const el2 = popupEl.querySelector('.popup-loading-indicator'); if (el2) el2.remove(); }}, 2000);
             }}
         }});
 
@@ -4635,13 +4626,19 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             btn.style.opacity = '0.7';
             
             try {{
-                // Forza sincronizzazione dati dal server
-                const response = await fetch('/api/sync', {{ method: 'POST' }});
+                // Triggera sync asincrono — SSE porterà l'aggiornamento in-place
+                const response = await fetch('/api/filone/sync', {{ method: 'POST' }});
                 const result = await response.json();
                 
                 if (result.success) {{
-                    // Ricarica la pagina per mostrare i nuovi dati
-                    window.location.reload();
+                    btn.textContent = '✅';
+                    // I dati arriveranno via SSE (sync_complete → reloadData)
+                    // Ripristina bottone dopo un po'
+                    setTimeout(() => {{
+                        btn.textContent = originalText;
+                        btn.disabled = false;
+                        btn.style.opacity = '1';
+                    }}, 3000);
                 }} else {{
                     alert('Errore durante il refresh: ' + (result.message || 'Sync fallito'));
                     btn.textContent = originalText;

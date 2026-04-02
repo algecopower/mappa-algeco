@@ -18,7 +18,6 @@ import argparse
 import subprocess
 import signal
 import time
-import webbrowser
 import urllib.request
 import urllib.error
 import shutil
@@ -65,7 +64,6 @@ parser.add_argument('--torino', '-t', action='store_true', help='Avvia solo Tori
 parser.add_argument('--pavia', '-p', action='store_true', help='Avvia solo Pavia')
 parser.add_argument('--pubblico', action='store_true', help='Avvia entrambe + Cloudflare Tunnel (accesso Internet)')
 parser.add_argument('--skip-osrm-check', action='store_true', help='Salta la verifica OSRM')
-parser.add_argument('--no-browser', action='store_true', help='Non aprire il browser automaticamente')
 args = parser.parse_args()
 
 # ============================================================================
@@ -510,16 +508,6 @@ if not IS_CHILD_PROCESS:
         
         print("\n⏹️ Premi Ctrl+C per terminare\n")
         
-        # Apri browser
-        if not args.no_browser:
-            for provincia, porta in province:
-                if args.pubblico:
-                    url = f"https://{SOTTODOMINI.get(provincia)}/"
-                else:
-                    url = f"http://localhost:{porta}/"
-                webbrowser.open(url)
-                time.sleep(0.5)
-        
         # Loop principale
         try:
             while True:
@@ -606,7 +594,6 @@ from config import (
     CAMPI_BOXBEAT,
     COLONNE_SIGILLI,
     MATRICOLE_VIP,
-    MODALITA_TEST,
 )
 
 # Colonne protette nella vista Excel (non modificabili dall'utente)
@@ -907,7 +894,7 @@ def get_config():
     """Restituisce la configurazione corrente (pubblica - nessun dato sensibile)."""
     return jsonify({
         'provincia': PROVINCIA_ATTIVA,
-        'modalita_test': MODALITA_TEST,
+        'modalita_test': False,
         'campi_modificabili': CAMPI_MODIFICABILI.get(PROVINCIA_ATTIVA, {}),
         'operatori': MATRICOLE_VIP,
     })
@@ -1184,7 +1171,6 @@ from config import (
 
 _sync_running = False
 _sync_thread = None
-_prima_sync_completata = False
 
 
 def sincronizza_dati():
@@ -1246,26 +1232,13 @@ def sincronizza_dati():
 
 def background_sync_loop():
     """Loop di sincronizzazione in background."""
-    global _sync_running, _prima_sync_completata
+    global _sync_running
     
     logger.info(f"[SYNC] 🔄 Thread di sync avviato (intervallo: {INTERVALLO_SYNC_SECONDI}s)")
     
-    # Se lanciato dal launcher, non aprire il browser (lo fa il launcher)
-    lanciato_da_launcher = os.environ.get('FLASK_PORT') is not None
-    
     while _sync_running:
         try:
-            result = sincronizza_dati()
-            
-            # Apri browser dopo la prima sync completata con successo
-            # (solo se NON lanciato dal launcher)
-            if result and not _prima_sync_completata:
-                _prima_sync_completata = True
-                if not lanciato_da_launcher:
-                    logger.info(f"🌐 Apertura mappa nel browser...")
-                    import webbrowser
-                    url = f"http://localhost:{FLASK_PORT}/"
-                    webbrowser.open(url)
+            sincronizza_dati()
                 
         except Exception as e:
             logger.error(f"[SYNC] ❌ Errore nel loop: {e}")
@@ -1462,7 +1435,7 @@ if __name__ == '__main__':
     
     logger.info("")
     logger.info(f"📍 Provincia: {PROVINCIA_ATTIVA}")
-    logger.info(f"📊 Modalità: {'TEST' if MODALITA_TEST else 'PRODUZIONE'}")
+    logger.info(f"📊 Modalità: PRODUZIONE")
     logger.info(f"🌐 http://localhost:{FLASK_PORT}")
     logger.info("")
     

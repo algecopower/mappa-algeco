@@ -7,17 +7,20 @@
   "coloriTecnici": {
     "AE101392": "#e74c3c",
     "AG49808": "#f1c40f",
-    "AG18966": "#2ecc71"
+    "AG18966": "#2ecc71",
+    "AG63397": "#3498db"
   },
   "matricoleVip": [
     "AE101392",
     "AG49808",
-    "AG18966"
+    "AG18966",
+    "AG63397"
   ],
   "operatoriDict": {
     "PAUL": "AE101392",
     "MIHAI": "AG49808",
-    "SIDI": "AG18966"
+    "SIDI": "AG18966",
+    "AMINE": "AG63397"
   },
   "provincia": "TORINO",
   "refreshInterval": 185000

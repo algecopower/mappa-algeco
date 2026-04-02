@@ -3,9 +3,14 @@
 Blueprint per le API Distinte — gestione distinte e messaggi.
 """
 import os
+import re
 import json
 import tempfile
 import logging
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.utils import formataddr
 
 import gspread.utils
 from flask import Blueprint, request, jsonify, session, send_file
@@ -54,6 +59,81 @@ def serve_whatsapp_redirect():
 
 # Percorso del file JSON dei template messaggi
 _TEMPLATES_JSON = os.path.join(_ROOT_DIR, 'data', 'distinte_templates.json')
+_SMTP_SETTINGS_JSON = os.path.join(_ROOT_DIR, 'data', 'smtp_settings.json')
+
+
+def _load_smtp_settings(prov=None):
+    """Carica le impostazioni SMTP per la provincia specificata (o PROVINCIA_ATTIVA)."""
+    prov = (prov or PROVINCIA_ATTIVA).lower()
+    try:
+        with open(_SMTP_SETTINGS_JSON, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        # Supporta sia il vecchio formato flat che il nuovo per-provincia
+        if prov in data:
+            return data[prov]
+        # Fallback: formato flat legacy
+        if 'host' in data:
+            return data
+        return {}
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def _format_data_estesa(date_str):
+    """Converte una data in formato esteso italiano (es. 'mercoledì 15 aprile')."""
+    if not date_str:
+        return date_str
+    giorni = ['lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato', 'domenica']
+    mesi = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno',
+            'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre']
+    from datetime import datetime
+    for fmt in ('%d/%m/%Y', '%Y-%m-%d'):
+        try:
+            d = datetime.strptime(date_str.strip(), fmt)
+            return f"{giorni[d.weekday()]} {d.day} {mesi[d.month - 1]}".upper()
+        except ValueError:
+            continue
+    return date_str
+
+
+def _resolve_template_server(body_str, fields, conditionals=None, email_tecnico=''):
+    """Risolve un template sostituendo i placeholder con i valori dei campi (server-side)."""
+    result = body_str
+    # Risolvi condizionali (es. {distacco_text})
+    if conditionals:
+        for key, cond in conditionals.items():
+            field_val = fields.get(cond['field'], '')
+            replacement = cond.get('values', {}).get(field_val, '')
+            result = re.sub(r'\{' + key + r'\}', replacement, result)
+    # Risolvi {email_tecnico}
+    result = result.replace('{email_tecnico}', email_tecnico)
+    # Risolvi tutti i {campo} — formatta date in formato esteso
+    date_fields = {'data', 'nuova_data'}
+    for k, v in fields.items():
+        val = _format_data_estesa(v) if k in date_fields else (v or '')
+        result = result.replace('{' + k + '}', val)
+    return result
+
+
+def _build_fields_for_contact(contatto, template_def, field_defs):
+    """Costruisce i valori dei campi auto-compilati per un contatto, come fa il frontend."""
+    fields = {}
+    for field_id in template_def.get('fields', []):
+        fdef = field_defs.get(field_id, {})
+        value = ''
+        # autoFillRule (es. distacco)
+        if 'autoFillRule' in fdef:
+            rule = fdef['autoFillRule']
+            src_val = (contatto.get(rule['field']) or '').lower()
+            value = rule['then'] if rule.get('contains') and rule['contains'] in src_val else rule['else']
+        elif fdef.get('autoFillFrom') is None:
+            value = ''
+        elif isinstance(fdef.get('autoFillFrom'), list):
+            value = ' '.join(contatto.get(k, '') or '' for k in fdef['autoFillFrom']).strip()
+        elif fdef.get('autoFillFrom'):
+            value = contatto.get(fdef['autoFillFrom'], '') or ''
+        fields[field_id] = value
+    return fields
 
 
 @bp.route('/api/distinte/templates', methods=['GET'])
@@ -84,6 +164,345 @@ def save_distinte_templates():
     except Exception as e:
         logger.error(f"Errore salvataggio template: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+@bp.route('/api/distinte/smtp-settings', methods=['GET'])
+@login_required
+def get_smtp_settings():
+    """Restituisce le impostazioni SMTP per la provincia attiva (password mascherata)."""
+    settings = _load_smtp_settings()
+    # Maschera la password per sicurezza
+    if settings.get('password'):
+        settings['password_set'] = True
+        settings['password'] = ''
+    else:
+        settings['password_set'] = False
+    settings['provincia'] = PROVINCIA_ATTIVA
+    return jsonify(settings)
+
+
+@bp.route('/api/distinte/smtp-settings', methods=['PUT'])
+@login_required
+def save_smtp_settings():
+    """Salva le impostazioni SMTP per la provincia attiva."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Nessun dato ricevuto'}), 400
+
+        prov = PROVINCIA_ATTIVA.lower()
+
+        # Carica file esistente (tutte le province)
+        try:
+            with open(_SMTP_SETTINGS_JSON, 'r', encoding='utf-8') as f:
+                all_settings = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            all_settings = {}
+
+        # Migra formato flat legacy se necessario
+        if 'host' in all_settings and prov not in all_settings:
+            old = {k: v for k, v in all_settings.items()}
+            all_settings = {'torino': old}
+
+        # Se la password non è stata modificata, mantieni quella esistente
+        existing = all_settings.get(prov, {})
+        if not data.get('password') and existing.get('password'):
+            data['password'] = existing['password']
+
+        # Rimuovi campo provincia dal salvataggio
+        data.pop('provincia', None)
+
+        # Validazione base
+        required = ['host', 'port', 'username', 'from_email']
+        for field in required:
+            if not data.get(field):
+                return jsonify({'error': f'Campo "{field}" obbligatorio'}), 400
+
+        all_settings[prov] = data
+        with open(_SMTP_SETTINGS_JSON, 'w', encoding='utf-8') as f:
+            json.dump(all_settings, f, ensure_ascii=False, indent=4)
+        return jsonify({'ok': True})
+    except Exception as e:
+        logger.error(f"Errore salvataggio SMTP settings: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+def _connect_smtp(smtp_settings, timeout=15):
+    """Crea e restituisce una connessione SMTP autenticata.
+    Porta 465 → SSL diretto (SMTP_SSL). Porta 587 → STARTTLS."""
+    host = smtp_settings['host']
+    port = int(smtp_settings.get('port', 587))
+    username = smtp_settings.get('username', '')
+    password = smtp_settings.get('password', '')
+    use_tls = smtp_settings.get('use_tls', True)
+
+    if port == 465:
+        # SSL diretto (Aruba, ecc.)
+        server = smtplib.SMTP_SSL(host, port, timeout=timeout)
+    else:
+        server = smtplib.SMTP(host, port, timeout=timeout)
+        if use_tls:
+            server.starttls()
+
+    if username and password:
+        server.login(username, password)
+    return server
+
+
+@bp.route('/api/distinte/smtp-test', methods=['POST'])
+@login_required
+def test_smtp_connection():
+    """Testa la connessione SMTP con le impostazioni attuali."""
+    try:
+        settings = _load_smtp_settings()
+        if not settings.get('host'):
+            return jsonify({'error': 'Configurazione SMTP mancante'}), 400
+
+        server = _connect_smtp(settings, timeout=10)
+        server.quit()
+
+        return jsonify({'ok': True, 'message': 'Connessione SMTP riuscita!'})
+    except smtplib.SMTPAuthenticationError:
+        return jsonify({'error': 'Autenticazione fallita. Controlla username e password.'}), 401
+    except Exception as e:
+        logger.error(f"Test SMTP fallito: {e}")
+        return jsonify({'error': f'Connessione fallita: {str(e)}'}), 500
+
+
+@bp.route('/api/distinte/invia-email-prova', methods=['POST'])
+@login_required
+def invia_email_prova():
+    """Invia una email di prova con dati fittizi all'indirizzo specificato."""
+    try:
+        data = request.get_json()
+        email_dest = (data.get('email') or '').strip()
+        template_id = data.get('template_id', '')
+
+        if not email_dest or '@' not in email_dest:
+            return jsonify({'error': 'Indirizzo email non valido'}), 400
+        if not template_id:
+            return jsonify({'error': 'Template non specificato'}), 400
+
+        # Carica template
+        try:
+            with open(_TEMPLATES_JSON, 'r', encoding='utf-8') as f:
+                tmpl_data = json.load(f)
+        except Exception:
+            return jsonify({'error': 'Impossibile caricare i template'}), 500
+
+        tmpl = tmpl_data.get('templates', {}).get(template_id)
+        if not tmpl or tmpl.get('type') != 'email':
+            return jsonify({'error': f'Template "{template_id}" non valido'}), 404
+
+        field_defs = tmpl_data.get('fields', {})
+        tmpl_settings = tmpl_data.get('settings', {})
+        email_tecnico = tmpl_settings.get(f'email_{PROVINCIA_ATTIVA.lower()}', '')
+
+        # Dati fittizi di prova
+        contatto_test = {
+            'pod': 'IT001E98765432',
+            'email': email_dest,
+            'nome': 'AZIENDA DI PROVA SRL',
+            'indirizzo': 'Via Roma',
+            'civico': '1',
+            'comune': 'Milano',
+            'data_intervento': '2026-04-15',
+            'pod_filone': 'IT001E98765432',
+            'eneltel_filone': '123456789',
+            'matricola_filone': 'MAT-TEST-001',
+            'tipologia_contatore': 'diretto',
+            'nome_societa': 'AZIENDA DI PROVA SRL',
+            'nome_referente': 'Mario Rossi',
+        }
+
+        # Carica SMTP settings
+        smtp_settings = _load_smtp_settings()
+        if not smtp_settings.get('host') or not smtp_settings.get('password'):
+            return jsonify({'error': 'Configurazione SMTP incompleta. Salva prima le credenziali.'}), 400
+
+        from_email = smtp_settings.get('from_email', smtp_settings.get('username', ''))
+        from_name = smtp_settings.get('from_name', 'Ufficio Tecnico Algeco Power')
+
+        # Costruisci campi e risolvi template
+        fields = _build_fields_for_contact(contatto_test, tmpl, field_defs)
+        body_html = _resolve_template_server(
+            tmpl['body'], fields,
+            conditionals=tmpl.get('conditionals'),
+            email_tecnico=email_tecnico
+        )
+        subject = _resolve_template_server(
+            tmpl.get('subject', ''), fields,
+            email_tecnico=email_tecnico
+        ) if tmpl.get('subject') else f'Sostituzione contatore - AZIENDA DI PROVA SRL'
+
+        subject = '[TEST] ' + subject
+
+        # Converti \n in <br> e aggiungi firma
+        body_html_formatted = body_html.replace('\n', '<br>')
+        firma_html = tmpl_settings.get('firma_html', '')
+        if firma_html:
+            firma_html = firma_html.replace('{email_tecnico}', email_tecnico)
+            body_html_formatted += firma_html
+
+        # Costruisci messaggio MIME
+        import email.utils as email_utils
+        msg = MIMEMultipart('alternative')
+        msg['From'] = formataddr((from_name, from_email))
+        msg['To'] = email_dest
+        msg['Subject'] = subject
+        msg['Reply-To'] = from_email
+        msg['Message-ID'] = email_utils.make_msgid(
+            domain=from_email.split('@')[-1] if '@' in from_email else 'algecopower.it')
+        msg['Date'] = email_utils.formatdate(localtime=True)
+
+        # Plain text
+        body_plain = re.sub(r'<a[^>]*href="([^"]*?)"[^>]*>(.*?)</a>', r'\2 (\1)', body_html)
+        body_plain = re.sub(r'<[^>]+>', '', body_plain)
+        if firma_html:
+            body_plain += f'\n\n--\nUfficio Tecnico\nTelefono: 375 774 5644\nMail: {email_tecnico}\nwww.algecopower.it'
+
+        msg.attach(MIMEText(body_plain, 'plain', 'utf-8'))
+        msg.attach(MIMEText(body_html_formatted, 'html', 'utf-8'))
+
+        # Invio
+        server = _connect_smtp(smtp_settings, timeout=15)
+        try:
+            server.send_message(msg)
+        finally:
+            try:
+                server.quit()
+            except Exception:
+                pass
+
+        logger.info(f"[EMAIL-TEST] Inviata email di prova a {email_dest}")
+        return jsonify({'ok': True, 'email': email_dest})
+
+    except smtplib.SMTPAuthenticationError:
+        return jsonify({'ok': False, 'errore': 'Autenticazione SMTP fallita'}), 401
+    except Exception as e:
+        logger.error(f"[EMAIL-TEST] Errore invio prova a {email_dest}: {e}")
+        return jsonify({'ok': False, 'errore': str(e)}), 500
+
+
+@bp.route('/api/distinte/invia-singola-email', methods=['POST'])
+@login_required
+def invia_singola_email():
+    """
+    Invia UNA singola email usando un template personalizzato.
+    Il frontend chiama questo endpoint in loop con pausa tra un invio e l'altro
+    per evitare di essere marcati come spam.
+    Body: {
+        "template_id": "email_societa" | "email_semplificata",
+        "contatto": {"pod": "IT...", "email": "...", "nome": "...", ...}
+    }
+    """
+    try:
+        data = request.get_json()
+        template_id = data.get('template_id', '')
+        contatto = data.get('contatto')
+        subject_override = data.get('subject_override')
+        body_override = data.get('body_override')
+
+        if not template_id:
+            return jsonify({'error': 'Template non specificato'}), 400
+        if not contatto:
+            return jsonify({'error': 'Contatto mancante'}), 400
+
+        email_dest = (contatto.get('email') or '').strip()
+        pod = contatto.get('pod', '?')
+
+        if not email_dest:
+            return jsonify({'ok': False, 'pod': pod, 'errore': 'Email mancante'}), 400
+
+        # Carica template
+        try:
+            with open(_TEMPLATES_JSON, 'r', encoding='utf-8') as f:
+                tmpl_data = json.load(f)
+        except Exception:
+            return jsonify({'error': 'Impossibile caricare i template'}), 500
+
+        tmpl = tmpl_data.get('templates', {}).get(template_id)
+        if not tmpl or tmpl.get('type') != 'email':
+            return jsonify({'error': f'Template "{template_id}" non valido'}), 404
+
+        field_defs = tmpl_data.get('fields', {})
+        tmpl_settings = tmpl_data.get('settings', {})
+        email_tecnico = tmpl_settings.get(f'email_{PROVINCIA_ATTIVA.lower()}', '')
+
+        # Carica SMTP settings
+        smtp_settings = _load_smtp_settings()
+        if not smtp_settings.get('host') or not smtp_settings.get('password'):
+            return jsonify({'error': 'Configurazione SMTP incompleta'}), 400
+
+        from_email = smtp_settings.get('from_email', smtp_settings.get('username', ''))
+        from_name = smtp_settings.get('from_name', 'Ufficio Tecnico Algeco Power')
+
+        # Se il frontend ha fornito subject/body già risolti (anteprima modificata), usali
+        if subject_override and body_override:
+            subject = subject_override
+            body_html = body_override
+        else:
+            # Costruisci i campi auto-compilati
+            fields = _build_fields_for_contact(contatto, tmpl, field_defs)
+
+            # Risolvi body e subject
+            body_html = _resolve_template_server(
+                tmpl['body'], fields,
+                conditionals=tmpl.get('conditionals'),
+                email_tecnico=email_tecnico
+            )
+            subject = _resolve_template_server(
+                tmpl.get('subject', ''), fields,
+                email_tecnico=email_tecnico
+            ) if tmpl.get('subject') else f'Sostituzione contatore - {contatto.get("nome", "")}'
+
+        # Converti \n in <br> per HTML
+        body_html_formatted = body_html.replace('\n', '<br>')
+
+        # Aggiungi firma HTML in calce
+        firma_html = tmpl_settings.get('firma_html', '')
+        if firma_html:
+            firma_html = firma_html.replace('{email_tecnico}', email_tecnico)
+            body_html_formatted += firma_html
+
+        # Costruisci messaggio MIME con header anti-spam
+        import email.utils as email_utils
+        msg = MIMEMultipart('alternative')
+        msg['From'] = formataddr((from_name, from_email))
+        msg['To'] = email_dest
+        msg['Subject'] = subject
+        msg['Reply-To'] = from_email
+        msg['Message-ID'] = email_utils.make_msgid(domain=from_email.split('@')[-1] if '@' in from_email else 'algecopower.it')
+        msg['Date'] = email_utils.formatdate(localtime=True)
+
+        # Versione plain text
+        body_plain = re.sub(r'<a[^>]*href="([^"]*?)"[^>]*>(.*?)</a>', r'\2 (\1)', body_html)
+        body_plain = re.sub(r'<[^>]+>', '', body_plain)
+        # Firma plain text
+        if firma_html:
+            body_plain += f'\n\n--\nUfficio Tecnico\nTelefono: 375 774 5644\nMail: {email_tecnico}\nwww.algecopower.it'
+
+        msg.attach(MIMEText(body_plain, 'plain', 'utf-8'))
+        msg.attach(MIMEText(body_html_formatted, 'html', 'utf-8'))
+
+        # Connessione e invio (una connessione per email)
+        server = _connect_smtp(smtp_settings, timeout=15)
+        try:
+            server.send_message(msg)
+        finally:
+            try:
+                server.quit()
+            except Exception:
+                pass
+
+        logger.info(f"[EMAIL] Inviata a {email_dest} (POD {pod})")
+        return jsonify({'ok': True, 'pod': pod, 'email': email_dest})
+
+    except smtplib.SMTPAuthenticationError:
+        return jsonify({'ok': False, 'pod': pod, 'errore': 'Autenticazione SMTP fallita'}), 401
+    except Exception as e:
+        logger.error(f"[EMAIL] Errore invio a {email_dest}: {e}")
+        return jsonify({'ok': False, 'pod': contatto.get('pod', '?'), 'email': email_dest, 'errore': str(e)}), 500
 
 
 @bp.route('/api/distinte/parse-distinta', methods=['POST'])

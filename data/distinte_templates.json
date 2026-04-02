@@ -1,7 +1,8 @@
 {
     "settings": {
         "email_pavia": "tecnico_pv1@algecopower.it",
-        "email_torino": "tecnico_to2@algecopower.it"
+        "email_torino": "tecnico_to2@algecopower.it",
+        "firma_html": "<br><br><table cellpadding=\"0\" cellspacing=\"0\" style=\"font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#333;\"><tr><td style=\"padding-right:15px;border-right:2px solid #2a7ab5;vertical-align:middle;\"><img src=\"https://www.algecopower.it/wp-content/uploads/2024/06/cropped-LOGO-NEW-1.png\" alt=\"Algeco Power\" width=\"120\" style=\"display:block;\"></td><td style=\"padding-left:15px;vertical-align:middle;\"><strong style=\"font-size:14px;color:#2a7ab5;\">Ufficio Tecnico</strong><br>Telefono: <a href=\"tel:+393757745644\" style=\"color:#333;text-decoration:none;\">375 774 5644</a><br>Mail: <a href=\"mailto:{email_tecnico}\" style=\"color:#2a7ab5;text-decoration:none;\">{email_tecnico}</a><br><a href=\"https://www.algecopower.it\" style=\"color:#2a7ab5;text-decoration:none;\">www.algecopower.it</a></td></tr></table>"
     },
     "fields": {
         "nome": {

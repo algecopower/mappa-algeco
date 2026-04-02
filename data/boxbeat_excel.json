@@ -1,1 +1,21 @@
-{}
+{
+  "2026-04-02": [
+    {
+      "id": "853466c0",
+      "data_appuntamento": "2026-04-04",
+      "orario": "9:00/9:30",
+      "pod": "IT001E01912731",
+      "eneltel": "19127311",
+      "nominativo": "DOMENICO EMANUELE COCCIA",
+      "via": "VENTIQUATTR.MAG",
+      "civico": "51",
+      "comune": "TROFARELLO",
+      "note": "APP 9:00/9:30. conferma wa",
+      "data_pianificata": "2026-04-04",
+      "origine": "filone_manuale",
+      "provincia": "TORINO",
+      "creato_da": "giada",
+      "registrato_il": "2026-04-02T12:12:14.762173"
+    }
+  ]
+}

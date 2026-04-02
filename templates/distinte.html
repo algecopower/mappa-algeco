@@ -682,7 +682,6 @@
         .stats {
             display: flex;
             gap: 15px;
-            margin-left: auto;
         }
 
         .stat-item {
@@ -1396,6 +1395,200 @@
         .back-btn:hover {
             background: var(--bg-card);
         }
+
+        /* ===== Bulk Email Modal ===== */
+        .bulk-email-btn {
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9em;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+        .bulk-email-btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
+        .bulk-email-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+        .bulk-email-modal .modal { max-width: 750px; max-height: 90vh; overflow-y: auto; }
+
+        .smtp-config-toggle {
+            color: var(--info);
+            cursor: pointer;
+            font-size: 0.85em;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            margin-bottom: 10px;
+        }
+        .smtp-config-toggle:hover { text-decoration: underline; }
+
+        .smtp-form { display: none; padding: 12px; background: var(--bg-dark); border-radius: 8px; margin-bottom: 12px; }
+        .smtp-form.visible { display: block; }
+        .smtp-form label { display: block; font-size: 0.85em; color: var(--text-muted); margin-top: 8px; margin-bottom: 3px; }
+        .smtp-form input, .smtp-form select {
+            width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border);
+            background: var(--bg-card); color: var(--text); font-size: 0.9em; box-sizing: border-box;
+        }
+        .smtp-form .smtp-row { display: flex; gap: 10px; }
+        .smtp-form .smtp-row > div { flex: 1; }
+
+        .bulk-template-select {
+            width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border);
+            background: var(--bg-card); color: var(--text); font-size: 1em; margin-bottom: 12px;
+        }
+
+        .bulk-contacts-list {
+            max-height: 300px; overflow-y: auto; border: 1px solid var(--border);
+            border-radius: 8px; padding: 0; margin-bottom: 12px;
+        }
+        .bulk-contact-item {
+            display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+            border-bottom: 1px solid var(--border); font-size: 0.9em;
+        }
+        .bulk-contact-item:last-child { border-bottom: none; }
+        .bulk-contact-item:hover { background: rgba(52, 152, 219, 0.08); }
+        .bulk-contact-item input[type="checkbox"] { flex-shrink: 0; }
+        .bulk-contact-name { flex: 1; font-weight: 500; }
+        .bulk-contact-email { color: var(--info); font-size: 0.85em; }
+        .bulk-contact-pod { color: var(--text-muted); font-size: 0.8em; }
+
+        .bulk-select-all { margin-bottom: 8px; font-size: 0.9em; display: flex; align-items: center; gap: 6px; }
+
+        .bulk-filter-row {
+            display: flex; align-items: center; gap: 12px; margin-bottom: 10px;
+            padding: 8px 12px; background: var(--bg-dark); border-radius: 8px; font-size: 0.9em;
+        }
+        .bulk-filter-row label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+
+        .pec-badge {
+            display: inline-block; background: #e67e22; color: white; font-size: 0.7em;
+            padding: 1px 6px; border-radius: 4px; font-weight: 600; margin-left: 4px; vertical-align: middle;
+        }
+        .bulk-contact-item.is-pec { opacity: 0.6; }
+        .bulk-contact-item.is-pec .bulk-contact-email { color: #e67e22; }
+
+        .bulk-progress { display: none; padding: 15px; text-align: center; }
+        .bulk-progress .progress-bar {
+            width: 100%; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; margin: 10px 0;
+        }
+        .bulk-progress .progress-fill {
+            height: 100%; background: linear-gradient(90deg, #3498db, #2ecc71); border-radius: 4px;
+            transition: width 0.3s;
+        }
+        .bulk-results { margin-top: 10px; font-size: 0.9em; }
+        .bulk-results .result-ok { color: var(--success); }
+        .bulk-results .result-err { color: var(--danger); }
+
+        /* Preview email cards */
+        .bulk-preview-section { display: none; margin-top: 12px; }
+        .bulk-preview-header {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 8px; font-size: 0.9em; color: var(--text-muted);
+        }
+        .bulk-preview-cards {
+            max-height: 60vh; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;
+        }
+        .preview-card {
+            border: 1px solid var(--border); border-radius: 8px;
+            background: var(--bg-dark); transition: border-color 0.2s;
+            flex-shrink: 0;
+        }
+        .preview-card.expanded { border-color: var(--primary); }
+        .preview-card-header {
+            display: flex; align-items: center; gap: 8px; padding: 10px 14px;
+            cursor: pointer; user-select: none; font-size: 0.9em;
+            min-height: 42px;
+        }
+        .preview-card-header:hover { background: rgba(52,152,219,0.08); }
+        .preview-card-header .preview-toggle {
+            transition: transform 0.2s; font-size: 0.75em; color: var(--text-muted); flex-shrink: 0;
+        }
+        .preview-card.expanded .preview-toggle { transform: rotate(90deg); }
+        .preview-card-header .preview-dest {
+            flex: 1; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            min-width: 0;
+        }
+        .preview-card-header .preview-pod {
+            color: var(--text-muted); font-size: 0.8em; flex-shrink: 0;
+            max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .preview-card-body {
+            display: none; padding: 12px 14px 14px; border-top: 1px solid var(--border);
+        }
+        .preview-card.expanded .preview-card-body { display: block; }
+        .preview-field-label {
+            font-size: 0.8em; color: var(--text-muted); margin-top: 10px; margin-bottom: 4px;
+        }
+        .preview-subject-input {
+            width: 100%; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px;
+            background: var(--bg-card); color: var(--text); font-size: 0.9em; box-sizing: border-box;
+        }
+        .preview-body-rendered {
+            padding: 12px 14px; border: 1px solid var(--border); border-radius: 6px;
+            background: #fff; color: #333; font-size: 0.9em; line-height: 1.6;
+            font-family: Arial, Helvetica, sans-serif; max-height: 300px; overflow-y: auto;
+        }
+        .preview-body-rendered a { color: #2a7ab5; }
+        .preview-body-editor {
+            width: 100%; min-height: 180px; padding: 8px 10px; border: 1px solid var(--border);
+            border-radius: 6px; background: var(--bg-card); color: var(--text); font-size: 0.85em;
+            line-height: 1.5; resize: vertical; font-family: inherit; box-sizing: border-box;
+            display: none;
+        }
+        .preview-edit-toggle {
+            display: inline-flex; align-items: center; gap: 4px; font-size: 0.8em;
+            color: var(--info); cursor: pointer; margin-top: 6px; padding: 3px 8px;
+            border: 1px solid var(--border); border-radius: 5px; background: transparent;
+        }
+        .preview-edit-toggle:hover { background: rgba(52,152,219,0.1); }
+        .preview-card-badge {
+            font-size: 0.7em; padding: 2px 6px; border-radius: 4px; font-weight: 600;
+            background: var(--info); color: white;
+        }
+        .preview-card-badge.edited { background: #e67e22; }
+
+        /* AI Search Modal */
+        .ai-search-modal .modal { max-width: 850px; max-height: 90vh; overflow-y: auto; }
+        .ai-step { margin-bottom: 16px; }
+        .ai-step-header {
+            display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+            font-weight: 600; font-size: 0.95em;
+        }
+        .ai-step-num {
+            width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center;
+            justify-content: center; font-size: 0.8em; font-weight: 700; flex-shrink: 0;
+            background: linear-gradient(135deg, #9b59b6, #8e44ad); color: white;
+        }
+        .ai-step.done .ai-step-num { background: var(--success); }
+        .ai-prompt-box {
+            background: var(--bg-dark); border: 1px solid var(--border); border-radius: 8px;
+            padding: 12px; font-size: 0.82em; max-height: 200px; overflow-y: auto;
+            font-family: monospace; white-space: pre-wrap; word-break: break-word;
+            line-height: 1.5; color: var(--text-muted);
+        }
+        .ai-response-area {
+            width: 100%; min-height: 150px; padding: 10px; border: 1px solid var(--border);
+            border-radius: 8px; background: var(--bg-dark); color: var(--text);
+            font-family: monospace; font-size: 0.85em; resize: vertical; box-sizing: border-box;
+        }
+        .ai-results-table { width: 100%; border-collapse: collapse; font-size: 0.85em; }
+        .ai-results-table th {
+            text-align: left; padding: 6px 10px; background: var(--bg-dark);
+            border-bottom: 2px solid var(--border); font-size: 0.85em; color: var(--text-muted);
+        }
+        .ai-results-table td {
+            padding: 5px 10px; border-bottom: 1px solid var(--border);
+        }
+        .ai-results-table tr:hover { background: rgba(52,152,219,0.08); }
+        .ai-results-table .new-data { color: var(--success); font-weight: 500; }
+        .ai-count-badge {
+            display: inline-block; padding: 2px 8px; border-radius: 10px;
+            font-size: 0.8em; font-weight: 600; background: var(--bg-dark); color: var(--text-muted);
+        }
     </style>
 </head>
 <body>
@@ -1448,7 +1641,7 @@
                 Fisso
             </label>
             <label>
-                <input type="checkbox" id="filterNoPhone">
+                <input type="checkbox" id="filterNoPhone" checked>
                 <i class="fas fa-phone-slash" style="color: var(--text-muted)"></i>
                 Senza telefono
             </label>
@@ -1474,29 +1667,43 @@
                 Solo Società
             </label>
 
-            <div class="stats">
-                <div class="stat-item cellulare">
-                    <i class="fas fa-mobile-alt"></i>
-                    <span id="countCellulare">0</span>
+            <div style="display:flex;align-items:center;gap:15px;width:100%;">
+                <div class="stats">
+                    <div class="stat-item cellulare">
+                        <i class="fas fa-mobile-alt"></i>
+                        <span id="countCellulare">0</span>
+                    </div>
+                    <div class="stat-item fisso">
+                        <i class="fas fa-phone"></i>
+                        <span id="countFisso">0</span>
+                    </div>
+                    <div class="stat-item no-phone">
+                        <i class="fas fa-phone-slash"></i>
+                        <span id="countNoPhone">0</span>
+                    </div>
+                    <div class="stat-item" style="color: var(--success);">
+                        <i class="fas fa-check-circle"></i>
+                        <span id="countCompleted">0</span>
+                    </div>
+                    <div class="stat-item" style="color: #e74c3c;">
+                        <i class="fas fa-building"></i>
+                        <span id="countAzienda">0</span>
+                    </div>
                 </div>
-                <div class="stat-item fisso">
-                    <i class="fas fa-phone"></i>
-                    <span id="countFisso">0</span>
-                </div>
-                <div class="stat-item no-phone">
-                    <i class="fas fa-phone-slash"></i>
-                    <span id="countNoPhone">0</span>
-                </div>
-                <div class="stat-item" style="color: var(--success);">
-                    <i class="fas fa-check-circle"></i>
-                    <span id="countCompleted">0</span>
-                </div>
-                <div class="stat-item" style="color: #e74c3c;">
-                    <i class="fas fa-building"></i>
-                    <span id="countAzienda">0</span>
-                </div>
-            </div>
 
+                <span style="width:1px;height:28px;background:var(--border);margin:0 5px;"></span>
+
+                <button class="bulk-email-btn" id="bulkEmailBtn" onclick="apriBulkEmailModal()" disabled>
+                    <i class="fas fa-paper-plane"></i>
+                    Invio Email in Blocco
+                </button>
+
+                <button class="bulk-email-btn" id="aiSearchBtn" onclick="apriAiSearchModal()" disabled
+                        style="background: linear-gradient(135deg, #9b59b6, #8e44ad);">
+                    <i class="fas fa-robot"></i>
+                    Cerca con AI
+                </button>
+            </div>
 
         </div>
 
@@ -1646,6 +1853,219 @@
     <div class="toast" id="toast">
         <i class="fas fa-check-circle"></i>
         <span id="toastMessage">Messaggio copiato!</span>
+    </div>
+
+    <!-- Bulk Email Modal -->
+    <!-- AI Search Modal -->
+    <div class="modal-overlay ai-search-modal" id="aiSearchModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>
+                    <i class="fas fa-robot" style="color: #9b59b6"></i>
+                    <span>Cerca Contatti con AI</span>
+                </h3>
+                <button class="modal-close" onclick="chiudiAiSearchModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- Step 1: Generate prompt -->
+                <div class="ai-step" id="aiStep1">
+                    <div class="ai-step-header">
+                        <span class="ai-step-num">1</span>
+                        Copia il prompt e incollalo in ChatGPT
+                        <span class="ai-count-badge" id="aiMissingCount"></span>
+                    </div>
+                    <div class="ai-prompt-box" id="aiPromptBox"></div>
+                    <div style="display:flex;gap:8px;margin-top:8px;">
+                        <button class="btn btn-primary" onclick="copiaPromptAI()" style="font-size:0.85em;">
+                            <i class="fas fa-copy"></i> Copia prompt
+                        </button>
+                        <a href="https://chatgpt.com" target="_blank" class="btn" style="font-size:0.85em;text-decoration:none;">
+                            <i class="fas fa-external-link-alt"></i> Apri ChatGPT
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Step 2: Paste response -->
+                <div class="ai-step" id="aiStep2">
+                    <div class="ai-step-header">
+                        <span class="ai-step-num">2</span>
+                        Incolla la risposta JSON di ChatGPT
+                    </div>
+                    <textarea class="ai-response-area" id="aiResponseArea"
+                              placeholder='Incolla qui la risposta JSON di ChatGPT...'></textarea>
+                    <button class="btn btn-primary" onclick="parsaRispostaAI()" style="font-size:0.85em;margin-top:8px;">
+                        <i class="fas fa-magic"></i> Analizza risposta
+                    </button>
+                </div>
+
+                <!-- Step 3: Review + Apply -->
+                <div class="ai-step" id="aiStep3" style="display:none;">
+                    <div class="ai-step-header">
+                        <span class="ai-step-num">3</span>
+                        Verifica e applica i risultati
+                        <span class="ai-count-badge" id="aiFoundCount"></span>
+                    </div>
+                    <div style="max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;">
+                        <table class="ai-results-table" id="aiResultsTable">
+                            <thead>
+                                <tr>
+                                    <th>Azienda</th>
+                                    <th><input type="checkbox" id="aiSelectAll" checked onchange="toggleAiSelectAll(this.checked)" title="Seleziona/deseleziona tutto"></th>
+                                    <th>Telefono</th>
+                                    <th></th>
+                                    <th>Email / PEC</th>
+                                </tr>
+                            </thead>
+                            <tbody id="aiResultsBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="chiudiAiSearchModal()">Chiudi</button>
+                <button class="btn btn-primary" id="aiApplyBtn" onclick="applicaRisultatiAI()" style="display:none;background:linear-gradient(135deg,#9b59b6,#8e44ad);">
+                    <i class="fas fa-check"></i> Applica selezionati
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay bulk-email-modal" id="bulkEmailModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>
+                    <i class="fas fa-paper-plane" style="color: var(--info)"></i>
+                    <span>Invio Email in Blocco</span>
+                </h3>
+                <button class="modal-close" onclick="chiudiBulkEmailModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- SMTP Config -->
+                <div class="smtp-config-toggle" onclick="toggleSmtpConfig()">
+                    <i class="fas fa-cog"></i>
+                    <span id="smtpStatusText">Configurazione SMTP</span>
+                    <span id="smtpProvLabel" style="font-size:0.75em;background:var(--primary);color:white;padding:1px 7px;border-radius:4px;margin-left:4px;"></span>
+                    <i class="fas fa-chevron-down" id="smtpToggleIcon" style="font-size:0.7em;"></i>
+                </div>
+                <div class="smtp-form" id="smtpForm">
+                    <div class="smtp-row">
+                        <div>
+                            <label>Server SMTP</label>
+                            <input type="text" id="smtpHost" placeholder="es. smtp.gmail.com">
+                        </div>
+                        <div style="max-width: 100px;">
+                            <label>Porta</label>
+                            <input type="number" id="smtpPort" value="587">
+                        </div>
+                    </div>
+                    <div class="smtp-row">
+                        <div>
+                            <label>Username</label>
+                            <input type="text" id="smtpUsername" placeholder="email@dominio.it">
+                        </div>
+                        <div>
+                            <label>Password</label>
+                            <input type="password" id="smtpPassword" placeholder="Password o App Password">
+                        </div>
+                    </div>
+                    <div class="smtp-row">
+                        <div>
+                            <label>Email mittente</label>
+                            <input type="email" id="smtpFromEmail" placeholder="mittente@dominio.it">
+                        </div>
+                        <div>
+                            <label>Nome mittente</label>
+                            <input type="text" id="smtpFromName" value="Ufficio Tecnico Algeco Power">
+                        </div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px;margin-top:10px;">
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:0;">
+                            <input type="checkbox" id="smtpUseTls" checked> Usa TLS (consigliato)
+                        </label>
+                    </div>
+                    <div style="display:flex;gap:8px;margin-top:10px;">
+                        <button class="btn btn-primary" onclick="salvaSmtpSettings()" style="font-size:0.85em;">
+                            <i class="fas fa-save"></i> Salva
+                        </button>
+                        <button class="btn" onclick="testSmtpConnection()" style="font-size:0.85em;">
+                            <i class="fas fa-plug"></i> Testa Connessione
+                        </button>
+                    </div>
+                    <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);">
+                        <label style="font-size:0.85em;color:var(--text-muted);margin-bottom:4px;display:block;">
+                            <i class="fas fa-flask"></i> Invia email di prova
+                        </label>
+                        <div style="display:flex;gap:8px;align-items:center;">
+                            <input type="email" id="smtpTestEmail" placeholder="tua.email@personale.it"
+                                   style="flex:1;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-card);color:var(--text);font-size:0.9em;">
+                            <button class="btn" id="smtpTestSendBtn" onclick="inviaEmailDiProva()" style="font-size:0.85em;white-space:nowrap;">
+                                <i class="fas fa-paper-plane"></i> Invia prova
+                            </button>
+                        </div>
+                        <div style="font-size:0.75em;color:var(--text-muted);margin-top:4px;">
+                            Invia una email con dati fittizi al tuo indirizzo per verificare template, firma e ricezione.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Template Selection -->
+                <label style="font-size:0.9em;color:var(--text-muted);margin-bottom:4px;display:block;">Template email:</label>
+                <select class="bulk-template-select" id="bulkTemplateSelect" onchange="aggiornaBulkPreview()">
+                </select>
+
+                <!-- Filters -->
+                <div class="bulk-filter-row">
+                    <label class="bulk-select-all" style="margin:0;">
+                        <input type="checkbox" id="bulkSelectAll" onchange="toggleBulkSelectAll(this.checked)" checked>
+                        <strong>Seleziona tutti</strong> (<span id="bulkEmailCount">0</span>)
+                    </label>
+                    <span style="width:1px;height:20px;background:var(--border);"></span>
+                    <label>
+                        <input type="checkbox" id="bulkExcludePec" checked onchange="applicaFiltroPec()">
+                        <i class="fas fa-shield-alt" style="color:#e67e22;"></i>
+                        Escludi PEC
+                    </label>
+                    <span style="color:var(--text-muted);font-size:0.85em;" id="bulkPecCount"></span>
+                </div>
+
+                <!-- Contacts List -->
+                <div class="bulk-contacts-list" id="bulkContactsList"></div>
+
+                <!-- Preview Section -->
+                <div class="bulk-preview-section" id="bulkPreviewSection">
+                    <div class="bulk-preview-header">
+                        <span><i class="fas fa-eye"></i> Anteprima email (<span id="previewCount">0</span>)</span>
+                        <button class="btn" onclick="chiudiAnteprima()" style="font-size:0.8em;padding:3px 10px;">
+                            <i class="fas fa-arrow-left"></i> Torna alla selezione
+                        </button>
+                    </div>
+                    <div class="bulk-preview-cards" id="bulkPreviewCards"></div>
+                </div>
+
+                <!-- Progress -->
+                <div class="bulk-progress" id="bulkProgress">
+                    <div><i class="fas fa-spinner fa-spin"></i> Invio in corso...</div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="bulkProgressFill" style="width:0%"></div>
+                    </div>
+                    <div id="bulkProgressText">0 / 0</div>
+                </div>
+
+                <!-- Results -->
+                <div class="bulk-results" id="bulkResults" style="display:none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="chiudiBulkEmailModal()">Chiudi</button>
+                <button class="btn" id="bulkPreviewBtn" onclick="generaAnteprima()" style="background: linear-gradient(135deg, #9b59b6, #8e44ad); color: white;">
+                    <i class="fas fa-eye"></i>
+                    Anteprima
+                </button>
+                <button class="btn btn-primary" id="bulkSendBtn" onclick="inviaEmailBulk()" style="background: linear-gradient(135deg, #3498db, #2980b9); display: none;">
+                    <i class="fas fa-paper-plane"></i>
+                    Invia Email
+                </button>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -1899,6 +2319,20 @@
             document.getElementById('countNoPhone').textContent = contatti.filter(c => c.tipo === 'senza_telefono').length;
             document.getElementById('countCompleted').textContent = totalCompleted + '/' + contatti.length;
             document.getElementById('countAzienda').textContent = contatti.filter(c => c.is_azienda).length;
+
+            // Abilita/disabilita pulsante invio email in blocco
+            const conEmail = contatti.filter(c => (c.email_filone || '').trim());
+            const bulkBtn = document.getElementById('bulkEmailBtn');
+            bulkBtn.disabled = conEmail.length === 0;
+            bulkBtn.title = conEmail.length > 0 ? `${conEmail.length} contatti con email` : 'Nessun contatto con email';
+
+            // Abilita/disabilita pulsante AI search (solo società)
+            const numSocieta = contatti.filter(c => c.is_azienda).length;
+            const aiBtn = document.getElementById('aiSearchBtn');
+            if (aiBtn) {
+                aiBtn.disabled = numSocieta === 0;
+                aiBtn.title = numSocieta > 0 ? `${numSocieta} società` : 'Nessuna società nei contatti';
+            }
             
             if (filtered.length === 0) {
                 container.innerHTML = `
@@ -2796,8 +3230,10 @@
         }
 
         // Aggiungi nota predefinita
-        async function aggiungiNota(pod, tipo) {
-            event.stopPropagation();
+        async function aggiungiNota(pod, tipo, silent) {
+            if (typeof event !== 'undefined' && event && event.stopPropagation) {
+                event.stopPropagation();
+            }
             
             // Chiudi dropdown
             const dropdown = document.getElementById(`noteDropdown_${pod}`);
@@ -2847,7 +3283,7 @@
             
             // Se già contiene questa nota (oggi per mandato wa/nr, o chiamare), non duplicare
             if (notaAttuale.includes(testoNota)) {
-                showToast('Nota già presente', 'warning');
+                if (!silent) showToast('Nota già presente', 'warning');
                 return;
             }
             
@@ -2876,7 +3312,7 @@
                 
                 const data = await resp.json();
                 if (data.success) {
-                    showToast(`Nota aggiunta: ${testoNota}`);
+                    if (!silent) showToast(`Nota aggiunta: ${testoNota}`);
                     // Aggiorna con la nota restituita dal server
                     if (data.nota !== undefined) {
                         noteStates[pod] = data.nota;
@@ -2886,10 +3322,10 @@
                         }
                     }
                 } else {
-                    showToast(data.error || 'Errore salvataggio', 'error');
+                    if (!silent) showToast(data.error || 'Errore salvataggio', 'error');
                 }
             } catch (e) {
-                showToast('Errore di connessione', 'error');
+                if (!silent) showToast('Errore di connessione', 'error');
             }
         }
 
@@ -3281,8 +3717,855 @@
 
         // Chiudi modal con Escape
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') closeModal();
+            if (e.key === 'Escape') {
+                closeModal();
+                chiudiBulkEmailModal();
+            }
         });
+
+        // ========================================
+        // BULK EMAIL SYSTEM
+        // ========================================
+
+        let smtpConfigured = false;
+
+        async function caricaSmtpSettings() {
+            try {
+                const resp = await fetch('/api/distinte/smtp-settings');
+                if (!resp.ok) return;
+                const data = await resp.json();
+                document.getElementById('smtpHost').value = data.host || '';
+                document.getElementById('smtpPort').value = data.port || 587;
+                document.getElementById('smtpUsername').value = data.username || '';
+                document.getElementById('smtpFromEmail').value = data.from_email || '';
+                document.getElementById('smtpFromName').value = data.from_name || 'Ufficio Tecnico Algeco Power';
+                document.getElementById('smtpUseTls').checked = data.use_tls !== false;
+                document.getElementById('smtpProvLabel').textContent = data.provincia || provincia;
+                smtpConfigured = !!(data.host && data.password_set);
+                aggiornaSmtpStatus();
+            } catch (e) {
+                console.error('Errore caricamento SMTP settings:', e);
+            }
+        }
+
+        function aggiornaSmtpStatus() {
+            const statusEl = document.getElementById('smtpStatusText');
+            if (smtpConfigured) {
+                statusEl.innerHTML = '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> SMTP configurato</span>';
+            } else {
+                statusEl.innerHTML = '<span style="color:var(--warning)"><i class="fas fa-exclamation-triangle"></i> SMTP non configurato</span>';
+            }
+        }
+
+        function toggleSmtpConfig() {
+            const form = document.getElementById('smtpForm');
+            const icon = document.getElementById('smtpToggleIcon');
+            form.classList.toggle('visible');
+            icon.style.transform = form.classList.contains('visible') ? 'rotate(180deg)' : '';
+        }
+
+        async function salvaSmtpSettings() {
+            const settings = {
+                host: document.getElementById('smtpHost').value.trim(),
+                port: parseInt(document.getElementById('smtpPort').value) || 587,
+                username: document.getElementById('smtpUsername').value.trim(),
+                password: document.getElementById('smtpPassword').value,
+                from_email: document.getElementById('smtpFromEmail').value.trim(),
+                from_name: document.getElementById('smtpFromName').value.trim(),
+                use_tls: document.getElementById('smtpUseTls').checked
+            };
+            try {
+                const resp = await fetch('/api/distinte/smtp-settings', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(settings)
+                });
+                const data = await resp.json();
+                if (data.ok) {
+                    showToast('Impostazioni SMTP salvate!');
+                    smtpConfigured = true;
+                    aggiornaSmtpStatus();
+                } else {
+                    showToast(data.error || 'Errore salvataggio', 'error');
+                }
+            } catch (e) {
+                showToast('Errore comunicazione server', 'error');
+            }
+        }
+
+        async function testSmtpConnection() {
+            showToast('Test connessione in corso...');
+            try {
+                const resp = await fetch('/api/distinte/smtp-test', { method: 'POST' });
+                const data = await resp.json();
+                if (data.ok) {
+                    showToast('Connessione SMTP riuscita!');
+                } else {
+                    showToast(data.error || 'Test fallito', 'error');
+                }
+            } catch (e) {
+                showToast('Errore comunicazione server', 'error');
+            }
+        }
+
+        async function inviaEmailDiProva() {
+            const emailDest = (document.getElementById('smtpTestEmail').value || '').trim();
+            if (!emailDest || !emailDest.includes('@')) {
+                showToast('Inserisci un indirizzo email valido', 'error');
+                return;
+            }
+            const templateId = document.getElementById('bulkTemplateSelect').value;
+            if (!templateId) {
+                showToast('Seleziona prima un template email', 'error');
+                return;
+            }
+            const btn = document.getElementById('smtpTestSendBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Invio...';
+            try {
+                const resp = await fetch('/api/distinte/invia-email-prova', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: emailDest, template_id: templateId })
+                });
+                const data = await resp.json();
+                if (data.ok) {
+                    showToast(`Email di prova inviata a ${emailDest}!`);
+                } else {
+                    showToast(data.error || data.errore || 'Invio fallito', 'error');
+                }
+            } catch (e) {
+                showToast('Errore comunicazione server', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-paper-plane"></i> Invia prova';
+            }
+        }
+
+        function isPec(email) {
+            if (!email) return false;
+            const e = email.toLowerCase().trim();
+            return /(@pec\.|@pec-|\.pec@|@legalmail\.|@cert\.|@postacert\.|@cgn\.legalmail|@arubapec\.|@pcert\.|@sicurezzapostale\.|@certifiposta\.|@interfreepec\.)/.test(e)
+                || e.endsWith('.pec.it')
+                || e.endsWith('@pec.it');
+        }
+
+        /**
+         * Splitta un campo email che può contenere più indirizzi separati da / , ; o spazi.
+         * Restituisce array di {email, pec: boolean}.
+         */
+        function splitEmails(campo) {
+            if (!campo) return [];
+            // Splitta per separatori comuni
+            const parti = campo.split(/[\/,;\s]+/).map(s => s.trim()).filter(s => s.includes('@'));
+            return parti.map(e => ({ email: e, pec: isPec(e) }));
+        }
+
+        function apriBulkEmailModal() {
+            // Filtra contatti che hanno email
+            const conEmail = contatti.filter(c => (c.email_filone || '').trim());
+            if (conEmail.length === 0) {
+                showToast('Nessun contatto ha un indirizzo email sul filone', 'error');
+                return;
+            }
+
+            // Popola template select (solo email)
+            const select = document.getElementById('bulkTemplateSelect');
+            select.innerHTML = '';
+            for (const [id, tmpl] of Object.entries(TEMPLATES)) {
+                if (tmpl.type === 'email') {
+                    const opt = document.createElement('option');
+                    opt.value = id;
+                    opt.textContent = tmpl.label;
+                    select.appendChild(opt);
+                }
+            }
+
+            // Costruisci lista con split indirizzi singoli
+            const righe = []; // {pod, email, pec, nome, contatto}
+            for (const c of conEmail) {
+                const emails = splitEmails(c.email_filone);
+                for (const em of emails) {
+                    righe.push({ pod: c.pod, email: em.email, pec: em.pec, nome: c.nome || 'N/D', contatto: c });
+                }
+            }
+
+            const numPec = righe.filter(r => r.pec).length;
+            const numNormali = righe.filter(r => !r.pec).length;
+
+            // Popola lista con ciascun indirizzo come riga separata
+            const list = document.getElementById('bulkContactsList');
+            list.innerHTML = righe.map((r, i) => `
+                <div class="bulk-contact-item ${r.pec ? 'is-pec' : ''}" data-is-pec="${r.pec}">
+                    <input type="checkbox" class="bulk-contact-check" data-pod="${r.pod}" data-email="${escapeHtml(r.email)}" data-pec="${r.pec}" data-idx="${i}" ${r.pec ? '' : 'checked'}>
+                    <div class="bulk-contact-name">${escapeHtml(r.nome)}</div>
+                    <div class="bulk-contact-email">${escapeHtml(r.email)}${r.pec ? '<span class="pec-badge">PEC</span>' : '<span class="pec-badge" style="background:var(--info)">MAIL</span>'}</div>
+                    <div class="bulk-contact-pod">${r.pod || ''}</div>
+                </div>
+            `).join('');
+
+            document.getElementById('bulkEmailCount').textContent = `${numNormali} mail` + (numPec > 0 ? `, ${numPec} PEC` : '');
+            document.getElementById('bulkPecCount').textContent = numPec > 0 ? `${numPec} PEC escluse` : '';
+            document.getElementById('bulkSelectAll').checked = true;
+            document.getElementById('bulkExcludePec').checked = true;
+
+            // Reset progress/results
+            document.getElementById('bulkProgress').style.display = 'none';
+            document.getElementById('bulkResults').style.display = 'none';
+            document.getElementById('bulkSendBtn').disabled = false;
+
+            // Reset preview state
+            document.getElementById('bulkPreviewSection').style.display = 'none';
+            document.getElementById('bulkContactsList').style.display = '';
+            document.querySelector('.bulk-filter-row').style.display = '';
+            document.getElementById('bulkPreviewBtn').style.display = '';
+            document.getElementById('bulkSendBtn').style.display = 'none';
+            bulkPreviews = [];
+
+            // Carica SMTP settings
+            caricaSmtpSettings();
+
+            document.getElementById('bulkEmailModal').classList.add('active');
+        }
+
+        function chiudiBulkEmailModal() {
+            document.getElementById('bulkEmailModal').classList.remove('active');
+        }
+
+        function toggleBulkSelectAll(checked) {
+            const excludePec = document.getElementById('bulkExcludePec').checked;
+            document.querySelectorAll('.bulk-contact-check').forEach(cb => {
+                if (excludePec && cb.dataset.pec === 'true') {
+                    cb.checked = false;
+                } else {
+                    cb.checked = checked;
+                }
+            });
+        }
+
+        function applicaFiltroPec() {
+            const excludePec = document.getElementById('bulkExcludePec').checked;
+            document.querySelectorAll('.bulk-contact-check[data-pec="true"]').forEach(cb => {
+                cb.checked = !excludePec;
+                cb.closest('.bulk-contact-item').style.opacity = excludePec ? '0.4' : '';
+            });
+        }
+
+        function aggiornaBulkPreview() {
+            // Re-show contact selection if template changed while in preview
+            if (bulkPreviews.length > 0) {
+                chiudiAnteprima();
+            }
+        }
+
+        // Preview data: array of {pod, email, nome, subject, bodyHtml, contatto, edited}
+        let bulkPreviews = [];
+
+        /**
+         * Genera le anteprime delle email per tutti i contatti selezionati.
+         * Risolve i template lato client usando resolveTemplate().
+         */
+        function generaAnteprima() {
+            const templateId = document.getElementById('bulkTemplateSelect').value;
+            if (!templateId) {
+                showToast('Seleziona un template', 'error');
+                return;
+            }
+
+            const tmpl = TEMPLATES[templateId];
+            if (!tmpl) {
+                showToast('Template non trovato', 'error');
+                return;
+            }
+
+            // Raccogli contatti selezionati
+            const checkboxes = document.querySelectorAll('.bulk-contact-check:checked');
+            if (checkboxes.length === 0) {
+                showToast('Nessun contatto selezionato', 'error');
+                return;
+            }
+
+            bulkPreviews = [];
+            checkboxes.forEach(cb => {
+                const pod = cb.dataset.pod;
+                const emailAddr = cb.dataset.email;
+                const contatto = contatti.find(c => c.pod === pod);
+                if (!contatto || !emailAddr) return;
+
+                // Build contact data same as inviaEmailBulk
+                const contattoData = {
+                    pod: contatto.pod || '',
+                    email: emailAddr,
+                    nome: contatto.nome || '',
+                    indirizzo: contatto.indirizzo || '',
+                    civico: contatto.civico || '',
+                    comune: contatto.comune || '',
+                    data_intervento: contatto.data_pian_filone || contatto.data_intervento || '',
+                    pod_filone: contatto.pod_filone || contatto.pod || '',
+                    eneltel_filone: contatto.eneltel_filone || '',
+                    matricola_filone: contatto.matricola_filone || '',
+                    tipologia_contatore: contatto.tipologia_contatore || '',
+                    nome_societa: contatto.nome || '',
+                    nome_referente: '',
+                };
+
+                // Auto-fill fields using FIELD_DEFS
+                const fields = {};
+                if (tmpl.fields) {
+                    for (const fId of tmpl.fields) {
+                        const fd = FIELD_DEFS[fId];
+                        if (fd && fd.autoFill) {
+                            fields[fId] = fd.autoFill(contatto);
+                        }
+                    }
+                }
+
+                // Resolve template
+                const bodyText = tmpl.generate(contatto, fields);
+                const subject = tmpl.subject ? tmpl.subject(contatto, fields) : `Sostituzione contatore - ${contatto.nome || ''}`;
+
+                bulkPreviews.push({
+                    pod: pod,
+                    email: emailAddr,
+                    nome: contatto.nome || 'N/D',
+                    subject: subject,
+                    bodyHtml: bodyText,
+                    contatto: contattoData,
+                    edited: false
+                });
+            });
+
+            if (bulkPreviews.length === 0) {
+                showToast('Nessun contatto valido', 'error');
+                return;
+            }
+
+            // Render preview cards
+            renderPreviewCards();
+
+            // Toggle visibility: hide contacts list + filters, show preview
+            document.getElementById('bulkContactsList').style.display = 'none';
+            document.querySelector('.bulk-filter-row').style.display = 'none';
+            document.querySelector('.bulk-select-all')?.closest?.('.bulk-filter-row')?.previousElementSibling?.style && null;
+            document.getElementById('bulkPreviewSection').style.display = 'block';
+            document.getElementById('previewCount').textContent = bulkPreviews.length;
+
+            // Toggle buttons: hide Anteprima, show Invia
+            document.getElementById('bulkPreviewBtn').style.display = 'none';
+            document.getElementById('bulkSendBtn').style.display = '';
+        }
+
+        function buildEmailHtml(bodyText) {
+            // Convert \n to <br> and append firma, same as backend
+            let html = bodyText.replace(/\n/g, '<br>');
+            let firma = (templateSettings.firma_html || '');
+            if (firma) {
+                const emailTecnico = provincia === 'PAVIA'
+                    ? templateSettings.email_pavia
+                    : templateSettings.email_torino;
+                firma = firma.replace(/\{email_tecnico\}/g, emailTecnico || '');
+                html += firma;
+            }
+            return html;
+        }
+
+        function renderPreviewCards() {
+            const container = document.getElementById('bulkPreviewCards');
+            container.innerHTML = bulkPreviews.map((p, i) => {
+                const renderedHtml = buildEmailHtml(p.bodyHtml);
+                return `
+                <div class="preview-card ${i === 0 ? 'expanded' : ''}" id="previewCard${i}">
+                    <div class="preview-card-header" onclick="togglePreviewCard(${i})">
+                        <i class="fas fa-chevron-right preview-toggle"></i>
+                        <span class="preview-dest">${escapeHtml(p.nome)} — ${escapeHtml(p.email)}</span>
+                        <span class="preview-pod">${p.pod}</span>
+                        <span class="preview-card-badge" id="previewBadge${i}" style="display:none;">modificata</span>
+                    </div>
+                    <div class="preview-card-body">
+                        <div class="preview-field-label">Oggetto:</div>
+                        <input type="text" class="preview-subject-input" id="previewSubject${i}"
+                               value="${escapeHtml(p.subject)}"
+                               oninput="segnaModificata(${i})">
+                        <div style="display:flex;align-items:center;justify-content:space-between;">
+                            <div class="preview-field-label" style="margin-bottom:0;">Anteprima email:</div>
+                            <button class="preview-edit-toggle" id="previewEditBtn${i}" onclick="toggleEditMode(${i}, event)">
+                                <i class="fas fa-pen"></i> Modifica testo
+                            </button>
+                        </div>
+                        <div class="preview-body-rendered" id="previewRendered${i}">${renderedHtml}</div>
+                        <textarea class="preview-body-editor" id="previewBody${i}"
+                                  oninput="onPreviewBodyEdit(${i})">${escapeHtml(p.bodyHtml)}</textarea>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function togglePreviewCard(idx) {
+            const card = document.getElementById(`previewCard${idx}`);
+            card.classList.toggle('expanded');
+        }
+
+        function toggleEditMode(idx, event) {
+            event.stopPropagation();
+            const rendered = document.getElementById(`previewRendered${idx}`);
+            const editor = document.getElementById(`previewBody${idx}`);
+            const btn = document.getElementById(`previewEditBtn${idx}`);
+            const isEditing = editor.style.display === 'block';
+            if (isEditing) {
+                // Switch back to rendered view — re-render with edits
+                rendered.innerHTML = buildEmailHtml(editor.value);
+                rendered.style.display = '';
+                editor.style.display = 'none';
+                btn.innerHTML = '<i class="fas fa-pen"></i> Modifica testo';
+            } else {
+                // Switch to edit mode
+                rendered.style.display = 'none';
+                editor.style.display = 'block';
+                editor.focus();
+                btn.innerHTML = '<i class="fas fa-eye"></i> Vedi anteprima';
+            }
+        }
+
+        function onPreviewBodyEdit(idx) {
+            segnaModificata(idx);
+        }
+
+        function segnaModificata(idx) {
+            bulkPreviews[idx].edited = true;
+            const badge = document.getElementById(`previewBadge${idx}`);
+            badge.style.display = '';
+            badge.classList.add('edited');
+        }
+
+        function chiudiAnteprima() {
+            // Torna alla vista selezione contatti
+            document.getElementById('bulkPreviewSection').style.display = 'none';
+            document.getElementById('bulkContactsList').style.display = '';
+            document.querySelector('.bulk-filter-row').style.display = '';
+
+            // Toggle buttons: show Anteprima, hide Invia
+            document.getElementById('bulkPreviewBtn').style.display = '';
+            document.getElementById('bulkSendBtn').style.display = 'none';
+
+            bulkPreviews = [];
+        }
+
+        const PAUSA_TRA_EMAIL_SEC = 4; // secondi tra un invio e l'altro
+        let bulkAbortato = false;
+
+        async function inviaEmailBulk() {
+            const templateId = document.getElementById('bulkTemplateSelect').value;
+            if (!templateId) {
+                showToast('Seleziona un template', 'error');
+                return;
+            }
+
+            // Read from preview data (including edits from textareas/inputs)
+            if (bulkPreviews.length === 0) {
+                showToast('Genera prima l\'anteprima', 'error');
+                return;
+            }
+
+            // Sync any user edits from DOM to bulkPreviews
+            const selezionati = bulkPreviews.map((p, i) => {
+                const subjectEl = document.getElementById(`previewSubject${i}`);
+                const bodyEl = document.getElementById(`previewBody${i}`);
+                return {
+                    ...p.contatto,
+                    subject_override: subjectEl ? subjectEl.value : p.subject,
+                    body_override: bodyEl ? bodyEl.value : p.bodyHtml,
+                };
+            });
+
+            const tempoStimato = Math.ceil(selezionati.length * PAUSA_TRA_EMAIL_SEC / 60);
+            if (!confirm(`Stai per inviare ${selezionati.length} email con il template "${document.getElementById('bulkTemplateSelect').selectedOptions[0].textContent}".\n\nPausa di ${PAUSA_TRA_EMAIL_SEC}s tra ogni invio per evitare spam.\nTempo stimato: ~${tempoStimato} min.\n\nConfermi l'invio?`)) {
+                return;
+            }
+
+            // Setup UI
+            bulkAbortato = false;
+            const progressEl = document.getElementById('bulkProgress');
+            const resultsEl = document.getElementById('bulkResults');
+            const sendBtn = document.getElementById('bulkSendBtn');
+            progressEl.style.display = 'block';
+            resultsEl.style.display = 'block';
+            resultsEl.innerHTML = '<div style="max-height:200px;overflow-y:auto;font-size:0.85em;" id="bulkResultsLog"></div>';
+            // Hide preview cards during sending
+            document.getElementById('bulkPreviewSection').style.display = 'none';
+            sendBtn.textContent = ' Interrompi';
+            sendBtn.innerHTML = '<i class="fas fa-stop"></i> Interrompi';
+            sendBtn.onclick = () => { bulkAbortato = true; };
+            sendBtn.style.background = 'var(--danger)';
+            document.getElementById('bulkProgressFill').style.width = '0%';
+            document.getElementById('bulkProgressText').textContent = `0 / ${selezionati.length}`;
+            progressEl.querySelector('div:first-child').innerHTML =
+                '<i class="fas fa-spinner fa-spin"></i> Invio in corso...';
+
+            const logEl = document.getElementById('bulkResultsLog');
+            let inviati = 0, errori = 0;
+            const podsInviati = new Set();
+
+            for (let i = 0; i < selezionati.length; i++) {
+                if (bulkAbortato) {
+                    logEl.innerHTML += `<div style="color:var(--warning);"><i class="fas fa-hand-paper"></i> Invio interrotto dall'utente dopo ${inviati} email</div>`;
+                    break;
+                }
+
+                const c = selezionati[i];
+
+                // Aggiorna progress
+                document.getElementById('bulkProgressText').textContent =
+                    `${i + 1} / ${selezionati.length} — attendere ~${PAUSA_TRA_EMAIL_SEC}s...`;
+                document.getElementById('bulkProgressFill').style.width =
+                    `${Math.round(((i + 1) / selezionati.length) * 100)}%`;
+
+                try {
+                    const resp = await fetch('/api/distinte/invia-singola-email', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            template_id: templateId,
+                            contatto: c,
+                            subject_override: c.subject_override || undefined,
+                            body_override: c.body_override || undefined
+                        })
+                    });
+                    const data = await resp.json();
+
+                    if (data.ok) {
+                        inviati++;
+                        podsInviati.add(c.pod);
+                        logEl.innerHTML += `<div class="result-ok"><i class="fas fa-check"></i> ${c.pod} → ${c.email}</div>`;
+                    } else {
+                        errori++;
+                        logEl.innerHTML += `<div class="result-err"><i class="fas fa-times"></i> ${c.pod} → ${c.email}: ${data.errore || 'Errore'}</div>`;
+                    }
+                } catch (e) {
+                    errori++;
+                    logEl.innerHTML += `<div class="result-err"><i class="fas fa-times"></i> ${c.pod} → ${c.email}: Errore rete</div>`;
+                }
+
+                logEl.scrollTop = logEl.scrollHeight;
+
+                // Pausa tra invii (tranne dopo l'ultimo)
+                if (i < selezionati.length - 1 && !bulkAbortato) {
+                    await new Promise(r => setTimeout(r, PAUSA_TRA_EMAIL_SEC * 1000));
+                }
+            }
+
+            // Riepilogo finale
+            progressEl.querySelector('div:first-child').innerHTML =
+                `<i class="fas fa-check-circle" style="color:var(--success)"></i> ${bulkAbortato ? 'Interrotto' : 'Completato'}`;
+            document.getElementById('bulkProgressText').textContent =
+                `${inviati} inviate, ${errori} errori su ${selezionati.length}`;
+            document.getElementById('bulkProgressFill').style.width = '100%';
+
+            // Ripristina pulsante
+            sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Invia Email';
+            sendBtn.onclick = inviaEmailBulk;
+            sendBtn.style.background = 'linear-gradient(135deg, #3498db, #2980b9)';
+
+            if (inviati > 0) {
+                showToast(`${inviati} email inviate con successo!`);
+                // Aggiungi nota "mandata mail" ai POD inviati
+                for (const pod of podsInviati) {
+                    await aggiungiNota(pod, 'mandata mail', true);
+                }
+            }
+        }
+
+        // ===== AI SEARCH =====
+        let aiParsedResults = []; // [{pod, nome, comune, telefono, email, pec}]
+
+        function apriAiSearchModal() {
+            // Tutte le società/enti
+            const societa = contatti.filter(c => c.is_azienda);
+
+            if (societa.length === 0) {
+                showToast('Nessuna società trovata nei contatti', 'warning');
+                return;
+            }
+
+            // Genera prompt con tutte le società
+            const righe = societa.map(c => {
+                return `- "${c.nome}" a ${c.comune || 'N/D'} (${c.indirizzo || ''} ${c.civico || ''}).  Cerca: telefono, email e PEC`;
+            }).join('\n');
+
+            const prompt = `Devi cercare informazioni di contatto per le seguenti aziende/enti/condomini italiani. Per OGNUNA, cerca ATTIVAMENTE su internet il numero di telefono, l'indirizzo email e la PEC.
+
+STRATEGIA DI RICERCA (segui TUTTI questi passaggi per ogni azienda):
+1. Cerca su Google: "nome azienda" + "telefono" oppure "contatti" oppure "email"
+2. Cerca su PagineBianche.it e PagineGialle.it
+3. Cerca il sito web ufficiale dell'azienda e trova la pagina "Contatti"
+4. Per la PEC: cerca su inipec.gov.it, registroimprese.it, o Google "nome azienda PEC"
+5. Se è un condominio, cerca l'amministratore del condominio
+6. Se non trovi per la sede locale, cerca la sede principale o altre filiali
+7. Prova varianti del nome (es. abbreviazioni, nome completo, ragione sociale)
+
+REGOLE:
+- Usa OBBLIGATORIAMENTE la ricerca web per ogni azienda, NON rispondere a memoria
+- Se trovi sia cellulare che fisso, riporta il cellulare
+- Se trovi più email, riporta quella più generica (info@, contatti@, ufficio@)
+- Non inventare dati: se non trovi, scrivi null
+- Rispondi SOLO con il JSON, senza testo aggiuntivo
+
+Aziende da cercare:
+${righe}
+
+Rispondi con un JSON array in questo formato esatto:
+[
+  {
+    "nome": "NOME ESATTO COME SOPRA",
+    "telefono": "0123456789" oppure null,
+    "email": "info@azienda.it" oppure null,
+    "pec": "azienda@pec.it" oppure null
+  }
+]`;
+
+            document.getElementById('aiPromptBox').textContent = prompt;
+            document.getElementById('aiMissingCount').textContent = `${societa.length} società da cercare`;
+            document.getElementById('aiResponseArea').value = '';
+            document.getElementById('aiStep3').style.display = 'none';
+            document.getElementById('aiApplyBtn').style.display = 'none';
+            document.getElementById('aiStep1').classList.remove('done');
+            document.getElementById('aiStep2').classList.remove('done');
+            aiParsedResults = [];
+
+            document.getElementById('aiSearchModal').classList.add('active');
+        }
+
+        function chiudiAiSearchModal() {
+            document.getElementById('aiSearchModal').classList.remove('active');
+        }
+
+        function copiaPromptAI() {
+            const prompt = document.getElementById('aiPromptBox').textContent;
+            navigator.clipboard.writeText(prompt).then(() => {
+                showToast('Prompt copiato! Incollalo in ChatGPT');
+                document.getElementById('aiStep1').classList.add('done');
+            });
+        }
+
+        function parsaRispostaAI() {
+            const raw = document.getElementById('aiResponseArea').value.trim();
+            if (!raw) {
+                showToast('Incolla la risposta di ChatGPT', 'error');
+                return;
+            }
+
+            // Estrai JSON anche se c'è testo intorno (```json ... ```)
+            let jsonStr = raw;
+            const jsonMatch = raw.match(/\[[\s\S]*\]/);
+            if (jsonMatch) {
+                jsonStr = jsonMatch[0];
+            }
+
+            let parsed;
+            try {
+                parsed = JSON.parse(jsonStr);
+            } catch (e) {
+                showToast('Formato JSON non valido. Assicurati che ChatGPT risponda con un array JSON.', 'error');
+                return;
+            }
+
+            if (!Array.isArray(parsed) || parsed.length === 0) {
+                showToast('Nessun risultato nel JSON', 'error');
+                return;
+            }
+
+            // Match con contatti esistenti per nome
+            aiParsedResults = [];
+
+            for (const r of parsed) {
+                const nomeRicerca = (r.nome || '').toUpperCase().trim();
+                if (!nomeRicerca) continue;
+
+                // Cerca match per nome (fuzzy: contiene o è contenuto)
+                const match = contatti.find(c => {
+                    const n = (c.nome || '').toUpperCase().trim();
+                    return n === nomeRicerca || n.includes(nomeRicerca) || nomeRicerca.includes(n);
+                });
+
+                if (!match) continue;
+
+                const telEsistente = (match.telefono_filone && match.telefono_filone !== 'non trovato') ? match.telefono_filone : null;
+                const emailEsistente = (match.email_filone || '').trim() || null;
+                const tel = r.telefono || null;
+                const email = r.email || null;
+                const pec = r.pec || null;
+
+                // Includi se AI ha trovato almeno qualcosa
+                if (tel || email || pec) {
+                    aiParsedResults.push({
+                        pod: match.pod,
+                        nome: match.nome,
+                        comune: match.comune || '',
+                        telefono: tel,
+                        email: email,
+                        pec: pec,
+                        telEsistente: telEsistente,
+                        emailEsistente: emailEsistente
+                    });
+                }
+            }
+
+            if (aiParsedResults.length === 0) {
+                showToast('Nessun dato utile trovato nella risposta', 'warning');
+                return;
+            }
+
+            // Render results table con confronto esistente vs AI
+            const tbody = document.getElementById('aiResultsBody');
+            tbody.innerHTML = aiParsedResults.map((r, i) => {
+                // Per telefono: mostra esistente vs nuovo, checkbox solo se AI ha trovato
+                let telCell = '<span style="color:var(--text-muted)">—</span>';
+                let telCheck = '';
+                if (r.telefono) {
+                    if (r.telEsistente && r.telEsistente !== r.telefono) {
+                        // Dato diverso: mostra confronto
+                        telCell = `<div style="font-size:0.8em;color:var(--text-muted);text-decoration:line-through">${escapeHtml(r.telEsistente)}</div><div class="new-data">${escapeHtml(r.telefono)}</div>`;
+                        telCheck = `<input type="checkbox" class="ai-field-check" data-idx="${i}" data-field="telefono" title="Sovrascrivi telefono">`;
+                    } else if (r.telEsistente === r.telefono) {
+                        // Stesso dato: confermato
+                        telCell = `<span style="color:var(--text-muted)">${escapeHtml(r.telefono)} ✓</span>`;
+                    } else {
+                        // Dato nuovo (campo vuoto)
+                        telCell = `<span class="new-data">${escapeHtml(r.telefono)}</span>`;
+                        telCheck = `<input type="checkbox" class="ai-field-check" data-idx="${i}" data-field="telefono" checked title="Aggiungi telefono">`;
+                    }
+                } else if (r.telEsistente) {
+                    telCell = `<span style="color:var(--text-muted)">${escapeHtml(r.telEsistente)}</span>`;
+                }
+
+                // Per email: stessa logica
+                const aiEmailFull = [r.email, r.pec].filter(Boolean).join(' - ');
+                let emailCell = '<span style="color:var(--text-muted)">—</span>';
+                let emailCheck = '';
+                if (aiEmailFull) {
+                    if (r.emailEsistente && r.emailEsistente !== aiEmailFull) {
+                        emailCell = `<div style="font-size:0.8em;color:var(--text-muted);text-decoration:line-through">${escapeHtml(r.emailEsistente)}</div><div class="new-data">${escapeHtml(aiEmailFull)}</div>`;
+                        emailCheck = `<input type="checkbox" class="ai-field-check" data-idx="${i}" data-field="email" title="Sovrascrivi email">`;
+                    } else if (r.emailEsistente === aiEmailFull) {
+                        emailCell = `<span style="color:var(--text-muted)">${escapeHtml(aiEmailFull)} ✓</span>`;
+                    } else {
+                        emailCell = `<span class="new-data">${escapeHtml(aiEmailFull)}</span>`;
+                        emailCheck = `<input type="checkbox" class="ai-field-check" data-idx="${i}" data-field="email" checked title="Aggiungi email">`;
+                    }
+                } else if (r.emailEsistente) {
+                    emailCell = `<span style="color:var(--text-muted)">${escapeHtml(r.emailEsistente)}</span>`;
+                }
+
+                return `
+                <tr>
+                    <td>${escapeHtml(r.nome)}<br><small style="color:var(--text-muted)">${escapeHtml(r.comune)}</small></td>
+                    <td>${telCheck}</td>
+                    <td>${telCell}</td>
+                    <td>${emailCheck}</td>
+                    <td>${emailCell}</td>
+                </tr>
+                `;
+            }).join('');
+
+            const nuovi = aiParsedResults.filter(r => {
+                const noTel = !r.telEsistente;
+                const noEmail = !r.emailEsistente;
+                return (noTel && r.telefono) || (noEmail && (r.email || r.pec));
+            }).length;
+            const aggiornamenti = aiParsedResults.filter(r => {
+                return (r.telEsistente && r.telefono && r.telEsistente !== r.telefono) ||
+                       (r.emailEsistente && (r.email || r.pec) && r.emailEsistente !== [r.email, r.pec].filter(Boolean).join(' - '));
+            }).length;
+
+            document.getElementById('aiFoundCount').textContent = `${nuovi} nuovi, ${aggiornamenti} aggiornamenti`;
+            document.getElementById('aiStep2').classList.add('done');
+            document.getElementById('aiStep3').style.display = '';
+            document.getElementById('aiApplyBtn').style.display = '';
+
+            showToast(`${aiParsedResults.length} società trovate! ${nuovi} nuovi dati, ${aggiornamenti} possibili aggiornamenti`);
+        }
+
+        function toggleAiSelectAll(checked) {
+            document.querySelectorAll('.ai-field-check').forEach(cb => cb.checked = checked);
+        }
+
+        async function applicaRisultatiAI() {
+            // Raccogli selezioni per-field
+            const selezionati = [];
+            aiParsedResults.forEach((r, i) => {
+                const telCb = document.querySelector(`.ai-field-check[data-idx="${i}"][data-field="telefono"]`);
+                const emailCb = document.querySelector(`.ai-field-check[data-idx="${i}"][data-field="email"]`);
+                const applicaTel = telCb && telCb.checked;
+                const applicaEmail = emailCb && emailCb.checked;
+                if (applicaTel || applicaEmail) {
+                    selezionati.push({ ...r, applicaTel, applicaEmail });
+                }
+            });
+
+            if (selezionati.length === 0) {
+                showToast('Nessun risultato selezionato', 'error');
+                return;
+            }
+
+            const btn = document.getElementById('aiApplyBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Applicazione...';
+
+            let applicati = 0, errori = 0;
+
+            for (const r of selezionati) {
+                try {
+                    // Salva telefono
+                    if (r.applicaTel && r.telefono) {
+                        const resp = await fetch('/api/distinte/salva-telefono', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ pod: r.pod, telefono: r.telefono, fonte: 'AI ChatGPT' })
+                        });
+                        const data = await resp.json();
+                        if (data.success) {
+                            const c = contatti.find(c => c.pod === r.pod);
+                            if (c) {
+                                c.telefono = r.telefono;
+                                c.telefono_filone = r.telefono;
+                                const isCellulare = /^3\d{8,9}$/.test(r.telefono.replace(/[^\d]/g, ''));
+                                c.tipo = isCellulare ? 'cellulare' : 'fisso';
+                            }
+                        }
+                    }
+
+                    // Salva email (combina email e pec con /)
+                    if (r.applicaEmail && (r.email || r.pec)) {
+                        const emailParts = [r.email, r.pec].filter(Boolean);
+                        const emailValue = emailParts.join(' - ');
+                        const resp = await fetch('/api/distinte/salva-email', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ pod: r.pod, email: emailValue })
+                        });
+                        const data = await resp.json();
+                        if (data.success) {
+                            const c = contatti.find(c => c.pod === r.pod);
+                            if (c) {
+                                c.email_filone = data.email || emailValue;
+                            }
+                        }
+                    }
+
+                    applicati++;
+                } catch (e) {
+                    errori++;
+                    console.error(`Errore applicazione AI per ${r.pod}:`, e);
+                }
+            }
+
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-check"></i> Applica selezionati';
+
+            showToast(`${applicati} contatti aggiornati${errori > 0 ? `, ${errori} errori` : ''}!`);
+
+            // Aggiorna la griglia
+            renderContacts();
+        }
 
         // Init
         loadConfig();

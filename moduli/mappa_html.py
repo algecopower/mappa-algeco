@@ -526,7 +526,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         
         /* Sidebar */
         .sidebar {{
-            width: 420px;
+            width: 370px;
             background: linear-gradient(180deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
             display: flex;
             flex-direction: column;
@@ -542,7 +542,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         
         .sidebar-toggle {{
             position: absolute;
-            left: 420px;
+            left: 370px;
             top: 50%;
             transform: translateY(-50%);
             background: var(--accent);
@@ -566,7 +566,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         /* Header */
         .header {{
             background: linear-gradient(135deg, var(--bg-tertiary) 0%, var(--bg-secondary) 100%);
-            padding: 15px 20px;
+            padding: 10px 14px;
             border-bottom: 1px solid var(--border);
         }}
         
@@ -574,24 +574,24 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 10px;
+            margin-bottom: 6px;
         }}
         
         .header h1 {{ 
-            font-size: 1.3em; 
+            font-size: 1.1em; 
             font-weight: 700;
             color: var(--accent);
         }}
         
         .header p {{ 
             opacity: 0.7; 
-            font-size: 0.8em; 
+            font-size: 0.72em; 
         }}
         
         /* Toggles */
         .toggles {{
             display: flex;
-            gap: 10px;
+            gap: 6px;
             flex-wrap: wrap;
         }}
         
@@ -599,10 +599,10 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             background: var(--bg-tertiary);
             border: 1px solid var(--border);
             color: var(--text-secondary);
-            padding: 6px 12px;
-            border-radius: 15px;
+            padding: 4px 9px;
+            border-radius: 12px;
             cursor: pointer;
-            font-size: 0.75em;
+            font-size: 0.7em;
             transition: all 0.2s;
         }}
         
@@ -616,7 +616,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         /* Breadcrumb */
         .breadcrumb {{
             display: none;
-            padding: 8px 12px;
+            padding: 6px 10px;
             background: var(--bg-tertiary);
             border-bottom: 1px solid var(--border);
             align-items: center;
@@ -1008,15 +1008,15 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         
         /* Filters */
         .filters {{
-            padding: 15px 20px;
+            padding: 10px 14px;
             background: rgba(15, 52, 96, 0.3);
             border-bottom: 1px solid var(--border);
         }}
         
         .search-row {{
             display: flex;
-            gap: 10px;
-            margin-bottom: 10px;
+            gap: 8px;
+            margin-bottom: 8px;
         }}
         
         .search-box {{
@@ -1026,10 +1026,10 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
 
         .search-box input {{
             width: 100%;
-            padding: 12px 40px 12px 16px;
+            padding: 9px 36px 9px 14px;
             border: 2px solid var(--border);
-            border-radius: 25px;
-            font-size: 14px;
+            border-radius: 20px;
+            font-size: 13px;
             outline: none;
             background: var(--bg-secondary);
             color: var(--text-primary);
@@ -1170,10 +1170,10 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
 
         .lcl-filter select {{
             width: 100%;
-            padding: 12px 40px 12px 16px;
+            padding: 9px 36px 9px 14px;
             border: 2px solid var(--border);
-            border-radius: 25px;
-            font-size: 14px;
+            border-radius: 20px;
+            font-size: 13px;
             outline: none;
             background: var(--bg-secondary);
             color: var(--text-primary);
@@ -1199,10 +1199,10 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         /* Date Filter */
         #dataFilter {{
             width: 100%;
-            padding: 12px 40px 12px 16px;
+            padding: 9px 36px 9px 14px;
             border: 2px solid var(--border);
-            border-radius: 25px;
-            font-size: 14px;
+            border-radius: 20px;
+            font-size: 13px;
             outline: none;
             background: var(--bg-secondary);
             color: var(--text-primary);
@@ -1238,15 +1238,15 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 6px;
-            padding: 6px 10px;
+            gap: 5px;
+            padding: 5px 8px;
             background: var(--bg-secondary);
             border: 1px solid var(--border);
-            border-radius: 8px;
+            border-radius: 7px;
             cursor: pointer;
             transition: all 0.2s;
             user-select: none;
-            font-size: 12px;
+            font-size: 11px;
         }}
 
         .filter-chip:hover {{
@@ -1269,9 +1269,9 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         .schedulabili-chip {{
             background: var(--bg-secondary);
             border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 6px 12px;
-            font-size: 12px;
+            border-radius: 7px;
+            padding: 5px 10px;
+            font-size: 11px;
             transition: all 0.2s;
         }}
         .schedulabili-chip:hover {{
@@ -1323,10 +1323,10 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         
         #operatoreFilter {{
             width: 100%;
-            padding: 12px 40px 12px 16px;
+            padding: 9px 36px 9px 14px;
             border: 2px solid var(--border);
-            border-radius: 25px;
-            font-size: 14px;
+            border-radius: 20px;
+            font-size: 13px;
             outline: none;
             background: var(--bg-secondary);
             color: var(--text-primary);
@@ -1377,7 +1377,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         .results {{
             flex: 1;
             overflow-y: auto;
-            padding: 15px;
+            padding: 10px;
         }}
         
         .results::-webkit-scrollbar {{ width: 8px; }}
@@ -1388,9 +1388,9 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         /* Zone Cards */
         .zone-card {{
             background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
-            border-radius: 12px;
-            padding: 16px;
-            margin-bottom: 12px;
+            border-radius: 10px;
+            padding: 11px 13px;
+            margin-bottom: 8px;
             border: 1px solid var(--border);
             cursor: pointer;
             transition: all 0.3s;
@@ -1410,19 +1410,19 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         .zone-header {{
             display: flex;
             align-items: center;
-            margin-bottom: 10px;
+            margin-bottom: 6px;
         }}
         
         .zone-color {{
-            width: 14px;
-            height: 14px;
-            border-radius: 4px;
-            margin-right: 10px;
+            width: 12px;
+            height: 12px;
+            border-radius: 3px;
+            margin-right: 8px;
         }}
         
         .zone-nome {{
             font-weight: 600;
-            font-size: 1em;
+            font-size: 0.9em;
             color: var(--text-primary);
             flex: 1;
         }}
@@ -1430,30 +1430,30 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         .zone-totale {{
             background: var(--accent);
             color: white;
-            padding: 4px 10px;
-            border-radius: 12px;
-            font-size: 0.8em;
+            padding: 3px 8px;
+            border-radius: 10px;
+            font-size: 0.75em;
             font-weight: 600;
         }}
         
         .zone-comuni {{
-            font-size: 0.8em;
+            font-size: 0.73em;
             color: var(--text-secondary);
-            margin-bottom: 8px;
+            margin-bottom: 5px;
         }}
         
         .zone-lcl {{
-            font-size: 0.75em;
+            font-size: 0.7em;
             color: var(--accent);
-            margin-bottom: 8px;
+            margin-bottom: 5px;
         }}
         
         .zone-stats {{
             display: flex;
-            gap: 15px;
-            font-size: 0.8em;
+            gap: 12px;
+            font-size: 0.73em;
             color: var(--text-muted);
-            margin-bottom: 12px;
+            margin-bottom: 8px;
         }}
         
         /* Date list */
@@ -1466,9 +1466,9 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         .date-item {{
             display: grid;
             grid-template-columns: 1fr auto auto auto;
-            gap: 12px;
+            gap: 8px;
             align-items: center;
-            padding: 12px 14px;
+            padding: 8px 11px;
             border-bottom: 1px solid var(--border);
             cursor: pointer;
             transition: all 0.2s;
@@ -1480,35 +1480,35 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         .date-item .data {{
             font-weight: 600;
             color: var(--accent);
-            font-size: 0.9em;
+            font-size: 0.82em;
         }}
         .date-item .info {{
             color: var(--text-secondary);
-            font-size: 0.85em;
-            min-width: 80px;
+            font-size: 0.78em;
+            min-width: 70px;
             text-align: right;
             white-space: nowrap;
         }}
         .date-item .app {{
             color: #f1c40f;
             font-weight: 600;
-            font-size: 0.85em;
-            min-width: 40px;
+            font-size: 0.78em;
+            min-width: 36px;
             text-align: center;
         }}
         .date-item .arrow {{
             color: var(--accent);
-            font-size: 1.2em;
+            font-size: 1em;
             text-align: right;
-            min-width: 20px;
+            min-width: 18px;
         }}
         
         .date-expand {{
             text-align: center;
-            padding: 10px;
+            padding: 7px;
             color: var(--accent);
             cursor: pointer;
-            font-size: 0.85em;
+            font-size: 0.78em;
             border-top: 1px solid var(--border);
             transition: all 0.2s;
         }}
@@ -1528,9 +1528,9 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         /* Tappa Cards */
         .tappa-card {{
             background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
-            border-radius: 10px;
-            padding: 14px;
-            margin-bottom: 10px;
+            border-radius: 8px;
+            padding: 10px 12px;
+            margin-bottom: 7px;
             border: 1px solid var(--border);
             cursor: pointer;
             transition: all 0.3s;
@@ -1554,7 +1554,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         .tappa-header {{
             display: flex;
             align-items: center;
-            margin-bottom: 8px;
+            margin-bottom: 5px;
         }}
         
         .tappa-edit-btn {{
@@ -1579,15 +1579,15 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         .tappa-numero {{
             background: var(--accent);
             color: white;
-            width: 28px;
-            height: 28px;
+            width: 24px;
+            height: 24px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 700;
-            font-size: 0.85em;
-            margin-right: 12px;
+            font-size: 0.75em;
+            margin-right: 10px;
         }}
         
         .tappa-card.deposito .tappa-numero {{
@@ -1642,17 +1642,17 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         }}
 
         .tappa-tempo {{
-            font-size: 0.75em;
+            font-size: 0.7em;
             color: #667eea;
-            margin-left: 40px;
-            margin-bottom: 4px;
+            margin-left: 34px;
+            margin-bottom: 3px;
             font-weight: 500;
         }}
         
         .tappa-dettagli {{
-            font-size: 0.8em;
+            font-size: 0.73em;
             color: var(--text-secondary);
-            margin-left: 40px;
+            margin-left: 34px;
         }}
         
         .tappa-dettagli div {{ margin-bottom: 3px; }}
@@ -1660,8 +1660,8 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         /* Tecnico header */
         .tecnico-header {{
             background: linear-gradient(135deg, var(--bg-tertiary) 0%, var(--bg-secondary) 100%);
-            padding: 14px 16px;
-            margin: 10px 0;
+            padding: 10px 12px;
+            margin: 7px 0;
             border-radius: 8px;
             display: flex;
             align-items: center;
@@ -1688,7 +1688,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         /* Stats bar */
         .stats-bar {{
             background: var(--bg-tertiary);
-            padding: 12px 20px;
+            padding: 8px 14px;
             display: flex;
             justify-content: space-around;
             border-top: 1px solid var(--border);
@@ -1699,13 +1699,13 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         }}
         
         .stat-value {{
-            font-size: 1.3em;
+            font-size: 1.1em;
             font-weight: 700;
             color: var(--accent);
         }}
         
         .stat-label {{
-            font-size: 0.75em;
+            font-size: 0.68em;
             color: var(--text-muted);
             text-transform: uppercase;
         }}

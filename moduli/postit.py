@@ -149,3 +149,64 @@ def get_conteggio() -> int:
     with _lock:
         data = _load_data()
     return len(data["notes"])
+
+
+def crea_postit_da_attivita(attivita: dict, creato_da: str = 'sistema') -> dict:
+    """Crea un post-it a partire da un'attività del calendario."""
+    # Mappa categoria calendario → categoria post-it
+    cat_map = {
+        'appuntamento': 'attivita',
+        'promemoria': 'generico',
+        'scadenza': 'scadenza',
+        'riunione': 'attivita',
+        'boxbeat': 'importante',
+        'altro': 'generico',
+    }
+    cat = cat_map.get(attivita.get('categoria', ''), 'generico')
+    colore_map = {
+        'appuntamento': 'azzurro',
+        'scadenza': 'rosa',
+        'riunione': 'viola',
+        'boxbeat': 'arancio',
+    }
+    colore = colore_map.get(attivita.get('categoria', ''), 'giallo')
+
+    testo = attivita.get('titolo', '')
+    desc = attivita.get('descrizione', '')
+    if desc:
+        testo += '\n' + desc
+
+    return crea_postit(
+        testo=testo,
+        categoria=cat,
+        colore=colore,
+        priorita='alta' if attivita.get('categoria') == 'scadenza' else 'media',
+        provincia=attivita.get('provincia'),
+        scadenza=attivita.get('data'),
+        creato_da=creato_da,
+    )
+
+
+def sync_postit_a_calendario(nota: dict) -> dict:
+    """Crea un'attività calendario a partire da un post-it. Restituisce l'attività creata."""
+    from moduli.calendario import crea_attivita
+
+    # Mappa categoria post-it → categoria calendario
+    cat_map = {
+        'assenza': 'promemoria',
+        'scadenza': 'scadenza',
+        'attivita': 'appuntamento',
+        'importante': 'promemoria',
+        'generico': 'altro',
+    }
+    cat_cal = cat_map.get(nota.get('categoria', ''), 'altro')
+    data = nota.get('scadenza') or datetime.now().strftime('%Y-%m-%d')
+
+    return crea_attivita(
+        titolo=nota['testo'][:100],
+        data=data,
+        descrizione=f"[Da post-it {nota['id']}] {nota['testo']}",
+        categoria=cat_cal,
+        creato_da=nota.get('creato_da', 'sistema'),
+        provincia=nota.get('provincia', ''),
+    )

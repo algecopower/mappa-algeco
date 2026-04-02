@@ -98,7 +98,7 @@ var CSS = `
     display: flex;
     gap: 6px;
 }
-.postit-panel-actions button {
+.postit-panel-actions button, .postit-panel-actions a {
     background: none;
     border: none;
     color: var(--text-secondary, #94a3b8);
@@ -107,8 +107,11 @@ var CSS = `
     padding: 4px 6px;
     border-radius: 6px;
     transition: all .2s;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
 }
-.postit-panel-actions button:hover {
+.postit-panel-actions button:hover, .postit-panel-actions a:hover {
     background: var(--border, #334155);
     color: var(--text-primary, #eee);
 }
@@ -339,7 +342,124 @@ var CSS = `
 @media (max-width: 600px) {
     .postit-panel { width: calc(100vw - 20px); right: 10px; bottom: 120px; }
     .postit-strip-item { font-size: .72em; padding: 4px 8px; }
+    .postit-cal-modal-body { max-height: 50vh; }
 }
+
+/* Calendario import modal */
+.postit-cal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.5);
+    backdrop-filter: blur(4px);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .25s;
+}
+.postit-cal-overlay.visible {
+    opacity: 1;
+    pointer-events: all;
+}
+.postit-cal-modal {
+    background: var(--bg-secondary, #1e293b);
+    border: 1px solid var(--border, #334155);
+    border-radius: 14px;
+    width: 400px;
+    max-width: 92vw;
+    box-shadow: 0 16px 50px rgba(0,0,0,.4);
+    overflow: hidden;
+}
+.postit-cal-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border, #334155);
+    background: var(--bg-tertiary, #0f172a);
+}
+.postit-cal-modal-header span {
+    font-weight: 700;
+    font-size: .95em;
+    color: var(--text-primary, #eee);
+}
+.postit-cal-modal-header button {
+    background: none;
+    border: none;
+    color: var(--text-secondary, #94a3b8);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: 6px;
+}
+.postit-cal-modal-header button:hover { background: var(--border, #334155); color: var(--text-primary, #eee); }
+.postit-cal-modal-body {
+    padding: 10px;
+    max-height: 350px;
+    overflow-y: auto;
+}
+.postit-cal-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background .15s;
+    border-bottom: 1px solid var(--border, #334155);
+}
+.postit-cal-item:last-child { border-bottom: none; }
+.postit-cal-item:hover { background: var(--border, #334155); }
+.postit-cal-item-info {
+    flex: 1;
+    min-width: 0;
+}
+.postit-cal-item-title {
+    font-size: .85em;
+    font-weight: 600;
+    color: var(--text-primary, #eee);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.postit-cal-item-meta {
+    font-size: .73em;
+    color: var(--text-secondary, #94a3b8);
+    margin-top: 2px;
+}
+.postit-cal-item-btn {
+    background: #f59e0b;
+    color: #1e293b;
+    border: none;
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-size: .78em;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background .2s;
+}
+.postit-cal-item-btn:hover { background: #d97706; }
+.postit-cal-empty {
+    text-align: center;
+    padding: 24px;
+    color: var(--text-muted, #64748b);
+    font-size: .85em;
+}
+.postit-cal-footer {
+    padding: 10px 16px;
+    border-top: 1px solid var(--border, #334155);
+    text-align: center;
+}
+.postit-cal-footer a {
+    color: #f59e0b;
+    font-size: .82em;
+    font-weight: 600;
+    text-decoration: none;
+}
+.postit-cal-footer a:hover { text-decoration: underline; }
 `;
 
 /* ===== STATE ===== */
@@ -392,7 +512,9 @@ function injectHTML() {
         '  <div class="postit-panel-title">📝 Post-it Promemoria</div>',
         '  <div class="postit-panel-actions">',
         '    <button onclick="window._postit.nuovo()" title="Nuovo post-it">➕</button>',
+        '    <button onclick="window._postit.apriImportCalendario()" title="Importa dal calendario">⬇️</button>',
         '    <button onclick="window._postit.toggleStrip()" title="Mostra/nascondi barra in alto" id="postitStripToggle">📌</button>',
+        '    <a href="/calendario" target="_blank" title="Apri Calendario">📅</a>',
         '    <button onclick="window._postit.toggle()" title="Chiudi">✕</button>',
         '  </div>',
         '</div>',
@@ -434,6 +556,29 @@ function injectHTML() {
     strip.className = 'postit-strip';
     strip.id = 'postitStrip';
     document.body.appendChild(strip);
+
+    // Modal importa da calendario
+    var overlay = document.createElement('div');
+    overlay.className = 'postit-cal-overlay';
+    overlay.id = 'postitCalOverlay';
+    overlay.innerHTML = [
+        '<div class="postit-cal-modal">',
+        '  <div class="postit-cal-modal-header">',
+        '    <span>📅 Importa dal Calendario</span>',
+        '    <button onclick="window._postit.chiudiImportCalendario()">✕</button>',
+        '  </div>',
+        '  <div class="postit-cal-modal-body" id="postitCalLista">',
+        '    <div class="postit-cal-empty">⏳ Caricamento...</div>',
+        '  </div>',
+        '  <div class="postit-cal-footer">',
+        '    <a href="/calendario" target="_blank">🗓️ Apri Calendario completo</a>',
+        '  </div>',
+        '</div>'
+    ].join('\n');
+    overlay.addEventListener('click', function(e) {
+        if (e.target === overlay) chiudiImportCalendario();
+    });
+    document.body.appendChild(overlay);
 
     // Color picker click
     panel.querySelectorAll('.postit-colore-dot').forEach(function(dot) {
@@ -493,6 +638,7 @@ function render() {
             '  <div class="postit-card-header">',
             '    <span class="postit-card-cat">' + cat.icona + ' ' + cat.label + '</span>',
             '    <div class="postit-card-actions">',
+            '      <button onclick="window._postit.syncCalendario(\'' + n.id + '\', this)" title="Aggiungi al calendario">⬆️</button>',
             '      <button onclick="window._postit.modifica(\'' + n.id + '\')" title="Modifica">✏️</button>',
             '      <button onclick="window._postit.elimina(\'' + n.id + '\')" title="Elimina">🗑️</button>',
             '    </div>',
@@ -670,6 +816,72 @@ function _toast(msg, type) {
     }
 }
 
+/* ===== CALENDARIO INTEGRATION ===== */
+function apriImportCalendario() {
+    var overlay = document.getElementById('postitCalOverlay');
+    if (!overlay) return;
+    overlay.classList.add('visible');
+    var lista = document.getElementById('postitCalLista');
+    lista.innerHTML = '<div class="postit-cal-empty">⏳ Caricamento attività...</div>';
+    api('GET', '/api/postit/calendario-attivita').then(function(res) {
+        if (!res.ok || !res.attivita || res.attivita.length === 0) {
+            lista.innerHTML = '<div class="postit-cal-empty">📭 Nessuna attività da importare</div>';
+            return;
+        }
+        var catIcn = { appuntamento: '📍', promemoria: '🔔', scadenza: '⏰', riunione: '👥', boxbeat: '📦', altro: '📋' };
+        lista.innerHTML = res.attivita.map(function(a) {
+            var icn = catIcn[a.categoria] || '📋';
+            var dataStr = a.data ? new Date(a.data + 'T00:00:00').toLocaleDateString('it-IT', { day: '2-digit', month: 'short' }) : '';
+            var oraStr = a.ora ? ' · ' + a.ora : '';
+            return [
+                '<div class="postit-cal-item">',
+                '  <div class="postit-cal-item-info">',
+                '    <div class="postit-cal-item-title">' + icn + ' ' + escHtml(a.titolo) + '</div>',
+                '    <div class="postit-cal-item-meta">' + dataStr + oraStr + ' · ' + (a.categoria || '') + '</div>',
+                '  </div>',
+                '  <button class="postit-cal-item-btn" onclick="window._postit.importaDaCalendario(\'' + a.id + '\')">📌 Fissa</button>',
+                '</div>'
+            ].join('');
+        }).join('');
+    }).catch(function() {
+        lista.innerHTML = '<div class="postit-cal-empty">❌ Errore caricamento</div>';
+    });
+}
+
+function chiudiImportCalendario() {
+    var overlay = document.getElementById('postitCalOverlay');
+    if (overlay) overlay.classList.remove('visible');
+}
+
+function importaDaCalendario(attivitaId) {
+    api('POST', '/api/postit/from-calendario', { attivita_id: attivitaId }).then(function(res) {
+        if (res.ok) {
+            _toast('📌 Attività fissata come post-it', 'success');
+            chiudiImportCalendario();
+            carica();
+        } else {
+            _toast(res.error || 'Errore', 'error');
+        }
+    });
+}
+
+function syncCalendario(noteId, btn) {
+    if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+    api('POST', '/api/postit/' + noteId + '/to-calendario').then(function(res) {
+        if (res.ok) {
+            var ora = new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+            _toast('📅 Aggiunto al calendario alle ' + ora, 'success');
+            if (btn) { btn.textContent = '✅'; setTimeout(function() { btn.textContent = '⬆️'; btn.disabled = false; }, 2000); }
+        } else {
+            _toast(res.error || 'Errore', 'error');
+            if (btn) { btn.textContent = '⬆️'; btn.disabled = false; }
+        }
+    }).catch(function() {
+        _toast('Errore di rete', 'error');
+        if (btn) { btn.textContent = '⬆️'; btn.disabled = false; }
+    });
+}
+
 /* ===== INIT ===== */
 function init() {
     injectCSS();
@@ -701,7 +913,11 @@ window._postit = {
     modifica: modifica,
     elimina: elimina,
     annullaForm: annullaForm,
-    carica: carica
+    carica: carica,
+    apriImportCalendario: apriImportCalendario,
+    chiudiImportCalendario: chiudiImportCalendario,
+    importaDaCalendario: importaDaCalendario,
+    syncCalendario: syncCalendario
 };
 
 // Auto-init

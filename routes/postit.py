@@ -10,6 +10,7 @@ from moduli.shared import _get_username, _api_error
 from moduli.postit import (
     get_postit, crea_postit, modifica_postit, elimina_postit,
     get_conteggio, COLORI_POSTIT, CATEGORIE_POSTIT,
+    crea_postit_da_attivita, sync_postit_a_calendario,
 )
 from config import PROVINCIA_ATTIVA
 
@@ -100,3 +101,69 @@ def api_postit_meta():
         'colori': COLORI_POSTIT,
         'count': get_conteggio(),
     })
+
+
+@bp.route('/api/postit/<note_id>/to-calendario', methods=['POST'])
+@login_required
+def api_postit_to_calendario(note_id):
+    """Sincronizza un post-it nel calendario come attività."""
+    try:
+        notes = get_postit()
+        nota = next((n for n in notes if n['id'] == note_id), None)
+        if not nota:
+            return _api_error('Post-it non trovato', 404)
+
+        attivita = sync_postit_a_calendario(nota)
+        logger.info(f"[PostIt] 📅 Post-it {note_id} → calendario da {_get_username()}")
+        return jsonify({'ok': True, 'attivita': attivita})
+    except Exception as e:
+        logger.error(f"[PostIt] Errore sync→calendario: {e}")
+        return _api_error(str(e), 500)
+
+
+@bp.route('/api/postit/from-calendario', methods=['POST'])
+@login_required
+def api_postit_from_calendario():
+    """Crea un post-it a partire da un'attività del calendario."""
+    try:
+        body = request.get_json(force=True)
+        attivita_id = body.get('attivita_id', '').strip()
+        if not attivita_id:
+            return _api_error('attivita_id obbligatorio', 400)
+
+        from moduli.calendario import get_attivita
+        tutte = get_attivita(provincia=PROVINCIA_ATTIVA)
+        attivita = next((a for a in tutte if a['id'] == attivita_id), None)
+        if not attivita:
+            return _api_error('Attività non trovata', 404)
+
+        nota = crea_postit_da_attivita(attivita, creato_da=_get_username())
+        if not nota:
+            return _api_error('Errore creazione post-it', 500)
+
+        logger.info(f"[PostIt] 📌 Calendario {attivita_id} → post-it da {_get_username()}")
+        return jsonify({'ok': True, 'nota': nota}), 201
+    except Exception as e:
+        logger.error(f"[PostIt] Errore from-calendario: {e}")
+        return _api_error(str(e), 500)
+
+
+@bp.route('/api/postit/calendario-attivita', methods=['GET'])
+@login_required
+def api_postit_lista_calendario():
+    """Restituisce le attività del calendario (non completate) per importazione rapida."""
+    try:
+        from moduli.calendario import get_attivita
+        tutte = get_attivita(mostra_completate=False, provincia=PROVINCIA_ATTIVA)
+        # Restituisci solo campi essenziali
+        lista = [{
+            'id': a['id'],
+            'titolo': a.get('titolo', ''),
+            'data': a.get('data', ''),
+            'ora': a.get('ora', ''),
+            'categoria': a.get('categoria', ''),
+        } for a in tutte[:50]]
+        return jsonify({'ok': True, 'attivita': lista})
+    except Exception as e:
+        logger.error(f"[PostIt] Errore lista calendario: {e}")
+        return _api_error(str(e), 500)

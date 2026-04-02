@@ -1044,23 +1044,6 @@
       }
     },
     {
-      "id": "db540ed0",
-      "titolo": "FISSARE DINO GAMBALUNGA (VEDI MAIL)",
-      "data": "2026-03-31",
-      "ora": "",
-      "ora_fine": "",
-      "descrizione": "",
-      "categoria": "promemoria",
-      "provincia": "TORINO",
-      "creato_da": "giada",
-      "creato_il": "2026-03-31T08:27:10.371541",
-      "completata": false,
-      "completata_da": null,
-      "completata_il": null,
-      "modificato_da": "giada",
-      "modificato_il": "2026-03-31T08:27:38.253115"
-    },
-    {
       "id": "a70b1667",
       "titolo": "Appuntamento SILVIA MANGANO  388 765 2220 - TROFARELLO ore 18:15",
       "data": "2026-04-01",
@@ -1098,9 +1081,9 @@
       "provincia": "TORINO",
       "creato_da": "giada",
       "creato_il": "2026-04-02T12:12:14.759716",
-      "completata": false,
-      "completata_da": null,
-      "completata_il": null,
+      "completata": true,
+      "completata_da": "giada",
+      "completata_il": "2026-04-02T16:32:34.063908",
       "boxbeat_data": {
         "pod": "IT001E01912731",
         "eneltel": "19127311",
@@ -1113,6 +1096,21 @@
         "ora_appuntamento": "9:00/9:30",
         "data_pianificata": "2026-04-04"
       }
+    },
+    {
+      "id": "e68070da",
+      "titolo": "Test sync calendario",
+      "data": "2026-04-05",
+      "ora": "",
+      "ora_fine": "",
+      "descrizione": "[Da post-it 1939d6dc] Test sync calendario",
+      "categoria": "scadenza",
+      "provincia": "",
+      "creato_da": "sistema",
+      "creato_il": "2026-04-02T16:37:59.938173",
+      "completata": false,
+      "completata_da": null,
+      "completata_il": null
     }
   ]
 }

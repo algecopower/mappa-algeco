@@ -998,6 +998,7 @@ def update_settings():
             ],
             'operatori_dict': [
                 (config, 'OPERATORI_DICT'),
+                (mappa_html, 'OPERATORI_DICT'),
                 (gestionale, 'OPERATORI_DICT'),
             ],
             'deposito': [

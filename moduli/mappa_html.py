@@ -10570,6 +10570,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
     
     <!-- Modali Gestionale -->
     {genera_html_gestionale()}
+<script src="/static/postit.js"></script>
 </body>
 </html>'''
     

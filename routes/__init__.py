@@ -8,4 +8,5 @@ Contiene:
   calendario.py — Calendario attività, BoxBeat
   sigilli.py    — Sigilli e matricole
   sync.py       — Sync, backup, upload BoxBeat
+  postit.py     — Post-it promemoria persistenti
 """

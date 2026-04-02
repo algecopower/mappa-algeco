@@ -1,0 +1,28 @@
+{
+  "notes": [
+    {
+      "id": "4c186eed",
+      "testo": "sdsd",
+      "categoria": "attivita",
+      "colore": "giallo",
+      "priorita": "alta",
+      "provincia": "TORINO",
+      "scadenza": "2026-04-02",
+      "creato_da": "giada",
+      "creato_il": "2026-04-02T16:27:30.960700",
+      "modificato_il": null
+    },
+    {
+      "id": "8b538961",
+      "testo": "paul",
+      "categoria": "assenza",
+      "colore": "giallo",
+      "priorita": "media",
+      "provincia": "TORINO",
+      "scadenza": "2026-04-02",
+      "creato_da": "giada",
+      "creato_il": "2026-04-02T16:29:16.270033",
+      "modificato_il": null
+    }
+  ]
+}

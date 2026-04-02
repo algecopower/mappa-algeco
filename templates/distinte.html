@@ -298,32 +298,9 @@
             color: white;
         }
 
-        .btn-search-phone {
-            background: #9b59b6;
-            color: white;
-        }
 
-        .btn-search-phone:hover {
-            background: #8e44ad;
-        }
 
-        .btn-search-google {
-            background: #4285f4;
-            color: white;
-        }
 
-        .btn-search-google:hover {
-            background: #3367d6;
-        }
-
-        /* PEC Search */
-        .btn-search-pec {
-            background: #e74c3c;
-            color: white;
-        }
-        .btn-search-pec:hover {
-            background: #c0392b;
-        }
 
         /* Badge azienda/condominio */
         .tipo-badge {
@@ -1781,67 +1758,7 @@
         </div>
     </div>
 
-    <!-- Phone Search Modal -->
-    <div class="modal-overlay" id="phoneSearchModal">
-        <div class="modal" style="max-width: 500px;">
-            <div class="modal-header">
-                <h3>
-                    <i class="fas fa-phone" style="color: var(--info)"></i>
-                    Aggiungi Numero di Telefono
-                </h3>
-                <button class="modal-close" onclick="closePhoneModal()">&times;</button>
-            </div>
-            <div class="modal-body">
-                <p style="margin-bottom: 15px;">
-                    <strong id="searchContactName">Nome cliente</strong><br>
-                    <span id="searchContactAddress" style="color: var(--text-muted); font-size: 0.9em;"></span>
-                </p>
-                
-                <p style="margin-bottom: 15px; color: var(--text-muted);">
-                    Cerca il numero su Pagine Bianche o Google, poi inseriscilo qui sotto:
-                </p>
-                
-                <div style="display: flex; gap: 10px; margin-bottom: 20px; justify-content: center; flex-wrap: wrap;">
-                    <a id="linkPagineBianche" href="#" target="_blank" class="btn btn-info">
-                        <i class="fas fa-external-link-alt"></i>
-                        Pagine Bianche
-                    </a>
-                    <a id="linkGoogle" href="#" target="_blank" class="btn btn-search-google">
-                        <i class="fab fa-google"></i>
-                        Cerca su Google
-                    </a>
-                    <a id="linkGoogleMailPec" href="#" target="_blank" class="btn btn-search-pec" style="display:none;" onclick="copiaENomeEApriFromPhone(event)">
-                        <i class="fas fa-envelope"></i>
-                        Cerca mail/PEC
-                    </a>
-                </div>
-                
-                <div style="padding: 15px; background: var(--bg-dark); border-radius: 10px;">
-                    <p style="margin-bottom: 10px; font-weight: bold;">
-                        <i class="fas fa-keyboard"></i> Inserisci il numero trovato:
-                    </p>
-                    <div style="display: flex; gap: 10px;">
-                        <input type="text" id="manualPhoneInput" placeholder="Numero telefono..." autocomplete="off"
-                            style="flex: 1; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); font-size: 1.1em;">
-                        <button class="btn btn-primary" onclick="salvaNumeroManuale()">
-                            <i class="fas fa-save"></i>
-                            Salva
-                        </button>
-                    </div>
-                </div>
-                
-                <div style="margin-top: 15px; text-align: center;">
-                    <button class="btn btn-warning" onclick="salvaNonTrovato()" style="opacity: 0.8;">
-                        <i class="fas fa-times"></i>
-                        Segna come "non trovato"
-                    </button>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn" onclick="closePhoneModal()">Chiudi</button>
-            </div>
-        </div>
-    </div>
+
 
     <!-- Loading Overlay -->
     <div class="loading-overlay" id="loadingOverlay">
@@ -2378,23 +2295,11 @@
                                 <i class="fab fa-whatsapp"></i>
                                 Messaggi / Template
                             </button>
-                            ${c.is_azienda ? `
-                            <a class="btn btn-search-pec" href="https://www.google.com/search?q=${encodeURIComponent('"' + (c.nome || '') + '" email PEC ' + (c.comune || ''))}" target="_blank" onclick="navigator.clipboard.writeText('${escapeHtml(c.nome || '')}').then(()=>showToast('\"${escapeHtml(c.nome || '')}\" copiato!'))">
-                                <i class="fas fa-envelope"></i>
-                                Cerca mail/PEC
-                            </a>
-                            ` : ''}
                         ` : c.tipo === 'fisso' ? `
                             <button class="btn btn-primary" onclick="showMessage('${c.pod}')" style="background: var(--info);">
                                 <i class="fas fa-envelope"></i>
                                 Template
                             </button>
-                            ${c.is_azienda ? `
-                            <a class="btn btn-search-pec" href="https://www.google.com/search?q=${encodeURIComponent('"' + (c.nome || '') + '" email PEC ' + (c.comune || ''))}" target="_blank" onclick="navigator.clipboard.writeText('${escapeHtml(c.nome || '')}').then(()=>showToast('\"${escapeHtml(c.nome || '')}\" copiato!'))">
-                                <i class="fas fa-envelope"></i>
-                                Cerca mail/PEC
-                            </a>
-                            ` : ''}
                         ` : c.tipo === 'senza_telefono' ? `
                             ${c.numeri_alternativi && c.numeri_alternativi.length > 0 ? `
                             <div class="numeri-alternativi-box">
@@ -2418,10 +2323,6 @@
                                 `).join('')}
                             </div>
                             ` : ''}
-                            <button class="btn btn-search-phone" onclick="cercaTelefono('${c.pod}')">
-                                <i class="fas fa-search"></i>
-                                Aggiungi contatti
-                            </button>
                             ${(() => {
                                 const hasCellulare = c.numeri_alternativi && c.numeri_alternativi.some(n => n.tipo === 'cellulare');
                                 const hasFisso = c.numeri_alternativi && c.numeri_alternativi.some(n => n.tipo !== 'cellulare');
@@ -2431,7 +2332,7 @@
                                 if (hasCellulare) {
                                     btns += `<button class="btn btn-primary" onclick="showMessage('${c.pod}', '${firstCell.numero}')">
                                         <i class="fab fa-whatsapp"></i>
-                                        Template WA
+                                        Template WA/mail
                                     </button>`;
                                 }
                                 if (hasFisso) {
@@ -3031,114 +2932,6 @@
             renderContacts();
         }
 
-        // Genera link ricerca Pagine Bianche
-        function generaLinkPagineBianche(contatto) {
-            // Pulisce il nome (rimuove prefissi come "SOC.", "IMPRESA", ecc.)
-            let nome = (contatto.nome || '').replace(/^(SOC\.|SOCIETA'|IMPRESA|DITTA|SRL|SPA|S\.R\.L\.|S\.P\.A\.)\s*/i, '').trim();
-            let comune = (contatto.comune || '').trim();
-            
-            // Costruisce l'URL di ricerca
-            const params = new URLSearchParams();
-            params.set('qs', nome);
-            if (comune) params.set('dv', comune);
-            
-            return `https://www.paginebianche.it/ricerca?${params.toString()}`;
-        }
-
-        // Genera link ricerca Google
-        function generaLinkGoogle(contatto) {
-            let nome = (contatto.nome || '').trim();
-            let indirizzo = `${contatto.indirizzo || ''} ${contatto.civico || ''}`.trim();
-            let comune = (contatto.comune || '').trim();
-            
-            // Costruisce query di ricerca
-            let query = `${nome} ${comune} telefono`;
-            if (indirizzo) query = `${nome} ${indirizzo} ${comune} telefono`;
-            
-            return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
-        }
-
-        // ========================================
-        // AGGIUNGI TELEFONO - Link manuali
-        // ========================================
-        
-        let currentSearchPod = null;  // POD attualmente in ricerca
-        
-        // Apri modal per aggiungere telefono
-        function cercaTelefono(pod) {
-            const contatto = contatti.find(c => c.pod === pod);
-            if (!contatto) return;
-            
-            currentSearchPod = pod;
-            
-            // Mostra modal
-            document.getElementById('searchContactName').textContent = contatto.nome || 'Nome non disponibile';
-            document.getElementById('searchContactAddress').textContent = 
-                `${contatto.indirizzo || ''} ${contatto.civico || ''}, ${contatto.cap || ''} ${contatto.comune || ''}`;
-            
-            // Imposta link manuali
-            document.getElementById('linkPagineBianche').href = generaLinkPagineBianche(contatto);
-            document.getElementById('linkGoogle').href = generaLinkGoogle(contatto);
-            
-            // Mostra/nascondi link cerca mail/PEC per aziende
-            const linkMailPec = document.getElementById('linkGoogleMailPec');
-            if (contatto.is_azienda) {
-                const query = encodeURIComponent(`"${contatto.nome || ''}" email PEC ${contatto.comune || ''}`);
-                linkMailPec.href = `https://www.google.com/search?q=${query}`;
-                linkMailPec.style.display = 'inline-flex';
-            } else {
-                linkMailPec.style.display = 'none';
-            }
-            
-            // Reset input
-            document.getElementById('manualPhoneInput').value = '';
-            
-            document.getElementById('phoneSearchModal').classList.add('active');
-        }
-        
-        // Salva numero inserito manualmente
-        async function salvaNumeroManuale() {
-            const telefono = document.getElementById('manualPhoneInput').value.trim();
-            if (!telefono) {
-                showToast('Inserisci un numero di telefono', 'warning');
-                return;
-            }
-            await salvaTelefonoNelFilone(currentSearchPod, telefono, 'inserito manualmente');
-        }
-        
-        // Segna come non trovato - salva "non trovato" nella colonna telefono del filone, ma lascia l'utente nella categoria senza telefono
-        async function salvaNonTrovato() {
-            const pod = currentSearchPod;
-            if (!pod) return;
-            
-            try {
-                // Salva "non trovato" nel campo telefono del filone
-                const resp = await fetch('/api/distinte/salva-telefono', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pod, telefono: 'non trovato', fonte: '' })
-                });
-                
-                const data = await resp.json();
-                
-                if (data.success) {
-                    // Aggiorna stato locale
-                    const contatto = contatti.find(c => c.pod === pod);
-                    if (contatto) {
-                        contatto.telefono_filone = 'non trovato';
-                    }
-                    showToast('Segnato come "non trovato"');
-                    closePhoneModal();
-                    renderContacts();
-                } else {
-                    showToast(data.error || 'Errore nel salvataggio', 'error');
-                }
-            } catch (e) {
-                console.error('Errore salvaNonTrovato:', e);
-                showToast('Errore di connessione', 'error');
-            }
-        }
-        
         // Salva telefono nel filone e aggiorna UI
         async function salvaTelefonoNelFilone(pod, telefono, fonte) {
             try {
@@ -3177,23 +2970,6 @@
             }
         }
         
-        // Funzione segnaIrrintracciabile rimossa - ora si usa solo salvaNonTrovato dal modal
-        
-        function closePhoneModal() {
-            document.getElementById('phoneSearchModal').classList.remove('active');
-            currentSearchPod = null;
-        }
-
-        function copiaENomeEApriFromPhone(event) {
-            // Copia il nome dell'azienda in clipboard prima di aprire la ricerca mail/PEC
-            const contatto = contatti.find(c => c.pod === currentSearchPod);
-            if (contatto && contatto.nome) {
-                navigator.clipboard.writeText(contatto.nome).then(() => {
-                    showToast('"' + contatto.nome + '" copiato! Incolla con Ctrl+V');
-                });
-            }
-        }
-
         // Helper per escape HTML
         function escapeHtml(str) {
             if (!str) return '';

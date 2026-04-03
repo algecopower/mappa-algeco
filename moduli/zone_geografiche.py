@@ -229,7 +229,8 @@ def unisci_zone_piccole(zone, centroidi, min_contatori=15, max_distanza_km=20):
     Post-processing: unisce zone troppo piccole con quelle vicine.
 
     Zone con meno di min_contatori vengono unite alla zona più vicina
-    se questa è entro max_distanza_km.
+    (grande o piccola). Le zone piccole vicine tra loro vengono raggruppate
+    iterativamente finché non superano min_contatori o non ci sono più merge possibili.
 
     Args:
         zone: dict delle zone dal clustering
@@ -244,103 +245,308 @@ def unisci_zone_piccole(zone, centroidi, min_contatori=15, max_distanza_km=20):
     if not zone:
         return {}, {}
 
-    # Identifica zone piccole e grandi
-    zone_piccole = []
-    zone_grandi = []
+    def _conta_contatori(zona_info):
+        n = zona_info.get('num_contatori_totali', 0)
+        if n == 0:
+            n = sum(centroidi[c]['num_contatori'] for c in zona_info['comuni'] if c in centroidi)
+        return n
 
-    for zona_nome, zona_info in zone.items():
-        num_contatori = zona_info.get('num_contatori_totali', 0)
-        if num_contatori == 0:
-            num_contatori = sum(centroidi[c]['num_contatori'] for c in zona_info['comuni'])
-
-        if num_contatori < min_contatori:
-            zone_piccole.append((zona_nome, zona_info, num_contatori))
-        else:
-            zone_grandi.append((zona_nome, zona_info, num_contatori))
-
-    # Se non ci sono zone grandi, tieni tutto com'è
-    if not zone_grandi:
-        assegnato = {}
-        for zona_nome, zona_info, _ in zone_piccole:
-            for comune in zona_info['comuni']:
-                assegnato[comune] = zona_nome
-        return zone, assegnato
-
-    # Mappa merge: zona_piccola -> zona_grande
-    merge_map = {}
-
-    # Per ogni zona piccola, trova la zona grande più vicina
-    for zona_piccola, info_piccola, cont_piccola in zone_piccole:
-        lat_piccola = info_piccola['centroide_lat']
-        lon_piccola = info_piccola['centroide_lon']
-
-        min_dist = float('inf')
-        zona_target = None
-
-        for zona_grande, info_grande, _ in zone_grandi:
-            dist = calcola_distanza_km(
-                lat_piccola, lon_piccola,
-                info_grande['centroide_lat'], info_grande['centroide_lon']
-            )
-
-            if dist < min_dist and dist <= max_distanza_km:
-                min_dist = dist
-                zona_target = zona_grande
-
-        if zona_target:
-            merge_map[zona_piccola] = zona_target
-            logger.info(f"   🔀 Unisco zona piccola ({cont_piccola} cont.) con {zona_target} (dist: {min_dist:.1f} km)")
-
-    # Applica i merge
-    zone_ottimizzate = {}
-
-    # Prima aggiungi tutte le zone grandi
-    for zona_nome, zona_info, cont in zone_grandi:
-        zone_ottimizzate[zona_nome] = {
-            'comuni': zona_info['comuni'].copy(),
-            'centroide_lat': zona_info['centroide_lat'],
-            'centroide_lon': zona_info['centroide_lon'],
-            'num_contatori_totali': cont
-        }
-
-    # Poi mergia le zone piccole
-    for zona_piccola, info_piccola, cont_piccola in zone_piccole:
-        if zona_piccola in merge_map:
-            # Mergia con zona target
-            zona_target = merge_map[zona_piccola]
-            zone_ottimizzate[zona_target]['comuni'].extend(info_piccola['comuni'])
-
-            # Ricalcola centroide pesato
-            comuni_uniti = zone_ottimizzate[zona_target]['comuni']
-            lat_sum = 0
-            lon_sum = 0
-            peso_totale = 0
-
-            for comune in comuni_uniti:
-                peso = centroidi[comune]['num_contatori']
+    def _ricalcola_centroide(comuni_list):
+        lat_sum = lon_sum = peso_totale = 0
+        for comune in comuni_list:
+            if comune in centroidi:
+                peso = max(centroidi[comune]['num_contatori'], 1)
                 lat_sum += centroidi[comune]['lat'] * peso
                 lon_sum += centroidi[comune]['lon'] * peso
                 peso_totale += peso
+        if peso_totale > 0:
+            return lat_sum / peso_totale, lon_sum / peso_totale
+        return None, None
 
-            zone_ottimizzate[zona_target]['centroide_lat'] = lat_sum / peso_totale
-            zone_ottimizzate[zona_target]['centroide_lon'] = lon_sum / peso_totale
-            zone_ottimizzate[zona_target]['num_contatori_totali'] = peso_totale
-        else:
-            # Zona piccola troppo lontana, tienila separata
-            zone_ottimizzate[zona_piccola] = {
-                'comuni': info_piccola['comuni'].copy(),
-                'centroide_lat': info_piccola['centroide_lat'],
-                'centroide_lon': info_piccola['centroide_lon'],
-                'num_contatori_totali': cont_piccola
+    # Copia lavorativa delle zone
+    zone_lavoro = {}
+    for nome, info in zone.items():
+        zone_lavoro[nome] = {
+            'comuni': info['comuni'].copy(),
+            'centroide_lat': info['centroide_lat'],
+            'centroide_lon': info['centroide_lon'],
+            'num_contatori_totali': _conta_contatori(info)
+        }
+
+    # Merge iterativo: continua finché ci sono merge possibili
+    modificato = True
+    while modificato:
+        modificato = False
+
+        # Trova tutte le zone piccole
+        zone_piccole = [n for n, i in zone_lavoro.items() if i['num_contatori_totali'] < min_contatori]
+        if not zone_piccole:
+            break
+
+        # Per ogni zona piccola, trova la zona più vicina (grande O piccola)
+        miglior_merge = None  # (zona_piccola, zona_target, distanza)
+        min_dist_trovata = float('inf')
+
+        for nome_piccola in zone_piccole:
+            info_piccola = zone_lavoro[nome_piccola]
+
+            for nome_altra, info_altra in zone_lavoro.items():
+                if nome_altra == nome_piccola:
+                    continue
+
+                dist = calcola_distanza_km(
+                    info_piccola['centroide_lat'], info_piccola['centroide_lon'],
+                    info_altra['centroide_lat'], info_altra['centroide_lon']
+                )
+
+                if dist <= max_distanza_km and dist < min_dist_trovata:
+                    min_dist_trovata = dist
+                    miglior_merge = (nome_piccola, nome_altra, dist)
+
+        if miglior_merge:
+            nome_piccola, nome_target, dist = miglior_merge
+            info_piccola = zone_lavoro[nome_piccola]
+            info_target = zone_lavoro[nome_target]
+
+            # Esegui merge
+            comuni_uniti = info_target['comuni'] + info_piccola['comuni']
+            lat_new, lon_new = _ricalcola_centroide(comuni_uniti)
+            cont_new = info_target['num_contatori_totali'] + info_piccola['num_contatori_totali']
+
+            zone_lavoro[nome_target] = {
+                'comuni': comuni_uniti,
+                'centroide_lat': lat_new if lat_new else info_target['centroide_lat'],
+                'centroide_lon': lon_new if lon_new else info_target['centroide_lon'],
+                'num_contatori_totali': cont_new
             }
+            del zone_lavoro[nome_piccola]
+            modificato = True
+
+            logger.info(f"   🔀 Unisco {nome_piccola} ({info_piccola['num_contatori_totali']} cont.) "
+                        f"con {nome_target} (dist: {dist:.1f} km)")
+
+    # Fase 2: Raggruppa zone a singolo comune vicine tra loro
+    # Zone con 1 solo comune che distano meno di max_distanza_singoli_km vengono unite
+    max_distanza_singoli_km = 10
+    modificato = True
+    while modificato:
+        modificato = False
+
+        # Trova zone a singolo comune
+        zone_singole = [n for n, i in zone_lavoro.items() if len(i['comuni']) == 1]
+        if len(zone_singole) < 2:
+            break
+
+        # Trova la coppia di zone singole più vicina
+        miglior_merge = None
+        min_dist_trovata = float('inf')
+
+        for i_idx in range(len(zone_singole)):
+            for j_idx in range(i_idx + 1, len(zone_singole)):
+                nome_a = zone_singole[i_idx]
+                nome_b = zone_singole[j_idx]
+                info_a = zone_lavoro[nome_a]
+                info_b = zone_lavoro[nome_b]
+
+                dist = calcola_distanza_km(
+                    info_a['centroide_lat'], info_a['centroide_lon'],
+                    info_b['centroide_lat'], info_b['centroide_lon']
+                )
+
+                if dist <= max_distanza_singoli_km and dist < min_dist_trovata:
+                    min_dist_trovata = dist
+                    miglior_merge = (nome_a, nome_b, dist)
+
+        if miglior_merge:
+            nome_a, nome_b, dist = miglior_merge
+            info_a = zone_lavoro[nome_a]
+            info_b = zone_lavoro[nome_b]
+
+            comuni_uniti = info_a['comuni'] + info_b['comuni']
+            lat_new, lon_new = _ricalcola_centroide(comuni_uniti)
+            cont_new = info_a['num_contatori_totali'] + info_b['num_contatori_totali']
+
+            zone_lavoro[nome_a] = {
+                'comuni': comuni_uniti,
+                'centroide_lat': lat_new if lat_new else info_a['centroide_lat'],
+                'centroide_lon': lon_new if lon_new else info_a['centroide_lon'],
+                'num_contatori_totali': cont_new
+            }
+            del zone_lavoro[nome_b]
+            modificato = True
+
+            logger.info(f"   🔀 Raggruppo singoli: {nome_a} + {nome_b} (dist: {dist:.1f} km)")
 
     # Crea mapping comune->zona aggiornato
     assegnato_nuovo = {}
-    for zona_nome, zona_info in zone_ottimizzate.items():
+    for zona_nome, zona_info in zone_lavoro.items():
         for comune in zona_info['comuni']:
             assegnato_nuovo[comune] = zona_nome
 
-    return zone_ottimizzate, assegnato_nuovo
+    return zone_lavoro, assegnato_nuovo
+
+
+def dividi_zone_grandi(zone, centroidi, max_comuni=25, max_rapporto_comuni_contatori=5.0, max_diametro_km=15):
+    """
+    Post-processing: divide zone troppo grandi in sotto-zone più bilanciate.
+
+    DBSCAN tende a concatenare transitivamente comuni vicini, creando zone
+    che coprono aree enormi. Questa funzione le spezza usando bisection
+    geografica ricorsiva (mediana lat/lon).
+
+    Una zona viene divisa se:
+    - Ha più di max_comuni comuni, OPPURE
+    - Il rapporto comuni/contatori è troppo alto, OPPURE
+    - Il diametro geografico (distanza max tra 2 comuni) supera max_diametro_km
+
+    Args:
+        zone: dict delle zone dal clustering
+        centroidi: dict dei centroidi comuni
+        max_comuni: numero massimo di comuni per zona (default 25)
+        max_rapporto_comuni_contatori: rapporto max (default 5.0)
+        max_diametro_km: diametro massimo della zona in km (default 15)
+
+    Returns:
+        zone_divise: dict con zone splittate
+        assegnato_nuovo: dict aggiornato comune->zona
+    """
+    if not zone:
+        return {}, {}
+
+    zone_divise = {}
+    contatore_nuove_zone = [0]  # mutable per closure
+
+    def _diametro_zona(comuni_lista):
+        """Calcola il diametro (distanza max tra 2 comuni qualsiasi) in km."""
+        coords = [(centroidi[c]['lat'], centroidi[c]['lon']) for c in comuni_lista if c in centroidi]
+        if len(coords) <= 1:
+            return 0
+        max_dist = 0
+        for i in range(len(coords)):
+            for j in range(i + 1, len(coords)):
+                d = calcola_distanza_km(coords[i][0], coords[i][1], coords[j][0], coords[j][1])
+                if d > max_dist:
+                    max_dist = d
+        return max_dist
+
+    def _deve_dividere(zona_info):
+        """Determina se una zona deve essere divisa."""
+        n_comuni = len(zona_info['comuni'])
+        n_contatori = zona_info.get('num_contatori_totali', 0)
+        if n_contatori == 0:
+            n_contatori = sum(centroidi[c]['num_contatori'] for c in zona_info['comuni'] if c in centroidi)
+
+        if n_comuni <= 3:
+            return False
+        if n_comuni > max_comuni:
+            return True
+        # Rapporto: tanti comuni con pochi contatori → split
+        if n_contatori > 0 and n_comuni / n_contatori > max_rapporto_comuni_contatori:
+            return True
+        # Diametro: zona troppo estesa geograficamente → split
+        if n_comuni > 4 and _diametro_zona(zona_info['comuni']) > max_diametro_km:
+            return True
+        return False
+
+    def _biseziona(comuni_lista):
+        """Divide una lista di comuni in due gruppi geografici usando la mediana."""
+        if len(comuni_lista) <= 2:
+            return [comuni_lista]
+
+        # Calcola spread lat vs lon per scegliere l'asse di split migliore
+        lats = [centroidi[c]['lat'] for c in comuni_lista if c in centroidi]
+        lons = [centroidi[c]['lon'] for c in comuni_lista if c in centroidi]
+
+        if not lats or not lons:
+            return [comuni_lista]
+
+        spread_lat = max(lats) - min(lats)
+        spread_lon = max(lons) - min(lons)
+
+        # Split lungo l'asse con maggiore dispersione
+        if spread_lat >= spread_lon:
+            comuni_ordinati = sorted(comuni_lista, key=lambda c: centroidi[c]['lat'] if c in centroidi else 0)
+        else:
+            comuni_ordinati = sorted(comuni_lista, key=lambda c: centroidi[c]['lon'] if c in centroidi else 0)
+
+        mid = len(comuni_ordinati) // 2
+        return [comuni_ordinati[:mid], comuni_ordinati[mid:]]
+
+    def _split_ricorsivo(comuni_lista, profondita=0):
+        """Divide ricorsivamente finché ogni sotto-zona è sotto soglia."""
+        if profondita > 5:  # safety: max 5 livelli (32 sotto-zone)
+            return [comuni_lista]
+
+        n_comuni = len(comuni_lista)
+        n_contatori = sum(centroidi[c]['num_contatori'] for c in comuni_lista if c in centroidi)
+
+        troppi_comuni = n_comuni > max_comuni
+        rapporto_alto = n_contatori > 0 and n_comuni / n_contatori > max_rapporto_comuni_contatori and n_comuni > 3
+        troppo_estesa = n_comuni > 4 and _diametro_zona(comuni_lista) > max_diametro_km
+
+        if not troppi_comuni and not rapporto_alto and not troppo_estesa:
+            return [comuni_lista]
+
+        parti = _biseziona(comuni_lista)
+        if len(parti) == 1:
+            return parti
+
+        risultato = []
+        for parte in parti:
+            risultato.extend(_split_ricorsivo(parte, profondita + 1))
+        return risultato
+
+    for zona_nome, zona_info in zone.items():
+        if not _deve_dividere(zona_info):
+            zone_divise[zona_nome] = zona_info.copy()
+            continue
+
+        n_originali = len(zona_info['comuni'])
+        sotto_zone = _split_ricorsivo(zona_info['comuni'])
+
+        logger.info(f"   ✂️  Divido {zona_nome} ({n_originali} comuni) in {len(sotto_zone)} sotto-zone")
+
+        for sotto_zona_comuni in sotto_zone:
+            contatore_nuove_zone[0] += 1
+            nuovo_nome = f"ZONA_S{contatore_nuove_zone[0]}"
+
+            # Calcola centroide pesato
+            lat_sum = 0
+            lon_sum = 0
+            peso_totale = 0
+            for comune in sotto_zona_comuni:
+                if comune in centroidi:
+                    peso = centroidi[comune]['num_contatori']
+                    lat_sum += centroidi[comune]['lat'] * peso
+                    lon_sum += centroidi[comune]['lon'] * peso
+                    peso_totale += peso
+
+            if peso_totale > 0:
+                zone_divise[nuovo_nome] = {
+                    'comuni': sotto_zona_comuni,
+                    'centroide_lat': lat_sum / peso_totale,
+                    'centroide_lon': lon_sum / peso_totale,
+                    'num_contatori_totali': peso_totale
+                }
+            else:
+                # Fallback: media semplice
+                lats = [centroidi[c]['lat'] for c in sotto_zona_comuni if c in centroidi]
+                lons = [centroidi[c]['lon'] for c in sotto_zona_comuni if c in centroidi]
+                if lats and lons:
+                    zone_divise[nuovo_nome] = {
+                        'comuni': sotto_zona_comuni,
+                        'centroide_lat': sum(lats) / len(lats),
+                        'centroide_lon': sum(lons) / len(lons),
+                        'num_contatori_totali': 0
+                    }
+
+    # Ricostruisci mapping comune->zona
+    assegnato_nuovo = {}
+    for zona_nome, zona_info in zone_divise.items():
+        for comune in zona_info['comuni']:
+            assegnato_nuovo[comune] = zona_nome
+
+    return zone_divise, assegnato_nuovo
 
 
 def crea_cluster_zone(centroidi, dimensione_cella_km=8, min_contatori_zona=15):
@@ -348,7 +554,8 @@ def crea_cluster_zone(centroidi, dimensione_cella_km=8, min_contatori_zona=15):
     Wrapper che crea zone ottimizzate usando DBSCAN + post-processing.
 
     1. Usa DBSCAN per clustering basato sulla densità geografica
-    2. Unisce zone troppo piccole con quelle vicine
+    2. Divide zone troppo grandi (troppi comuni, pochi contatori)
+    3. Unisce zone troppo piccole con quelle vicine
 
     Args:
         centroidi: dict dei centroidi comuni
@@ -366,57 +573,117 @@ def crea_cluster_zone(centroidi, dimensione_cella_km=8, min_contatori_zona=15):
 
     logger.info(f"   🗺️  DBSCAN: {len(zone_iniziali)} zone iniziali (eps={eps_km:.1f} km)")
 
-    # Step 2: Post-processing - unisci zone piccole
+    # Step 2: Dividi zone troppo grandi (troppi comuni, estensione eccessiva)
+    zone_divise, _ = dividi_zone_grandi(
+        zone_iniziali,
+        centroidi,
+        max_comuni=12,
+        max_rapporto_comuni_contatori=0.15,
+        max_diametro_km=15
+    )
+
+    logger.info(f"   ✂️  Dopo split: {len(zone_divise)} zone")
+
+    # Step 3: Post-processing - unisci zone piccole
     max_distanza_merge = dimensione_cella_km * 2.5  # ~20km per default
     zone_ottimizzate, assegnato = unisci_zone_piccole(
-        zone_iniziali,
+        zone_divise,
         centroidi,
         min_contatori=min_contatori_zona,
         max_distanza_km=max_distanza_merge
     )
 
-    logger.info(f"   ✅ Ottimizzazione: {len(zone_ottimizzate)} zone finali")
+    logger.info(f"   🔀 Dopo merge: {len(zone_ottimizzate)} zone")
 
-    return zone_ottimizzate, assegnato
+    # Step 4: Re-split zone che il merge ha reso troppo grandi
+    zone_finali, assegnato = dividi_zone_grandi(
+        zone_ottimizzate,
+        centroidi,
+        max_comuni=12,
+        max_rapporto_comuni_contatori=999,
+        max_diametro_km=15
+    )
+
+    logger.info(f"   ✅ Ottimizzazione: {len(zone_finali)} zone finali")
+
+    return zone_finali, assegnato
 
 
 def assegna_nomi_zone(zone, centroidi, deposito):
     """
     Assegna nomi più descrittivi e intuitivi alle zone basandosi sulla posizione.
+    Usa 8 direzioni cardinali (N, NE, E, SE, S, SW, W, NW) + CENTRO,
+    calcolate rispetto al centro geografico dell'area servita (non il deposito)
+    per ottenere direzioni coerenti con la percezione geografica.
     """
-    # Calcola distanza dal deposito per ogni zona
+
+    def _calcola_direzione(dlat, dlon, dist):
+        """Calcola la direzione cardinale a 8 punti basandosi sull'angolo."""
+        if dist < 5:
+            return "CENTRO"
+
+        # Angolo in gradi: 0=Nord, 90=Est, 180=Sud, 270=Ovest
+        angolo = math.degrees(math.atan2(dlon, dlat)) % 360
+
+        # 8 settori da 45° ciascuno, centrati sulla direzione
+        settori = [
+            (337.5, 360.0, "NORD"), (0.0, 22.5, "NORD"),
+            (22.5, 67.5, "NORD-EST"),
+            (67.5, 112.5, "EST"),
+            (112.5, 157.5, "SUD-EST"),
+            (157.5, 202.5, "SUD"),
+            (202.5, 247.5, "SUD-OVEST"),
+            (247.5, 292.5, "OVEST"),
+            (292.5, 337.5, "NORD-OVEST"),
+        ]
+
+        for ang_min, ang_max, nome in settori:
+            if ang_min <= angolo < ang_max:
+                return nome
+
+        return "NORD"  # fallback
+
+    # Usa il capoluogo di provincia come punto di riferimento per le direzioni
+    # Così "SUD" = a sud di Torino/Pavia, che corrisponde alla percezione geografica
+    CAPOLUOGHI = {
+        'TORINO': (45.0703, 7.6869),   # Piazza Castello, Torino
+        'PAVIA':  (45.1847, 9.1582),   # Centro, Pavia
+    }
+    centro_lat, centro_lon = CAPOLUOGHI.get(PROVINCIA_ATTIVA, (deposito['Lat'], deposito['Lon']))
+
+    logger.info(f"   📍 Riferimento direzioni (capoluogo {PROVINCIA_ATTIVA}): lat={centro_lat:.4f}, lon={centro_lon:.4f}")
+
+    # Calcola distanza e direzione per ogni zona
     zone_con_distanza = []
     for zona_nome, zona_info in zone.items():
-        dist = calcola_distanza_km(
+        # Distanza dal deposito (operativa, per i percorsi)
+        dist_deposito = calcola_distanza_km(
             deposito['Lat'], deposito['Lon'],
             zona_info['centroide_lat'], zona_info['centroide_lon']
         )
-        
+
+        # Direzione dal centro geografico (per i nomi delle zone)
+        dist_centro = calcola_distanza_km(
+            centro_lat, centro_lon,
+            zona_info['centroide_lat'], zona_info['centroide_lon']
+        )
+        dlat = zona_info['centroide_lat'] - centro_lat
+        dlon = zona_info['centroide_lon'] - centro_lon
+        direzione = _calcola_direzione(dlat, dlon, dist_centro)
+
         # Trova il comune principale (quello con più contatori)
         comune_principale = max(
             zona_info['comuni'],
             key=lambda c: centroidi[c]['num_contatori']
         )
-        
-        # Determina direzione cardinale
-        dlat = zona_info['centroide_lat'] - deposito['Lat']
-        dlon = zona_info['centroide_lon'] - deposito['Lon']
-        
-        if abs(dlat) > abs(dlon):
-            direzione = "NORD" if dlat > 0 else "SUD"
-        else:
-            direzione = "EST" if dlon > 0 else "OVEST"
-        
-        # Se molto vicino al deposito
-        if dist < 5:
-            direzione = "CENTRO"
-        
+
         # Conta contatori totali nella zona
         num_contatori_zona = sum(centroidi[c]['num_contatori'] for c in zona_info['comuni'])
-        
+
         zone_con_distanza.append({
             'zona_id': zona_nome,
-            'distanza': dist,
+            'distanza': dist_deposito,
+            'distanza_centro': dist_centro,
             'direzione': direzione,
             'comune_principale': comune_principale,
             'comuni': zona_info['comuni'],
@@ -425,32 +692,38 @@ def assegna_nomi_zone(zone, centroidi, deposito):
             'num_contatori': num_contatori_zona,
             'num_comuni': len(zona_info['comuni'])
         })
-    
-    # Ordina per distanza
+
+    # Ordina per distanza dal deposito
     zone_con_distanza.sort(key=lambda x: x['distanza'])
-    
+
+    # Raggruppa per direzione per gestire duplicati
+    zone_per_direzione = defaultdict(list)
+    for z in zone_con_distanza:
+        zone_per_direzione[z['direzione']].append(z)
+
+    # Ordina ogni gruppo per distanza
+    for dir_name in zone_per_direzione:
+        zone_per_direzione[dir_name].sort(key=lambda x: x['distanza'])
+
     # Assegna nomi
     zone_rinominate = {}
-    contatori_direzione = defaultdict(int)
-    
+
     for z in zone_con_distanza:
         dir_base = z['direzione']
-        contatori_direzione[dir_base] += 1
-        
-        # Genera nome più intuitivo e informativo
+        gruppo = zone_per_direzione[dir_base]
+
+        # Genera nome
         if len(z['comuni']) == 1:
-            # Zona singola: nome semplice
+            # Zona singola: nome semplice con direzione
             nome_nuovo = z['comune_principale'].upper()
         elif z['num_comuni'] <= 2:
             # 2 comuni: mostra entrambi
             comuni_ordinati = sorted(z['comuni'], key=lambda c: -centroidi[c]['num_contatori'])
             nome_nuovo = f"{dir_base} - {' / '.join([c.title() for c in comuni_ordinati])}"
         else:
-            # Multipli comuni: principale + "e dintorni"
-            # Rendi il nome più compatto e leggibile
             comune_title = z['comune_principale'].title()
             nome_nuovo = f"{dir_base} - {comune_title} e dintorni ({z['num_comuni']} comuni)"
-        
+
         zone_rinominate[nome_nuovo] = {
             'comuni': z['comuni'],
             'distanza_deposito': round(z['distanza'], 1),
@@ -460,7 +733,7 @@ def assegna_nomi_zone(zone, centroidi, deposito):
             'num_contatori': z['num_contatori'],
             'num_comuni': z['num_comuni']
         }
-    
+
     return zone_rinominate
 
 

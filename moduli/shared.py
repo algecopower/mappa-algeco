@@ -130,6 +130,12 @@ def get_worksheet(force_refresh=False):
     return _worksheet
 
 
+def get_spreadsheet():
+    """Ottiene l'oggetto Spreadsheet (per chiamate API dirette)."""
+    client = get_sheets_client()
+    return _sheets_retry(client.open_by_key, ID_FOGLIO_GOOGLE)
+
+
 def get_header_map():
     """Restituisce la mappa header corrente (inizializza se necessario)."""
     if not _worksheet_initialized:

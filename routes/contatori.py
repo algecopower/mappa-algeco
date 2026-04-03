@@ -2,9 +2,11 @@
 """
 Blueprint: Contatori — gestione contatori, filone, orari lettere.
 """
+import json
 import logging
 import os
 import re
+import threading
 from datetime import datetime
 
 import gspread.utils
@@ -13,6 +15,7 @@ from flask import Blueprint, request, jsonify, session, send_file
 from moduli.auth import login_required
 from moduli.shared import (
     get_worksheet,
+    get_spreadsheet,
     get_header_map,
     get_headers,
     find_row_by_eneltel,
@@ -24,6 +27,7 @@ from moduli.shared import (
     _trova_indice_colonna,
     _trova_indice_multi,
     _callbacks,
+    _sheets_retry,
 )
 from config import (
     PROVINCIA_ATTIVA,
@@ -268,11 +272,353 @@ def get_filone():
             'headers': headers,
             'data': data,
             'total': len(rows),
-            'protectedCols': COLONNE_PROTETTE_FILONE.get(PROVINCIA_ATTIVA, [])
+            'protectedCols': COLONNE_PROTETTE_FILONE.get(PROVINCIA_ATTIVA, []),
         })
 
     except Exception as e:
         return _api_error(e, 'caricamento filone')
+
+
+@bp.route('/api/filone/formats')
+@login_required
+def get_filone_formats():
+    """
+    Restituisce la formattazione delle celle, servita da cache locale.
+    La cache viene generata in background alla prima richiesta.
+    """
+    try:
+        cache_file = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), '..',
+            'cache', f'cache_formati_{PROVINCIA_ATTIVA.lower()}.json'
+        )
+        cache_file = os.path.normpath(cache_file)
+
+        # Serve dalla cache se esiste
+        if os.path.exists(cache_file):
+            try:
+                import json
+                with open(cache_file, 'r') as f:
+                    cached = json.load(f)
+                return jsonify({'formats': cached.get('formats', {}), 'cached': True})
+            except Exception:
+                pass
+
+        # Se non c'è cache, avvia la generazione in background e rispondi vuoto
+        _trigger_format_cache_refresh()
+        return jsonify({'formats': {}, 'cached': False, 'loading': True})
+
+    except Exception as e:
+        return _api_error(e, 'caricamento formattazione')
+
+
+@bp.route('/api/filone/formats/refresh', methods=['POST'])
+@login_required
+def refresh_filone_formats():
+    """Forza il re-caricamento della formattazione da Google Sheets."""
+    try:
+        _trigger_format_cache_refresh()
+        return jsonify({'ok': True, 'message': 'Sincronizzazione formattazione avviata'})
+    except Exception as e:
+        return _api_error(e, 'sync formattazione')
+
+
+_format_cache_lock = threading.Lock()
+_format_cache_running = False
+
+
+def _trigger_format_cache_refresh():
+    """Avvia il refresh della cache formattazione in un thread separato."""
+    global _format_cache_running
+    with _format_cache_lock:
+        if _format_cache_running:
+            return
+        _format_cache_running = True
+
+    import threading as _th
+    t = _th.Thread(target=_refresh_format_cache_bg, daemon=True)
+    t.start()
+
+
+def _refresh_format_cache_bg():
+    """Background: legge formattazione da Sheets e salva in cache."""
+    global _format_cache_running
+    try:
+        ws = get_worksheet()
+        all_data = ws.get_all_values()
+        total_rows = len(all_data)
+        total_cols = len(all_data[0]) if all_data else 0
+        formats = _read_sheet_formats(ws, total_rows, total_cols)
+
+        cache_file = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), '..',
+            'cache', f'cache_formati_{PROVINCIA_ATTIVA.lower()}.json'
+        )
+        cache_file = os.path.normpath(cache_file)
+
+        import json
+        os.makedirs(os.path.dirname(cache_file), exist_ok=True)
+        with open(cache_file, 'w') as f:
+            json.dump({'formats': formats, 'updated': datetime.now().isoformat()}, f)
+
+        logger.info(f"[Filone] Cache formattazione aggiornata: {len(formats)} celle formattate")
+    except Exception as e:
+        logger.warning(f"[Filone] Errore refresh cache formattazione: {e}")
+    finally:
+        with _format_cache_lock:
+            _format_cache_running = False
+
+
+def _sheets_color_to_hex(color_obj):
+    """Converte un oggetto colore Sheets API {red, green, blue} in #rrggbb."""
+    if not color_obj:
+        return None
+    r = int(color_obj.get('red', 0) * 255)
+    g = int(color_obj.get('green', 0) * 255)
+    b = int(color_obj.get('blue', 0) * 255)
+    return f'#{r:02x}{g:02x}{b:02x}'
+
+
+def _is_default_color(hex_color, is_bg=False):
+    """Verifica se un colore è di default (bianco per bg, nero per testo)."""
+    if not hex_color:
+        return True
+    if is_bg:
+        return hex_color in ('#ffffff', '#fff', None)
+    return hex_color in ('#000000', '#000', None)
+
+
+def _read_sheet_formats(ws, total_rows, total_cols):
+    """
+    Legge la formattazione delle celle dal Google Sheets API.
+    Restituisce un dict: {"row:colName": {bold, italic, underline, strikethrough, textColor, bgColor}}
+    Solo le celle con formattazione non-default vengono incluse.
+    """
+    formats = {}
+    try:
+        spreadsheet = ws.spreadsheet
+        # Richiedi solo i campi di formato che ci interessano per minimizzare la risposta
+        sheet_data = _sheets_retry(
+            spreadsheet.fetch_sheet_metadata,
+            params={
+                'includeGridData': True,
+                'ranges': f"'{ws.title}'",
+                'fields': (
+                    'sheets.data.rowData.values.userEnteredFormat.textFormat.bold,'
+                    'sheets.data.rowData.values.userEnteredFormat.textFormat.italic,'
+                    'sheets.data.rowData.values.userEnteredFormat.textFormat.underline,'
+                    'sheets.data.rowData.values.userEnteredFormat.textFormat.strikethrough,'
+                    'sheets.data.rowData.values.userEnteredFormat.textFormat.foregroundColor,'
+                    'sheets.data.rowData.values.userEnteredFormat.textFormat.foregroundColorStyle,'
+                    'sheets.data.rowData.values.userEnteredFormat.backgroundColor,'
+                    'sheets.data.rowData.values.userEnteredFormat.backgroundColorStyle'
+                ),
+            }
+        )
+
+        sheets = sheet_data.get('sheets', [])
+        if not sheets:
+            return formats
+
+        grid_data = sheets[0].get('data', [])
+        if not grid_data:
+            return formats
+
+        row_data_list = grid_data[0].get('rowData', [])
+
+        # Leggi headers dalla riga 0
+        headers = get_headers()
+
+        # Salta la riga header (indice 0), itera sulle righe dati (indice 1+)
+        for row_idx in range(1, len(row_data_list)):
+            row_data = row_data_list[row_idx]
+            values = row_data.get('values', [])
+            row_num = row_idx + 1  # Numero riga 1-based nel foglio
+
+            for col_idx, cell_data in enumerate(values):
+                if col_idx >= len(headers):
+                    break
+
+                fmt = cell_data.get('userEnteredFormat')
+                if not fmt:
+                    continue
+
+                cell_fmt = {}
+
+                # Text format
+                tf = fmt.get('textFormat', {})
+                if tf.get('bold'):
+                    cell_fmt['bold'] = True
+                if tf.get('italic'):
+                    cell_fmt['italic'] = True
+                if tf.get('underline'):
+                    cell_fmt['underline'] = True
+                if tf.get('strikethrough'):
+                    cell_fmt['strikethrough'] = True
+
+                # Colore testo
+                fg = tf.get('foregroundColorStyle', {}).get('rgbColor') or tf.get('foregroundColor')
+                if fg:
+                    hex_color = _sheets_color_to_hex(fg)
+                    if not _is_default_color(hex_color, is_bg=False):
+                        cell_fmt['textColor'] = hex_color
+
+                # Colore sfondo
+                bg = fmt.get('backgroundColorStyle', {}).get('rgbColor') or fmt.get('backgroundColor')
+                if bg:
+                    hex_color = _sheets_color_to_hex(bg)
+                    if not _is_default_color(hex_color, is_bg=True):
+                        cell_fmt['bgColor'] = hex_color
+
+                # Salva solo se c'è qualcosa di non-default
+                if cell_fmt:
+                    key = f"{row_num}:{headers[col_idx]}"
+                    formats[key] = cell_fmt
+
+    except Exception as e:
+        logger.warning(f"[Filone] Impossibile leggere formattazione Sheets: {e}")
+
+    return formats
+
+
+def _hex_to_sheets_color(hex_color):
+    """Converte #rrggbb in formato colore Sheets API {red, green, blue}."""
+    hex_color = hex_color.lstrip('#')
+    if len(hex_color) == 3:
+        hex_color = ''.join(c * 2 for c in hex_color)
+    r = int(hex_color[0:2], 16) / 255.0
+    g = int(hex_color[2:4], 16) / 255.0
+    b = int(hex_color[4:6], 16) / 255.0
+    return {'red': r, 'green': g, 'blue': b}
+
+
+@bp.route('/api/filone/formats', methods=['PUT'])
+@login_required
+def update_filone_formats():
+    """
+    Aggiorna la formattazione delle celle su Google Sheets.
+    Body JSON: {"formats": {"row:colName": {bold, italic, underline, strikethrough, textColor, bgColor}}}
+    Supporta anche "cleared": ["row:colName", ...] per celle da resettare.
+    """
+    try:
+        body = request.json
+        if not body:
+            return jsonify({'error': 'Nessun dato'}), 400
+
+        fmt_updates = body.get('formats', {})
+        fmt_cleared = body.get('cleared', [])
+
+        ws = get_worksheet()
+        _header_map = get_header_map()
+        batch = []
+
+        # Formattazioni da applicare
+        for key, fmt in fmt_updates.items():
+            parts = key.split(':', 1)
+            if len(parts) != 2:
+                continue
+            try:
+                row_num = int(parts[0])
+            except ValueError:
+                continue
+            col_name = parts[1]
+            col_idx = _header_map.get(col_name)
+            if not col_idx:
+                continue
+
+            cell_a1 = gspread.utils.rowcol_to_a1(row_num, col_idx)
+            sheets_fmt = {}
+
+            text_fmt = {}
+            if 'bold' in fmt:
+                text_fmt['bold'] = bool(fmt['bold'])
+            if 'italic' in fmt:
+                text_fmt['italic'] = bool(fmt['italic'])
+            if 'underline' in fmt:
+                text_fmt['underline'] = bool(fmt['underline'])
+            if 'strikethrough' in fmt:
+                text_fmt['strikethrough'] = bool(fmt['strikethrough'])
+            if fmt.get('textColor'):
+                text_fmt['foregroundColorStyle'] = {'rgbColor': _hex_to_sheets_color(fmt['textColor'])}
+            if text_fmt:
+                sheets_fmt['textFormat'] = text_fmt
+
+            if fmt.get('bgColor'):
+                sheets_fmt['backgroundColorStyle'] = {'rgbColor': _hex_to_sheets_color(fmt['bgColor'])}
+
+            if sheets_fmt:
+                batch.append({'range': cell_a1, 'format': sheets_fmt})
+
+        # Formattazioni da resettare (cleared)
+        for key in fmt_cleared:
+            parts = key.split(':', 1)
+            if len(parts) != 2:
+                continue
+            try:
+                row_num = int(parts[0])
+            except ValueError:
+                continue
+            col_name = parts[1]
+            col_idx = _header_map.get(col_name)
+            if not col_idx:
+                continue
+
+            cell_a1 = gspread.utils.rowcol_to_a1(row_num, col_idx)
+            # Reset: imposta tutti gli stili a default
+            batch.append({
+                'range': cell_a1,
+                'format': {
+                    'textFormat': {
+                        'bold': False,
+                        'italic': False,
+                        'underline': False,
+                        'strikethrough': False,
+                        'foregroundColorStyle': {'rgbColor': {'red': 0, 'green': 0, 'blue': 0}},
+                    },
+                    'backgroundColorStyle': {'rgbColor': {'red': 1, 'green': 1, 'blue': 1}},
+                }
+            })
+
+        if batch:
+            # batch_format gestisce fino a ~1000 range per chiamata
+            CHUNK = 500
+            for i in range(0, len(batch), CHUNK):
+                _sheets_retry(ws.batch_format, batch[i:i + CHUNK])
+
+        # ---- Aggiorna la cache locale inline ----
+        cache_file = os.path.normpath(os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), '..',
+            'cache', f'cache_formati_{PROVINCIA_ATTIVA.lower()}.json'
+        ))
+        cached_formats = {}
+        if os.path.exists(cache_file):
+            try:
+                with open(cache_file, 'r') as f:
+                    cached_formats = json.load(f).get('formats', {})
+            except Exception:
+                pass
+
+        # Applica aggiornamenti
+        for key, fmt in fmt_updates.items():
+            cached_formats[key] = fmt
+
+        # Rimuovi celle cleared
+        for key in fmt_cleared:
+            cached_formats.pop(key, None)
+
+        try:
+            os.makedirs(os.path.dirname(cache_file), exist_ok=True)
+            with open(cache_file, 'w') as f:
+                json.dump({'formats': cached_formats, 'updated': datetime.now().isoformat()}, f)
+        except Exception as ce:
+            logger.warning(f"[Filone] Errore aggiornamento cache formattazione: {ce}")
+
+        username = _get_username()
+        logger.info(f"[Filone] Formattazione aggiornata da {username}: {len(batch)} celle")
+
+        return jsonify({'ok': True, 'updated': len(batch)})
+
+    except Exception as e:
+        return _api_error(e, 'aggiornamento formattazione')
 
 
 @bp.route('/api/filone/row/<int:row_num>', methods=['PUT'])
@@ -788,3 +1134,52 @@ def download_excel_lettere(filename):
         download_name=safe_name,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
+
+
+# ============================================================================
+# PREFERENZE COLONNE PER UTENTE (persistent server-side)
+# ============================================================================
+
+_USER_PREFS_DIR = os.path.normpath(os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'user_prefs'
+))
+
+def _user_prefs_path(username):
+    safe = re.sub(r'[^a-zA-Z0-9_-]', '_', username)
+    return os.path.join(_USER_PREFS_DIR, f'{safe}.json')
+
+
+@bp.route('/api/filone/col-config')
+@login_required
+def get_col_config():
+    """Restituisce le preferenze colonne dell'utente corrente."""
+    username = _get_username()
+    path = _user_prefs_path(username)
+    if os.path.exists(path):
+        try:
+            with open(path, 'r') as f:
+                return jsonify(json.load(f))
+        except Exception:
+            pass
+    return jsonify({})
+
+
+@bp.route('/api/filone/col-config', methods=['PUT'])
+@login_required
+def save_col_config():
+    """Salva le preferenze colonne dell'utente corrente."""
+    try:
+        body = request.json
+        if not body or not isinstance(body, dict):
+            return jsonify({'error': 'Dati non validi'}), 400
+        # Accetta solo chiavi note
+        allowed = {'colWidths', 'colOrder', 'hiddenCols'}
+        prefs = {k: v for k, v in body.items() if k in allowed}
+        os.makedirs(_USER_PREFS_DIR, exist_ok=True)
+        username = _get_username()
+        path = _user_prefs_path(username)
+        with open(path, 'w') as f:
+            json.dump(prefs, f)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return _api_error(e, 'salvataggio preferenze colonne')

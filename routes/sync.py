@@ -35,8 +35,9 @@ bp = Blueprint('sync', __name__)
 def filone_trigger_sync():
     """Triggera sync della mappa dopo modifiche dalla vista Excel."""
     try:
+        is_running = _callbacks.get('is_sync_running', lambda: False)()
         _callbacks['trigger_sync_after_edit']()
-        return jsonify({'success': True})
+        return jsonify({'success': True, 'already_running': is_running})
     except Exception as e:
         return _api_error(e, 'sync filone')
 

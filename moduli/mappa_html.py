@@ -3602,9 +3602,9 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                 <svg id="printLabelLines" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 999;"></svg>
                 <!-- Print Zoom Slider -->
                 <div class="zoom-slider-container print-zoom-slider" id="printZoomSliderContainer">
-                    <span class="zoom-label">−</span>
+                    <span class="zoom-label" id="printZoomOut" title="Zoom out">−</span>
                     <input type="range" id="printZoomSlider" min="5" max="19" step="0.25" value="14">
-                    <span class="zoom-label">+</span>
+                    <span class="zoom-label" id="printZoomIn" title="Zoom in">+</span>
                     <span class="zoom-value" id="printZoomValue">14.0x</span>
                 </div>
             </div>
@@ -4616,7 +4616,10 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             btn.classList.toggle('active', newTheme === 'light');
         }}
         
+        let _refreshWaitingForSSE = false;
+
         async function refreshDati() {{
+            if (_refreshWaitingForSSE) return; // Sync già in corso, ignora
             const btn = document.getElementById('refreshBtn');
             const originalText = btn.textContent;
             
@@ -4624,34 +4627,56 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             btn.textContent = '⏳';
             btn.disabled = true;
             btn.style.opacity = '0.7';
+            _refreshWaitingForSSE = true;
+            
+            // Timeout di sicurezza: se SSE non arriva entro 120s, ripristina
+            const safetyTimeout = setTimeout(() => {{
+                if (_refreshWaitingForSSE) {{
+                    _refreshWaitingForSSE = false;
+                    btn.textContent = '⚠️';
+                    setTimeout(() => {{
+                        btn.textContent = originalText;
+                        btn.disabled = false;
+                        btn.style.opacity = '1';
+                    }}, 3000);
+                }}
+            }}, 120000);
             
             try {{
                 // Triggera sync asincrono — SSE porterà l'aggiornamento in-place
                 const response = await fetch('/api/filone/sync', {{ method: 'POST' }});
                 const result = await response.json();
                 
-                if (result.success) {{
-                    btn.textContent = '✅';
-                    // I dati arriveranno via SSE (sync_complete → reloadData)
-                    // Ripristina bottone dopo un po'
-                    setTimeout(() => {{
-                        btn.textContent = originalText;
-                        btn.disabled = false;
-                        btn.style.opacity = '1';
-                    }}, 3000);
-                }} else {{
+                if (!result.success) {{
+                    clearTimeout(safetyTimeout);
+                    _refreshWaitingForSSE = false;
                     alert('Errore durante il refresh: ' + (result.message || 'Sync fallito'));
                     btn.textContent = originalText;
                     btn.disabled = false;
                     btn.style.opacity = '1';
                 }}
+                // Se success, resta in ⏳ fino a sync_complete via SSE
             }} catch (err) {{
+                clearTimeout(safetyTimeout);
+                _refreshWaitingForSSE = false;
                 console.error('Errore refresh:', err);
                 alert('Errore di connessione durante il refresh');
                 btn.textContent = originalText;
                 btn.disabled = false;
                 btn.style.opacity = '1';
             }}
+        }}
+        
+        function _onSyncComplete() {{
+            if (!_refreshWaitingForSSE) return;
+            _refreshWaitingForSSE = false;
+            const btn = document.getElementById('refreshBtn');
+            btn.textContent = '✅';
+            setTimeout(() => {{
+                btn.textContent = '🔄';
+                btn.disabled = false;
+                btn.style.opacity = '1';
+            }}, 3000);
         }}
 
         function toggleFiltroAppuntamenti() {{
@@ -8519,6 +8544,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             eventSource.addEventListener('sync_complete', async (e) => {{
                 const data = JSON.parse(e.data);
                 console.log('[SSE] 📢 Sync completato:', data);
+                _onSyncComplete();
                 await reloadData();
             }});
             
@@ -9394,6 +9420,14 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                 const zoom = parseFloat(this.value);
                 printMap.setZoom(zoom);
                 printZoomValue.textContent = zoom.toFixed(1) + 'x';
+            }});
+
+            // Pulsanti zoom +/-
+            document.getElementById('printZoomOut').addEventListener('click', function() {{
+                printMap.zoomOut(0.5);
+            }});
+            document.getElementById('printZoomIn').addEventListener('click', function() {{
+                printMap.zoomIn(0.5);
             }});
 
             // Inizializza il valore dello slider dopo fitBounds

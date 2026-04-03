@@ -2322,7 +2322,7 @@
                     
                     <div class="contact-actions">
                         <button class="btn btn-primary" onclick="showMessage('${c.pod}')" style="${c.tipo === 'fisso' ? 'background: var(--warning);color:#333;' : c.tipo === 'senza_telefono' ? 'background: var(--info);' : ''}">
-                            <i class="fas ${c.tipo === 'cellulare' ? 'fab fa-whatsapp' : 'fa-paper-plane'}"></i>
+                            <i class="${c.tipo === 'cellulare' ? 'fab fa-whatsapp' : 'fas fa-paper-plane'}"></i>
                             Template WA/mail
                         </button>
                         ${c.tipo === 'senza_telefono' && c.numeri_alternativi && c.numeri_alternativi.length > 0 ? `
@@ -2343,6 +2343,7 @@
                                         }</span>
                                         <span class="numero-valore ${n.tipo}">${n.numero}</span>
                                         <span class="numero-tipo-badge ${n.tipo}"><i class="fas ${n.tipo === 'cellulare' ? 'fa-mobile-alt' : 'fa-phone'}"></i></span>
+                                        ${n.tipo === 'cellulare' ? `<button class="btn-mini btn-whatsapp" onclick="event.stopPropagation(); showMessage('${c.pod}', '${n.numero}', 'cellulare')" title="Invia WA a questo numero"><i class="fab fa-whatsapp"></i></button>` : ''}
                                     </div>
                                 `).join('')}
                             </div>
@@ -2577,7 +2578,16 @@
             currentTemplateContact = {...contatto};
             if (numeroOverride) {
                 currentTemplateContact.telefono = numeroOverride;
-                currentTemplateContact.telefono_formattato = '39' + numeroOverride.replace(/^\+?39/, '');
+                const digits = numeroOverride.replace(/[^\d]/g, '').replace(/^39/, '');
+                currentTemplateContact.telefono_formattato = '39' + digits;
+            } else if (!currentTemplateContact.telefono && contatto.numeri_alternativi && contatto.numeri_alternativi.length > 0) {
+                // Per senza_telefono con numeri alternativi: usa il primo cellulare trovato
+                const primoCell = contatto.numeri_alternativi.find(n => n.tipo === 'cellulare');
+                if (primoCell) {
+                    currentTemplateContact.telefono = primoCell.numero;
+                    const digits = primoCell.numero.replace(/[^\d]/g, '').replace(/^39/, '');
+                    currentTemplateContact.telefono_formattato = '39' + digits;
+                }
             }
             
             const telefono = currentTemplateContact.telefono_formattato || currentTemplateContact.telefono || '';
@@ -3618,7 +3628,7 @@
         function isPec(email) {
             if (!email) return false;
             const e = email.toLowerCase().trim();
-            return /(@pec\.|@pec-|\.pec@|@legalmail\.|@cert\.|@postacert\.|@cgn\.legalmail|@arubapec\.|@pcert\.|@sicurezzapostale\.|@certifiposta\.|@interfreepec\.)/.test(e)
+            return /(@pec\.|@pec-|\.pec@|@legalmail\.|\.legalmail\.|@cert\.|@postacert\.|@cgn\.legalmail|@arubapec\.|@pcert\.|@sicurezzapostale\.|@certifiposta\.|@interfreepec\.)/.test(e)
                 || e.endsWith('.pec.it')
                 || e.endsWith('@pec.it');
         }
@@ -4168,18 +4178,24 @@
 
             const prompt = `Devi cercare informazioni di contatto per le seguenti aziende/enti/condomini italiani. Per OGNUNA, cerca ATTIVAMENTE su internet il numero di telefono, l'indirizzo email e la PEC.
 
+IMPORTANTE: Per OGNI azienda devi EFFETTIVAMENTE navigare i siti web e i risultati di ricerca. NON rispondere a memoria. Molti di questi contatti sono facilmente visibili già nei primi risultati di Google.
+
 STRATEGIA DI RICERCA (segui TUTTI questi passaggi per ogni azienda):
-1. Cerca su Google: "nome azienda" + "telefono" oppure "contatti" oppure "email"
-2. Cerca su PagineBianche.it e PagineGialle.it
-3. Cerca il sito web ufficiale dell'azienda e trova la pagina "Contatti"
-4. Per la PEC: cerca su inipec.gov.it, registroimprese.it, o Google "nome azienda PEC"
-5. Se è un condominio, cerca l'amministratore del condominio
-6. Se non trovi per la sede locale, cerca la sede principale o altre filiali
-7. Prova varianti del nome (es. abbreviazioni, nome completo, ragione sociale)
+1. Cerca su Google: "nome azienda" + città + "telefono" oppure "contatti" — LEGGI i risultati, spesso il numero è visibile direttamente nello snippet di Google
+2. Cerca su Google: "nome azienda" + città + "email" — spesso l'email appare direttamente nei risultati
+3. APRI il sito web ufficiale dell'azienda e visita le pagine "Contatti", "Chi siamo", footer del sito
+4. Cerca su PagineBianche.it e PagineGialle.it il nome e la città
+5. Cerca su Facebook: "nome azienda" + città — molte aziende/attività hanno la pagina Facebook con telefono e email nella sezione "Informazioni"
+6. Cerca su Google Maps / scheda Google Business dell'azienda — spesso contiene telefono e sito web
+7. Per la PEC: cerca su Google "nome azienda PEC", controlla inipec.gov.it, registroimprese.it
+8. Se è un condominio, cerca "amministratore condominio" + indirizzo + città
+9. Se non trovi per la sede locale, cerca la sede principale o altre filiali
+10. Prova varianti del nome (abbreviazioni, nome completo, ragione sociale, con/senza "srl", "spa", ecc.)
 
 REGOLE:
 - Usa OBBLIGATORIAMENTE la ricerca web per ogni azienda, NON rispondere a memoria
-- Se trovi sia cellulare che fisso, riporta il cellulare
+- NAVIGA effettivamente i link trovati, non fermarti allo snippet
+- Se trovi sia cellulare che fisso, riporta il cellulare come principale
 - Se trovi più email, riporta quella più generica (info@, contatti@, ufficio@)
 - Non inventare dati: se non trovi, scrivi null
 - Rispondi SOLO con il JSON, senza testo aggiuntivo

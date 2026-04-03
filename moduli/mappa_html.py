@@ -8786,8 +8786,8 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                 const appLabel = isApp ? ' ☎️' : '';
 
                 righeHtml += `
-                    <tr style="background: ${{bgColor}};">
-                        <td style="text-align:center; font-weight:600;">${{idx + 1}}</td>
+                    <tr draggable="true" style="background: ${{bgColor}};">
+                        <td class="drag-handle" style="text-align:center; font-weight:600; cursor:grab;">☰ ${{idx + 1}}</td>
                         <td contenteditable="true">${{c.tipo_ce || ''}}</td>
                         <td contenteditable="true" style="font-weight:${{isApp ? '700' : '400'}}; color:${{isApp ? '#d63384' : '#333'}};">${{c._orari_display}}${{appLabel}}</td>
                         <td contenteditable="true">${{c.note_app || ''}}</td>
@@ -8802,6 +8802,20 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             }});
 
             const totApp = listaTappe.filter(c => c.is_appuntamento).length;
+
+            // Conteggio tipologie CE
+            let totMono = 0, totTriSemi = 0, totTriDir = 0;
+            listaTappe.forEach(c => {{
+                const t = (c.tipo_ce || '').toLowerCase();
+                if (t.includes('monofase')) totMono++;
+                else if (t.includes('semidirett')) totTriSemi++;
+                else if (t.includes('trifase') || t.includes('dirett')) totTriDir++;
+            }});
+            const ceInfoParts = [];
+            if (totMono > 0) ceInfoParts.push(totMono + ' mono');
+            if (totTriDir > 0) ceInfoParts.push(totTriDir + ' tri.dir');
+            if (totTriSemi > 0) ceInfoParts.push(totTriSemi + ' tri.semi');
+            const ceInfoHtml = ceInfoParts.length > 0 ? '<span>⚡ ' + ceInfoParts.join(' · ') + '</span>' : '';
 
             const htmlStampa = `<!DOCTYPE html>
 <html>
@@ -8906,6 +8920,12 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             background: #eaf3ff !important;
         }}
         tr:hover {{ background: #e8f4fd !important; }}
+        /* Drag & drop styles */
+        tr[draggable] {{ transition: opacity 0.2s; }}
+        tr.dragging {{ opacity: 0.4; background: #cfe2ff !important; }}
+        tr.drag-over {{ border-top: 3px solid #3a7bd5; }}
+        .drag-handle {{ user-select: none; font-size: 10px; color: #888; }}
+        .drag-handle:active {{ cursor: grabbing; }}
         .footer {{
             margin-top: 6px;
             text-align: center;
@@ -8919,6 +8939,8 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             th .resize-handle {{ display: none; }}
             th {{ border-right: 1px solid rgba(255,255,255,0.1); }}
             .table-wrapper {{ overflow: visible; }}
+            .drag-handle {{ cursor: default; }}
+            tr[draggable] {{ -webkit-user-drag: none; }}
         }}
         .print-bar {{
             text-align: center;
@@ -8950,6 +8972,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             <span>📅 ${{dataFormattata}}</span>
             <span>📍 ${{listaTappe.length}} tappe</span>
             ${{totApp > 0 ? '<span>☎️ ' + totApp + ' app.</span>' : ''}}
+            ${{ceInfoHtml}}
         </div>
     </div>
     <div class="table-wrapper">
@@ -8980,6 +9003,70 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
 </html>
 <scr` + `ipt>
 (function() {{
+    /* ── Drag & Drop riordinamento righe ── */
+    const tbody = document.querySelector('tbody');
+    let dragRow = null;
+
+    tbody.addEventListener('dragstart', function(e) {{
+        const tr = e.target.closest('tr');
+        if (!tr || !tbody.contains(tr)) return;
+        dragRow = tr;
+        tr.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', '');
+    }});
+
+    tbody.addEventListener('dragover', function(e) {{
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        const tr = e.target.closest('tr');
+        if (!tr || tr === dragRow || !tbody.contains(tr)) return;
+        tbody.querySelectorAll('tr.drag-over').forEach(r => r.classList.remove('drag-over'));
+        tr.classList.add('drag-over');
+    }});
+
+    tbody.addEventListener('dragleave', function(e) {{
+        const tr = e.target.closest('tr');
+        if (tr) tr.classList.remove('drag-over');
+    }});
+
+    tbody.addEventListener('drop', function(e) {{
+        e.preventDefault();
+        const tr = e.target.closest('tr');
+        tbody.querySelectorAll('tr.drag-over').forEach(r => r.classList.remove('drag-over'));
+        if (!tr || tr === dragRow || !tbody.contains(tr)) return;
+        // Inserisci prima o dopo in base alla posizione relativa
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        const fromIdx = rows.indexOf(dragRow);
+        const toIdx = rows.indexOf(tr);
+        if (fromIdx < toIdx) {{
+            tr.after(dragRow);
+        }} else {{
+            tr.before(dragRow);
+        }}
+        rinumeraRighe();
+    }});
+
+    tbody.addEventListener('dragend', function() {{
+        if (dragRow) dragRow.classList.remove('dragging');
+        tbody.querySelectorAll('tr.drag-over').forEach(r => r.classList.remove('drag-over'));
+        dragRow = null;
+    }});
+
+    function rinumeraRighe() {{
+        const rows = tbody.querySelectorAll('tr');
+        rows.forEach((row, i) => {{
+            const cell = row.querySelector('.drag-handle');
+            if (cell) cell.textContent = '☰ ' + (i + 1);
+            // Ricalcola colori zebrati (mantieni giallo per appuntamenti)
+            const isApp = row.style.background === 'rgb(255, 243, 205)' || row.style.background === '#fff3cd';
+            if (!isApp) {{
+                row.style.background = (i % 2 === 0) ? '#ffffff' : '#f8f9fa';
+            }}
+        }});
+    }}
+
+    /* ── Ridimensionamento colonne ── */
     const table = document.querySelector('table');
     const ths = Array.from(document.querySelectorAll('thead th'));
     let frozen = false;

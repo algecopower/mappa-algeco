@@ -2290,18 +2290,11 @@
                     </div>
                     
                     <div class="contact-actions">
-                        ${c.tipo === 'cellulare' ? `
-                            <button class="btn btn-primary" onclick="showMessage('${c.pod}')">
-                                <i class="fab fa-whatsapp"></i>
-                                Messaggi / Template
-                            </button>
-                        ` : c.tipo === 'fisso' ? `
-                            <button class="btn btn-primary" onclick="showMessage('${c.pod}')" style="background: var(--info);">
-                                <i class="fas fa-envelope"></i>
-                                Template
-                            </button>
-                        ` : c.tipo === 'senza_telefono' ? `
-                            ${c.numeri_alternativi && c.numeri_alternativi.length > 0 ? `
+                        <button class="btn btn-primary" onclick="showMessage('${c.pod}')" style="${c.tipo === 'fisso' ? 'background: var(--warning);color:#333;' : c.tipo === 'senza_telefono' ? 'background: var(--info);' : ''}">
+                            <i class="fas ${c.tipo === 'cellulare' ? 'fab fa-whatsapp' : 'fa-paper-plane'}"></i>
+                            Template WA/mail
+                        </button>
+                        ${c.tipo === 'senza_telefono' && c.numeri_alternativi && c.numeri_alternativi.length > 0 ? `
                             <div class="numeri-alternativi-box">
                                 <div class="numeri-alternativi-header">
                                     <i class="fas fa-lightbulb"></i> Numeri trovati in altri campi:
@@ -2322,33 +2315,6 @@
                                     </div>
                                 `).join('')}
                             </div>
-                            ` : ''}
-                            ${(() => {
-                                const hasCellulare = c.numeri_alternativi && c.numeri_alternativi.some(n => n.tipo === 'cellulare');
-                                const hasFisso = c.numeri_alternativi && c.numeri_alternativi.some(n => n.tipo !== 'cellulare');
-                                const firstCell = c.numeri_alternativi && c.numeri_alternativi.find(n => n.tipo === 'cellulare');
-                                const firstFisso = c.numeri_alternativi && c.numeri_alternativi.find(n => n.tipo !== 'cellulare');
-                                let btns = '';
-                                if (hasCellulare) {
-                                    btns += `<button class="btn btn-primary" onclick="showMessage('${c.pod}', '${firstCell.numero}')">
-                                        <i class="fab fa-whatsapp"></i>
-                                        Template WA/mail
-                                    </button>`;
-                                }
-                                if (hasFisso) {
-                                    btns += `<button class="btn btn-primary" onclick="showMessage('${c.pod}', '${firstFisso.numero}', 'fisso')" style="background: var(--info);">
-                                        <i class="fas fa-envelope"></i>
-                                        Template mail
-                                    </button>`;
-                                }
-                                if (!hasCellulare && !hasFisso) {
-                                    btns += `<button class="btn btn-primary" onclick="showMessage('${c.pod}', '', 'fisso')" style="background: var(--info);">
-                                        <i class="fas fa-envelope"></i>
-                                        Template mail
-                                    </button>`;
-                                }
-                                return btns;
-                            })()}
                         ` : ''}
                     </div>
                     

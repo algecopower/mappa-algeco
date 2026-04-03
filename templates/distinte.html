@@ -1527,6 +1527,35 @@
             background: var(--info); color: white;
         }
         .preview-card-badge.edited { background: #e67e22; }
+        .preview-allegati-badge {
+            font-size: 0.7em; padding: 2px 6px; border-radius: 4px; font-weight: 600;
+            background: #e74c3c; color: white; margin-left: 4px;
+        }
+        .preview-allegati-section { border-top: 1px solid var(--border); padding-top: 6px; margin-top: 8px; }
+        .allegati-list { display: flex; flex-direction: column; gap: 4px; }
+        .allegato-item {
+            display: flex; align-items: center; gap: 6px; padding: 4px 8px;
+            background: var(--bg-dark); border: 1px solid var(--border); border-radius: 6px;
+            font-size: 0.85em;
+        }
+        .allegato-nome { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .allegato-remove {
+            background: none; border: none; color: var(--danger); cursor: pointer;
+            padding: 2px 4px; font-size: 0.85em; border-radius: 4px;
+        }
+        .allegato-remove:hover { background: rgba(231,76,60,0.15); }
+        .allegato-aggiungi {
+            display: flex; align-items: center; gap: 4px; margin-top: 4px;
+        }
+        .allegato-select {
+            flex: 1; padding: 4px 6px; font-size: 0.82em; border-radius: 5px;
+            border: 1px solid var(--border); background: var(--bg-dark); color: var(--text);
+        }
+        .allegato-add-btn {
+            background: var(--success); color: white; border: none; border-radius: 5px;
+            padding: 4px 8px; cursor: pointer; font-size: 0.82em;
+        }
+        .allegato-add-btn:hover { opacity: 0.85; }
 
         /* AI Search Modal */
         .ai-search-modal .modal { max-width: 850px; max-height: 90vh; overflow-y: auto; }
@@ -2013,6 +2042,8 @@
             }
             // Carica template messaggi dal JSON centralizzato (dopo aver impostato provincia)
             await caricaTemplates();
+            // Carica info allegati disponibili
+            await caricaAllegatiInfo();
         }
 
         // Gestione upload file
@@ -3700,8 +3731,34 @@
             }
         }
 
-        // Preview data: array of {pod, email, nome, subject, bodyHtml, contatto, edited}
+        // Preview data: array of {pod, email, nome, subject, bodyHtml, contatto, allegati, edited}
         let bulkPreviews = [];
+        // Allegati: metadati caricati dal server
+        let allegatiDisponibili = [];  // ['attestazione_piemonte.pdf', ...]
+        let allegatiDefaultProvincia = {}; // {TORINO: [...], PAVIA: [...]}
+        let allegatoSemidiretta = '';      // 'informativa_semidiretta.pdf'
+
+        async function caricaAllegatiInfo() {
+            try {
+                const resp = await fetch('/api/distinte/allegati');
+                const data = await resp.json();
+                if (data.ok) {
+                    allegatiDisponibili = data.disponibili || [];
+                    allegatiDefaultProvincia = data.default_provincia || {};
+                    allegatoSemidiretta = data.allegato_semidiretta || '';
+                }
+            } catch(e) {
+                console.warn('Impossibile caricare info allegati', e);
+            }
+        }
+
+        function getAllegatiDefault(tipologiaContatore) {
+            const allegati = [...(allegatiDefaultProvincia[provincia] || [])];
+            if (allegatoSemidiretta && (tipologiaContatore || '').toLowerCase().includes('semidirett')) {
+                allegati.push(allegatoSemidiretta);
+            }
+            return allegati;
+        }
 
         /**
          * Genera le anteprime delle email per tutti i contatti selezionati.
@@ -3773,6 +3830,7 @@
                     subject: subject,
                     bodyHtml: bodyText,
                     contatto: contattoData,
+                    allegati: getAllegatiDefault(contatto.tipologia_contatore || ''),
                     edited: false
                 });
             });
@@ -3815,12 +3873,14 @@
             const container = document.getElementById('bulkPreviewCards');
             container.innerHTML = bulkPreviews.map((p, i) => {
                 const renderedHtml = buildEmailHtml(p.bodyHtml);
+                const allegatiHtml = renderAllegatiPreview(p.allegati || [], i);
                 return `
                 <div class="preview-card ${i === 0 ? 'expanded' : ''}" id="previewCard${i}">
                     <div class="preview-card-header" onclick="togglePreviewCard(${i})">
                         <i class="fas fa-chevron-right preview-toggle"></i>
                         <span class="preview-dest">${escapeHtml(p.nome)} — ${escapeHtml(p.email)}</span>
                         <span class="preview-pod">${p.pod}</span>
+                        ${(p.allegati || []).length > 0 ? `<span class="preview-allegati-badge"><i class="fas fa-paperclip"></i> ${p.allegati.length}</span>` : ''}
                         <span class="preview-card-badge" id="previewBadge${i}" style="display:none;">modificata</span>
                     </div>
                     <div class="preview-card-body">
@@ -3837,6 +3897,12 @@
                         <div class="preview-body-rendered" id="previewRendered${i}">${renderedHtml}</div>
                         <textarea class="preview-body-editor" id="previewBody${i}"
                                   oninput="onPreviewBodyEdit(${i})">${escapeHtml(p.bodyHtml)}</textarea>
+                        <div class="preview-allegati-section" id="previewAllegati${i}">
+                            <div class="preview-field-label" style="margin-top:10px;">
+                                <i class="fas fa-paperclip"></i> Allegati:
+                            </div>
+                            ${allegatiHtml}
+                        </div>
                     </div>
                 </div>`;
             }).join('');
@@ -3845,6 +3911,71 @@
         function togglePreviewCard(idx) {
             const card = document.getElementById(`previewCard${idx}`);
             card.classList.toggle('expanded');
+        }
+
+        function renderAllegatiPreview(allegati, idx) {
+            let html = '<div class="allegati-list">';
+            allegati.forEach((nome, j) => {
+                html += `<div class="allegato-item">
+                    <i class="fas fa-file-pdf" style="color:#e74c3c;"></i>
+                    <span class="allegato-nome">${escapeHtml(nome)}</span>
+                    <button class="allegato-remove" onclick="rimuoviAllegato(${idx}, ${j})" title="Rimuovi">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>`;
+            });
+            // Select per aggiungere altri allegati
+            const nonPresenti = allegatiDisponibili.filter(a => !allegati.includes(a));
+            if (nonPresenti.length > 0) {
+                html += `<div class="allegato-aggiungi">
+                    <select id="addAllegatoSelect${idx}" class="allegato-select">
+                        <option value="">+ Aggiungi allegato...</option>
+                        ${nonPresenti.map(a => `<option value="${escapeHtml(a)}">${escapeHtml(a)}</option>`).join('')}
+                    </select>
+                    <button class="allegato-add-btn" onclick="aggiungiAllegato(${idx})">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                </div>`;
+            }
+            if (allegati.length === 0 && nonPresenti.length === 0) {
+                html += '<div style="color:var(--text-muted);font-size:0.85em;">Nessun allegato disponibile</div>';
+            }
+            html += '</div>';
+            return html;
+        }
+
+        function rimuoviAllegato(previewIdx, allegatoIdx) {
+            bulkPreviews[previewIdx].allegati.splice(allegatoIdx, 1);
+            // Re-render solo la sezione allegati di questa card
+            const section = document.getElementById(`previewAllegati${previewIdx}`);
+            section.innerHTML = `<div class="preview-field-label" style="margin-top:10px;">
+                <i class="fas fa-paperclip"></i> Allegati:
+            </div>` + renderAllegatiPreview(bulkPreviews[previewIdx].allegati, previewIdx);
+            // Aggiorna badge header
+            aggiornaAllegatiBadge(previewIdx);
+        }
+
+        function aggiungiAllegato(previewIdx) {
+            const select = document.getElementById(`addAllegatoSelect${previewIdx}`);
+            const nome = select.value;
+            if (!nome) return;
+            if (!bulkPreviews[previewIdx].allegati.includes(nome)) {
+                bulkPreviews[previewIdx].allegati.push(nome);
+            }
+            const section = document.getElementById(`previewAllegati${previewIdx}`);
+            section.innerHTML = `<div class="preview-field-label" style="margin-top:10px;">
+                <i class="fas fa-paperclip"></i> Allegati:
+            </div>` + renderAllegatiPreview(bulkPreviews[previewIdx].allegati, previewIdx);
+            aggiornaAllegatiBadge(previewIdx);
+        }
+
+        function aggiornaAllegatiBadge(previewIdx) {
+            const header = document.querySelector(`#previewCard${previewIdx} .preview-allegati-badge`);
+            const count = (bulkPreviews[previewIdx].allegati || []).length;
+            if (header) {
+                header.innerHTML = `<i class="fas fa-paperclip"></i> ${count}`;
+                header.style.display = count > 0 ? '' : 'none';
+            }
         }
 
         function toggleEditMode(idx, event) {
@@ -3916,6 +4047,7 @@
                     ...p.contatto,
                     subject_override: subjectEl ? subjectEl.value : p.subject,
                     body_override: bodyEl ? bodyEl.value : p.bodyHtml,
+                    allegati: p.allegati || [],
                 };
             });
 
@@ -3969,7 +4101,8 @@
                             template_id: templateId,
                             contatto: c,
                             subject_override: c.subject_override || undefined,
-                            body_override: c.body_override || undefined
+                            body_override: c.body_override || undefined,
+                            allegati: c.allegati || []
                         })
                     });
                     const data = await resp.json();

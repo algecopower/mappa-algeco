@@ -5,11 +5,15 @@ Blueprint per le API Distinte — gestione distinte e messaggi.
 import os
 import re
 import json
+import imaplib
 import tempfile
 import logging
 import smtplib
+import time
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email import encoders
 from email.utils import formataddr
 
 import gspread.utils
@@ -60,6 +64,15 @@ def serve_whatsapp_redirect():
 # Percorso del file JSON dei template messaggi
 _TEMPLATES_JSON = os.path.join(_ROOT_DIR, 'data', 'distinte_templates.json')
 _SMTP_SETTINGS_JSON = os.path.join(_ROOT_DIR, 'data', 'smtp_settings.json')
+_ALLEGATI_DIR = os.path.join(_ROOT_DIR, 'data', 'allegati')
+
+# Mappa allegati di default per provincia
+_ALLEGATI_DEFAULT = {
+    'TORINO': ['attestazione_piemonte.pdf'],
+    'PAVIA': ['attestazione_lombardia.pdf'],
+}
+# Allegato aggiuntivo per contatori semidiretti
+_ALLEGATO_SEMIDIRETTA = 'informativa_semidiretta.pdf'
 
 
 def _load_smtp_settings(prov=None):
@@ -249,6 +262,108 @@ def _connect_smtp(smtp_settings, timeout=15):
     return server
 
 
+def _save_to_sent(smtp_settings, msg):
+    """Salva una copia del messaggio nella cartella Inviati via IMAP.
+    Deriva l'host IMAP dall'host SMTP (es. smtps.aruba.it → imaps.aruba.it)."""
+    try:
+        smtp_host = smtp_settings.get('host', '')
+        username = smtp_settings.get('username', '')
+        password = smtp_settings.get('password', '')
+
+        if not smtp_host or not username or not password:
+            return
+
+        # Deriva host IMAP
+        imap_host = smtp_settings.get('imap_host', '')
+        if not imap_host:
+            imap_host = smtp_host.replace('smtps.', 'imaps.').replace('smtp.', 'imap.')
+
+        imap = imaplib.IMAP4_SSL(imap_host, 993, timeout=15)
+        imap.login(username, password)
+
+        # Prova cartelle comuni per "Inviati"
+        sent_folder = None
+        for folder_name in ['Sent', 'INBOX.Sent', 'Posta inviata', 'INBOX.Posta inviata']:
+            status, _ = imap.select(folder_name)
+            if status == 'OK':
+                sent_folder = folder_name
+                break
+
+        if not sent_folder:
+            # Lista tutte le cartelle e cerca una con "sent" o "inviat"
+            status, folders = imap.list()
+            if status == 'OK':
+                for f in folders:
+                    fname = f.decode('utf-8', errors='ignore').split('"')[-2] if b'"' in f else ''
+                    if fname and ('sent' in fname.lower() or 'inviat' in fname.lower()):
+                        sent_folder = fname
+                        break
+
+        if sent_folder:
+            msg_bytes = msg.as_bytes()
+            import email.utils as _eu
+            date_time = imaplib.Time2Internaldate(time.time())
+            imap.append(sent_folder, '\\Seen', None, msg_bytes)
+            logger.info(f"[IMAP] Email salvata in '{sent_folder}'")
+        else:
+            logger.warning("[IMAP] Cartella Inviati non trovata")
+
+        imap.logout()
+    except Exception as e:
+        # Non bloccare l'invio se IMAP fallisce
+        logger.warning(f"[IMAP] Errore salvataggio in Inviati: {e}")
+
+
+def _get_default_allegati(provincia, tipologia_contatore=''):
+    """Restituisce la lista di nomi file allegati di default per provincia e tipo contatore."""
+    allegati = list(_ALLEGATI_DEFAULT.get(provincia.upper(), []))
+    if 'semidirett' in (tipologia_contatore or '').lower():
+        allegati.append(_ALLEGATO_SEMIDIRETTA)
+    return allegati
+
+
+def _get_available_allegati():
+    """Restituisce la lista di file disponibili nella cartella allegati."""
+    if not os.path.isdir(_ALLEGATI_DIR):
+        return []
+    return sorted(f for f in os.listdir(_ALLEGATI_DIR)
+                  if os.path.isfile(os.path.join(_ALLEGATI_DIR, f)) and not f.startswith('.'))
+
+
+def _attach_files_to_msg(msg_mixed, allegati_nomi):
+    """Allega i PDF specificati al messaggio MIME. Ritorna lista di nomi effettivamente allegati."""
+    allegati_ok = []
+    for nome in allegati_nomi:
+        filepath = os.path.join(_ALLEGATI_DIR, os.path.basename(nome))  # sanitize
+        if not os.path.isfile(filepath):
+            logger.warning(f"[ALLEGATI] File non trovato: {filepath}")
+            continue
+        try:
+            with open(filepath, 'rb') as f:
+                part = MIMEBase('application', 'octet-stream')
+                part.set_payload(f.read())
+            encoders.encode_base64(part)
+            part.add_header('Content-Disposition', 'attachment', filename=nome)
+            msg_mixed.attach(part)
+            allegati_ok.append(nome)
+        except Exception as e:
+            logger.warning(f"[ALLEGATI] Errore lettura {nome}: {e}")
+    return allegati_ok
+
+
+@bp.route('/api/distinte/allegati', methods=['GET'])
+@login_required
+def get_allegati_disponibili():
+    """Restituisce la lista di allegati disponibili e i default per provincia/tipo."""
+    disponibili = _get_available_allegati()
+    return jsonify({
+        'ok': True,
+        'disponibili': disponibili,
+        'default_provincia': _ALLEGATI_DEFAULT,
+        'allegato_semidiretta': _ALLEGATO_SEMIDIRETTA,
+    })
+
+
 @bp.route('/api/distinte/smtp-test', methods=['POST'])
 @login_required
 def test_smtp_connection():
@@ -374,6 +489,9 @@ def invia_email_prova():
             except Exception:
                 pass
 
+        # Salva in cartella Inviati
+        _save_to_sent(smtp_settings, msg)
+
         logger.info(f"[EMAIL-TEST] Inviata email di prova a {email_dest}")
         return jsonify({'ok': True, 'email': email_dest})
 
@@ -402,6 +520,7 @@ def invia_singola_email():
         contatto = data.get('contatto')
         subject_override = data.get('subject_override')
         body_override = data.get('body_override')
+        allegati_nomi = data.get('allegati', [])
 
         if not template_id:
             return jsonify({'error': 'Template non specificato'}), 400
@@ -467,23 +586,33 @@ def invia_singola_email():
 
         # Costruisci messaggio MIME con header anti-spam
         import email.utils as email_utils
-        msg = MIMEMultipart('alternative')
+
+        # Versione plain text
+        body_plain = re.sub(r'<a[^>]*href="([^"]*?)"[^>]*>(.*?)</a>', r'\2 (\1)', body_html)
+        body_plain = re.sub(r'<[^>]+>', '', body_plain)
+        if firma_html:
+            body_plain += f'\n\n--\nUfficio Tecnico\nTelefono: 375 774 5644\nMail: {email_tecnico}\nwww.algecopower.it'
+
+        # Parte alternativa (text + html)
+        msg_alt = MIMEMultipart('alternative')
+        msg_alt.attach(MIMEText(body_plain, 'plain', 'utf-8'))
+        msg_alt.attach(MIMEText(body_html_formatted, 'html', 'utf-8'))
+
+        # Se ci sono allegati, usa mixed > alternative + attachments
+        if allegati_nomi:
+            msg = MIMEMultipart('mixed')
+            msg.attach(msg_alt)
+            allegati_effettivi = _attach_files_to_msg(msg, allegati_nomi)
+            logger.info(f"[EMAIL] Allegati per {pod}: {allegati_effettivi}")
+        else:
+            msg = msg_alt
+
         msg['From'] = formataddr((from_name, from_email))
         msg['To'] = email_dest
         msg['Subject'] = subject
         msg['Reply-To'] = from_email
         msg['Message-ID'] = email_utils.make_msgid(domain=from_email.split('@')[-1] if '@' in from_email else 'algecopower.it')
         msg['Date'] = email_utils.formatdate(localtime=True)
-
-        # Versione plain text
-        body_plain = re.sub(r'<a[^>]*href="([^"]*?)"[^>]*>(.*?)</a>', r'\2 (\1)', body_html)
-        body_plain = re.sub(r'<[^>]+>', '', body_plain)
-        # Firma plain text
-        if firma_html:
-            body_plain += f'\n\n--\nUfficio Tecnico\nTelefono: 375 774 5644\nMail: {email_tecnico}\nwww.algecopower.it'
-
-        msg.attach(MIMEText(body_plain, 'plain', 'utf-8'))
-        msg.attach(MIMEText(body_html_formatted, 'html', 'utf-8'))
 
         # Connessione e invio (una connessione per email)
         server = _connect_smtp(smtp_settings, timeout=15)
@@ -494,6 +623,9 @@ def invia_singola_email():
                 server.quit()
             except Exception:
                 pass
+
+        # Salva in cartella Inviati
+        _save_to_sent(smtp_settings, msg)
 
         logger.info(f"[EMAIL] Inviata a {email_dest} (POD {pod})")
         return jsonify({'ok': True, 'pod': pod, 'email': email_dest})

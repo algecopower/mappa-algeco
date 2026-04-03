@@ -298,6 +298,68 @@ var CSS = `
 }
 .postit-btn-annulla:hover { opacity: .8; }
 
+/* Category groups */
+.postit-group {
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid rgba(0,0,0,.08);
+}
+.postit-group-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 7px 10px;
+    cursor: pointer;
+    user-select: none;
+    transition: background .15s;
+    background: var(--bg-tertiary, #0f172a);
+    border-radius: 8px;
+}
+.postit-group-header:hover { opacity: .85; }
+.postit-group-label {
+    font-size: .8em;
+    font-weight: 700;
+    color: var(--text-primary, #eee);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+.postit-group-count {
+    background: rgba(255,255,255,.18);
+    color: var(--text-primary, #eee);
+    font-size: .7em;
+    font-weight: 700;
+    padding: 1px 7px;
+    border-radius: 8px;
+    min-width: 20px;
+    text-align: center;
+}
+.postit-group-arrow {
+    font-size: .7em;
+    transition: transform .2s;
+    color: var(--text-secondary, #94a3b8);
+}
+.postit-group.collapsed .postit-group-arrow {
+    transform: rotate(-90deg);
+}
+.postit-group-body {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 6px 0 0 0;
+    transition: all .2s;
+}
+.postit-group.collapsed .postit-group-body {
+    display: none;
+}
+/* Compact card inside group (no repeated category header) */
+.postit-group .postit-card {
+    border-radius: 8px;
+}
+.postit-group .postit-card-cat {
+    display: none;
+}
+
 /* Strip promemoria in alto */
 .postit-strip {
     position: fixed;
@@ -610,6 +672,52 @@ function carica() {
 }
 
 /* ===== RENDER ===== */
+function renderCard(n) {
+    var cat = CATEGORIE[n.categoria] || CATEGORIE.generico;
+    var bg = COLORI[n.colore] || COLORI.giallo;
+    var data = n.creato_il ? new Date(n.creato_il).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' }) : '';
+    var scad = '';
+    if (n.scadenza) {
+        var oggi = new Date(); oggi.setHours(0,0,0,0);
+        var ds = new Date(n.scadenza + 'T00:00:00'); 
+        var diff = Math.ceil((ds - oggi) / 86400000);
+        if (diff < 0) scad = '⚠️ Scaduto!';
+        else if (diff === 0) scad = '⏰ Oggi!';
+        else if (diff === 1) scad = '⏰ Domani';
+        else scad = '📅 ' + ds.toLocaleDateString('it-IT', { day: '2-digit', month: 'short' });
+    }
+    return [
+        '<div class="postit-card" data-priorita="' + (n.priorita || 'media') + '" data-id="' + n.id + '" style="background:' + bg + '">',
+        '  <div class="postit-card-header">',
+        '    <span class="postit-card-cat">' + cat.icona + ' ' + cat.label + '</span>',
+        '    <div class="postit-card-actions">',
+        '      <button onclick="window._postit.syncCalendario(\'' + n.id + '\', this)" title="Aggiungi al calendario">⬆️</button>',
+        '      <button onclick="window._postit.modifica(\'' + n.id + '\')" title="Modifica">✏️</button>',
+        '      <button onclick="window._postit.elimina(\'' + n.id + '\')" title="Elimina">🗑️</button>',
+        '    </div>',
+        '  </div>',
+        '  <div class="postit-card-text">' + escHtml(n.testo) + '</div>',
+        '  <div class="postit-card-footer">',
+        '    <span>' + (n.creato_da || '') + ' · ' + data + '</span>',
+        '    <span class="' + (scad.includes('Scaduto') || scad.includes('Oggi') ? 'postit-card-scadenza' : '') + '">' + scad + '</span>',
+        '  </div>',
+        '</div>'
+    ].join('');
+}
+
+// Tiene traccia dei gruppi collassati dall'utente
+var _collapsedGroups = {};
+try {
+    var saved = localStorage.getItem('postit_collapsed');
+    if (saved) _collapsedGroups = JSON.parse(saved);
+} catch(e) {}
+
+function toggleGroup(catKey) {
+    _collapsedGroups[catKey] = !_collapsedGroups[catKey];
+    try { localStorage.setItem('postit_collapsed', JSON.stringify(_collapsedGroups)); } catch(e) {}
+    render();
+}
+
 function render() {
     var list = document.getElementById('postitList');
     if (!list) return;
@@ -619,34 +727,30 @@ function render() {
         return;
     }
 
-    list.innerHTML = notes.map(function(n) {
-        var cat = CATEGORIE[n.categoria] || CATEGORIE.generico;
-        var bg = COLORI[n.colore] || COLORI.giallo;
-        var data = n.creato_il ? new Date(n.creato_il).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' }) : '';
-        var scad = '';
-        if (n.scadenza) {
-            var oggi = new Date(); oggi.setHours(0,0,0,0);
-            var ds = new Date(n.scadenza + 'T00:00:00'); 
-            var diff = Math.ceil((ds - oggi) / 86400000);
-            if (diff < 0) scad = '⚠️ Scaduto!';
-            else if (diff === 0) scad = '⏰ Oggi!';
-            else if (diff === 1) scad = '⏰ Domani';
-            else scad = '📅 ' + ds.toLocaleDateString('it-IT', { day: '2-digit', month: 'short' });
-        }
+    // Raggruppa per categoria
+    var gruppi = {};
+    var ordine = [];
+    notes.forEach(function(n) {
+        var k = n.categoria || 'generico';
+        if (!gruppi[k]) { gruppi[k] = []; ordine.push(k); }
+        gruppi[k].push(n);
+    });
+
+    list.innerHTML = ordine.map(function(catKey) {
+        var cat = CATEGORIE[catKey] || CATEGORIE.generico;
+        var items = gruppi[catKey];
+        var collapsed = _collapsedGroups[catKey] === false ? '' : ' collapsed';
         return [
-            '<div class="postit-card" data-priorita="' + (n.priorita || 'media') + '" data-id="' + n.id + '" style="background:' + bg + '">',
-            '  <div class="postit-card-header">',
-            '    <span class="postit-card-cat">' + cat.icona + ' ' + cat.label + '</span>',
-            '    <div class="postit-card-actions">',
-            '      <button onclick="window._postit.syncCalendario(\'' + n.id + '\', this)" title="Aggiungi al calendario">⬆️</button>',
-            '      <button onclick="window._postit.modifica(\'' + n.id + '\')" title="Modifica">✏️</button>',
-            '      <button onclick="window._postit.elimina(\'' + n.id + '\')" title="Elimina">🗑️</button>',
+            '<div class="postit-group' + collapsed + '" data-cat="' + catKey + '">',
+            '  <div class="postit-group-header" onclick="window._postit.toggleGroup(\'' + catKey + '\')">',
+            '    <span class="postit-group-label">' + cat.icona + ' ' + cat.label + '</span>',
+            '    <div style="display:flex;align-items:center;gap:6px">',
+            '      <span class="postit-group-count">' + items.length + '</span>',
+            '      <span class="postit-group-arrow">▼</span>',
             '    </div>',
             '  </div>',
-            '  <div class="postit-card-text">' + escHtml(n.testo) + '</div>',
-            '  <div class="postit-card-footer">',
-            '    <span>' + (n.creato_da || '') + ' · ' + data + '</span>',
-            '    <span class="' + (scad.includes('Scaduto') || scad.includes('Oggi') ? 'postit-card-scadenza' : '') + '">' + scad + '</span>',
+            '  <div class="postit-group-body">',
+                 items.map(renderCard).join(''),
             '  </div>',
             '</div>'
         ].join('');
@@ -917,7 +1021,8 @@ window._postit = {
     apriImportCalendario: apriImportCalendario,
     chiudiImportCalendario: chiudiImportCalendario,
     importaDaCalendario: importaDaCalendario,
-    syncCalendario: syncCalendario
+    syncCalendario: syncCalendario,
+    toggleGroup: toggleGroup
 };
 
 // Auto-init

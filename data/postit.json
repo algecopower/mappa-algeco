@@ -1,3 +1,52 @@
 {
-  "notes": []
+  "notes": [
+    {
+      "id": "ca972400",
+      "testo": "mihai",
+      "categoria": "assenza",
+      "colore": "giallo",
+      "priorita": "media",
+      "provincia": "TORINO",
+      "scadenza": "2026-04-27",
+      "creato_da": "giada",
+      "creato_il": "2026-04-03T07:46:41.925633",
+      "modificato_il": "2026-04-03T07:47:08.951491"
+    },
+    {
+      "id": "f8d0978f",
+      "testo": "mihai",
+      "categoria": "assenza",
+      "colore": "giallo",
+      "priorita": "media",
+      "provincia": "TORINO",
+      "scadenza": "2026-04-29",
+      "creato_da": "giada",
+      "creato_il": "2026-04-03T07:47:20.677484",
+      "modificato_il": null
+    },
+    {
+      "id": "571f6071",
+      "testo": "mihai",
+      "categoria": "assenza",
+      "colore": "giallo",
+      "priorita": "media",
+      "provincia": "TORINO",
+      "scadenza": "2026-05-04",
+      "creato_da": "giada",
+      "creato_il": "2026-04-03T07:47:34.276571",
+      "modificato_il": null
+    },
+    {
+      "id": "49452689",
+      "testo": "mihai",
+      "categoria": "assenza",
+      "colore": "giallo",
+      "priorita": "media",
+      "provincia": "TORINO",
+      "scadenza": "2026-05-06",
+      "creato_da": "giada",
+      "creato_il": "2026-04-03T07:47:49.236633",
+      "modificato_il": null
+    }
+  ]
 }

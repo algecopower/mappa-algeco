@@ -3571,6 +3571,11 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                 <span class="gp-btn-text">Vista Excel Filone</span>
                 <span class="gp-btn-desc">Modifica il filone come un foglio di calcolo</span>
             </a>
+            <a href="/dashboard" target="_blank" class="gestionale-panel-btn gp-btn-distinte" style="text-decoration:none;">
+                <span class="gp-btn-icon">📈</span>
+                <span class="gp-btn-text">Dashboard</span>
+                <span class="gp-btn-desc">Statistiche, report operatori e riepilogo operativo</span>
+            </a>
             <button class="gestionale-panel-btn gp-btn-backup" onclick="toggleGestionalePanel(); apriModalBackup()">
                 <span class="gp-btn-icon">💾</span>
                 <span class="gp-btn-text">Backup / Ripristino</span>

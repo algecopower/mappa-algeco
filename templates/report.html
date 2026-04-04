@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2">
+    <title>Report Operatori - Algeco</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script>
+        (function(){
+            const t = localStorage.getItem('algeco_theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', t);
+        })();
+    </script>
+    <style>
+        :root {
+            --primary: #25D366; --primary-dark: #128C7E;
+            --danger: #e74c3c; --warning: #f39c12; --success: #27ae60;
+            --info: #3498db; --purple: #9b59b6;
+            --bg-dark: #1a1a2e; --bg-card: #16213e; --bg-card-hover: #1a2744;
+            --bg-inner: rgba(255,255,255,0.03);
+            --text: #eee; --text-muted: #888; --text-dim: #666; --border: #333;
+        }
+        [data-theme="light"] {
+            --bg-dark: #f0f2f5; --bg-card: #ffffff; --bg-card-hover: #f8f9fa;
+            --bg-inner: #f5f7f9; --text: #333; --text-muted: #777;
+            --text-dim: #aaa; --border: #ddd;
+        }
+        [data-theme="light"] .panel { background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+        [data-theme="light"] .kpi-card { background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+        [data-theme="light"] .back-btn { color: #555; }
+        [data-theme="light"] .back-btn:hover { color: var(--primary); }
+        [data-theme="light"] header { background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+        [data-theme="light"] .op-detail { background: #f8f9fa; }
+        [data-theme="light"] .tab-btn.active { background: #fff; }
+        [data-theme="light"] .tab-btn { color: #666; }
+        [data-theme="light"] .tbl th { background: #f0f4f0; color: #333; }
+        [data-theme="light"] .tbl tr:hover { background: #f5fff5; }
+        [data-theme="light"] .filter-bar { background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--bg-dark); color: var(--text); min-height: 100vh;
+        }
+        .container { max-width: 1500px; margin: 0 auto; padding: 20px; }
+
+        .nav-row { display: flex; align-items: center; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+        .back-btn {
+            background: none; border: none; color: var(--text);
+            text-decoration: none; padding: 8px 14px; border-radius: 8px;
+            display: inline-flex; align-items: center; gap: 6px;
+            cursor: pointer; font-size: 0.88em; transition: all 0.2s;
+        }
+        .back-btn:hover { color: var(--primary); }
+
+        header {
+            background: var(--bg-card); border-radius: 16px;
+            padding: 22px 28px; margin-bottom: 20px;
+            display: flex; align-items: center; justify-content: space-between;
+            flex-wrap: wrap; gap: 15px;
+        }
+        header h1 { font-size: 1.5em; display: flex; align-items: center; gap: 10px; }
+        header h1 i { color: var(--primary); }
+        .header-sub { font-size: 0.82em; color: var(--text-muted); margin-top: 4px; }
+        .header-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+        .btn {
+            padding: 9px 18px; border-radius: 8px; border: 1px solid var(--border);
+            background: none; color: var(--text); cursor: pointer; font-size: 0.85em;
+            display: inline-flex; align-items: center; gap: 6px; transition: all 0.2s;
+            text-decoration: none;
+        }
+        .btn:hover { border-color: var(--primary); color: var(--primary); }
+        .btn-primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+        .btn-primary:hover { background: var(--primary-dark); }
+
+        /* ── Filter bar ── */
+        .filter-bar {
+            background: var(--bg-card); border-radius: 14px; padding: 16px 22px;
+            margin-bottom: 20px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+        }
+        .filter-bar label { font-size: 0.82em; color: var(--text-muted); font-weight: 600; }
+        .filter-bar select, .filter-bar input[type="date"] {
+            background: var(--bg-inner); border: 1px solid var(--border);
+            color: var(--text); padding: 7px 12px; border-radius: 8px; font-size: 0.85em;
+        }
+        .filter-bar .sep { width: 1px; height: 28px; background: var(--border); }
+
+        /* ── KPI ── */
+        .kpi-row {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 14px; margin-bottom: 24px;
+        }
+        .kpi-card {
+            background: var(--bg-card); border-radius: 14px; padding: 18px;
+            border-left: 4px solid transparent;
+        }
+        .kpi-value { font-size: 2em; font-weight: 800; line-height: 1.1; }
+        .kpi-label { font-size: 0.85em; color: var(--text); font-weight: 600; margin-top: 2px; }
+        .kpi-sub { font-size: 0.72em; color: var(--text-muted); margin-top: 4px; }
+        .kpi-card.c-green { border-left-color: var(--success); }
+        .kpi-card.c-blue { border-left-color: var(--info); }
+        .kpi-card.c-orange { border-left-color: var(--warning); }
+        .kpi-card.c-red { border-left-color: var(--danger); }
+        .kpi-card.c-purple { border-left-color: var(--purple); }
+        .kpi-card.c-primary { border-left-color: var(--primary); }
+
+        /* ── Tabs ── */
+        .tabs { display: flex; gap: 4px; margin-bottom: 18px; flex-wrap: wrap; }
+        .tab-btn {
+            padding: 8px 18px; border-radius: 8px; border: none;
+            background: none; color: var(--text-muted); cursor: pointer;
+            font-size: 0.85em; font-weight: 600; transition: all 0.2s;
+        }
+        .tab-btn:hover { color: var(--text); }
+        .tab-btn.active { background: var(--bg-card); color: var(--primary); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* ── Panel ── */
+        .panel {
+            background: var(--bg-card); border-radius: 14px; padding: 22px;
+            margin-bottom: 18px;
+        }
+        .panel h3 { font-size: 1em; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+        .panel h3 i { color: var(--primary); font-size: 0.95em; }
+        .panel-hint { font-size: 0.75em; color: var(--text-muted); margin-bottom: 14px; }
+
+        .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+        .row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px; }
+
+        /* ── Chart canvas ── */
+        .chart-wrap { position: relative; width: 100%; height: 260px; }
+        .chart-wrap canvas { width: 100% !important; height: 100% !important; }
+
+        /* ── Operator detail cards ── */
+        .op-detail {
+            background: var(--bg-inner); border-radius: 12px; padding: 18px;
+            border-left: 4px solid #888; margin-bottom: 12px;
+        }
+        .op-detail-header {
+            display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+        .op-detail-header .op-name { font-weight: 800; font-size: 1.1em; }
+        .op-detail-header .op-matricola { font-size: 0.78em; color: var(--text-muted); }
+        .op-kpi-row { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 14px; }
+        .op-kpi { text-align: center; }
+        .op-kpi-val { font-size: 1.6em; font-weight: 800; }
+        .op-kpi-lbl { font-size: 0.7em; color: var(--text-muted); }
+        .op-chart-wrap { height: 180px; margin-bottom: 12px; }
+        .op-chart-wrap canvas { width: 100% !important; height: 100% !important; }
+
+        /* ── Table ── */
+        .tbl-wrap { overflow-x: auto; }
+        .tbl { width: 100%; border-collapse: collapse; font-size: 0.85em; }
+        .tbl th {
+            background: rgba(37,211,102,0.1); color: var(--primary);
+            padding: 10px 12px; text-align: left; font-weight: 700;
+            position: sticky; top: 0; white-space: nowrap;
+        }
+        .tbl td { padding: 9px 12px; border-bottom: 1px solid var(--border); }
+        .tbl tr:hover { background: rgba(37,211,102,0.03); }
+        .tbl .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+        /* ── Bar chart (CSS) ── */
+        .bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 7px; }
+        .bar-label { width: 130px; font-size: 0.8em; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .bar-track { flex: 1; height: 22px; background: rgba(255,255,255,0.04); border-radius: 6px; overflow: hidden; }
+        .bar-fill { height: 100%; border-radius: 6px; background: linear-gradient(90deg, var(--primary), var(--primary-dark)); transition: width 0.6s; min-width: 3px; }
+        .bar-val { width: 40px; font-size: 0.82em; font-weight: 700; }
+
+        .badge { display: inline-block; padding: 2px 9px; border-radius: 10px; font-size: 0.72em; font-weight: 600; }
+        .badge-green { background: rgba(39,174,96,0.14); color: var(--success); }
+        .badge-red { background: rgba(231,76,60,0.14); color: var(--danger); }
+        .badge-blue { background: rgba(52,152,219,0.14); color: var(--info); }
+        .badge-orange { background: rgba(243,156,18,0.14); color: var(--warning); }
+
+        .section-loading { display: flex; justify-content: center; align-items: center; padding: 60px; color: var(--text-muted); gap: 10px; }
+        .section-empty { text-align: center; padding: 40px; color: var(--text-muted); }
+        .section-empty i { font-size: 1.5em; display: block; margin-bottom: 8px; opacity: 0.4; }
+
+        .toast {
+            position: fixed; bottom: 24px; right: 24px;
+            background: var(--success); color: #fff; padding: 14px 22px;
+            border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+            z-index: 10000; font-size: 0.88em; animation: slideUp 0.3s ease-out;
+        }
+        @keyframes slideUp { from { transform: translateY(20px); opacity:0 } to { transform: translateY(0); opacity:1 } }
+
+        @media (max-width: 1000px) { .row-2, .row-3 { grid-template-columns: 1fr; } }
+        @media (max-width: 600px) {
+            .container { padding: 12px; }
+            header { padding: 16px; }
+            .filter-bar { flex-direction: column; align-items: stretch; }
+            .kpi-row { grid-template-columns: 1fr 1fr; }
+        }
+
+        @media print {
+            body { background: #fff; color: #000; }
+            .nav-row, .filter-bar, .header-actions, .tabs { display: none; }
+            .panel, .kpi-card, header { box-shadow: none; border: 1px solid #ddd; break-inside: avoid; }
+            .tab-content { display: block !important; page-break-before: auto; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <div class="nav-row">
+        <a href="/" class="back-btn"><i class="fas fa-map"></i> Mappa</a>
+        <a href="/dashboard" class="back-btn"><i class="fas fa-chart-line"></i> Dashboard</a>
+        <a href="/calendario" class="back-btn"><i class="fas fa-calendar-alt"></i> Calendario</a>
+        <a href="/filone" class="back-btn"><i class="fas fa-table"></i> Filone</a>
+    </div>
+
+    <header>
+        <div>
+            <h1><i class="fas fa-chart-pie"></i> Report Operatori</h1>
+            <div class="header-sub" id="h-sub">Produttività, esiti e statistiche per periodo</div>
+        </div>
+        <div class="header-actions">
+            <button class="btn" onclick="window.print()" title="Stampa report"><i class="fas fa-print"></i> Stampa</button>
+            <button class="btn btn-primary" onclick="exportExcel()" title="Scarica Excel"><i class="fas fa-file-excel"></i> Export Excel</button>
+            <button class="btn" id="theme-toggle" onclick="toggleTheme()"><i class="fas fa-moon"></i></button>
+        </div>
+    </header>
+
+    <!-- Filtri -->
+    <div class="filter-bar">
+        <label>Periodo:</label>
+        <select id="f-periodo" onchange="onPeriodoChange()">
+            <option value="settimana" selected>Questa settimana</option>
+            <option value="mese">Questo mese</option>
+            <option value="custom">Personalizzato</option>
+        </select>
+        <div class="sep"></div>
+        <label>Da:</label>
+        <input type="date" id="f-da" disabled>
+        <label>A:</label>
+        <input type="date" id="f-a" disabled>
+        <div class="sep"></div>
+        <button class="btn btn-primary" onclick="loadReport()"><i class="fas fa-search"></i> Genera</button>
+    </div>
+
+    <!-- Contenuto principale -->
+    <div id="main-content">
+        <div class="section-loading" id="loading"><i class="fas fa-spinner fa-spin"></i> Caricamento report...</div>
+    </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script>
+// ═══════════ THEME ═══════════
+function toggleTheme() {
+    const h = document.documentElement;
+    const n = (h.getAttribute('data-theme')||'dark') === 'dark' ? 'light' : 'dark';
+    h.setAttribute('data-theme', n);
+    localStorage.setItem('algeco_theme', n);
+    updateThemeBtn();
+}
+function updateThemeBtn() {
+    const t = document.documentElement.getAttribute('data-theme')||'dark';
+    document.getElementById('theme-toggle').innerHTML = t==='dark' ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
+}
+document.addEventListener('DOMContentLoaded', updateThemeBtn);
+
+// ═══════════ HELPERS ═══════════
+const MESI = ['gennaio','febbraio','marzo','aprile','maggio','giugno','luglio','agosto','settembre','ottobre','novembre','dicembre'];
+const GIORNI_S = ['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function cap(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : ''; }
+function fmtDate(d) { if(!d) return ''; try { const [y,m,dd]=d.split('-'); return `${+dd}/${+m}/${y}`; } catch { return d; } }
+function fmtDateShort(d) { if(!d) return ''; try { const [y,m,dd]=d.split('-'); const dt=new Date(+y,+m-1,+dd); return `${GIORNI_S[dt.getDay()]} ${+dd}/${+m}`; } catch { return d; } }
+function showToast(msg, err) {
+    const t = document.createElement('div'); t.className = 'toast';
+    if (err) t.style.background = 'var(--danger)';
+    t.textContent = msg; document.body.appendChild(t);
+    setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity 0.3s'; setTimeout(() => t.remove(), 300); }, 3000);
+}
+
+// ═══════════ CHART INSTANCES ═══════════
+let charts = {};
+function destroyCharts() { Object.values(charts).forEach(c => c.destroy()); charts = {}; }
+
+function chartColors() {
+    const isDark = (document.documentElement.getAttribute('data-theme')||'dark') === 'dark';
+    return {
+        grid: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
+        text: isDark ? '#999' : '#666',
+    };
+}
+
+// ═══════════ FILTERS ═══════════
+function onPeriodoChange() {
+    const p = document.getElementById('f-periodo').value;
+    const custom = p === 'custom';
+    document.getElementById('f-da').disabled = !custom;
+    document.getElementById('f-a').disabled = !custom;
+}
+
+function getFilterParams() {
+    const p = document.getElementById('f-periodo').value;
+    let qs = `periodo=${p}`;
+    if (p === 'custom') {
+        qs += `&da=${document.getElementById('f-da').value}&a=${document.getElementById('f-a').value}`;
+    }
+    return qs;
+}
+
+function exportExcel() {
+    const qs = getFilterParams();
+    window.open(`/api/report/export?${qs}&formato=excel`, '_blank');
+}
+
+// ═══════════ LOAD ═══════════
+async function loadReport() {
+    const el = document.getElementById('main-content');
+    el.innerHTML = '<div class="section-loading"><i class="fas fa-spinner fa-spin"></i> Generazione report...</div>';
+    destroyCharts();
+    try {
+        const res = await fetch(`/api/report?${getFilterParams()}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Errore');
+        renderReport(data);
+    } catch (e) {
+        console.error('Report:', e);
+        el.innerHTML = `<div class="section-empty"><i class="fas fa-exclamation-triangle"></i>${esc(e.message)}</div>`;
+        showToast('Errore caricamento report', true);
+    }
+}
+
+// ═══════════ RENDER ═══════════
+function renderReport(data) {
+    const el = document.getElementById('main-content');
+    document.getElementById('h-sub').textContent =
+        `${data.provincia} — ${fmtDate(data.data_da)} → ${fmtDate(data.data_a)}`;
+
+    const ops = data.operatori || [];
+    const totInst = data.installati_totale || 0;
+    const totPian = data.pianificati_totale || 0;
+    const giorniRange = data.date_labels ? data.date_labels.length : 0;
+    const giorniLav = ops.reduce((s,o) => Math.max(s, o.giorni_lavorati), 0);
+    const totKm = ops.reduce((s,o) => s + o.km_totali, 0);
+    const totMin = ops.reduce((s,o) => s + o.minuti_guida, 0);
+
+    let html = '';
+
+    // ── KPI ──
+    html += `<div class="kpi-row">
+        <div class="kpi-card c-green">
+            <div class="kpi-value">${totInst}</div>
+            <div class="kpi-label">Contatori installati</div>
+            <div class="kpi-sub">Nel periodo selezionato</div>
+        </div>
+        <div class="kpi-card c-blue">
+            <div class="kpi-value">${totPian}</div>
+            <div class="kpi-label">Contatori pianificati</div>
+            <div class="kpi-sub">Totale assegnati a operatori</div>
+        </div>
+        <div class="kpi-card c-orange">
+            <div class="kpi-value">${giorniLav}</div>
+            <div class="kpi-label">Giorni lavorativi</div>
+            <div class="kpi-sub">Con almeno 1 installazione</div>
+        </div>
+        <div class="kpi-card c-primary">
+            <div class="kpi-value">${giorniLav ? Math.round(totInst/giorniLav) : 0}</div>
+            <div class="kpi-label">Media installati/giorno</div>
+            <div class="kpi-sub">Tutti gli operatori</div>
+        </div>
+        <div class="kpi-card c-purple">
+            <div class="kpi-value">${Math.round(totKm)}</div>
+            <div class="kpi-label">Km totali stimati</div>
+            <div class="kpi-sub">${Math.round(totMin/60)}h ${totMin%60}min di guida</div>
+        </div>
+    </div>`;
+
+    // ── Tabs ──
+    html += `<div class="tabs">
+        <button class="tab-btn active" onclick="switchTab(this,'tab-panoramica')"><i class="fas fa-chart-bar"></i> Panoramica</button>
+        <button class="tab-btn" onclick="switchTab(this,'tab-operatori')"><i class="fas fa-users"></i> Dettaglio Operatori</button>
+        <button class="tab-btn" onclick="switchTab(this,'tab-esiti')"><i class="fas fa-clipboard-check"></i> Esiti</button>
+        <button class="tab-btn" onclick="switchTab(this,'tab-confronto')"><i class="fas fa-balance-scale"></i> Confronto</button>
+    </div>`;
+
+    // ─── TAB: PANORAMICA ───
+    html += '<div class="tab-content active" id="tab-panoramica">';
+
+    // Grafico andamento giornaliero
+    html += `<div class="panel">
+        <h3><i class="fas fa-chart-area"></i> Andamento giornaliero</h3>
+        <div class="panel-hint">Installazioni completate per giorno nel periodo. Ogni linea rappresenta un operatore.</div>
+        <div class="chart-wrap"><canvas id="chart-daily"></canvas></div>
+    </div>`;
+
+    // Produttività per operatore (tabella riepilogativa)
+    html += `<div class="panel">
+        <h3><i class="fas fa-trophy"></i> Produttività operatori</h3>
+        <div class="panel-hint">Riepilogo installazioni, media giornaliera, km percorsi e appuntamenti gestiti.</div>
+        <div class="tbl-wrap"><table class="tbl">
+            <thead><tr>
+                <th>Operatore</th><th class="num">Installati</th><th class="num">Pianificati</th>
+                <th class="num">Appuntam.</th><th class="num">Gg Lavorati</th><th class="num">Media/Gg</th>
+                <th class="num">Km Totali</th><th class="num">Tempo Guida</th>
+            </tr></thead><tbody>`;
+    for (const op of ops) {
+        const ore = Math.floor(op.minuti_guida/60);
+        const min = op.minuti_guida % 60;
+        html += `<tr>
+            <td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${op.colore};margin-right:6px;vertical-align:middle"></span><strong>${esc(op.nome)}</strong> <span style="color:var(--text-muted);font-size:0.78em">${esc(op.matricola)}</span></td>
+            <td class="num"><strong>${op.installati}</strong></td>
+            <td class="num">${op.pianificati}</td>
+            <td class="num">${op.appuntamenti}</td>
+            <td class="num">${op.giorni_lavorati}</td>
+            <td class="num"><strong>${op.media_giorno}</strong></td>
+            <td class="num">${op.km_totali} km</td>
+            <td class="num">${ore}h ${min}m</td>
+        </tr>`;
+    }
+    html += `</tbody></table></div></div>`;
+
+    // Top comuni + LCL
+    html += '<div class="row-2">';
+    // Comuni
+    html += `<div class="panel">
+        <h3><i class="fas fa-map-marked-alt"></i> Top comuni (pianificati)</h3>
+        <div class="panel-hint">I comuni con più contatori pianificati nel periodo.</div>
+        <div id="comuni-bars"></div>
+    </div>`;
+    // LCL
+    html += `<div class="panel">
+        <h3><i class="fas fa-layer-group"></i> Installati per LCL</h3>
+        <div class="panel-hint">Distribuzione installazioni per sotto-lotto.</div>
+        <div id="lcl-bars"></div>
+    </div>`;
+    html += '</div>';
+    html += '</div>'; // end tab-panoramica
+
+    // ─── TAB: DETTAGLIO OPERATORI ───
+    html += '<div class="tab-content" id="tab-operatori">';
+    for (const op of ops) {
+        const ore = Math.floor(op.minuti_guida/60);
+        const min = op.minuti_guida % 60;
+        html += `<div class="op-detail" style="border-left-color:${op.colore}">
+            <div class="op-detail-header">
+                <span class="op-name">${esc(op.nome)}</span>
+                <span class="op-matricola">${esc(op.matricola)}</span>
+            </div>
+            <div class="op-kpi-row">
+                <div class="op-kpi"><div class="op-kpi-val" style="color:var(--success)">${op.installati}</div><div class="op-kpi-lbl">installati</div></div>
+                <div class="op-kpi"><div class="op-kpi-val">${op.pianificati}</div><div class="op-kpi-lbl">pianificati</div></div>
+                <div class="op-kpi"><div class="op-kpi-val" style="color:var(--warning)">${op.appuntamenti}</div><div class="op-kpi-lbl">appuntamenti</div></div>
+                <div class="op-kpi"><div class="op-kpi-val">${op.giorni_lavorati}</div><div class="op-kpi-lbl">gg lavorati</div></div>
+                <div class="op-kpi"><div class="op-kpi-val" style="color:var(--primary)">${op.media_giorno}</div><div class="op-kpi-lbl">media/gg</div></div>
+                <div class="op-kpi"><div class="op-kpi-val">${op.km_totali}</div><div class="op-kpi-lbl">km</div></div>
+                <div class="op-kpi"><div class="op-kpi-val">${ore}h${min}m</div><div class="op-kpi-lbl">guida</div></div>
+            </div>
+            <div class="op-chart-wrap"><canvas id="chart-op-${op.matricola}"></canvas></div>
+            <div class="row-2" style="gap:14px">
+                <div>
+                    <div style="font-size:0.78em;color:var(--text-muted);margin-bottom:6px;font-weight:600">Comuni più frequenti</div>
+                    <div id="op-comuni-${op.matricola}"></div>
+                </div>
+                <div>
+                    <div style="font-size:0.78em;color:var(--text-muted);margin-bottom:6px;font-weight:600">Esiti</div>
+                    <div id="op-esiti-${op.matricola}"></div>
+                </div>
+            </div>
+        </div>`;
+    }
+    html += '</div>'; // end tab-operatori
+
+    // ─── TAB: ESITI ───
+    html += '<div class="tab-content" id="tab-esiti">';
+    html += `<div class="panel">
+        <h3><i class="fas fa-clipboard-check"></i> Distribuzione esiti</h3>
+        <div class="panel-hint">Tutti gli esiti registrati nel periodo selezionato. Include OK, KO, cliente assente e altri.</div>
+        <div class="row-2">
+            <div><div class="chart-wrap" style="height:300px"><canvas id="chart-esiti"></canvas></div></div>
+            <div id="esiti-table"></div>
+        </div>
+    </div>`;
+    html += '</div>';
+
+    // ─── TAB: CONFRONTO ───
+    html += '<div class="tab-content" id="tab-confronto">';
+    html += `<div class="panel">
+        <h3><i class="fas fa-balance-scale"></i> Confronto operatori</h3>
+        <div class="panel-hint">Confronto diretto tra operatori su diverse metriche. Chi installa di più, chi percorre più km, chi ha la media giornaliera più alta.</div>
+        <div class="chart-wrap" style="height:320px"><canvas id="chart-confronto"></canvas></div>
+    </div>`;
+    html += `<div class="panel">
+        <h3><i class="fas fa-chart-pie"></i> Distribuzione installati per operatore</h3>
+        <div class="panel-hint">Quota di installazioni completate per ciascun tecnico nel periodo.</div>
+        <div class="row-2">
+            <div class="chart-wrap" style="height:280px"><canvas id="chart-pie"></canvas></div>
+            <div id="confronto-rank"></div>
+        </div>
+    </div>`;
+    html += '</div>';
+
+    el.innerHTML = html;
+
+    // ── Render data-driven parts ──
+    renderDailyChart(data);
+    renderComuniBars(data.top_comuni || [], 'comuni-bars');
+    renderLCLBars(data.lcl || []);
+    renderEsiti(data.esiti || {});
+    renderConfrontoChart(ops);
+    renderPieChart(ops);
+    renderConfronto(ops);
+
+    for (const op of ops) {
+        renderOpChart(op, data.date_labels);
+        renderOpComuni(op);
+        renderOpEsiti(op);
+    }
+}
+
+// ═══════════ TABS ═══════════
+function switchTab(btn, id) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(id).classList.add('active');
+}
+
+// ═══════════ CHARTS ═══════════
+function renderDailyChart(data) {
+    const ctx = document.getElementById('chart-daily');
+    if (!ctx) return;
+    const cc = chartColors();
+    const labels = (data.date_labels||[]).map(fmtDateShort);
+
+    const datasets = [];
+    // Totale come area
+    datasets.push({
+        label: 'Totale installati',
+        data: data.serie_installati,
+        borderColor: 'rgba(255,255,255,0.3)',
+        backgroundColor: 'rgba(255,255,255,0.04)',
+        fill: true, tension: 0.3, borderWidth: 1, pointRadius: 0, order: 10,
+    });
+    // Per operatore
+    for (const op of data.operatori) {
+        datasets.push({
+            label: op.nome,
+            data: op.serie_installati,
+            borderColor: op.colore,
+            backgroundColor: op.colore + '22',
+            fill: false, tension: 0.3, borderWidth: 2.5,
+            pointRadius: 3, pointBackgroundColor: op.colore,
+        });
+    }
+
+    charts['daily'] = new Chart(ctx, {
+        type: 'line',
+        data: { labels, datasets },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+                x: { ticks: { color: cc.text, maxRotation: 45 }, grid: { color: cc.grid } },
+                y: { beginAtZero: true, ticks: { color: cc.text }, grid: { color: cc.grid } },
+            },
+            plugins: { legend: { labels: { color: cc.text, usePointStyle: true } } },
+        }
+    });
+}
+
+function renderOpChart(op, dateLabels) {
+    const ctx = document.getElementById(`chart-op-${op.matricola}`);
+    if (!ctx) return;
+    const cc = chartColors();
+    const labels = (dateLabels||[]).map(fmtDateShort);
+
+    charts[`op-${op.matricola}`] = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: 'Installati',
+                    data: op.serie_installati,
+                    backgroundColor: op.colore + 'CC',
+                    borderRadius: 4,
+                },
+                {
+                    label: 'Pianificati',
+                    data: op.serie_pianificati,
+                    backgroundColor: 'rgba(255,255,255,0.08)',
+                    borderRadius: 4,
+                },
+            ]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            scales: {
+                x: { ticks: { color: cc.text, maxRotation: 45 }, grid: { display: false } },
+                y: { beginAtZero: true, ticks: { color: cc.text }, grid: { color: cc.grid } },
+            },
+            plugins: { legend: { labels: { color: cc.text, usePointStyle: true } } },
+        }
+    });
+}
+
+function renderEsiti(esiti) {
+    const ctx = document.getElementById('chart-esiti');
+    if (!ctx) return;
+    const cc = chartColors();
+    const entries = Object.entries(esiti).sort((a,b) => b[1]-a[1]);
+    const labels = entries.map(e => e[0].length > 30 ? e[0].substr(0,30)+'…' : e[0]);
+    const values = entries.map(e => e[1]);
+    const colors = entries.map(e => e[0].includes('OK') ? 'rgba(39,174,96,0.7)' : 'rgba(231,76,60,0.7)');
+
+    charts['esiti'] = new Chart(ctx, {
+        type: 'doughnut',
+        data: { labels, datasets: [{ data: values, backgroundColor: colors, borderWidth: 0 }] },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { position: 'right', labels: { color: cc.text, padding: 8, font: { size: 11 } } } },
+        }
+    });
+
+    // Table
+    const tbl = document.getElementById('esiti-table');
+    if (!tbl) return;
+    let h = '<table class="tbl"><thead><tr><th>Esito</th><th class="num">Conteggio</th><th class="num">%</th></tr></thead><tbody>';
+    const tot = values.reduce((s,v) => s+v, 0);
+    for (const [esito, count] of entries) {
+        const pct = tot ? (count/tot*100).toFixed(1) : 0;
+        const isOk = esito.includes('OK');
+        h += `<tr><td>${isOk ? '<span class="badge badge-green">OK</span>' : '<span class="badge badge-red">KO</span>'} ${esc(esito)}</td><td class="num"><strong>${count}</strong></td><td class="num">${pct}%</td></tr>`;
+    }
+    h += '</tbody></table>';
+    tbl.innerHTML = h;
+}
+
+function renderConfrontoChart(ops) {
+    const ctx = document.getElementById('chart-confronto');
+    if (!ctx) return;
+    const cc = chartColors();
+    const labels = ops.map(o => o.nome);
+
+    charts['confronto'] = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [
+                { label: 'Installati', data: ops.map(o => o.installati), backgroundColor: ops.map(o => o.colore + 'CC'), borderRadius: 6 },
+                { label: 'Pianificati', data: ops.map(o => o.pianificati), backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 6 },
+            ]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            indexAxis: 'y',
+            scales: {
+                x: { beginAtZero: true, ticks: { color: cc.text }, grid: { color: cc.grid } },
+                y: { ticks: { color: cc.text, font: { weight: 'bold' } }, grid: { display: false } },
+            },
+            plugins: { legend: { labels: { color: cc.text, usePointStyle: true } } },
+        }
+    });
+}
+
+function renderPieChart(ops) {
+    const ctx = document.getElementById('chart-pie');
+    if (!ctx) return;
+    const cc = chartColors();
+    charts['pie'] = new Chart(ctx, {
+        type: 'pie',
+        data: {
+            labels: ops.map(o => o.nome),
+            datasets: [{ data: ops.map(o => o.installati), backgroundColor: ops.map(o => o.colore + 'CC'), borderWidth: 0 }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { position: 'right', labels: { color: cc.text, usePointStyle: true } } },
+        }
+    });
+}
+
+function renderConfronto(ops) {
+    const el = document.getElementById('confronto-rank');
+    if (!el) return;
+    const sorted = [...ops].sort((a,b) => b.installati - a.installati);
+    const medals = ['🥇','🥈','🥉'];
+    let h = '<div style="font-size:0.82em;color:var(--text-muted);margin-bottom:8px;font-weight:600">Classifica installazioni</div>';
+    sorted.forEach((op, i) => {
+        const medal = medals[i] || `${i+1}.`;
+        h += `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+            <span style="font-size:1.3em;width:30px;text-align:center">${medal}</span>
+            <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${op.colore}"></span>
+            <strong>${esc(op.nome)}</strong>
+            <span style="margin-left:auto;font-weight:800;font-size:1.1em">${op.installati}</span>
+        </div>`;
+    });
+
+    // Ranking media/gg
+    const sortedMedia = [...ops].sort((a,b) => b.media_giorno - a.media_giorno);
+    h += '<div style="font-size:0.82em;color:var(--text-muted);margin-top:16px;margin-bottom:8px;font-weight:600">Classifica media giornaliera</div>';
+    sortedMedia.forEach((op, i) => {
+        h += `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border)">
+            <span style="width:30px;text-align:center;font-weight:600">${i+1}.</span>
+            <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${op.colore}"></span>
+            <span>${esc(op.nome)}</span>
+            <span style="margin-left:auto;font-weight:700">${op.media_giorno}/gg</span>
+        </div>`;
+    });
+
+    el.innerHTML = h;
+}
+
+// ═══════════ BAR HELPERS ═══════════
+function renderComuniBars(comuni, containerId) {
+    const el = document.getElementById(containerId);
+    if (!el || !comuni.length) { if(el) el.innerHTML = '<div class="section-empty"><i class="fas fa-map"></i>Nessun dato</div>'; return; }
+    const max = comuni[0].count;
+    let h = '';
+    for (const c of comuni) {
+        const pct = Math.round((c.count/max)*100);
+        h += `<div class="bar-row">
+            <div class="bar-label">${esc(cap(c.comune))}</div>
+            <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
+            <div class="bar-val">${c.count}</div>
+        </div>`;
+    }
+    el.innerHTML = h;
+}
+
+function renderLCLBars(lcls) {
+    const el = document.getElementById('lcl-bars');
+    if (!el || !lcls.length) { if(el) el.innerHTML = '<div class="section-empty"><i class="fas fa-layer-group"></i>Nessun dato</div>'; return; }
+    const max = Math.max(...lcls.map(l => l.installati), 1);
+    let h = '';
+    for (const l of lcls) {
+        const pct = Math.round((l.installati/max)*100);
+        h += `<div class="bar-row">
+            <div class="bar-label">${esc(l.codice)}</div>
+            <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
+            <div class="bar-val">${l.installati}</div>
+        </div>`;
+    }
+    el.innerHTML = h;
+}
+
+function renderOpComuni(op) {
+    const el = document.getElementById(`op-comuni-${op.matricola}`);
+    if (!el) return;
+    if (!op.top_comuni || !op.top_comuni.length) { el.innerHTML = '<span style="font-size:0.78em;color:var(--text-dim)">Nessun dato</span>'; return; }
+    const max = op.top_comuni[0].count;
+    let h = '';
+    for (const c of op.top_comuni.slice(0, 6)) {
+        const pct = Math.round((c.count/max)*100);
+        h += `<div class="bar-row">
+            <div class="bar-label" style="width:100px">${esc(cap(c.comune))}</div>
+            <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${op.colore}"></div></div>
+            <div class="bar-val">${c.count}</div>
+        </div>`;
+    }
+    el.innerHTML = h;
+}
+
+function renderOpEsiti(op) {
+    const el = document.getElementById(`op-esiti-${op.matricola}`);
+    if (!el) return;
+    const entries = Object.entries(op.esiti || {}).sort((a,b) => b[1]-a[1]);
+    if (!entries.length) { el.innerHTML = '<span style="font-size:0.78em;color:var(--text-dim)">Nessun esito</span>'; return; }
+    let h = '';
+    for (const [esito, count] of entries) {
+        const isOk = esito.includes('OK');
+        h += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;font-size:0.82em">
+            <span class="badge ${isOk ? 'badge-green' : 'badge-red'}">${isOk ? 'OK' : 'KO'}</span>
+            <span style="flex:1">${esc(esito)}</span>
+            <strong>${count}</strong>
+        </div>`;
+    }
+    el.innerHTML = h;
+}
+
+// ═══════════ INIT ═══════════
+document.addEventListener('DOMContentLoaded', () => {
+    // Set default dates
+    const oggi = new Date().toISOString().split('T')[0];
+    document.getElementById('f-a').value = oggi;
+    const lun = new Date();
+    lun.setDate(lun.getDate() - lun.getDay() + 1);
+    document.getElementById('f-da').value = lun.toISOString().split('T')[0];
+    loadReport();
+});
+</script>
+</body>
+</html>

@@ -289,6 +289,9 @@
             background: var(--bg-inner); border: 1px solid var(--border);
             color: var(--text); padding: 6px 10px; border-radius: 8px; font-size: 0.85em;
         }
+        .report-filter select option {
+            background: var(--bg-card); color: var(--text);
+        }
         .rp-tbl { width: 100%; border-collapse: collapse; font-size: 0.85em; }
         .rp-tbl th { background: rgba(37,211,102,0.1); color: var(--primary); padding: 9px 10px; text-align: left; font-weight: 700; white-space: nowrap; }
         .rp-tbl td { padding: 8px 10px; border-bottom: 1px solid var(--border); }
@@ -360,6 +363,23 @@
         </div>
     </div>
 
+    <div class="row-2" style="margin-bottom: 20px;">
+        <div class="panel">
+            <div class="panel-header">
+                <h3><i class="fas fa-map-marked-alt"></i> Dove si lavora oggi</h3>
+            </div>
+            <div class="panel-hint">I comuni in cui sono pianificati più interventi oggi, ordinati per numero di contatori.</div>
+            <div id="comuni-content"><div class="section-loading"><i class="fas fa-spinner fa-spin"></i></div></div>
+        </div>
+        <div class="panel">
+            <div class="panel-header">
+                <h3><i class="fas fa-chart-bar"></i> Questa settimana</h3>
+            </div>
+            <div class="panel-hint">Contatori pianificati giorno per giorno. La barra arancione indica oggi.</div>
+            <div id="settimana-content"><div class="section-loading"><i class="fas fa-spinner fa-spin"></i></div></div>
+        </div>
+    </div>
+
     <!-- ══════════════ OPERATORI ══════════════ -->
     <div class="section-label"><i class="fas fa-hard-hat"></i> Carico di lavoro per operatore</div>
 
@@ -392,42 +412,50 @@
         </div>
     </div>
 
-    <!-- ══════════════ STATISTICHE PER LCL ══════════════ -->
-    <div class="section-label"><i class="fas fa-layer-group"></i> Statistiche per LCL (sotto-lotto)</div>
+    <!-- ══════════════ STATO DEL FILONE ══════════════ -->
+    <div class="section-label"><i class="fas fa-database"></i> Stato del filone</div>
+
+    <div class="kpi-row" id="kpi-filone">
+        <div class="kpi-card c-green">
+            <div class="kpi-top"><span class="kpi-icon">✅</span></div>
+            <div class="kpi-value" id="k-inst-tot">-</div>
+            <div class="kpi-label">Installazioni completate</div>
+            <div class="kpi-explain">Contatori con esito positivo dall'inizio del filone</div>
+        </div>
+        <div class="kpi-card c-purple">
+            <div class="kpi-top"><span class="kpi-icon">📊</span></div>
+            <div class="kpi-value" id="k-righe">-</div>
+            <div class="kpi-label">Righe totali nel filone</div>
+            <div class="kpi-explain">Numero complessivo di contatori presenti nel foglio</div>
+        </div>
+        <div class="kpi-card c-primary">
+            <div class="kpi-top"><span class="kpi-icon">📅</span></div>
+            <div class="kpi-value" id="k-con-data">-</div>
+            <div class="kpi-label">Con data pianificata</div>
+            <div class="kpi-explain">Contatori che hanno una data di intervento assegnata</div>
+        </div>
+        <div class="kpi-card" style="border-left-color: #888;">
+            <div class="kpi-top"><span class="kpi-icon">🚫</span></div>
+            <div class="kpi-value" id="k-annullati">-</div>
+            <div class="kpi-label">Annullati</div>
+            <div class="kpi-explain">Contatori rimossi dalla pianificazione</div>
+        </div>
+    </div>
 
     <div class="panel" style="margin-bottom: 20px;">
         <div class="panel-header">
-            <h3><i class="fas fa-barcode"></i> Stato di ogni LCL</h3>
+            <h3><i class="fas fa-check-circle"></i> Installati questo mese</h3>
         </div>
-        <div class="panel-hint">Ogni LCL è un sotto-lotto del filone. Per ciascuno sono riportati il totale righe, gli installati, i pianificati oggi e domani con dettaglio operatori.</div>
-        <div id="lcl-content"><div class="section-loading"><i class="fas fa-spinner fa-spin"></i> Caricamento...</div></div>
+        <div class="panel-hint">Contatori con esito positivo nel mese corrente, suddivisi per operatore.</div>
+        <div id="installati-content"><div class="section-loading"><i class="fas fa-spinner fa-spin"></i></div></div>
     </div>
 
-    <!-- ══════════════ PANORAMICA SETTIMANA ══════════════ -->
-    <div class="section-label"><i class="fas fa-chart-bar"></i> Panoramica</div>
-
-    <div class="row-3">
-        <div class="panel">
-            <div class="panel-header">
-                <h3><i class="fas fa-chart-bar"></i> Contatori pianificati per giorno</h3>
-            </div>
-            <div class="panel-hint">Distribuzione dei contatori da sostituire giorno per giorno in questa settimana. La barra arancione indica il giorno corrente.</div>
-            <div id="settimana-content"><div class="section-loading"><i class="fas fa-spinner fa-spin"></i></div></div>
+    <div class="panel" style="margin-bottom: 20px;">
+        <div class="panel-header">
+            <h3><i class="fas fa-barcode"></i> Dettaglio per LCL (sotto-lotto)</h3>
         </div>
-        <div class="panel">
-            <div class="panel-header">
-                <h3><i class="fas fa-check-circle"></i> Installati questo mese</h3>
-            </div>
-            <div class="panel-hint">Contatori con esito positivo nel mese corrente, suddivisi per operatore.</div>
-            <div id="installati-content"><div class="section-loading"><i class="fas fa-spinner fa-spin"></i></div></div>
-        </div>
-        <div class="panel">
-            <div class="panel-header">
-                <h3><i class="fas fa-map-marked-alt"></i> Dove si lavora oggi</h3>
-            </div>
-            <div class="panel-hint">I comuni in cui sono pianificati più interventi oggi, ordinati per numero di contatori.</div>
-            <div id="comuni-content"><div class="section-loading"><i class="fas fa-spinner fa-spin"></i></div></div>
-        </div>
+        <div class="panel-hint">Stato di ogni sotto-lotto: righe totali, installati, pianificati oggi e domani.</div>
+        <div id="lcl-content"><div class="section-loading"><i class="fas fa-spinner fa-spin"></i> Caricamento...</div></div>
     </div>
 
     <!-- ══════════════ ATTIVITA' E PROMEMORIA ══════════════ -->
@@ -472,36 +500,6 @@
 
     <div id="report-content">
         <div class="section-loading"><i class="fas fa-spinner fa-spin"></i> Caricamento report...</div>
-    </div>
-
-    <!-- ══════════════ RIEPILOGO FILONE ══════════════ -->
-    <div class="section-label"><i class="fas fa-database"></i> Riepilogo generale del filone</div>
-
-    <div class="kpi-row" id="kpi-filone">
-        <div class="kpi-card c-green">
-            <div class="kpi-top"><span class="kpi-icon">✅</span></div>
-            <div class="kpi-value" id="k-inst-tot">-</div>
-            <div class="kpi-label">Installazioni completate</div>
-            <div class="kpi-explain">Contatori con esito positivo dall'inizio del filone</div>
-        </div>
-        <div class="kpi-card c-purple">
-            <div class="kpi-top"><span class="kpi-icon">📊</span></div>
-            <div class="kpi-value" id="k-righe">-</div>
-            <div class="kpi-label">Righe totali nel filone</div>
-            <div class="kpi-explain">Numero complessivo di contatori presenti nel foglio Google Sheets</div>
-        </div>
-        <div class="kpi-card c-primary">
-            <div class="kpi-top"><span class="kpi-icon">📅</span></div>
-            <div class="kpi-value" id="k-con-data">-</div>
-            <div class="kpi-label">Con data pianificata</div>
-            <div class="kpi-explain">Contatori che hanno una data di intervento assegnata</div>
-        </div>
-        <div class="kpi-card" style="border-left-color: #888;">
-            <div class="kpi-top"><span class="kpi-icon">🚫</span></div>
-            <div class="kpi-value" id="k-annullati">-</div>
-            <div class="kpi-label">Annullati</div>
-            <div class="kpi-explain">Contatori rimossi dalla pianificazione</div>
-        </div>
     </div>
 
 </div>

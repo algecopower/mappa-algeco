@@ -1352,7 +1352,274 @@ def genera_css_gestionale():
             background: rgba(231, 76, 60, 0.15);
             color: #e74c3c;
         }
+
+        /* Suggerimento AI - Bottone coerente con UI */
+        .btn-suggerisci-gestionale {
+            padding: 12px 16px;
+            background: linear-gradient(135deg, #f39c12, #f1c40f);
+            color: #333;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.9em;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-suggerisci-gestionale:hover {
+            filter: brightness(1.08);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(243, 156, 18, 0.4);
+        }
+        .btn-suggerisci-gestionale:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Modale Suggerimenti AI */
+        .suggerimenti-modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.35);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            z-index: 10002;
+            align-items: center;
+            justify-content: center;
+        }
+        .suggerimenti-modal.visible {
+            display: flex;
+        }
+        .suggerimenti-modal-content {
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            width: 95%;
+            max-width: 520px;
+            max-height: 85vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            animation: modalSlideUp 0.3s ease-out;
+        }
+        .sgm-header {
+            padding: 16px 20px;
+            background: linear-gradient(135deg, rgba(243,156,18,0.15), rgba(241,196,15,0.08));
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .sgm-header h3 {
+            margin: 0;
+            font-size: 1em;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .sgm-header .sgm-close {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 20px;
+            padding: 4px 10px;
+            border-radius: 6px;
+            transition: all 0.15s;
+        }
+        .sgm-header .sgm-close:hover {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+        .sgm-filters {
+            padding: 10px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+        .sgm-filters label {
+            font-size: 0.8em;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+        .sgm-filters input {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            padding: 5px 10px;
+            font-size: 0.8em;
+        }
+        .sgm-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0;
+        }
+        .sgm-loading {
+            padding: 30px;
+            text-align: center;
+            color: var(--text-secondary);
+        }
+        .sgm-empty {
+            padding: 30px;
+            text-align: center;
+            color: var(--text-secondary);
+        }
+        .sgm-warnings-global {
+            padding: 10px 20px;
+            font-size: 0.85em;
+            color: #f39c12;
+        }
+
+        /* Card suggerimento - cliccabile */
+        .sgm-card {
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--border);
+            cursor: pointer;
+            transition: all 0.15s;
+            position: relative;
+        }
+        .sgm-card:last-child { border-bottom: none; }
+        .sgm-card:hover {
+            background: rgba(243, 156, 18, 0.06);
+        }
+        .sgm-card:active {
+            background: rgba(243, 156, 18, 0.12);
+        }
+        .sgm-card.selected {
+            background: rgba(243, 156, 18, 0.10);
+            border-left: 3px solid #f39c12;
+            padding-left: 17px;
+        }
+        .sgm-card-top {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .sgm-card-map-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: rgba(52,152,219,0.12);
+            color: #3498db;
+            border: none;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+        .sgm-card-map-btn:hover {
+            background: rgba(52,152,219,0.25);
+            transform: scale(1.15);
+        }
+        .sgm-card-date {
+            font-weight: 700;
+            font-size: 1em;
+            color: var(--text-primary);
+        }
+        .sgm-card-fascia {
+            background: rgba(243,156,18,0.15);
+            color: #f39c12;
+            padding: 3px 12px;
+            border-radius: 12px;
+            font-size: 0.82em;
+            font-weight: 600;
+        }
+        .sgm-card-op {
+            color: var(--text-secondary);
+            font-size: 0.85em;
+            margin-left: auto;
+        }
+        .sgm-card-score {
+            font-size: 0.85em;
+            font-weight: 700;
+        }
+        .sgm-card-detail {
+            color: var(--text-secondary);
+            font-size: 0.8em;
+            margin-top: 5px;
+        }
+        .sgm-card-warnings {
+            color: #f39c12;
+            font-size: 0.8em;
+            margin-top: 3px;
+        }
+        /* Feedback verifica dentro la card */
+        .sgm-card-feedback {
+            margin-top: 8px;
+            display: none;
+        }
+        .sgm-card-feedback.visible {
+            display: block;
+        }
+        .sgm-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.8em;
+            padding: 3px 10px;
+            border-radius: 12px;
+            margin-right: 4px;
+            margin-bottom: 3px;
+        }
+        .sgm-badge.ok { background: rgba(46,204,113,0.15); color: #2ecc71; }
+        .sgm-badge.warn { background: rgba(243,156,18,0.15); color: #f39c12; }
+        .sgm-badge.error { background: rgba(231,76,60,0.15); color: #e74c3c; }
         
+        .sgm-footer {
+            padding: 12px 20px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+        .sgm-btn-apply {
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #f39c12, #f1c40f);
+            color: #333;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.9em;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: none;
+        }
+        .sgm-btn-apply.visible {
+            display: inline-flex;
+        }
+        .sgm-btn-apply:hover {
+            filter: brightness(1.08);
+            transform: translateY(-1px);
+        }
+        .sgm-btn-cancel {
+            padding: 10px 20px;
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-weight: 500;
+            font-size: 0.9em;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .sgm-btn-cancel:hover {
+            background: var(--bg-primary);
+        }
+
         /* Status toast - fisso in alto a destra */
         .fullscreen-status {
             position: fixed;
@@ -1814,6 +2081,34 @@ def genera_js_gestionale():
             btn.disabled = true;
             btn.textContent = '⏳ Salvataggio...';
             statusDiv.className = 'appuntamento-status';
+
+            // Pre-verifica conflitti
+            const contatore = contatori.find(c => c.eneltel === currentFullscreenEneltel);
+            if (contatore && contatore.data && orario) {{
+                try {{
+                    const vResp = await fetch(`${{API_BASE}}/api/appuntamenti/verifica`, {{
+                        method: 'POST',
+                        headers: {{ 'Content-Type': 'application/json' }},
+                        body: JSON.stringify({{
+                            pod: contatore.pod || '',
+                            data: contatore.data,
+                            orario: orario,
+                            operatore: contatore.tecnico || ''
+                        }})
+                    }});
+                    const vData = await vResp.json();
+                    if (vData.success && vData.errori && vData.errori.length) {{
+                        const msg = '⚠️ Conflitti rilevati:\\n\\n' + vData.errori.join('\\n') +
+                                    (vData.warnings && vData.warnings.length ? '\\n\\nAvvisi:\\n' + vData.warnings.join('\\n') : '') +
+                                    '\\n\\nContinuare comunque?';
+                        if (!confirm(msg)) {{
+                            btn.disabled = false;
+                            btn.textContent = '✅ Fissa Appuntamento';
+                            return;
+                        }}
+                    }}
+                }} catch(e) {{ /* verifica non bloccante */ }}
+            }}
             
             try {{
                 // Includi il contenuto corrente delle note per non perdere modifiche non salvate
@@ -1867,6 +2162,254 @@ def genera_js_gestionale():
             }}
         }}
         
+        // ========================================
+        // SUGGERIMENTO INTELLIGENTE (MODALE)
+        // ========================================
+        let sgmSuggerimenti = [];
+        let sgmSelezionato = null;
+
+        function apriModaleSuggerimenti() {{
+            if (!currentFullscreenEneltel) return;
+            sgmSuggerimenti = [];
+            sgmSelezionato = null;
+            document.getElementById('sgmFiltroDa').value = '';
+            document.getElementById('sgmFiltroA').value = '';
+            document.getElementById('sgmBody').innerHTML = '<div class="sgm-loading">⏳ Ricerca suggerimenti...</div>';
+            document.getElementById('sgmBtnApply').classList.remove('visible');
+            document.getElementById('suggerimentiModal').classList.add('visible');
+            caricaSuggerimentiModal();
+        }}
+
+        function chiudiModaleSuggerimenti() {{
+            document.getElementById('suggerimentiModal').classList.remove('visible');
+        }}
+
+        async function caricaSuggerimentiModal(vincoliGiorni) {{
+            const contatore = contatori.find(c => c.eneltel === currentFullscreenEneltel);
+            if (!contatore) return;
+
+            const body = {{}};
+            if (contatore.pod) body.pod = contatore.pod;
+            if (contatore.lat && contatore.lon) {{
+                body.lat = contatore.lat;
+                body.lon = contatore.lon;
+            }}
+            if (vincoliGiorni && vincoliGiorni.length) body.vincoli_giorni = vincoliGiorni;
+
+            const bodyEl = document.getElementById('sgmBody');
+            bodyEl.innerHTML = '<div class="sgm-loading">⏳ Ricerca suggerimenti...</div>';
+            document.getElementById('sgmBtnApply').classList.remove('visible');
+            sgmSelezionato = null;
+
+            try {{
+                const resp = await fetch(`${{API_BASE}}/api/appuntamenti/suggerisci`, {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify(body)
+                }});
+                const data = await resp.json();
+
+                if (!data.success || !data.suggerimenti || !data.suggerimenti.length) {{
+                    let html = '<div class="sgm-empty">Nessun suggerimento disponibile</div>';
+                    if (data.warnings_globali && data.warnings_globali.length) {{
+                        html += '<div class="sgm-warnings-global">' + data.warnings_globali.join('<br>') + '</div>';
+                    }}
+                    bodyEl.innerHTML = html;
+                    return;
+                }}
+
+                sgmSuggerimenti = data.suggerimenti;
+                renderSuggerimentiModal();
+
+            }} catch(e) {{
+                console.error('Errore suggerimento:', e);
+                bodyEl.innerHTML = '<div class="sgm-empty">❌ Errore di connessione</div>';
+            }}
+        }}
+
+        function renderSuggerimentiModal() {{
+            const bodyEl = document.getElementById('sgmBody');
+            const giorni = ['DOM','LUN','MAR','MER','GIO','VEN','SAB'];
+            let html = '';
+
+            for (let i = 0; i < sgmSuggerimenti.length; i++) {{
+                const s = sgmSuggerimenti[i];
+                const dt = new Date(s.data);
+                const giornoNome = !isNaN(dt) ? giorni[dt.getDay()] : '';
+                const dataFmt = s.data.split('-').reverse().join('/');
+                const scorePercent = Math.round(s.score * 100);
+                const scoreColor = scorePercent >= 60 ? '#2ecc71' : scorePercent >= 35 ? '#f39c12' : '#e74c3c';
+
+                html += `<div class="sgm-card" data-idx="${{i}}" onclick="selezionaSuggerimento(${{i}})">
+                    <div class="sgm-card-top">
+                        <span class="sgm-card-date">${{giornoNome}} ${{dataFmt}}</span>
+                        <span class="sgm-card-fascia">🕐 ${{s.fascia}}</span>
+                        <span class="sgm-card-op">👤 ${{s.operatore}}</span>
+                        <span class="sgm-card-score" style="color:${{scoreColor}}">⬤ ${{scorePercent}}%</span>
+                        <button class="sgm-card-map-btn" title="Vedi sulla mappa" onclick="event.stopPropagation(); vediSullaMappa(${{i}})">🗺️</button>
+                    </div>
+                    <div class="sgm-card-detail">${{s.motivo}}</div>
+                    ${{s.warnings.length ? '<div class="sgm-card-warnings">⚠️ ' + s.warnings.join(' · ') + '</div>' : ''}}
+                    <div class="sgm-card-feedback" id="sgmFeedback_${{i}}"></div>
+                </div>`;
+            }}
+            bodyEl.innerHTML = html;
+        }}
+
+        async function selezionaSuggerimento(idx) {{
+            const s = sgmSuggerimenti[idx];
+            if (!s) return;
+
+            // Deseleziona precedente
+            document.querySelectorAll('.sgm-card.selected').forEach(el => el.classList.remove('selected'));
+            document.querySelectorAll('.sgm-card-feedback.visible').forEach(el => el.classList.remove('visible'));
+
+            // Seleziona nuovo
+            const card = document.querySelector(`.sgm-card[data-idx="${{idx}}"]`);
+            if (card) card.classList.add('selected');
+            sgmSelezionato = s;
+
+            // Mostra bottone applica
+            document.getElementById('sgmBtnApply').classList.add('visible');
+
+            // Verifica automatica
+            const contatore = contatori.find(c => c.eneltel === currentFullscreenEneltel);
+            if (!contatore) return;
+
+            const feedbackEl = document.getElementById('sgmFeedback_' + idx);
+            if (!feedbackEl) return;
+            feedbackEl.innerHTML = '<span style="color:var(--text-secondary);font-size:0.8em">⏳ Verifica...</span>';
+            feedbackEl.classList.add('visible');
+
+            try {{
+                const resp = await fetch(`${{API_BASE}}/api/appuntamenti/verifica`, {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify({{
+                        pod: contatore.pod || '',
+                        data: s.data,
+                        orario: s.fascia,
+                        operatore: s.operatore
+                    }})
+                }});
+                const result = await resp.json();
+                if (!result.success) return;
+
+                let badges = '';
+                if (result.errori && result.errori.length) {{
+                    for (const e of result.errori) {{
+                        badges += '<div class="sgm-badge error">⚠️ ' + e + '</div>';
+                    }}
+                }}
+                if (result.warnings && result.warnings.length) {{
+                    for (const w of result.warnings) {{
+                        badges += '<div class="sgm-badge warn">⚠️ ' + w + '</div>';
+                    }}
+                }}
+                if ((!result.errori || !result.errori.length) && (!result.warnings || !result.warnings.length)) {{
+                    badges = '<div class="sgm-badge ok">✅ Nessun conflitto rilevato</div>';
+                }}
+                feedbackEl.innerHTML = badges;
+            }} catch(e) {{
+                feedbackEl.innerHTML = '<div class="sgm-badge warn">⚠️ Verifica non riuscita</div>';
+            }}
+        }}
+
+        function applicaSuggerimentoSelezionato() {{
+            if (!sgmSelezionato) return;
+            const s = sgmSelezionato;
+
+            // Compila gli orari
+            const startInput = document.getElementById('fullscreenAppOrarioInizio');
+            const endInput = document.getElementById('fullscreenAppOrarioFine');
+            const statusDiv = document.getElementById('appuntamentoInlineStatus');
+
+            const parti = s.fascia.split('/');
+            if (parti.length === 2) {{
+                if (startInput) startInput.value = parti[0].padStart(2, '0') + ':00';
+                if (endInput) endInput.value = parti[1].padStart(2, '0') + ':00';
+            }}
+
+            // Chiudi modale
+            chiudiModaleSuggerimenti();
+
+            // Mostra conferma
+            if (statusDiv) {{
+                const dataFmt = s.data.split('-').reverse().join('/');
+                statusDiv.style.display = 'block';
+                statusDiv.className = 'appuntamento-status visible success';
+                statusDiv.innerHTML = '💡 Suggerimento applicato: <strong>' + dataFmt + '</strong> fascia <strong>' + s.fascia + '</strong> (' + s.operatore + '). Clicca <strong>Fissa Appuntamento</strong> per confermare.';
+            }}
+        }}
+
+        async function filtraSuggerimentiModal() {{
+            const da = document.getElementById('sgmFiltroDa')?.value || '';
+            const a = document.getElementById('sgmFiltroA')?.value || '';
+
+            let vincoliGiorni = null;
+            if (da || a) {{
+                const start = da ? new Date(da) : new Date();
+                const end = a ? new Date(a) : new Date(start.getTime() + 30 * 86400000);
+                vincoliGiorni = [];
+                for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {{
+                    if (d.getDay() > 0) vincoliGiorni.push(d.toISOString().split('T')[0]);
+                }}
+            }}
+            await caricaSuggerimentiModal(vincoliGiorni);
+        }}
+
+        function vediSullaMappa(idx) {{
+            const s = sgmSuggerimenti[idx];
+            if (!s || !currentFullscreenEneltel) return;
+
+            const contatore = contatori.find(c => c.eneltel === currentFullscreenEneltel);
+            if (!contatore || !contatore.lat || !contatore.lon) return;
+
+            // Chiudi i modali
+            chiudiModaleSuggerimenti();
+            chiudiVistaModifica();
+
+            // Imposta filtro data sulla giornata suggerita (vista giornata intera)
+            const dataFilter = document.getElementById('dataFilter');
+            if (dataFilter) {{
+                let found = false;
+                for (const opt of dataFilter.options) {{
+                    if (opt.value === s.data) {{ found = true; break; }}
+                }}
+                if (!found) {{
+                    const opt = document.createElement('option');
+                    opt.value = s.data;
+                    opt.textContent = s.data.split('-').reverse().join('/');
+                    dataFilter.appendChild(opt);
+                }}
+                dataFilter.value = s.data;
+                // NON selezionare operatore singolo — mostra giornata intera
+                onDataFilterChange();
+            }}
+
+            // Dopo che la vista si è aggiornata, crea il pin rosa
+            setTimeout(() => {{
+                // Rimuovi pin precedente
+                if (pinnedMarker) map.removeLayer(pinnedMarker);
+
+                pinnedContatore = contatore;
+                const pinIcon = L.divIcon({{
+                    className: 'marker-pinned',
+                    html: `<div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 3px solid white; box-shadow: 0 4px 12px rgba(0,0,0,0.4); font-size: 16px;">📌</div>`,
+                    iconSize: [32, 32],
+                    iconAnchor: [16, 16]
+                }});
+                pinnedMarker = L.marker([contatore.lat, contatore.lon], {{ icon: pinIcon, zIndexOffset: 10000 }})
+                    .bindPopup(() => createContatorePopup(contatore, '📌', '#f5576c'))
+                    .addTo(map);
+
+                map.flyTo([contatore.lat, contatore.lon], 16);
+                setTimeout(() => {{
+                    if (pinnedMarker) pinnedMarker.openPopup();
+                }}, 600);
+            }}, 500);
+        }}
+
         async function salvaModificheFullscreen() {{
             if (!currentFullscreenEneltel) return;
             
@@ -3489,6 +4032,9 @@ def genera_html_gestionale():
                         <button class="btn-fissa-appuntamento" id="btnFissaAppuntamento" onclick="fissaAppuntamentoInline()">
                             ✅ Fissa Appuntamento
                         </button>
+                        <button class="btn-suggerisci-gestionale" id="btnSuggerisciApp" onclick="apriModaleSuggerimenti()">
+                            🔍 Suggerisci
+                        </button>
                         <button class="btn-fissa-appuntamento" id="btnRimuoviAppuntamento" onclick="rimuoviAppuntamentoGestionale(currentFullscreenEneltel)" style="background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%); display: none;">
                             🗑️ Rimuovi
                         </button>
@@ -3504,6 +4050,29 @@ def genera_html_gestionale():
                     <button class="btn-fullscreen-cancel" onclick="chiudiVistaModifica()">
                         Annulla
                     </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- MODAL SUGGERIMENTI AI -->
+        <div id="suggerimentiModal" class="suggerimenti-modal" onclick="if(event.target===this) chiudiModaleSuggerimenti()">
+            <div class="suggerimenti-modal-content">
+                <div class="sgm-header">
+                    <h3>🔍 Suggerisci Appuntamento</h3>
+                    <button class="sgm-close" onclick="chiudiModaleSuggerimenti()">✕</button>
+                </div>
+                <div class="sgm-filters">
+                    <label>Da:</label>
+                    <input type="date" id="sgmFiltroDa" style="width:130px" onchange="filtraSuggerimentiModal()">
+                    <label>A:</label>
+                    <input type="date" id="sgmFiltroA" style="width:130px" onchange="filtraSuggerimentiModal()">
+                </div>
+                <div class="sgm-body" id="sgmBody">
+                    <div class="sgm-empty">Clicca il pulsante per cercare suggerimenti</div>
+                </div>
+                <div class="sgm-footer">
+                    <button class="sgm-btn-cancel" onclick="chiudiModaleSuggerimenti()">Chiudi</button>
+                    <button class="sgm-btn-apply" id="sgmBtnApply" onclick="applicaSuggerimentoSelezionato()">✅ Applica Suggerimento</button>
                 </div>
             </div>
         </div>

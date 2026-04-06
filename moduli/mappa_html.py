@@ -5928,6 +5928,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             const dateOrdinateArray = Array.from(dateSet).sort();
 
             const dataFilter = document.getElementById('dataFilter');
+            const prevValue = dataFilter.value;
             dataFilter.innerHTML = '<option value="">📅 Tutte le date</option>';
 
             dateOrdinateArray.forEach(data => {{
@@ -5936,6 +5937,11 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                 option.textContent = formatDate(data);
                 dataFilter.appendChild(option);
             }});
+
+            // Ripristina selezione precedente se ancora disponibile
+            if (prevValue && dateOrdinateArray.includes(prevValue)) {{
+                dataFilter.value = prevValue;
+            }}
         }}
 
         function applicaFiltri() {{

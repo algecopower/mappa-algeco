@@ -5,7 +5,6 @@ Include matrice distanze per ottimizzazione percorsi.
 """
 import math
 import requests
-import pandas as pd
 from datetime import datetime
 
 from config import (

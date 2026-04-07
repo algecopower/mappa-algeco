@@ -15,7 +15,6 @@ from flask import Blueprint, request, jsonify, session, send_file
 from moduli.auth import login_required
 from moduli.shared import (
     get_worksheet,
-    get_spreadsheet,
     get_header_map,
     get_headers,
     find_row_by_eneltel,
@@ -24,7 +23,6 @@ from moduli.shared import (
     _rimuovi_appuntamento_da_filone,
     _get_username,
     _api_error,
-    _trova_indice_colonna,
     _trova_indice_multi,
     _callbacks,
     _sheets_retry,
@@ -485,6 +483,8 @@ def _hex_to_sheets_color(hex_color):
     hex_color = hex_color.lstrip('#')
     if len(hex_color) == 3:
         hex_color = ''.join(c * 2 for c in hex_color)
+    if len(hex_color) != 6 or not all(c in '0123456789abcdefABCDEF' for c in hex_color):
+        return {'red': 0, 'green': 0, 'blue': 0}
     r = int(hex_color[0:2], 16) / 255.0
     g = int(hex_color[2:4], 16) / 255.0
     b = int(hex_color[4:6], 16) / 255.0
@@ -520,9 +520,11 @@ def update_filone_formats():
                 row_num = int(parts[0])
             except ValueError:
                 continue
+            if row_num < 2:
+                continue
             col_name = parts[1]
             col_idx = _header_map.get(col_name)
-            if not col_idx:
+            if col_idx is None:
                 continue
 
             cell_a1 = gspread.utils.rowcol_to_a1(row_num, col_idx)
@@ -557,9 +559,11 @@ def update_filone_formats():
                 row_num = int(parts[0])
             except ValueError:
                 continue
+            if row_num < 2:
+                continue
             col_name = parts[1]
             col_idx = _header_map.get(col_name)
-            if not col_idx:
+            if col_idx is None:
                 continue
 
             cell_a1 = gspread.utils.rowcol_to_a1(row_num, col_idx)
@@ -584,31 +588,33 @@ def update_filone_formats():
             for i in range(0, len(batch), CHUNK):
                 _sheets_retry(ws.batch_format, batch[i:i + CHUNK])
 
-        # ---- Aggiorna la cache locale inline ----
-        cache_file = os.path.normpath(os.path.join(
+        # Aggiorna la cache locale con le modifiche
+        cache_file = os.path.join(
             os.path.dirname(os.path.abspath(__file__)), '..',
             'cache', f'cache_formati_{PROVINCIA_ATTIVA.lower()}.json'
-        ))
-        cached_formats = {}
-        if os.path.exists(cache_file):
-            try:
-                with open(cache_file, 'r') as f:
-                    cached_formats = json.load(f).get('formats', {})
-            except Exception:
-                pass
-
-        # Applica aggiornamenti
-        for key, fmt in fmt_updates.items():
-            cached_formats[key] = fmt
-
-        # Rimuovi celle cleared
-        for key in fmt_cleared:
-            cached_formats.pop(key, None)
-
+        )
+        cache_file = os.path.normpath(cache_file)
         try:
-            os.makedirs(os.path.dirname(cache_file), exist_ok=True)
+            cached = {}
+            if os.path.exists(cache_file):
+                with open(cache_file, 'r') as f:
+                    cached = json.load(f)
+            current_formats = cached.get('formats', {})
+            # Applica aggiornamenti
+            for key, fmt in fmt_updates.items():
+                clean_fmt = {k: v for k, v in fmt.items() if v}
+                if clean_fmt:
+                    current_formats[key] = clean_fmt
+                elif key in current_formats:
+                    del current_formats[key]
+            # Applica clearing
+            for key in fmt_cleared:
+                if key in current_formats:
+                    del current_formats[key]
+            cached['formats'] = current_formats
+            cached['updated'] = datetime.now().isoformat()
             with open(cache_file, 'w') as f:
-                json.dump({'formats': cached_formats, 'updated': datetime.now().isoformat()}, f)
+                json.dump(cached, f)
         except Exception as ce:
             logger.warning(f"[Filone] Errore aggiornamento cache formattazione: {ce}")
 
@@ -626,6 +632,9 @@ def update_filone_formats():
 def update_filone_row(row_num):
     """Aggiorna una riga del FILONE (per vista Excel)."""
     try:
+        if row_num < 2:
+            return jsonify({'error': 'Riga non valida'}), 400
+
         fields = request.json
         if not fields:
             return jsonify({'error': 'Nessun campo da aggiornare'}), 400
@@ -633,10 +642,15 @@ def update_filone_row(row_num):
         ws = get_worksheet()
         _header_map = get_header_map()
 
+        # Colonne protette lato server
+        protette = set(c.lower() for c in COLONNE_PROTETTE_FILONE.get(PROVINCIA_ATTIVA, _COLONNE_PROTETTE_BASE))
+
         # Prepara batch update
         updates = []
         for col_name, value in fields.items():
             if col_name.startswith('_'):  # Salta campi interni
+                continue
+            if col_name.lower() in protette:
                 continue
             if col_name in _header_map:
                 updates.append({
@@ -759,14 +773,21 @@ def update_filone_bulk():
         all_updates = []
         rows_ok = 0
 
+        # Colonne protette lato server
+        protette = set(c.lower() for c in COLONNE_PROTETTE_FILONE.get(PROVINCIA_ATTIVA, _COLONNE_PROTETTE_BASE))
+
         for row_num_str, fields in rows_dict.items():
             try:
                 row_num = int(row_num_str)
             except (ValueError, TypeError):
                 continue
+            if row_num < 2:
+                continue
 
             for col_name, value in fields.items():
                 if col_name.startswith('_'):
+                    continue
+                if col_name.lower() in protette:
                     continue
                 if col_name in _header_map:
                     all_updates.append({
@@ -787,7 +808,10 @@ def update_filone_bulk():
         # Rilevamento appuntamenti (per tutte le righe modificate)
         try:
             for row_num_str, fields in rows_dict.items():
-                row_num = int(row_num_str)
+                try:
+                    row_num = int(row_num_str)
+                except (ValueError, TypeError):
+                    continue
                 orario_trovato = None
                 nota_salvata = ''
 
@@ -1134,52 +1158,3 @@ def download_excel_lettere(filename):
         download_name=safe_name,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
-
-
-# ============================================================================
-# PREFERENZE COLONNE PER UTENTE (persistent server-side)
-# ============================================================================
-
-_USER_PREFS_DIR = os.path.normpath(os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'user_prefs'
-))
-
-def _user_prefs_path(username):
-    safe = re.sub(r'[^a-zA-Z0-9_-]', '_', username)
-    return os.path.join(_USER_PREFS_DIR, f'{safe}.json')
-
-
-@bp.route('/api/filone/col-config')
-@login_required
-def get_col_config():
-    """Restituisce le preferenze colonne dell'utente corrente."""
-    username = _get_username()
-    path = _user_prefs_path(username)
-    if os.path.exists(path):
-        try:
-            with open(path, 'r') as f:
-                return jsonify(json.load(f))
-        except Exception:
-            pass
-    return jsonify({})
-
-
-@bp.route('/api/filone/col-config', methods=['PUT'])
-@login_required
-def save_col_config():
-    """Salva le preferenze colonne dell'utente corrente."""
-    try:
-        body = request.json
-        if not body or not isinstance(body, dict):
-            return jsonify({'error': 'Dati non validi'}), 400
-        # Accetta solo chiavi note
-        allowed = {'colWidths', 'colOrder', 'hiddenCols'}
-        prefs = {k: v for k, v in body.items() if k in allowed}
-        os.makedirs(_USER_PREFS_DIR, exist_ok=True)
-        username = _get_username()
-        path = _user_prefs_path(username)
-        with open(path, 'w') as f:
-            json.dump(prefs, f)
-        return jsonify({'ok': True})
-    except Exception as e:
-        return _api_error(e, 'salvataggio preferenze colonne')

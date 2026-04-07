@@ -10,9 +10,7 @@ Funzionalità:
 """
 import os
 import json
-import csv
 import threading
-import time as time_module
 from datetime import datetime, date
 import traceback
 
@@ -263,7 +261,12 @@ def ripristina_backup(filename: str) -> dict:
     Returns:
         dict con risultato del ripristino
     """
-    percorso = os.path.join(BACKUP_DIR, filename)
+    percorso = os.path.realpath(os.path.join(BACKUP_DIR, filename))
+    if not percorso.startswith(os.path.realpath(BACKUP_DIR) + os.sep):
+        return {
+            'success': False,
+            'message': 'Percorso non valido'
+        }
     
     if not os.path.exists(percorso):
         return {
@@ -336,7 +339,12 @@ def elimina_backup(filename: str) -> dict:
     Returns:
         dict con risultato
     """
-    percorso = os.path.join(BACKUP_DIR, filename)
+    percorso = os.path.realpath(os.path.join(BACKUP_DIR, filename))
+    if not percorso.startswith(os.path.realpath(BACKUP_DIR) + os.sep):
+        return {
+            'success': False,
+            'message': 'Percorso non valido'
+        }
     
     if not os.path.exists(percorso):
         return {

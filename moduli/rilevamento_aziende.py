@@ -36,7 +36,7 @@ _SUFFISSI_AZIENDA = [
     r'\bFONDAZIONE\b',
     r'\bIMPRESA\b',
     r'\bDITTA\b',
-    r'\bDI\b',                           # DI (ditta individuale)
+    r'\bDI\b',                           # DI (ditta individuale: "NOME DITTA DI NOME COGNOME")
     r'\bAZIENDA\b',
     r'\bINTERNATIONAL\b',
     r'\bMANAGEMENT\b',

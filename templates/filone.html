@@ -373,7 +373,20 @@
         .colmgr-foot button.d { border-color: var(--danger); color: var(--danger); }
         .colmgr-foot button.d:hover { background: var(--danger); color: #fff; }
 
-
+        /* Hide column button in filter popup */
+        .fpop-hide {
+            width: 100%;
+            padding: 5px;
+            border: 1px solid var(--border);
+            border-radius: 3px;
+            background: var(--bg-card);
+            color: var(--text-muted);
+            font-size: 0.76em;
+            cursor: pointer;
+            margin-bottom: 6px;
+            text-align: left;
+        }
+        .fpop-hide:hover { border-color: var(--danger); color: var(--danger); }
 
         /* Column drag reorder */
         .col-drag-ghost {
@@ -428,7 +441,7 @@
             right: 0;
             border-bottom: 1px solid var(--border);
         }
-        .vrow:hover .vc:not(.has-bg) { background: var(--bg-cell-hover); }
+        .vrow:hover .vc { background: var(--bg-cell-hover) !important; }
         .vc {
             padding: 4px 10px;
             font-size: 0.82em;
@@ -497,7 +510,8 @@
             z-index: 10;
         }
         .vc.mod {
-            box-shadow: inset 3px 0 0 var(--modified-border), inset 0 0 0 1000px var(--modified-bg);
+            background: var(--modified-bg) !important;
+            box-shadow: inset 3px 0 0 var(--modified-border);
         }
 
         /* FORMAT TOOLBAR */
@@ -535,7 +549,6 @@
             position: relative;
             display: flex;
             align-items: center;
-            margin: 0 2px;
         }
         .fmt-color-wrap input[type=color] {
             position: absolute;
@@ -565,13 +578,6 @@
             cursor: pointer;
         }
         .fmt-color-preview:hover { border-color: var(--border); background: var(--bg-cell-hover); }
-        .fmt-color-dd { display: none; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 4px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 6px; z-index: 200; box-shadow: 0 4px 12px rgba(0,0,0,.25); }
-        .fmt-color-dd.open { display: block; }
-        .fmt-color-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 3px; margin-bottom: 4px; }
-        .fmt-color-swatch { width: 20px; height: 20px; border-radius: 3px; border: 1px solid var(--border); cursor: pointer; transition: transform .1s; }
-        .fmt-color-swatch:hover { transform: scale(1.25); border-color: var(--primary); z-index: 1; }
-        .fmt-color-custom { display: flex; align-items: center; gap: 4px; font-size: 0.7em; color: var(--text-muted); cursor: pointer; padding-top: 4px; border-top: 1px solid var(--border); }
-        .fmt-color-custom:hover { color: var(--text); }
         .fmt-sep { width: 1px; height: 18px; background: var(--border); margin: 0 2px; }
 
         .vc.protected {
@@ -848,10 +854,10 @@
 
         /* Multi-cell selection range */
         .vc.sel-range {
-            box-shadow: inset 0 0 0 1000px rgba(37, 211, 102, 0.12);
+            background: rgba(37, 211, 102, 0.12) !important;
         }
         .vc.sel-range.sel {
-            box-shadow: inset 0 0 0 1000px rgba(37, 211, 102, 0.25);
+            background: rgba(37, 211, 102, 0.25) !important;
         }
         body.nosel, body.nosel * { user-select: none !important; -webkit-user-select: none !important; -moz-user-select: none !important; -ms-user-select: none !important; }
 
@@ -975,7 +981,7 @@
         /* Status bar stats */
         .status-bar .st-stats { color: var(--info); font-weight: 600; }
 
-        /* VLOOKUP (Ricerca Avanzata) Panel */
+        /* VLOOKUP (Cerca Vert) Panel */
         .vl-overlay {
             position: fixed; inset: 0;
             background: rgba(0,0,0,0.45);
@@ -1143,8 +1149,6 @@
 </head>
 <body>
     <div class="toolbar">
-        <a href="/" style="text-decoration:none;color:var(--text-muted);font-size:0.85em;margin-right:4px" title="Mappa">&#x1F5FA;</a>
-        <a href="/dashboard" style="text-decoration:none;color:var(--text-muted);font-size:0.85em;margin-right:8px" title="Dashboard">&#x1F4C8;</a>
         <div class="toolbar-title">&#x1F4CA; Filone</div>
         <div class="toolbar-sep"></div>
         <span class="toolbar-info" id="infoRighe">Caricamento...</span>
@@ -1161,7 +1165,7 @@
             <button class="tb" id="btnUndo" onclick="undo()" style="display:none" title="Annulla (Ctrl+Z)">&#x21A9;</button>
             <button class="tb" id="btnRedo" onclick="redo()" style="display:none" title="Ripristina (Ctrl+Y)">&#x21AA;</button>
             <button class="tb" onclick="openFindReplace()" title="Trova e Sostituisci (Ctrl+H)">&#x1F50D; Sostituisci</button>
-            <button class="tb" onclick="openVlookup()" title="Ricerca Avanzata (Ctrl+L)">&#x1F50D; Ricerca Avanzata</button>
+            <button class="tb" onclick="openVlookup()" title="Cerca Vert / VLOOKUP (Ctrl+L)">&#x1F50D; Cerca Vert</button>
             <div class="toolbar-sep"></div>
             <div class="fmt-bar">
                 <button class="fmt-btn" id="fmtBold" onclick="toggleCellFormat('bold')" title="Grassetto (Ctrl+B)"><span class="fmt-icon">B</span></button>
@@ -1169,21 +1173,13 @@
                 <button class="fmt-btn" id="fmtUnderline" onclick="toggleCellFormat('underline')" title="Sottolineato (Ctrl+U)"><span class="fmt-icon fmt-icon-u">U</span></button>
                 <button class="fmt-btn" id="fmtStrike" onclick="toggleCellFormat('strikethrough')" title="Barrato (Ctrl+5)"><span class="fmt-icon fmt-icon-s">S</span></button>
                 <div class="fmt-sep"></div>
-                <div class="fmt-color-wrap" id="fmtTextColorWrap">
-                    <div class="fmt-color-preview" id="fmtTextColorPreview" onclick="toggleColorDropdown('text')" title="Colore testo" style="color:var(--text)">A</div>
-                    <input type="color" id="fmtTextColor" value="#ef4444" onchange="setCellFormatColor('textColor', this.value); closeColorDropdowns()" style="display:none">
-                    <div class="fmt-color-dd" id="fmtTextColorDD">
-                        <div class="fmt-color-grid" id="fmtTextColorGrid"></div>
-                        <div class="fmt-color-custom" onclick="qs('#fmtTextColor').style.display='block'; qs('#fmtTextColor').click()">&#x1F3A8; Personalizzato...</div>
-                    </div>
+                <div class="fmt-color-wrap">
+                    <div class="fmt-color-preview" id="fmtTextColorPreview" onclick="qs('#fmtTextColor').click()" title="Colore testo" style="color:var(--text)">A</div>
+                    <input type="color" id="fmtTextColor" value="#ef4444" onchange="setCellFormatColor('textColor', this.value)">
                 </div>
-                <div class="fmt-color-wrap" id="fmtBgColorWrap">
-                    <div class="fmt-color-preview" id="fmtHighlightPreview" onclick="toggleColorDropdown('bg')" title="Evidenzia cella" style="background:var(--bg-cell);color:var(--text-muted);font-size:0.7em">&#x1F58D;</div>
-                    <input type="color" id="fmtHighlight" value="#facc15" onchange="setCellFormatColor('bgColor', this.value); closeColorDropdowns()" style="display:none">
-                    <div class="fmt-color-dd" id="fmtBgColorDD">
-                        <div class="fmt-color-grid" id="fmtBgColorGrid"></div>
-                        <div class="fmt-color-custom" onclick="qs('#fmtHighlight').style.display='block'; qs('#fmtHighlight').click()">&#x1F3A8; Personalizzato...</div>
-                    </div>
+                <div class="fmt-color-wrap">
+                    <div class="fmt-color-preview" id="fmtHighlightPreview" onclick="qs('#fmtHighlight').click()" title="Evidenzia cella" style="background:var(--bg-cell);color:var(--text-muted);font-size:0.7em">&#x1F58D;</div>
+                    <input type="color" id="fmtHighlight" value="#facc15" onchange="setCellFormatColor('bgColor', this.value)">
                 </div>
                 <div class="fmt-sep"></div>
                 <button class="fmt-btn" onclick="clearCellFormat()" title="Cancella formattazione">&#x1F6AB;</button>
@@ -1257,7 +1253,7 @@
     <div class="vl-overlay" id="vlOverlay" onclick="closeVlookup()"></div>
     <div class="vl-panel" id="vlPanel">
         <div class="vl-hdr">
-            <h3>&#x1F50D; Ricerca Avanzata</h3>
+            <h3>&#x1F50D; Cerca Vert <span style="font-size:0.7em;color:var(--text-muted);font-weight:400">(VLOOKUP)</span></h3>
             <button class="vl-close" onclick="closeVlookup()">&times;</button>
         </div>
         <div class="vl-body">
@@ -1427,11 +1423,10 @@ let sortDir = 'asc';
 let pending = {};           // "row:col" -> {row, col, old, val}
 let colFilters = {};        // colName -> Set(values)
 let colorFilterCol = '';     // column name for color filter
-let colorFilterColor = '';   // color value to filter by ('' = no filter)
-let colorFilterType = '';    // 'text' | 'bg' | 'condText' — tipo filtro colore
+let colorFilterColor = '';   // textColor value to filter by ('' = no filter)
 let podFilterSet = null;    // Set di valori filtro attivi, null = nessun filtro
 let podColName = '';        // nome colonna POD (auto-detected)
-let vlFilterCol = '';       // nome colonna usata per il filtro dalla Ricerca Avanzata
+let vlFilterCol = '';       // nome colonna usata per il filtro dal Cerca Vert
 let colTypes = {};          // colName -> 'date'|'time'|'number'|'text'
 let hiddenCols = new Set(); // set of hidden column indices
 let protectedCols = new Set(); // set of protected (read-only) column names (lowercase)
@@ -1490,11 +1485,6 @@ async function loadData() {
         initCondFormat();
         loadCellFormats();
         detectPodColumn();
-        // Carica preferenze colonne dal server
-        try {
-            var cfgR = await fetch('/api/filone/col-config');
-            if (cfgR.ok) _serverColConfig = await cfgR.json();
-        } catch(e) {}
         initColWidths();
         initColOrder();
         loadHiddenCols();
@@ -1626,24 +1616,16 @@ function initColWidths() {
     });
 }
 
-var _colConfigTimer = null;
-function _saveColConfigToServer() {
-    clearTimeout(_colConfigTimer);
-    _colConfigTimer = setTimeout(function() {
-        fetch('/api/filone/col-config', {
-            method: 'PUT',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                colWidths: colWidths,
-                colOrder: colOrder,
-                hiddenCols: Array.from(hiddenCols)
-            })
-        }).catch(function() {});
-    }, 500);
+function saveColWidths() {
+    try { localStorage.setItem('filone_col_widths', JSON.stringify(colWidths)); } catch(e) {}
 }
-function saveColWidths() { _saveColConfigToServer(); }
-function loadColWidths() { return _serverColConfig ? _serverColConfig.colWidths || null : null; }
-var _serverColConfig = null;
+function loadColWidths() {
+    try {
+        var s = localStorage.getItem('filone_col_widths');
+        if (s) return JSON.parse(s);
+    } catch(e) {}
+    return null;
+}
 
 // ============================================================
 // COLUMN ORDER – PERSISTENCE
@@ -1663,17 +1645,30 @@ function rebuildColOrderMap() {
     colOrderMap = {};
     for (var i = 0; i < colOrder.length; i++) colOrderMap[colOrder[i]] = i;
 }
-function saveColOrder() { _saveColConfigToServer(); }
-function loadColOrder() { return _serverColConfig ? _serverColConfig.colOrder || null : null; }
+function saveColOrder() {
+    try { localStorage.setItem('filone_col_order', JSON.stringify(colOrder)); } catch(e) {}
+}
+function loadColOrder() {
+    try {
+        var s = localStorage.getItem('filone_col_order');
+        if (s) return JSON.parse(s);
+    } catch(e) {}
+    return null;
+}
 // ============================================================
 // HIDDEN COLUMNS – PERSISTENCE
 // ============================================================
-function saveHiddenCols() { _saveColConfigToServer(); }
+function saveHiddenCols() {
+    try { localStorage.setItem('filone_hidden_cols', JSON.stringify(Array.from(hiddenCols))); } catch(e) {}
+}
 function loadHiddenCols() {
-    if (_serverColConfig && _serverColConfig.hiddenCols) {
-        var arr = _serverColConfig.hiddenCols;
-        hiddenCols = new Set(arr.filter(function(c) { return c >= 0 && c < headers.length; }));
-    }
+    try {
+        var s = localStorage.getItem('filone_hidden_cols');
+        if (s) {
+            var arr = JSON.parse(s);
+            hiddenCols = new Set(arr.filter(function(c) { return c >= 0 && c < headers.length; }));
+        }
+    } catch(e) {}
 }
 function applyHiddenCols() {
     var style = qs('#colHideStyle');
@@ -1726,15 +1721,15 @@ function updateHiddenColsBtn() {
     var btn = qs('#btnHiddenCols');
     var n = hiddenCols.size;
     if (n > 0) {
-        btn.innerHTML = '&#x2630; Colonne <span style="background:var(--warning);color:#000;border-radius:50%;min-width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;font-size:0.75em;font-weight:700;margin-left:3px;vertical-align:middle">' + n + '</span>';
+        btn.innerHTML = '&#x2630; Colonne <span style=\"background:var(--warning);color:#000;border-radius:8px;padding:0 5px;font-size:0.85em;margin-left:2px\">' + n + '</span>';
     } else {
         btn.innerHTML = '&#x2630; Colonne';
     }
 }
 
 function resetColWidths() {
-    // Reset colonne: rimuovi preferenze dal server
-    hiddenCols.clear();
+    localStorage.removeItem('filone_col_widths');
+    localStorage.removeItem('filone_col_order');
     colWidths = headers.map(function(h, i) {
         var maxLen = h.length;
         var sample = Math.min(rawData.length, 100);
@@ -1746,9 +1741,6 @@ function resetColWidths() {
     });
     colOrder = headers.map(function(_, i) { return i; });
     rebuildColOrderMap();
-    applyHiddenCols();
-    updateHiddenColsBtn();
-    _saveColConfigToServer();
     buildHeader();
     updateLayout();
     renderVisible(true);
@@ -1780,9 +1772,6 @@ function buildHeader() {
     hdr.innerHTML = html;
 }
 
-qs('#gridHeader')?.addEventListener?.('click', function(e) {
-    // wait for DOM
-});
 // Defer header event binding until after first buildHeader
 (function setupHeaderEvents() {
     var hdr = qs('#gridHeader');
@@ -1978,6 +1967,7 @@ qs('#gridHeader')?.addEventListener?.('click', function(e) {
 function applyFilters() {
     var q = qs('#globalSearch').value.toLowerCase().trim();
     filtered = [];
+    selRange = null;
 
     // Rows with pending edits bypass filters so they don't disappear while editing
     var pendingRows = new Set();
@@ -1988,7 +1978,7 @@ function applyFilters() {
         var pass = true;
         var hasPending = pendingRows.has(row._row);
 
-        // Ricerca Avanzata / POD filter (skip for rows with pending edits)
+        // Cerca Vert / POD filter (skip for rows with pending edits)
         if (!hasPending && podFilterSet) {
             var filterColName = vlFilterCol || podColName;
             if (filterColName) {
@@ -2007,23 +1997,14 @@ function applyFilters() {
             if (!pass) continue;
         }
 
-        // Color/format filter (skip for rows with pending edits)
+        // Color filter (skip for rows with pending edits)
         if (!hasPending && colorFilterCol && colorFilterColor) {
+            var cfVal = (row[colorFilterCol] != null ? row[colorFilterCol] : '').toString().trim();
+            var cfRules = condRulesByCol[colorFilterCol];
             var cfMatch = false;
-            if (colorFilterType === 'bg' || colorFilterType === 'text') {
-                var ck = row._row + ':' + colorFilterCol;
-                var cf = cellFormats[ck];
-                if (cf) {
-                    if (colorFilterType === 'bg' && cf.bgColor === colorFilterColor) cfMatch = true;
-                    if (colorFilterType === 'text' && cf.textColor === colorFilterColor) cfMatch = true;
-                }
-            } else {
-                var cfVal = (row[colorFilterCol] != null ? row[colorFilterCol] : '').toString().trim();
-                var cfRules = condRulesByCol[colorFilterCol];
-                if (cfRules) {
-                    for (var cfr = 0; cfr < cfRules.length; cfr++) {
-                        if (evalCondRule(cfRules[cfr], cfVal) && cfRules[cfr].textColor === colorFilterColor) { cfMatch = true; break; }
-                    }
+            if (cfRules) {
+                for (var cfr = 0; cfr < cfRules.length; cfr++) {
+                    if (evalCondRule(cfRules[cfr], cfVal) && cfRules[cfr].textColor === colorFilterColor) { cfMatch = true; break; }
                 }
             }
             if (!cfMatch) { pass = false; }
@@ -2269,7 +2250,6 @@ function fillRow(node, row, visIdx) {
         if (editing && row._row === selRow && i === selCol) cls += ' editing';
 
         // 1) Cell-level formatting (direct, manual — ha priorità visiva base)
-        var hasBg = false;
         var cfmt = getCellFormat(row._row, cn);
         if (cfmt) {
             if (cfmt.bold) cell.style.fontWeight = '700';
@@ -2279,14 +2259,14 @@ function fillRow(node, row, visIdx) {
             if (cfmt.strikethrough) td.push('line-through');
             if (td.length) cell.style.textDecoration = td.join(' ');
             if (cfmt.textColor) cell.style.color = cfmt.textColor;
-            if (cfmt.bgColor) { cell.style.backgroundColor = cfmt.bgColor; hasBg = true; }
+            if (cfmt.bgColor) cell.style.backgroundColor = cfmt.bgColor;
         }
 
         // 2) Conditional formatting (sovrascrive i colori/stili se match)
         var condRule = getCondStyle(i, val);
         if (condRule) {
             if (condRule.textColor) cell.style.color = condRule.textColor;
-            if (condRule.bgColor) { cell.style.backgroundColor = condRule.bgColor; hasBg = true; }
+            if (condRule.bgColor) cell.style.backgroundColor = condRule.bgColor;
             if (condRule.bold) cell.style.fontWeight = '700';
             if (condRule.italic) cell.style.fontStyle = 'italic';
             var ctd = [];
@@ -2294,7 +2274,6 @@ function fillRow(node, row, visIdx) {
             if (condRule.strikethrough) ctd.push('line-through');
             if (ctd.length) cell.style.textDecoration = ctd.join(' ');
         }
-        if (hasBg) cls += ' has-bg';
 
         // Find & Replace highlight
         if (fnrMatchSet.size > 0 && fnrMatchSet.has(row._row + ':' + i)) {
@@ -2314,6 +2293,15 @@ qs('#gridScroll').addEventListener('scroll', function() {
         scrollRaf = 0;
     });
 }, { passive: true });
+
+var resizeRaf = 0;
+window.addEventListener('resize', function() {
+    if (resizeRaf) return;
+    resizeRaf = requestAnimationFrame(function() {
+        renderVisible(true);
+        resizeRaf = 0;
+    });
+});
 
 // ============================================================
 // CELL CLICK/DBLCLICK (delegation)
@@ -2889,6 +2877,10 @@ function ensureVisible(vi, ci) {
 // SAVE
 // ============================================================
 async function saveAll() {
+    // Flush any in-progress edit to pending before saving
+    // (blur timeout is 80ms, so commitEdit may not have run yet when clicking the button)
+    if (editing) commitEdit();
+
     var changes = Object.values(pending);
     if (!changes.length) return;
 
@@ -3082,7 +3074,7 @@ function openFilter(ci, x, y) {
     for (var i = 0; i < rawData.length; i++) {
         var row = rawData[i];
         var pass = true;
-        // Ricerca Avanzata / POD filter
+        // Cerca Vert / POD filter
         if (podFilterSet) {
             var filterColName = vlFilterCol || podColName;
             if (filterColName) {
@@ -3100,21 +3092,12 @@ function openFilter(ci, x, y) {
         if (!pass) continue;
         // Color filter
         if (colorFilterCol && colorFilterColor && colorFilterCol !== cn) {
+            var cfVal = (row[colorFilterCol] != null ? row[colorFilterCol] : '').toString().trim();
+            var cfRules = condRulesByCol[colorFilterCol];
             var cfMatch = false;
-            if (colorFilterType === 'bg' || colorFilterType === 'text') {
-                var ck2 = row._row + ':' + colorFilterCol;
-                var cf2 = cellFormats[ck2];
-                if (cf2) {
-                    if (colorFilterType === 'bg' && cf2.bgColor === colorFilterColor) cfMatch = true;
-                    if (colorFilterType === 'text' && cf2.textColor === colorFilterColor) cfMatch = true;
-                }
-            } else {
-                var cfVal = (row[colorFilterCol] != null ? row[colorFilterCol] : '').toString().trim();
-                var cfRules = condRulesByCol[colorFilterCol];
-                if (cfRules) {
-                    for (var cfr = 0; cfr < cfRules.length; cfr++) {
-                        if (evalCondRule(cfRules[cfr], cfVal) && cfRules[cfr].textColor === colorFilterColor) { cfMatch = true; break; }
-                    }
+            if (cfRules) {
+                for (var cfr = 0; cfr < cfRules.length; cfr++) {
+                    if (evalCondRule(cfRules[cfr], cfVal) && cfRules[cfr].textColor === colorFilterColor) { cfMatch = true; break; }
                 }
             }
             if (!cfMatch) pass = false;
@@ -3158,61 +3141,32 @@ function openFilter(ci, x, y) {
     html += '<button' + sortDescActive + ' onclick="fpSort(' + ci + ',\'desc\')">\u25BC ' + sortDescLabel + '</button>';
     html += '<span title="Tipo: ' + ctype + '" style="max-width:36px;padding:6px 10px;font-size:13px;opacity:.55;cursor:default;user-select:none">' + typeIcon + '</span>';
     html += '</div>';
-    // Color filter section — collect colors from cell formats AND cond format
-    var fmtTextColors = {}; // textColor -> count (cell-level)
-    var fmtBgColors = {};   // bgColor -> count (cell-level)
-    var condTextColors = {}; // textColor -> count (cond rules)
-    // Scan all visible rows for cell-level formatting on this column
-    for (var ri = 0; ri < rawData.length; ri++) {
-        var rr = rawData[ri];
-        var ck = rr._row + ':' + cn;
-        var cf = cellFormats[ck];
-        if (cf) {
-            if (cf.textColor) fmtTextColors[cf.textColor] = (fmtTextColors[cf.textColor] || 0) + 1;
-            if (cf.bgColor) fmtBgColors[cf.bgColor] = (fmtBgColors[cf.bgColor] || 0) + 1;
-        }
-    }
-    // Cond format colors
+    html += '<button class="fpop-hide" onclick="hideColumn(' + ci + ');fpClose()">&#x1F441;&#x200D;&#x1F5E8; Nascondi colonna &laquo;' + esc(cn) + '&raquo;</button>';
+
+    // Color filter section — collect distinct cond format colors (solo righe visibili con altri filtri)
+    var colColors = {}; // textColor -> count
     var rules = condRulesByCol[cn];
     if (rules && rules.length > 0) {
+        // Usa lo stesso set 'vals' già filtrato per iterare solo sulle righe rilevanti
         vals.forEach(function(rv) {
             for (var rr = 0; rr < rules.length; rr++) {
                 if (evalCondRule(rules[rr], rv) && rules[rr].textColor) {
                     var c2 = rules[rr].textColor;
-                    condTextColors[c2] = (condTextColors[c2] || 0) + 1;
+                    colColors[c2] = (colColors[c2] || 0) + 1;
                     break;
                 }
             }
         });
     }
-    var hasTextColors = Object.keys(fmtTextColors).length > 0;
-    var hasBgColors = Object.keys(fmtBgColors).length > 0;
-    var hasCondColors = Object.keys(condTextColors).length > 0;
-    if (hasTextColors || hasBgColors || hasCondColors) {
+    var colorKeys = Object.keys(colColors);
+    if (colorKeys.length > 0) {
+        html += '<div class="fpop-colors">';
+        html += '<span class="fpop-colors-label">🎨 Filtra per colore:</span>';
         var activeColor = (colorFilterCol === cn) ? colorFilterColor : '';
-        var activeType = (colorFilterCol === cn) ? colorFilterType : '';
-        html += '<div class="fpop-colors" style="flex-wrap:wrap">';
-        html += '<span class="fpop-colors-label" style="width:100%;margin-bottom:3px">🎨 Filtra per formattazione:</span>';
-        if (hasBgColors) {
-            html += '<span class="fpop-colors-label">Sfondo:</span>';
-            Object.keys(fmtBgColors).forEach(function(cc) {
-                var isAct = (activeType === 'bg' && activeColor === cc) ? ' fpop-color-active' : '';
-                html += '<button class="fpop-color-btn' + isAct + '" style="background:' + cc + ';color:#000" onclick="fpFmtFilter(' + ci + ',\'' + cc.replace(/'/g, "\\'") + '\',\'bg\')" title="' + fmtBgColors[cc] + ' righe">■</button>';
-            });
-        }
-        if (hasTextColors) {
-            html += '<span class="fpop-colors-label">Testo:</span>';
-            Object.keys(fmtTextColors).forEach(function(cc) {
-                var isAct = (activeType === 'text' && activeColor === cc) ? ' fpop-color-active' : '';
-                html += '<button class="fpop-color-btn' + isAct + '" style="color:' + cc + '" onclick="fpFmtFilter(' + ci + ',\'' + cc.replace(/'/g, "\\'") + '\',\'text\')" title="' + fmtTextColors[cc] + ' righe">A</button>';
-            });
-        }
-        if (hasCondColors) {
-            html += '<span class="fpop-colors-label">Regole:</span>';
-            Object.keys(condTextColors).forEach(function(cc) {
-                var isAct = (activeType === 'condText' && activeColor === cc) ? ' fpop-color-active' : '';
-                html += '<button class="fpop-color-btn' + isAct + '" style="color:' + cc + '" onclick="fpFmtFilter(' + ci + ',\'' + cc.replace(/'/g, "\\'") + '\',\'condText\')" title="' + condTextColors[cc] + ' righe">A</button>';
-            });
+        for (var ck = 0; ck < colorKeys.length; ck++) {
+            var cc = colorKeys[ck];
+            var isActive = (activeColor === cc) ? ' fpop-color-active' : '';
+            html += '<button class="fpop-color-btn' + isActive + '" style="color:' + cc + '" onclick="fpColorFilter(' + ci + ',\'' + cc.replace(/'/g, "\\'") + '\')" title="' + colColors[cc] + ' righe">A</button>';
         }
         if (activeColor) {
             html += '<button class="fpop-color-btn fpop-color-clear" onclick="fpColorClear()" title="Rimuovi filtro colore">\u2715</button>';
@@ -3261,23 +3215,17 @@ function fpSort(ci, dir) {
     applyFilters();
 }
 
-function fpFmtFilter(ci, color, type) {
+function fpColorFilter(ci, color) {
     colorFilterCol = headers[ci];
     colorFilterColor = color;
-    colorFilterType = type;
     fpClose();
     buildHeader();
     applyFilters();
 }
 
-function fpColorFilter(ci, color) {
-    fpFmtFilter(ci, color, 'condText');
-}
-
 function fpColorClear() {
     colorFilterCol = '';
     colorFilterColor = '';
-    colorFilterType = '';
     fpClose();
     buildHeader();
     applyFilters();
@@ -3341,7 +3289,6 @@ function isProtected(colName) {
     return protectedCols.has(colName.toLowerCase()) && !unlockedCols.has(colName.toLowerCase());
 }
 function toast(msg, type) {
-    if (type !== 'error') return;
     var t = qs('#toast');
     t.textContent = msg;
     t.className = 'toast ' + type + ' show';
@@ -3359,7 +3306,7 @@ window.onbeforeunload = function(e) {
 };
 
 // ============================================================
-// VLOOKUP FILTER (Filtra sul filone dai risultati Ricerca Avanzata)
+// VLOOKUP FILTER (Filtra sul filone dai risultati Cerca Vert)
 // ============================================================
 function vlApplyAsFilter() {
     if (vlResults.length === 0) { toast('Nessun risultato da filtrare', 'warning'); return; }
@@ -3382,7 +3329,7 @@ function clearVlFilter() {
     podFilterSet = null;
     vlFilterCol = '';
     applyFilters();
-    toast('Filtro Ricerca Avanzata rimosso', 'warning');
+    toast('Filtro Cerca Vert rimosso', 'warning');
 }
 
 // ============================================================
@@ -3395,12 +3342,12 @@ function updateActiveFilterBadges() {
     // Column filters badges
     for (var cn in colFilters) {
         var count = colFilters[cn].size;
-        html += '<span class="filter-badge">' + esc(cn) + ': ' + count + ' val <span class="badge-x" onclick="removeColFilter(\'' + esc(cn).replace(/'/g, "\\'") + '\')">\u2715</span></span>';
+        html += '<span class="filter-badge">' + esc(cn) + ': ' + count + ' val <span class="badge-x" data-col="' + esc(cn) + '" onclick="removeColFilter(this.dataset.col)">\u2715</span></span>';
     }
 
-    // Ricerca Avanzata filter badge
+    // Cerca Vert filter badge
     if (podFilterSet) {
-        var filterLabel = vlFilterCol || podColName || 'Ricerca Avanzata';
+        var filterLabel = vlFilterCol || podColName || 'Cerca Vert';
         html += '<span class="filter-badge">\uD83D\uDD0D ' + esc(filterLabel) + ': ' + podFilterSet.size + ' <span class="badge-x" onclick="clearVlFilterQuick()">\u2715</span></span>';
     }
 
@@ -4033,9 +3980,23 @@ async function _syncFormatsToServer() {
         var fmts = {};
         for (var i = 0; i < dirtyKeys.length; i++) {
             var k = dirtyKeys[i];
-            if (cellFormats[k]) fmts[k] = cellFormats[k];
+            if (cellFormats[k]) {
+                // Send complete boolean state (explicit false to reset on Sheets)
+                var full = {
+                    bold: !!cellFormats[k].bold,
+                    italic: !!cellFormats[k].italic,
+                    underline: !!cellFormats[k].underline,
+                    strikethrough: !!cellFormats[k].strikethrough
+                };
+                if (cellFormats[k].textColor) full.textColor = cellFormats[k].textColor;
+                if (cellFormats[k].bgColor) full.bgColor = cellFormats[k].bgColor;
+                fmts[k] = full;
+            } else {
+                // All formatting removed -> treat as cleared
+                if (clearedKeys.indexOf(k) < 0) clearedKeys.push(k);
+            }
         }
-        body.formats = fmts;
+        if (Object.keys(fmts).length > 0) body.formats = fmts;
     }
     if (clearedKeys.length > 0) {
         body.cleared = clearedKeys;
@@ -4148,66 +4109,6 @@ function setCellFormatColor(prop, color) {
     }
 }
 
-// ---- Preset color dropdowns ----
-var _presetColors = [
-    '#000000', '#434343', '#666666', '#999999', '#b7b7b7', '#ffffff',
-    '#ff0000', '#ff9900', '#ffff00', '#00ff00', '#00ffff', '#0000ff',
-    '#9900ff', '#ff00ff', '#e06666', '#f6b26b', '#ffd966', '#93c47d',
-    '#76a5af', '#6fa8dc', '#8e7cc3', '#c27ba0', '#cc0000', '#e69138',
-    '#f1c232', '#6aa84f', '#45818e', '#3d85c6', '#674ea7', '#a64d79',
-    '#990000', '#b45f06', '#bf9000', '#38761d', '#134f5c', '#0b5394',
-    '#351c75', '#741b47', '#00ff00', '#00cc00', '#00e5ff', '#ff6d00'
-];
-
-function _buildColorGrid(containerId, prop) {
-    var grid = qs('#' + containerId);
-    if (!grid) return;
-    grid.innerHTML = '';
-    for (var i = 0; i < _presetColors.length; i++) {
-        var sw = document.createElement('div');
-        sw.className = 'fmt-color-swatch';
-        sw.style.background = _presetColors[i];
-        sw.title = _presetColors[i];
-        sw.dataset.color = _presetColors[i];
-        sw.dataset.prop = prop;
-        sw.onclick = function() {
-            setCellFormatColor(this.dataset.prop, this.dataset.color);
-            closeColorDropdowns();
-        };
-        grid.appendChild(sw);
-    }
-}
-
-function toggleColorDropdown(type) {
-    var dd = type === 'text' ? qs('#fmtTextColorDD') : qs('#fmtBgColorDD');
-    var other = type === 'text' ? qs('#fmtBgColorDD') : qs('#fmtTextColorDD');
-    if (other) other.classList.remove('open');
-    if (dd) dd.classList.toggle('open');
-}
-
-function closeColorDropdowns() {
-    var dd1 = qs('#fmtTextColorDD'), dd2 = qs('#fmtBgColorDD');
-    if (dd1) dd1.classList.remove('open');
-    if (dd2) dd2.classList.remove('open');
-}
-
-// Close dropdowns on outside click
-document.addEventListener('click', function(e) {
-    if (!e.target.closest('#fmtTextColorWrap') && !e.target.closest('#fmtBgColorWrap')) {
-        closeColorDropdowns();
-    }
-});
-
-// Init color grids on load
-(function() {
-    var _initGrids = function() {
-        _buildColorGrid('fmtTextColorGrid', 'textColor');
-        _buildColorGrid('fmtBgColorGrid', 'bgColor');
-    };
-    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _initGrids);
-    else _initGrids();
-})();
-
 function clearCellFormat() {
     var keys = getSelectedCellKeys();
     if (keys.length === 0) { toast('Seleziona almeno una cella', 'warning'); return; }
@@ -4231,20 +4132,6 @@ function updateFormatToolbarState() {
     if (italicBtn) italicBtn.classList.toggle('active', !!fmt.italic);
     if (underBtn) underBtn.classList.toggle('active', !!fmt.underline);
     if (strikeBtn) strikeBtn.classList.toggle('active', !!fmt.strikethrough);
-    // Sync color previews with selected cell
-    var tc = fmt.textColor || '';
-    var bg = fmt.bgColor || '';
-    var tcPrev = qs('#fmtTextColorPreview');
-    var bgPrev = qs('#fmtHighlightPreview');
-    var tcInput = qs('#fmtTextColor');
-    var bgInput = qs('#fmtHighlight');
-    if (tcPrev) tcPrev.style.color = tc || 'var(--text)';
-    if (tcInput) tcInput.value = tc || '#ef4444';
-    if (bgPrev) {
-        bgPrev.style.background = bg || 'var(--bg-cell)';
-        bgPrev.style.color = bg ? '#000' : 'var(--text-muted)';
-    }
-    if (bgInput) bgInput.value = bg || '#facc15';
 }
 
 function getCellFormat(rn, cn) {
@@ -4293,7 +4180,7 @@ function evalCondRule(rule, cellVal) {
         case 'contains': return vLow.indexOf(rvLow) >= 0;
         case 'notcontains': return vLow.indexOf(rvLow) < 0;
         case 'startswith': return vLow.indexOf(rvLow) === 0;
-        case 'endswith': return vLow.slice(-rvLow.length) === rvLow;
+        case 'endswith': return rvLow.length === 0 || vLow.slice(-rvLow.length) === rvLow;
         case 'empty': return v === '';
         case 'notempty': return v !== '';
         case 'gt': return parseFloat(v) > parseFloat(rv);
@@ -4472,7 +4359,7 @@ function cfmClearAll() {
 }
 
 // ============================================================
-// RICERCA AVANZATA (VLOOKUP) - Ricerca intuitiva
+// VLOOKUP (CERCA VERT) - Ricerca intuitiva
 // ============================================================
 var vlMatchMode = 'exact'; // 'exact', 'contains', 'starts'
 var vlSearchMode = 'single'; // 'single' or 'multi'
@@ -4785,7 +4672,7 @@ function vlRenderResults() {
         emptyEl.style.display = '';
         emptyEl.innerHTML = '<div class="vl-icon">&#x1F50D;</div>' +
             '<div>Seleziona una colonna di ricerca, digita un valore e scegli le colonne da restituire.</div>' +
-            '<div style="margin-top:6px;font-size:0.9em;color:var(--text-muted)">&#x1F4A1; Incrocia dati da file esterni con il filone in un click!</div>';
+            '<div style="margin-top:6px;font-size:0.9em;color:var(--text-muted)">&#x1F4A1; Come il CERCA.VERT di Excel, ma pi&ugrave; veloce e intuitivo!</div>';
         return;
     }
     
@@ -4848,7 +4735,7 @@ function vlRenderResults() {
             var cellVal = res.values[retCN] || '';
             tbHtml += '<td title="' + esc(cellVal) + '">' + esc(cellVal);
             // Copy single value button
-            tbHtml += ' <button class="vl-copy-btn" onclick="event.stopPropagation();vlCopySingle(\'' + esc(cellVal).replace(/'/g, "\\'") + '\')" title="Copia valore">&#x1F4CB;</button>';
+            tbHtml += ' <button class="vl-copy-btn" data-copyval="' + esc(cellVal) + '" onclick="event.stopPropagation();vlCopySingle(this.dataset.copyval)" title="Copia valore">&#x1F4CB;</button>';
             tbHtml += '</td>';
         }
         tbHtml += '<td><span style="color:var(--primary);font-size:0.85em" title="Vai alla riga">&#x2197;</span></td>';
@@ -4963,7 +4850,7 @@ function vlExportCSV() {
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
     a.href = url;
-    a.download = 'ricerca_avanzata_risultati.csv';
+    a.download = 'cerca_vert_risultati.csv';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -5046,6 +4933,27 @@ function vlLoadExcelFile(file) {
     }
 }
 
+function _csvParseLine(line, sep) {
+    var fields = [];
+    var cur = '';
+    var inQuote = false;
+    for (var i = 0; i < line.length; i++) {
+        var ch = line[i];
+        if (inQuote) {
+            if (ch === '"') {
+                if (i + 1 < line.length && line[i + 1] === '"') { cur += '"'; i++; }
+                else { inQuote = false; }
+            } else { cur += ch; }
+        } else {
+            if (ch === '"') { inQuote = true; }
+            else if (ch === sep) { fields.push(cur.trim()); cur = ''; }
+            else { cur += ch; }
+        }
+    }
+    fields.push(cur.trim());
+    return fields;
+}
+
 function vlParseCSV(text) {
     var lines = text.split(/\r?\n/);
     if (lines.length < 2) { toast('File CSV vuoto o con una sola riga', 'warning'); return; }
@@ -5056,17 +4964,16 @@ function vlParseCSV(text) {
     if (firstLine.indexOf('\t') >= 0 && firstLine.split('\t').length > firstLine.split(';').length) sep = '\t';
     else if (firstLine.indexOf(',') >= 0 && firstLine.split(',').length > firstLine.split(';').length) sep = ',';
 
-    vlExcelHeaders = lines[0].split(sep).map(function(h) { return h.replace(/^["']|["']$/g, '').trim(); });
+    vlExcelHeaders = _csvParseLine(lines[0], sep);
     vlExcelData = [];
 
     for (var i = 1; i < lines.length; i++) {
         var line = lines[i].trim();
         if (!line) continue;
-        var parts = line.split(sep);
+        var parts = _csvParseLine(line, sep);
         var row = {};
         for (var j = 0; j < vlExcelHeaders.length; j++) {
-            var val = (parts[j] || '').replace(/^["']|["']$/g, '').trim();
-            row[vlExcelHeaders[j]] = val;
+            row[vlExcelHeaders[j]] = (parts[j] || '').trim();
         }
         vlExcelData.push(row);
     }
@@ -5079,6 +4986,8 @@ function vlParseXLSX(buffer) {
     if (typeof XLSX === 'undefined') {
         var script = document.createElement('script');
         script.src = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
+        script.integrity = 'sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT';
+        script.crossOrigin = 'anonymous';
         script.onload = function() { vlDoParseXLSX(buffer); };
         script.onerror = function() { toast('Errore nel caricamento della libreria Excel. Prova con un file CSV.', 'error'); };
         document.head.appendChild(script);
@@ -5212,27 +5121,17 @@ function vlExcelPreview() {
 
     // Find matches
     var matchCount = 0;
-    var noMatchCount = 0;
     var previewRows = [];
     var maxPreview = 10;
 
-    for (var r = 0; r < rawData.length && previewRows.length < maxPreview; r++) {
+    for (var r = 0; r < rawData.length; r++) {
         var fKey = (rawData[r][filoneKey] || '').toString().trim().toUpperCase();
         if (excelIndex[fKey]) {
             matchCount++;
-            previewRows.push({ filoneRow: rawData[r], excelRow: excelIndex[fKey], key: fKey });
+            if (previewRows.length < maxPreview) {
+                previewRows.push({ filoneRow: rawData[r], excelRow: excelIndex[fKey], key: fKey });
+            }
         }
-    }
-    // Count total matches
-    for (var r2 = previewRows.length > 0 ? maxPreview : 0; r2 < rawData.length; r2++) {
-        var fk2 = (rawData[r2][filoneKey] || '').toString().trim().toUpperCase();
-        if (excelIndex[fk2]) matchCount++;
-    }
-    // Fix: avoid double counting
-    matchCount = 0;
-    for (var r3 = 0; r3 < rawData.length; r3++) {
-        var fk3 = (rawData[r3][filoneKey] || '').toString().trim().toUpperCase();
-        if (excelIndex[fk3]) matchCount++;
     }
 
     // Render preview
@@ -5329,7 +5228,6 @@ function vlExcelMerge() {
                 } else {
                     pending[key].val = newVal;
                 }
-                rawData[r][colName] = newVal;
                 cellsChanged++;
                 rowChanged = true;
             }
@@ -5410,6 +5308,10 @@ function vlExcelClear() {
             if (!r.ok) return;
             var d = await r.json();
             if (d.error || !d.data) return;
+
+            // Ricontrolla editing DOPO la fetch: l'utente potrebbe aver iniziato
+            // a modificare una cella durante l'attesa della risposta
+            if (editing) { _ssePendingRefresh = true; return; }
 
             var newData = d.data;
 

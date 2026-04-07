@@ -4614,9 +4614,9 @@ Rispondi con un JSON array in questo formato esatto:
                 let telCheck = '';
                 if (r.telefono) {
                     if (r.telEsistente && r.telEsistente !== r.telefono) {
-                        // Dato diverso: mostra confronto
-                        telCell = `<div style="font-size:0.8em;color:var(--text-muted);text-decoration:line-through">${escapeHtml(r.telEsistente)}</div><div class="new-data">${escapeHtml(r.telefono)}</div>`;
-                        telCheck = `<input type="checkbox" class="ai-field-check" data-idx="${i}" data-field="telefono" title="Sovrascrivi telefono">`;
+                        // Dato diverso: mostra che verrà aggiunto (non sovrascritto)
+                        telCell = `<div style="color:var(--text-muted)">${escapeHtml(r.telEsistente)}</div><div class="new-data">+ ${escapeHtml(r.telefono)}</div>`;
+                        telCheck = `<input type="checkbox" class="ai-field-check" data-idx="${i}" data-field="telefono" title="Aggiungi telefono">`;
                     } else if (r.telEsistente === r.telefono) {
                         // Stesso dato: confermato
                         telCell = `<span style="color:var(--text-muted)">${escapeHtml(r.telefono)} ✓</span>`;
@@ -4635,8 +4635,8 @@ Rispondi con un JSON array in questo formato esatto:
                 let emailCheck = '';
                 if (aiEmailFull) {
                     if (r.emailEsistente && r.emailEsistente !== aiEmailFull) {
-                        emailCell = `<div style="font-size:0.8em;color:var(--text-muted);text-decoration:line-through">${escapeHtml(r.emailEsistente)}</div><div class="new-data">${escapeHtml(aiEmailFull)}</div>`;
-                        emailCheck = `<input type="checkbox" class="ai-field-check" data-idx="${i}" data-field="email" title="Sovrascrivi email">`;
+                        emailCell = `<div style="color:var(--text-muted)">${escapeHtml(r.emailEsistente)}</div><div class="new-data">+ ${escapeHtml(aiEmailFull)}</div>`;
+                        emailCheck = `<input type="checkbox" class="ai-field-check" data-idx="${i}" data-field="email" title="Aggiungi email">`;
                     } else if (r.emailEsistente === aiEmailFull) {
                         emailCell = `<span style="color:var(--text-muted)">${escapeHtml(aiEmailFull)} ✓</span>`;
                     } else {
@@ -4706,29 +4706,36 @@ Rispondi con un JSON array in questo formato esatto:
 
             for (const r of selezionati) {
                 try {
-                    // Salva telefono
+                    // Salva telefono (se esiste già uno diverso, aggiungilo)
                     if (r.applicaTel && r.telefono) {
+                        let telDaSalvare = r.telefono;
+                        if (r.telEsistente && r.telEsistente !== r.telefono) {
+                            telDaSalvare = r.telEsistente + ' - ' + r.telefono;
+                        }
                         const resp = await fetch('/api/distinte/salva-telefono', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ pod: r.pod, telefono: r.telefono, fonte: 'AI ChatGPT' })
+                            body: JSON.stringify({ pod: r.pod, telefono: telDaSalvare, fonte: 'AI ChatGPT' })
                         });
                         const data = await resp.json();
                         if (data.success) {
                             const c = contatti.find(c => c.pod === r.pod);
                             if (c) {
-                                c.telefono = r.telefono;
-                                c.telefono_filone = r.telefono;
+                                c.telefono = telDaSalvare;
+                                c.telefono_filone = telDaSalvare;
                                 const isCellulare = /^3\d{8,9}$/.test(r.telefono.replace(/[^\d]/g, ''));
                                 c.tipo = isCellulare ? 'cellulare' : 'fisso';
                             }
                         }
                     }
 
-                    // Salva email (combina email e pec con /)
+                    // Salva email (se esiste già una diversa, aggiungila)
                     if (r.applicaEmail && (r.email || r.pec)) {
                         const emailParts = [r.email, r.pec].filter(Boolean);
-                        const emailValue = emailParts.join(' - ');
+                        let emailValue = emailParts.join(' - ');
+                        if (r.emailEsistente && r.emailEsistente !== emailValue) {
+                            emailValue = r.emailEsistente + ' - ' + emailValue;
+                        }
                         const resp = await fetch('/api/distinte/salva-email', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },

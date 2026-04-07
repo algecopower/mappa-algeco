@@ -4,7 +4,6 @@ Sistema di cache per ottimizzare i ricalcoli.
 import os
 import json
 import hashlib
-from datetime import datetime
 
 from config import FILE_CACHE_DISTANZE, FILE_CACHE_HASH
 

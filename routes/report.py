@@ -11,7 +11,7 @@ import logging
 from datetime import datetime, date, timedelta
 from collections import Counter, defaultdict
 
-from flask import Blueprint, jsonify, redirect, request, send_file, session
+from flask import Blueprint, jsonify, redirect, request, send_file
 from moduli.auth import login_required
 from moduli.data_loader import parse_data_flessibile
 from config import PROVINCIA_ATTIVA, MATRICOLE_VIP, COLORI_TECNICI, OPERATORI_DICT

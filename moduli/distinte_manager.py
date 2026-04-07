@@ -13,7 +13,7 @@ import re
 import logging
 import pdfplumber
 from datetime import datetime
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional
 import os
 
 logger = logging.getLogger('mappa_algeco')

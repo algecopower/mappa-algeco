@@ -11,7 +11,6 @@ from moduli.auth import login_required
 from moduli.shared import (
     get_worksheet, get_headers, get_header_map,
     _get_username, _api_error, _callbacks,
-    _trova_indice_colonna,
 )
 from moduli.calendario import (
     get_attivita, crea_attivita, modifica_attivita,

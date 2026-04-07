@@ -9,7 +9,7 @@ import logging
 from datetime import datetime, date, timedelta
 from collections import Counter, defaultdict
 
-from flask import Blueprint, jsonify, send_file, session
+from flask import Blueprint, jsonify, send_file
 from moduli.auth import login_required
 from moduli.calendario import get_attivita
 from moduli.postit import get_postit

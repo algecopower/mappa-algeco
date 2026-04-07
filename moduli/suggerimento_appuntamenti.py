@@ -15,6 +15,7 @@ Utilizzato da:
 """
 import logging
 import math
+import re
 from collections import defaultdict
 from datetime import datetime, timedelta
 
@@ -87,20 +88,37 @@ def _conta_tappe_per_fascia(contatori_giorno, operatore=None):
         and not c.get('annullato', False)
     ]
     
-    # Controlla se abbiamo ordini reali (non tutti 999)
-    ordini_reali = [c for c in contatori_filtrati if c.get('ordine_tappa', 999) != 999]
+    # Separa contatori con ordine reale da quelli senza
+    con_ordine = [c for c in contatori_filtrati if c.get('ordine_tappa', 999) != 999]
+    senza_ordine = [c for c in contatori_filtrati if c.get('ordine_tappa', 999) == 999]
     
-    if ordini_reali:
-        # Usa ordine_tappa reale
-        for c in ordini_reali:
+    if con_ordine:
+        # Usa ordine_tappa reale per quelli che ce l'hanno
+        for c in con_ordine:
             ordine = c.get('ordine_tappa', 999)
             fascia_idx = (ordine - 1) // TAPPE_PER_FASCIA
             if 0 <= fascia_idx < len(FASCE_ORARIE):
                 fascia = FASCE_ORARIE[fascia_idx]
                 conteggio[fascia] += 1
                 contatori_fascia[fascia].append(c)
+        
+        # Distribuisci quelli senza ordine equamente tra le fasce
+        if senza_ordine:
+            n = len(senza_ordine)
+            n_fasce = len(FASCE_ORARIE)
+            base = n // n_fasce
+            resto = n % n_fasce
+            
+            idx = 0
+            for f_idx, fascia in enumerate(FASCE_ORARIE):
+                count = base + (1 if f_idx < resto else 0)
+                for _ in range(count):
+                    if idx < n:
+                        conteggio[fascia] += 1
+                        contatori_fascia[fascia].append(senza_ordine[idx])
+                        idx += 1
     else:
-        # Stima distribuzione: dividi equamente tra le fasce
+        # Nessun ordine reale: stima distribuzione equa tra le fasce
         n = len(contatori_filtrati)
         n_fasce = len(FASCE_ORARIE)
         base = n // n_fasce
@@ -158,7 +176,34 @@ def _score_carico_fascia(conteggio_fascia, fascia):
     return 1.0 - (tappe / TAPPE_PER_FASCIA)
 
 
-def _score_posizione_percorso(fascia, dist_media, conteggio_fascia, app_giorno,
+def _fascia_da_orari_lettere(orari_lettere):
+    """Parse 'dalle X:00 alle Y:00' in fascia FASCE_ORARIE corrispondente."""
+    if not orari_lettere:
+        return None
+    m = re.search(r'(\d{1,2})[:.]?\d*\s*(?:alle?|[-/])\s*(\d{1,2})', orari_lettere)
+    if m:
+        start = int(m.group(1))
+        end = int(m.group(2))
+        fascia_str = f'{start}/{end}'
+        if fascia_str in FASCE_ORARIE:
+            return fascia_str
+    return None
+
+
+def _fascia_contatore(contatore):
+    """Determina la fascia di un contatore: da orari_lettere se disponibile, altrimenti da ordine_tappa."""
+    fascia = _fascia_da_orari_lettere(contatore.get('orari_lettere', ''))
+    if fascia:
+        return fascia
+    ordine = contatore.get('ordine_tappa', 999)
+    if ordine != 999:
+        fascia_idx = (ordine - 1) // TAPPE_PER_FASCIA
+        if 0 <= fascia_idx < len(FASCE_ORARIE):
+            return FASCE_ORARIE[fascia_idx]
+    return None
+
+
+def _score_posizione_percorso(fascia, dist_media, conteggio_fascia,
                                target_lat, target_lon, deposito):
     """
     Calcola lo score di posizionamento ottimale nel percorso (0-1).
@@ -184,46 +229,34 @@ def _score_posizione_percorso(fascia, dist_media, conteggio_fascia, app_giorno,
         return 0.5
     
     # Contatore periferico: calcola preferenza mattina vs sera
-    pref_mattina = 0.5
-    pref_sera = 0.5
+    # Default: mattina preferita (partenza per il periferico, poi rientra nel cluster)
+    pref_mattina = 0.6
+    pref_sera = 0.4
     
     # 1) Fascia più libera tra prima e ultima
     tappe_prima = conteggio_fascia.get(FASCE_ORARIE[prima_fascia], 0)
     tappe_ultima = conteggio_fascia.get(FASCE_ORARIE[ultima_fascia], 0)
     
-    if tappe_prima < tappe_ultima:
-        pref_mattina += 0.2
+    if tappe_prima >= TAPPE_PER_FASCIA and tappe_ultima < TAPPE_PER_FASCIA:
+        # Prima fascia piena, ultima libera → sera
+        pref_sera += 0.3
+    elif tappe_ultima >= TAPPE_PER_FASCIA and tappe_prima < TAPPE_PER_FASCIA:
+        # Ultima piena, prima libera → mattina
+        pref_mattina += 0.3
+    elif tappe_prima < tappe_ultima:
+        pref_mattina += 0.1
     elif tappe_ultima < tappe_prima:
-        pref_sera += 0.2
+        pref_sera += 0.1
     
-    # 2) Appuntamenti: se ci sono appuntamenti nelle fasce centrali, il periferico
-    #    va meglio in testa o coda (non in mezzo a spostarsi)
-    app_centrali = 0
-    for a in app_giorno:
-        a_lat, a_lon = a.get('lat'), a.get('lon')
-        if a_lat and a_lon and is_valid_coordinate(a_lat, a_lon):
-            d = calcola_distanza_km(target_lat, target_lon, float(a_lat), float(a_lon))
-            if d > SOGLIA_PERIFERICO_KM:
-                # Appuntamento lontano dal target → meglio separare
-                ordine = a.get('ordine_tappa', 999)
-                if ordine != 999:
-                    # Se l'appuntamento è nelle prime tappe, il periferico va in coda
-                    if ordine <= TAPPE_PER_FASCIA * 2:
-                        pref_sera += 0.15
-                    else:
-                        pref_mattina += 0.15
-    
-    # 3) Vicinanza al deposito (se disponibile): mattina se più vicino al deposito
+    # 2) Vicinanza al deposito (se disponibile): mattina se più vicino al deposito
     if deposito and deposito.get('Lat') and deposito.get('Lon'):
         try:
             dist_deposito = calcola_distanza_km(
                 target_lat, target_lon,
                 float(deposito['Lat']), float(deposito['Lon'])
             )
-            if dist_deposito < SOGLIA_PERIFERICO_KM:
+            if dist_deposito < RAGGIO_VICINANZA_KM / 2:
                 pref_mattina += 0.15  # Vicino al deposito → prima tappa (partenza)
-            elif dist_deposito > RAGGIO_VICINANZA_KM:
-                pref_sera += 0.1  # Lontano dal deposito → ultima tappa (ritorno)
         except (ValueError, TypeError):
             pass
     
@@ -321,13 +354,7 @@ def suggerisci_appuntamento(contatori_tutti, target_lat, target_lon,
         tec = c.get('tecnico', '')
         if tec and tec != 'TUTTI':
             operatori.add(tec)
-    # Includi anche i contatori senza operatore assegnato
-    ha_senza_operatore = any(
-        not c.get('tecnico') or c.get('tecnico') == 'TUTTI'
-        for c in contatori_tutti if c.get('data')
-    )
-    
-    if not operatori and not ha_senza_operatore:
+    if not operatori:
         return {'suggerimenti': [], 'warnings_globali': ['Nessun operatore trovato nella pianificazione']}
     
     for data in sorted(date_candidate):
@@ -387,15 +414,15 @@ def suggerisci_appuntamento(contatori_tutti, target_lat, target_lon,
                 score_coerenza_fascia = 0.0
                 
                 if contatori_op:
-                    # Trova i contatori più vicini con le loro fasce
+                    # Trova i contatori più vicini con le loro fasce (da orari_lettere o ordine_tappa)
                     vicini_con_fascia = []
-                    for f_check in FASCE_ORARIE:
-                        for c in contatori_fascia.get(f_check, []):
-                            c_lat, c_lon = c.get('lat'), c.get('lon')
-                            if c_lat and c_lon and is_valid_coordinate(c_lat, c_lon):
-                                d = calcola_distanza_km(target_lat, target_lon, float(c_lat), float(c_lon))
-                                if d < RAGGIO_VICINANZA_KM:
-                                    vicini_con_fascia.append((d, f_check))
+                    for c in contatori_op:
+                        c_lat, c_lon = c.get('lat'), c.get('lon')
+                        if c_lat and c_lon and is_valid_coordinate(c_lat, c_lon):
+                            d = calcola_distanza_km(target_lat, target_lon, float(c_lat), float(c_lon))
+                            f_c = _fascia_contatore(c)
+                            if d < RAGGIO_VICINANZA_KM and f_c:
+                                vicini_con_fascia.append((d, f_c))
                     
                     if vicini_con_fascia:
                         # Ordina per distanza, prendi i più vicini
@@ -435,18 +462,9 @@ def suggerisci_appuntamento(contatori_tutti, target_lat, target_lon,
                 
                 # -- Score posizionamento nel percorso --
                 score_posizione = _score_posizione_percorso(
-                    fascia, dist_media_tutte, conteggio, app_giorno,
+                    fascia, dist_media_tutte, conteggio,
                     target_lat, target_lon, deposito
                 )
-                
-                # Se periferico: coerenza fascia conta meno, posizione percorso conta di più
-                is_periferico = dist_media_tutte != float('inf') and dist_media_tutte >= SOGLIA_PERIFERICO_KM
-                if is_periferico:
-                    peso_coerenza_eff = PESO_COERENZA_FASCIA * 0.3
-                    peso_posizione_eff = PESO_POSIZIONE_PERCORSO + PESO_COERENZA_FASCIA * 0.7
-                else:
-                    peso_coerenza_eff = PESO_COERENZA_FASCIA
-                    peso_posizione_eff = PESO_POSIZIONE_PERCORSO
                 
                 # -- Score distribuzione --
                 tappe_oggi = tappe_per_giorno.get(data, 0)
@@ -456,9 +474,9 @@ def suggerisci_appuntamento(contatori_tutti, target_lat, target_lon,
                 score = (
                     PESO_VICINANZA * score_vicinanza +
                     PESO_VICINANZA_APP * score_vicinanza_app +
-                    peso_coerenza_eff * score_coerenza_fascia +
+                    PESO_COERENZA_FASCIA * score_coerenza_fascia +
                     PESO_CARICO_FASCIA * score_carico +
-                    peso_posizione_eff * score_posizione +
+                    PESO_POSIZIONE_PERCORSO * score_posizione +
                     PESO_DISTRIBUZIONE * score_distribuzione
                 )
                 

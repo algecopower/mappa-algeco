@@ -1306,6 +1306,78 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         .zone-sched-inline-list.visible {{
             display: block;
         }}
+        /* Pannello filtri schedulabili */
+        .sched-filters-panel {{
+            display: none;
+            flex-direction: column;
+            gap: 6px;
+            padding: 8px 10px;
+            margin-top: 4px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            animation: slideDown 0.2s ease;
+        }}
+        .sched-filters-panel.visible {{
+            display: flex;
+        }}
+        .sched-filter-row {{
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }}
+        .sched-filter-row label {{
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            white-space: nowrap;
+            min-width: 80px;
+        }}
+        .sched-filter-row select {{
+            flex: 1;
+            min-width: 0;
+            padding: 4px 8px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: var(--bg-tertiary);
+            color: var(--text);
+            font-size: 0.78rem;
+            cursor: pointer;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }}
+        .sched-filter-chips {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+        }}
+        .sched-filter-chip {{
+            padding: 3px 8px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: var(--bg-tertiary);
+            color: var(--text-muted);
+            font-size: 0.72rem;
+            cursor: pointer;
+            transition: all 0.15s;
+            user-select: none;
+        }}
+        .sched-filter-chip:hover {{
+            border-color: var(--accent-secondary, #06b6d4);
+        }}
+        .sched-filter-chip.active {{
+            background: rgba(6, 182, 212, 0.2);
+            border-color: var(--accent-secondary, #06b6d4);
+            color: var(--text);
+        }}
+        .sched-filters-count {{
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            text-align: right;
+            padding-top: 2px;
+        }}
+        .sched-filters-count strong {{
+            color: var(--accent-secondary, #06b6d4);
+        }}
         @keyframes pulse-marker {{
             0%, 100% {{ transform: scale(1); }}
             50% {{ transform: scale(1.2); }}
@@ -3450,6 +3522,29 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                         <span class="schedulabili-badge" id="schedulabiliBadge" style="margin-left: auto; background: var(--accent-secondary, #06b6d4); color: #fff; border-radius: 10px; padding: 1px 8px; font-size: 0.75rem; font-weight: 700;">0</span>
                     </label>
                 </div>
+                <div class="sched-filters-panel" id="schedFiltersPanel">
+                    <div class="sched-filter-row">
+                        <label>⚡ Tipologia</label>
+                        <select id="schedFilterTipologia" onchange="applySchedFilters()">
+                            <option value="">Tutte</option>
+                        </select>
+                    </div>
+                    <div class="sched-filter-row">
+                        <label>📅 Stato</label>
+                        <div class="sched-filter-chips">
+                            <span class="sched-filter-chip active" data-sched-stato="tutti" onclick="setSchedStato('tutti')">Tutti</span>
+                            <span class="sched-filter-chip" data-sched-stato="senza_data" onclick="setSchedStato('senza_data')">Senza data</span>
+                            <span class="sched-filter-chip" data-sched-stato="data_passata" onclick="setSchedStato('data_passata')">Data passata</span>
+                        </div>
+                    </div>
+                    <div class="sched-filter-row">
+                        <label>📍 Posizione</label>
+                        <select id="schedFilterPosizione" onchange="applySchedFilters()">
+                            <option value="">Tutte</option>
+                        </select>
+                    </div>
+                    <div class="sched-filters-count" id="schedFiltersCount"></div>
+                </div>
 
                 <!-- Advanced Search Panel -->
                 <div class="advanced-search-panel" id="advancedSearchPanel">
@@ -4008,17 +4103,29 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
 
         // Calcola contatori schedulabili: senza data o con data passata, esclusi ANNULLATI
         // Mostra SOLO contatori con coordinate valide
+        // Applica filtri attivi (tipologia, stato, appuntamento)
         function getContatoriSchedulabili() {{
             const oggiStr = getOggiStr();
             return contatori.filter(c => {{
                 if (c.annullato) return false;
                 // Escludi contatori senza coordinate valide
                 if (!isValidCoordinate(c.lat, c.lon)) return false;
-                // Senza data programmata
-                if (!c.data || c.data === '') return true;
-                // Con data nel passato (prima di oggi)
-                if (c.data < oggiStr) return true;
-                return false;
+                // Schedulabile: senza data o con data passata
+                const isSenzaData = !c.data || c.data === '';
+                const isDataPassata = c.data && c.data < oggiStr;
+                if (!isSenzaData && !isDataPassata) return false;
+
+                // Filtro tipologia
+                if (schedFilterTipologia && (c.tipo_ce || '').toLowerCase() !== schedFilterTipologia.toLowerCase()) return false;
+
+                // Filtro stato
+                if (schedFilterStato === 'senza_data' && !isSenzaData) return false;
+                if (schedFilterStato === 'data_passata' && !isDataPassata) return false;
+
+                // Filtro posizione misuratore
+                if (schedFilterPosizione && normalizePosizione(c.note || '') !== schedFilterPosizione) return false;
+
+                return true;
             }});
         }}
 
@@ -4130,6 +4237,9 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         let currentDataFiltro = '';
         let filterAppuntamentiOnly = false;  // Filtro solo appuntamenti
         let filterSchedulabili = false;  // Filtro contatori schedulabili
+        let schedFilterTipologia = '';   // Filtro tipologia schedulabili
+        let schedFilterStato = 'tutti';  // Filtro stato: tutti, senza_data, data_passata
+        let schedFilterPosizione = '';    // Filtro posizione misuratore
         let showEneltelLabels = false;
         let advancedSearchMode = false;
         let markers = [];
@@ -4706,6 +4816,22 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             const chip = document.getElementById('schedulabiliChip');
             chip.classList.toggle('active', filterSchedulabili);
             
+            // Mostra/nascondi pannello filtri
+            const filtersPanel = document.getElementById('schedFiltersPanel');
+            filtersPanel.classList.toggle('visible', filterSchedulabili);
+            
+            if (filterSchedulabili) {{
+                // Popola dropdown con valori unici dagli schedulabili
+                populateSchedTipologiaDropdown();
+                populateSchedPosizioneDropdown();
+                updateSchedFiltersCount();
+            }} else {{
+                // Reset filtri
+                schedFilterTipologia = '';
+                schedFilterStato = 'tutti';
+                schedFilterPosizione = '';
+            }}
+            
             preserveMapView = true;
             if (currentView === 'zone' || currentView === 'towns') {{
                 if (viewMode === 'zone') {{
@@ -4713,11 +4839,135 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                 }} else {{
                     mostraVistaComuni(document.getElementById('searchInput').value);
                 }}
+            }} else if (currentView === 'detail' && currentZona) {{
+                // Aggiorna anche la vista dettaglio
+                if (showAllDatesInDetail) {{
+                    toggleAllDates();
+                }} else if (currentData) {{
+                    const zona = zone.find(z => z.nome === currentZona);
+                    if (zona) {{
+                        apriDettaglio(currentZona, currentData);
+                    }} else {{
+                        apriDettaglioComune(currentZona, currentData);
+                    }}
+                }}
             }} else if (currentView === 'tuttiOperatori' && currentData) {{
                 mostraPercorsoTuttiOperatori(currentData);
             }} else if (currentView === 'operatore' && currentOperatore && currentData) {{
                 mostraPercorsoCompletoOperatore(currentOperatore, currentData);
             }}
+        }}
+
+        // Popola il dropdown tipologia con i valori unici trovati negli schedulabili
+        function populateSchedTipologiaDropdown() {{
+            // Salva temporaneamente il filtro e calcola senza filtro tipologia per ottenere tutti i valori
+            const savedTipo = schedFilterTipologia;
+            schedFilterTipologia = '';
+            const allSched = getContatoriSchedulabili();
+            schedFilterTipologia = savedTipo;
+            
+            const tipologie = new Set();
+            allSched.forEach(c => {{
+                if (c.tipo_ce && c.tipo_ce.trim() !== '') tipologie.add(c.tipo_ce.trim());
+            }});
+            
+            const select = document.getElementById('schedFilterTipologia');
+            const currentVal = select.value;
+            select.innerHTML = '<option value="">Tutte</option>';
+            Array.from(tipologie).sort().forEach(t => {{
+                const opt = document.createElement('option');
+                opt.value = t;
+                opt.textContent = t;
+                if (t === currentVal) opt.selected = true;
+                select.appendChild(opt);
+            }});
+        }}
+
+        function setSchedStato(stato) {{
+            schedFilterStato = stato;
+            document.querySelectorAll('[data-sched-stato]').forEach(el => {{
+                el.classList.toggle('active', el.dataset.schedStato === stato);
+            }});
+            applySchedFilters();
+        }}
+
+        // Normalizza la stringa posizione rimuovendo il prefisso numerico
+        function normalizePosizione(val) {{
+            if (!val) return '';
+            return val.replace(/^\d+\s*-\s*/, '').trim().toLowerCase();
+        }}
+
+        function populateSchedPosizioneDropdown() {{
+            // Salva temporaneamente il filtro e calcola senza filtro posizione
+            const savedPos = schedFilterPosizione;
+            schedFilterPosizione = '';
+            const allSched = getContatoriSchedulabili();
+            schedFilterPosizione = savedPos;
+
+            const posizioni = new Map(); // normalized -> display label
+            allSched.forEach(c => {{
+                const raw = (c.note || '').trim();
+                if (!raw) return;
+                const norm = normalizePosizione(raw);
+                if (norm && !posizioni.has(norm)) {{
+                    // Capitalize first letter for display
+                    posizioni.set(norm, norm.charAt(0).toUpperCase() + norm.slice(1));
+                }}
+            }});
+
+            const select = document.getElementById('schedFilterPosizione');
+            const currentVal = select.value;
+            select.innerHTML = '<option value="">Tutte</option>';
+            Array.from(posizioni.entries()).sort((a, b) => a[1].localeCompare(b[1])).forEach(([norm, label]) => {{
+                const opt = document.createElement('option');
+                opt.value = norm;
+                opt.textContent = label;
+                if (norm === currentVal) opt.selected = true;
+                select.appendChild(opt);
+            }});
+        }}
+
+        function applySchedFilters() {{
+            schedFilterTipologia = document.getElementById('schedFilterTipologia').value;
+            schedFilterPosizione = document.getElementById('schedFilterPosizione').value;
+            updateSchedFiltersCount();
+            preserveMapView = true;
+            if (currentView === 'detail' && currentZona) {{
+                if (showAllDatesInDetail) {{
+                    toggleAllDates();
+                }} else if (currentData) {{
+                    const zona = zone.find(z => z.nome === currentZona);
+                    if (zona) {{
+                        apriDettaglio(currentZona, currentData);
+                    }} else {{
+                        apriDettaglioComune(currentZona, currentData);
+                    }}
+                }}
+            }} else if (currentView === 'tuttiOperatori' && currentData) {{
+                mostraPercorsoTuttiOperatori(currentData);
+            }} else if (currentView === 'operatore' && currentOperatore && currentData) {{
+                mostraPercorsoCompletoOperatore(currentOperatore, currentData);
+            }} else if (viewMode === 'zone') {{
+                mostraVistaZone(document.getElementById('searchInput').value);
+            }} else {{
+                mostraVistaComuni(document.getElementById('searchInput').value);
+            }}
+        }}
+
+        function updateSchedFiltersCount() {{
+            const schedulabili = getContatoriSchedulabili();
+            const countEl = document.getElementById('schedFiltersCount');
+            if (countEl) {{
+                const hasFilters = schedFilterTipologia || schedFilterStato !== 'tutti' || schedFilterPosizione;
+                if (hasFilters) {{
+                    countEl.textContent = '';
+                    countEl.innerHTML = `Filtrati: <strong>${{schedulabili.length}}</strong> contatori`;
+                }} else {{
+                    countEl.textContent = '';
+                }}
+            }}
+            // Aggiorna anche il badge principale
+            updateSchedulabiliBadge();
         }}
 
         function updateSchedulabiliBadge() {{
@@ -4740,8 +4990,9 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                             <div style="display: flex; flex-direction: column; flex: 1; gap: 2px;">
                                 <span style="font-weight: 600; font-size: 0.85rem;">📍 ${{c.comune}}</span>
                                 <span style="font-size: 0.78rem; color: var(--text-muted);">${{c.via || 'N/A'}} ${{c.civico || ''}}</span>
-                                <span style="font-size: 0.78rem; color: var(--text-muted);">🔢 ${{c.eneltel}}</span>
+                                <span style="font-size: 0.78rem; color: var(--text-muted);">🔢 ${{c.eneltel}}${{c.tipo_ce ? ` · ⚡ ${{c.tipo_ce}}` : ''}}</span>
                                 ${{c.data ? `<span style="font-size: 0.75rem; color: var(--danger, #ef4444);">⏰ era: ${{formatDate(c.data)}}</span>` : `<span style="font-size: 0.75rem; color: var(--accent-secondary, #06b6d4);">📋 senza data</span>`}}
+                                ${{c.is_appuntamento ? `<span style="font-size: 0.75rem; color: #f59e0b;">📞 Appuntamento${{c.ora_appuntamento ? ' ' + c.ora_appuntamento : ''}}</span>` : ''}}
                             </div>
                             <span class="arrow">→</span>
                         </div>
@@ -4760,8 +5011,9 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                         <div class="date-item schedulabile-item" onclick="event.stopPropagation(); mostraContatorePopup(contatori.find(cc => cc.id === '${{sc.id}}'))">
                             <div style="display: flex; flex-direction: column; flex: 1; gap: 2px;">
                                 <span style="font-size: 0.78rem; color: var(--text-muted);">${{sc.via || 'N/A'}} ${{sc.civico || ''}}</span>
-                                <span style="font-size: 0.78rem; color: var(--text-muted);">🔢 ${{sc.eneltel}}</span>
+                                <span style="font-size: 0.78rem; color: var(--text-muted);">🔢 ${{sc.eneltel}}${{sc.tipo_ce ? ` · ⚡ ${{sc.tipo_ce}}` : ''}}</span>
                                 ${{sc.data ? `<span style="font-size: 0.75rem; color: var(--danger, #ef4444);">⏰ era: ${{formatDate(sc.data)}}</span>` : `<span style="font-size: 0.75rem; color: var(--accent-secondary, #06b6d4);">📋 senza data</span>`}}
+                                ${{sc.is_appuntamento ? `<span style="font-size: 0.75rem; color: #f59e0b;">📞 Appuntamento${{sc.ora_appuntamento ? ' ' + sc.ora_appuntamento : ''}}</span>` : ''}}
                             </div>
                             <span class="arrow">→</span>
                         </div>
@@ -5775,6 +6027,17 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                         allContatori = allContatori.filter(c => c.is_appuntamento);
                     }}
 
+                    // Applica filtri schedulabili: mantieni i programmati, filtra gli schedulabili
+                    if (filterSchedulabili) {{
+                        const oggiStrF = getOggiStr();
+                        const schedIds = new Set(getContatoriSchedulabili().map(c => c.id));
+                        allContatori = allContatori.filter(c => {{
+                            const isSched = (!c.data || c.data === '' || c.data < oggiStrF);
+                            if (!isSched) return true; // programmato: tieni sempre
+                            return schedIds.has(c.id); // schedulabile: solo se passa i filtri
+                        }});
+                    }}
+
                     // Separa programmati e schedulabili per il conteggio
                     const oggiStr = getOggiStr();
                     const numSchedulabili = allContatori.filter(c => !c.data || c.data === '' || c.data < oggiStr).length;
@@ -5813,6 +6076,17 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                     }}
                     if (filterAppuntamentiOnly) {{
                         allContatori = allContatori.filter(c => c.is_appuntamento);
+                    }}
+
+                    // Applica filtri schedulabili: mantieni i programmati, filtra gli schedulabili
+                    if (filterSchedulabili) {{
+                        const oggiStrF = getOggiStr();
+                        const schedIds = new Set(getContatoriSchedulabili().map(c => c.id));
+                        allContatori = allContatori.filter(c => {{
+                            const isSched = (!c.data || c.data === '' || c.data < oggiStrF);
+                            if (!isSched) return true; // programmato: tieni sempre
+                            return schedIds.has(c.id); // schedulabile: solo se passa i filtri
+                        }});
                     }}
 
                     const oggiStr = getOggiStr();
@@ -6224,8 +6498,9 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                                         <div style="display: flex; flex-direction: column; flex: 1; gap: 2px;">
                                             <span style="font-weight: 600; font-size: 0.85rem;">📍 ${{c.comune}}</span>
                                             <span style="font-size: 0.78rem; color: var(--text-muted);">${{c.via || 'N/A'}} ${{c.civico || ''}}</span>
-                                            <span style="font-size: 0.78rem; color: var(--text-muted);">🔢 ${{c.eneltel}}</span>
+                                            <span style="font-size: 0.78rem; color: var(--text-muted);">🔢 ${{c.eneltel}}${{c.tipo_ce ? ` · ⚡ ${{c.tipo_ce}}` : ''}}</span>
                                             ${{c.data ? `<span style="font-size: 0.75rem; color: var(--danger, #ef4444);">⏰ era: ${{formatDate(c.data)}}</span>` : `<span style="font-size: 0.75rem; color: var(--accent-secondary, #06b6d4);">📋 senza data</span>`}}
+                                            ${{c.is_appuntamento ? `<span style="font-size: 0.75rem; color: #f59e0b;">📞 Appuntamento${{c.ora_appuntamento ? ' ' + c.ora_appuntamento : ''}}</span>` : ''}}
                                         </div>
                                         <span class="arrow">→</span>
                                     </div>
@@ -6585,8 +6860,9 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                                         <div style="display: flex; flex-direction: column; flex: 1; gap: 2px;">
                                             <span style="font-weight: 600; font-size: 0.85rem;">📍 ${{c.comune}}</span>
                                             <span style="font-size: 0.78rem; color: var(--text-muted);">${{c.via || 'N/A'}} ${{c.civico || ''}}</span>
-                                            <span style="font-size: 0.78rem; color: var(--text-muted);">🔢 ${{c.eneltel}}</span>
+                                            <span style="font-size: 0.78rem; color: var(--text-muted);">🔢 ${{c.eneltel}}${{c.tipo_ce ? ` · ⚡ ${{c.tipo_ce}}` : ''}}</span>
                                             ${{c.data ? `<span style="font-size: 0.75rem; color: var(--danger, #ef4444);">⏰ era: ${{formatDate(c.data)}}</span>` : `<span style="font-size: 0.75rem; color: var(--accent-secondary, #06b6d4);">📋 senza data</span>`}}
+                                            ${{c.is_appuntamento ? `<span style="font-size: 0.75rem; color: #f59e0b;">📞 Appuntamento${{c.ora_appuntamento ? ' ' + c.ora_appuntamento : ''}}</span>` : ''}}
                                         </div>
                                         <span class="arrow">→</span>
                                     </div>
@@ -6945,8 +7221,9 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                                         <div style="display: flex; flex-direction: column; flex: 1; gap: 2px;">
                                             <span style="font-weight: 600; font-size: 0.85rem;">📍 ${{com}}</span>
                                             <span style="font-size: 0.78rem; color: var(--text-muted);">${{c.via || 'N/A'}} ${{c.civico || ''}}</span>
-                                            <span style="font-size: 0.78rem; color: var(--text-muted);">🔢 ${{c.eneltel}}</span>
+                                            <span style="font-size: 0.78rem; color: var(--text-muted);">🔢 ${{c.eneltel}}${{c.tipo_ce ? ` · ⚡ ${{c.tipo_ce}}` : ''}}</span>
                                             ${{c.data ? `<span style="font-size: 0.75rem; color: var(--danger, #ef4444);">⏰ era: ${{formatDate(c.data)}}</span>` : `<span style="font-size: 0.75rem; color: var(--accent-secondary, #06b6d4);">📋 senza data</span>`}}
+                                            ${{c.is_appuntamento ? `<span style="font-size: 0.75rem; color: #f59e0b;">📞 Appuntamento${{c.ora_appuntamento ? ' ' + c.ora_appuntamento : ''}}</span>` : ''}}
                                         </div>
                                         <span class="arrow">→</span>
                                     </div>
@@ -7458,8 +7735,9 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                                 <div class="date-item schedulabile-item" onclick="event.stopPropagation(); mostraContatorePopup(contatori.find(cc => cc.id === '${{sc.id}}'))">
                                     <div style="display: flex; flex-direction: column; flex: 1; gap: 2px;">
                                         <span style="font-size: 0.78rem; color: var(--text-muted);">${{sc.via || 'N/A'}} ${{sc.civico || ''}}</span>
-                                        <span style="font-size: 0.78rem; color: var(--text-muted);">🔢 ${{sc.eneltel}}</span>
+                                        <span style="font-size: 0.78rem; color: var(--text-muted);">🔢 ${{sc.eneltel}}${{sc.tipo_ce ? ` · ⚡ ${{sc.tipo_ce}}` : ''}}</span>
                                         ${{sc.data ? `<span style="font-size: 0.75rem; color: var(--danger, #ef4444);">⏰ era: ${{formatDate(sc.data)}}</span>` : `<span style="font-size: 0.75rem; color: var(--accent-secondary, #06b6d4);">📋 senza data</span>`}}
+                                        ${{sc.is_appuntamento ? `<span style="font-size: 0.75rem; color: #f59e0b;">📞 Appuntamento${{sc.ora_appuntamento ? ' ' + sc.ora_appuntamento : ''}}</span>` : ''}}
                                     </div>
                                     <span class="arrow">→</span>
                                 </div>
@@ -7629,7 +7907,8 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
 
             // Mostra toggle al posto del select in vista dettaglio
             document.getElementById('dataFilterRow').style.display = 'none';
-            document.getElementById('schedulabiliFilterRow').style.display = 'none';
+            document.getElementById('schedulabiliFilterRow').style.display = 'flex';
+            document.getElementById('schedFiltersPanel').classList.toggle('visible', filterSchedulabili);
             document.getElementById('detailFilters').style.display = 'flex';
             document.getElementById('soloAppuntamentiCheckbox').checked = filterAppuntamentiOnly;
 
@@ -7640,6 +7919,15 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                 c.data === data &&
                 c.comune.toUpperCase() === comuneNome.toUpperCase()
             );
+
+            // Aggiungi schedulabili se filtro attivo
+            if (filterSchedulabili) {{
+                const schedComune = getContatoriSchedulabili().filter(c =>
+                    c.comune.toUpperCase() === comuneNome.toUpperCase() &&
+                    c.data !== data  // evita duplicati
+                );
+                contatoriData = contatoriData.concat(schedComune);
+            }}
 
             // Filtra per LCL se attivo
             if (currentLCL) {{
@@ -7697,7 +7985,8 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
 
             // Mostra toggle al posto del select in vista dettaglio
             document.getElementById('dataFilterRow').style.display = 'none';
-            document.getElementById('schedulabiliFilterRow').style.display = 'none';
+            document.getElementById('schedulabiliFilterRow').style.display = 'flex';
+            document.getElementById('schedFiltersPanel').classList.toggle('visible', filterSchedulabili);
             document.getElementById('detailFilters').style.display = 'flex';
             document.getElementById('soloAppuntamentiCheckbox').checked = filterAppuntamentiOnly;
 
@@ -7711,6 +8000,15 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                 c.data === data &&
                 comuniZona.includes(c.comune.toLowerCase())
             );
+
+            // Aggiungi schedulabili se filtro attivo
+            if (filterSchedulabili) {{
+                const schedZona = getContatoriSchedulabili().filter(c =>
+                    comuniZona.includes(c.comune.toLowerCase()) &&
+                    c.data !== data  // evita duplicati
+                );
+                contatoriData = contatoriData.concat(schedZona);
+            }}
 
             // Filtra per LCL se attivo
             if (currentLCL) {{

@@ -2908,6 +2908,8 @@ async function saveAll() {
             });
             var res = await r.json();
             if (r.ok && res.success) {
+                // Traccia valori salvati per protezione anti-race
+                if (window._trackRecentSaves) window._trackRecentSaves(perRow);
                 // Aggiorna rawData e pulisci pending
                 for (var rn in perRow) {
                     var di = rowIndex[+rn];
@@ -2948,6 +2950,9 @@ async function saveAll() {
                 var res = await r.json();
                 if (r.ok && res.success) {
                     ok++;
+                    // Traccia valori salvati per protezione anti-race
+                    var savedRow = {}; savedRow[rn] = fields;
+                    if (window._trackRecentSaves) window._trackRecentSaves(savedRow);
                     var di = rowIndex[+rn];
                     if (di !== undefined) {
                         for (var col in fields) rawData[di][col] = fields[col];
@@ -5273,6 +5278,30 @@ function vlExcelClear() {
     var _sseRefreshing = false;
     var _ssePendingRefresh = false;
 
+    // Protezione anti-race-condition: valori salvati di recente che non devono
+    // essere sovrascritti da dati stale provenienti dal server durante il refresh SSE.
+    // Formato: { "row:col": { val: "...", ts: Date.now() } }
+    // I valori vengono protetti per 15 secondi dopo il salvataggio.
+    var _recentSaves = {};
+    var RECENT_SAVE_TTL = 15000; // 15 secondi
+
+    // Esponi globalmente per saveAll()
+    window._trackRecentSaves = function(perRow) {
+        var now = Date.now();
+        for (var rn in perRow) {
+            for (var col in perRow[rn]) {
+                _recentSaves[rn + ':' + col] = { val: perRow[rn][col], ts: now };
+            }
+        }
+    };
+
+    function _cleanExpiredSaves() {
+        var now = Date.now();
+        for (var k in _recentSaves) {
+            if (now - _recentSaves[k].ts > RECENT_SAVE_TTL) delete _recentSaves[k];
+        }
+    }
+
     function connectSSE() {
         if (evtSource) { try { evtSource.close(); } catch(e) {} }
         try {
@@ -5347,6 +5376,32 @@ function vlExcelClear() {
                 }
             }
 
+            // Protezione anti-race: se un valore è stato salvato di recente e il server
+            // restituisce ancora il vecchio dato (Google Sheets non ha propagato), mantieni
+            // il valore che abbiamo salvato
+            _cleanExpiredSaves();
+            var recentKeys = Object.keys(_recentSaves);
+            if (recentKeys.length > 0) {
+                for (var s = 0; s < recentKeys.length; s++) {
+                    var sk = recentKeys[s];
+                    var parts = sk.split(':');
+                    var sRn = +parts[0];
+                    var sCol = parts.slice(1).join(':');
+                    var saved = _recentSaves[sk];
+                    var si = newIndex[sRn];
+                    if (si === undefined) continue;
+                    var serverVal = (newData[si][sCol] != null ? newData[si][sCol] : '').toString();
+                    var savedVal = (saved.val != null ? saved.val : '').toString();
+                    if (serverVal !== savedVal) {
+                        // Server ha ancora il vecchio valore, mantieni quello salvato
+                        newData[si][sCol] = saved.val;
+                    } else {
+                        // Server ha confermato il valore, rimuovi dalla protezione
+                        delete _recentSaves[sk];
+                    }
+                }
+            }
+
             // Rimpiazza dati
             rawData = newData;
             buildRowIndex();
@@ -5363,8 +5418,11 @@ function vlExcelClear() {
             applyFilters();
             qs('#infoRighe').innerHTML = '<strong>' + rawData.length + '</strong> righe &times; <strong>' + headers.length + '</strong> colonne';
 
+            var hasRecentSaves = Object.keys(_recentSaves).length > 0;
             if (hasPending) {
                 toast('\uD83D\uDD04 Dati aggiornati (modifiche pendenti mantenute)', 'info');
+            } else if (hasRecentSaves) {
+                toast('\uD83D\uDD04 Dati aggiornati (salvataggi recenti protetti)', 'info');
             } else {
                 toast('\uD83D\uDD04 Dati aggiornati dal server', 'success');
             }

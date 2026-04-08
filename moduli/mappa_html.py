@@ -5637,6 +5637,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         function updateDateNavigation() {{
             // Cerca prima nelle zone
             let zona = zone.find(z => z.nome === currentZona);
+            const oggiStr = getOggiStr();
 
             // Se non trovata, potrebbe essere un comune singolo
             if (!zona) {{
@@ -5647,10 +5648,10 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                         dateSet.add(c.data);
                     }}
                 }});
-                availableDates = Array.from(dateSet).sort();
+                availableDates = Array.from(dateSet).sort().filter(d => d >= oggiStr);
                 currentDateIndex = availableDates.indexOf(currentData);
             }} else {{
-                availableDates = zona.date.map(d => d.data).sort();
+                availableDates = zona.date.map(d => d.data).sort().filter(d => d >= oggiStr);
                 currentDateIndex = availableDates.indexOf(currentData);
             }}
 
@@ -5664,8 +5665,8 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             if (currentView === 'detail' && (hasMultipleDates || (isNoDate && availableDates.length > 0))) {{
                 nav.classList.add('visible');
                 if (isNoDate) {{
-                    // Utente schedulabile senza data: abilita entrambe le frecce
-                    btnPrev.disabled = false;
+                    // Utente schedulabile senza data: solo avanti
+                    btnPrev.disabled = true;
                     btnNext.disabled = false;
                 }} else {{
                     btnPrev.disabled = currentDateIndex <= 0;
@@ -5686,9 +5687,11 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
 
             let html = '';
 
+            const oggiStrPicker = getOggiStr();
+
             if (zona) {{
                 // È una zona
-                zona.date.forEach(d => {{
+                zona.date.filter(d => d.data >= oggiStrPicker).forEach(d => {{
                     const isCurrent = d.data === currentData;
                     html += `
                         <div class="date-item-picker ${{isCurrent ? 'current' : ''}}" onclick="selectDateFromPicker('${{d.data}}')">
@@ -5711,7 +5714,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                     }}
                 }});
 
-                Array.from(dateMap.keys()).sort().forEach(data => {{
+                Array.from(dateMap.keys()).sort().filter(d => d >= oggiStrPicker).forEach(data => {{
                     const info = dateMap.get(data);
                     const isCurrent = data === currentData;
                     html += `

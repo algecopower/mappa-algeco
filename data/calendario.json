@@ -1150,6 +1150,102 @@
         "ora_appuntamento": "14:00/17:00",
         "data_pianificata": "2026-04-09"
       }
+    },
+    {
+      "id": "98e4e73c",
+      "titolo": "Appuntamento PARROCCHIA SANTA MARIA MAGGIORE - POIRINO ore 8:00/11:00",
+      "data": "2026-04-10",
+      "ora": "8:00/11:00",
+      "ora_fine": "",
+      "descrizione": "POD: IT001E04789419\nENELTEL: 29479879\nNominativo: PARROCCHIA SANTA MARIA MAGGIORE\nIndirizzo: INDIPENDENZA 68\nComune: POIRINO\nNote: APP 8:00/11:00 - importante, chiamare mezz'ora prima perché deve inviare qualcuno - 07/04 mandata mail\nOrigine: filone_manuale",
+      "categoria": "boxbeat",
+      "provincia": "TORINO",
+      "creato_da": "giada",
+      "creato_il": "2026-04-08T13:02:15.444997",
+      "completata": true,
+      "completata_da": "giada",
+      "completata_il": "2026-04-08T13:25:34.285657",
+      "boxbeat_data": {
+        "pod": "IT001E04789419",
+        "eneltel": "29479879",
+        "nominativo": "PARROCCHIA SANTA MARIA MAGGIORE",
+        "via": "INDIPENDENZA",
+        "civico": "68",
+        "comune": "POIRINO",
+        "note": "APP 8:00/11:00 - importante, chiamare mezz'ora prima perché deve inviare qualcuno - 07/04 mandata mail",
+        "origine": "filone_manuale",
+        "ora_appuntamento": "8:00/11:00",
+        "data_pianificata": "2026-04-10"
+      }
+    },
+    {
+      "id": "03cd2d6e",
+      "titolo": "Appuntamento PARROCCHIA SANTA MARIA MAGGIORE - POIRINO ore 12:00/15:00",
+      "data": "2026-04-13",
+      "ora": "12:00/15:00",
+      "ora_fine": "",
+      "descrizione": "POD: IT001E02944942\nENELTEL: 29449422\nNominativo: PARROCCHIA SANTA MARIA MAGGIORE\nIndirizzo: PREVOSTURA 23\nComune: POIRINO\nNote: APP 12:00/15:00\nOrigine: filone_manuale",
+      "categoria": "boxbeat",
+      "provincia": "TORINO",
+      "creato_da": "giada",
+      "creato_il": "2026-04-08T13:02:16.443001",
+      "completata": true,
+      "completata_da": "giada",
+      "completata_il": "2026-04-08T13:25:32.511218",
+      "boxbeat_data": {
+        "pod": "IT001E02944942",
+        "eneltel": "29449422",
+        "nominativo": "PARROCCHIA SANTA MARIA MAGGIORE",
+        "via": "PREVOSTURA",
+        "civico": "23",
+        "comune": "POIRINO",
+        "note": "APP 12:00/15:00",
+        "origine": "filone_manuale",
+        "ora_appuntamento": "12:00/15:00",
+        "data_pianificata": "2026-04-13"
+      }
+    },
+    {
+      "id": "0ca4b09c",
+      "titolo": "Appuntamento PARROCCHIA SANTA MARIA MAGGIORE  parrocchiapoirino@gmail.com Sig. Luciano - POIRINO ore 8:00/11:00",
+      "data": "2026-04-09",
+      "ora": "8:00/11:00",
+      "ora_fine": "",
+      "descrizione": "POD: IT001E04789422\nENELTEL: 29477094\nNominativo: PARROCCHIA SANTA MARIA MAGGIORE  parrocchiapoirino@gmail.com Sig. Luciano\nIndirizzo: IV MARZO 12A\nComune: POIRINO\nNote: APP 8:00/11:00 - importante, chiamare mezz'ora prima perché deve inviare qualcuno - 07/04 mandata mail\nOrigine: filone_manuale",
+      "categoria": "boxbeat",
+      "provincia": "TORINO",
+      "creato_da": "giada",
+      "creato_il": "2026-04-08T13:02:17.662110",
+      "completata": true,
+      "completata_da": "giada",
+      "completata_il": "2026-04-08T13:25:34.870585",
+      "boxbeat_data": {
+        "pod": "IT001E04789422",
+        "eneltel": "29477094",
+        "nominativo": "PARROCCHIA SANTA MARIA MAGGIORE  parrocchiapoirino@gmail.com Sig. Luciano",
+        "via": "IV MARZO",
+        "civico": "12A",
+        "comune": "POIRINO",
+        "note": "APP 8:00/11:00 - importante, chiamare mezz'ora prima perché deve inviare qualcuno - 07/04 mandata mail",
+        "origine": "filone_manuale",
+        "ora_appuntamento": "8:00/11:00",
+        "data_pianificata": "2026-04-09"
+      }
+    },
+    {
+      "id": "aa2d5a84",
+      "titolo": "MANDARE PEC/MAIL PER LUNEDI' 13/04",
+      "data": "2026-04-09",
+      "ora": "08:00",
+      "ora_fine": "",
+      "descrizione": "",
+      "categoria": "promemoria",
+      "provincia": "TORINO",
+      "creato_da": "giada",
+      "creato_il": "2026-04-08T13:21:00.696216",
+      "completata": false,
+      "completata_da": null,
+      "completata_il": null
     }
   ]
 }

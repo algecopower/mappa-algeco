@@ -135,6 +135,57 @@
       "provincia": "TORINO",
       "creato_da": "giada",
       "registrato_il": "2026-04-08T10:38:33.367368"
+    },
+    {
+      "id": "5acf2785",
+      "data_appuntamento": "2026-04-10",
+      "orario": "8:00/11:00",
+      "pod": "IT001E04789419",
+      "eneltel": "29479879",
+      "nominativo": "PARROCCHIA SANTA MARIA MAGGIORE",
+      "via": "INDIPENDENZA",
+      "civico": "68",
+      "comune": "POIRINO",
+      "note": "APP 8:00/11:00 - importante, chiamare mezz'ora prima perché deve inviare qualcuno - 07/04 mandata mail",
+      "data_pianificata": "2026-04-10",
+      "origine": "filone_manuale",
+      "provincia": "TORINO",
+      "creato_da": "giada",
+      "registrato_il": "2026-04-08T13:02:15.447610"
+    },
+    {
+      "id": "c4753973",
+      "data_appuntamento": "2026-04-13",
+      "orario": "12:00/15:00",
+      "pod": "IT001E02944942",
+      "eneltel": "29449422",
+      "nominativo": "PARROCCHIA SANTA MARIA MAGGIORE",
+      "via": "PREVOSTURA",
+      "civico": "23",
+      "comune": "POIRINO",
+      "note": "APP 12:00/15:00",
+      "data_pianificata": "2026-04-13",
+      "origine": "filone_manuale",
+      "provincia": "TORINO",
+      "creato_da": "giada",
+      "registrato_il": "2026-04-08T13:02:16.445720"
+    },
+    {
+      "id": "99c06e41",
+      "data_appuntamento": "2026-04-09",
+      "orario": "8:00/11:00",
+      "pod": "IT001E04789422",
+      "eneltel": "29477094",
+      "nominativo": "PARROCCHIA SANTA MARIA MAGGIORE  parrocchiapoirino@gmail.com Sig. Luciano",
+      "via": "IV MARZO",
+      "civico": "12A",
+      "comune": "POIRINO",
+      "note": "APP 8:00/11:00 - importante, chiamare mezz'ora prima perché deve inviare qualcuno - 07/04 mandata mail",
+      "data_pianificata": "2026-04-09",
+      "origine": "filone_manuale",
+      "provincia": "TORINO",
+      "creato_da": "giada",
+      "registrato_il": "2026-04-08T13:02:17.665015"
     }
   ]
 }

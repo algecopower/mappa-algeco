@@ -323,6 +323,7 @@ def estrai_lavori_da_tabella(page) -> List[Dict]:
         
         # Per ogni lavoro trovato, cerca i dati usando le coordinate
         for i, match in enumerate(matches):
+            matricola_operatore = match.group(2)  # AE101392, AG18966, ecc.
             num_lavoro = int(match.group(3))
             data_intervento = match.group(6)
             
@@ -391,6 +392,7 @@ def estrai_lavori_da_tabella(page) -> List[Dict]:
                     'data_intervento': data_intervento,
                     'pod': '',
                     'eneltel': '',
+                    'matricola_operatore': matricola_operatore,
                 }
                 
                 # POD (formato standard IT001E... o fotovoltaico ITP0AE...)
@@ -483,6 +485,7 @@ def estrai_lavori_da_testo(text: str) -> List[Dict]:
     matches = list(pattern.finditer(text))
     
     for i, match in enumerate(matches):
+        matricola_operatore = match.group(2)  # AE101392, AG18966, ecc.
         num_lavoro = int(match.group(3))
         data_intervento = match.group(6)
         
@@ -500,6 +503,7 @@ def estrai_lavori_da_testo(text: str) -> List[Dict]:
         # Estrai dati dal blocco
         lavoro = estrai_dati_da_blocco_v2(blocco, num_lavoro, data_intervento)
         if lavoro and lavoro.get('pod'):
+            lavoro['matricola_operatore'] = matricola_operatore
             lavori.append(lavoro)
     
     return lavori

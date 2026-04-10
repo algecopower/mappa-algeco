@@ -578,6 +578,46 @@
             cursor: pointer;
         }
         .fmt-color-preview:hover { border-color: var(--border); background: var(--bg-cell-hover); }
+        .fmt-color-palette {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 999;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 6px;
+            box-shadow: 0 4px 16px rgba(0,0,0,.25);
+            width: 176px;
+        }
+        .fmt-color-palette.open { display: block; }
+        .fmt-color-palette-grid {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 3px;
+        }
+        .fmt-color-swatch {
+            width: 18px; height: 18px;
+            border-radius: 3px;
+            border: 1px solid rgba(128,128,128,.25);
+            cursor: pointer;
+            transition: transform .1s;
+        }
+        .fmt-color-swatch:hover { transform: scale(1.25); border-color: var(--primary); z-index: 1; }
+        .fmt-color-palette-row {
+            display: flex; align-items: center; gap: 5px;
+            margin-top: 5px; padding-top: 5px;
+            border-top: 1px solid var(--border);
+            font-size: 0.78em; color: var(--text-muted); cursor: pointer;
+        }
+        .fmt-color-palette-row:hover { color: var(--text); }
+        .fmt-color-palette-row .fmt-custom-swatch {
+            width: 18px; height: 18px; border-radius: 3px;
+            border: 1px dashed var(--border); display: flex; align-items: center; justify-content: center;
+            font-size: 0.9em;
+        }
         .fmt-sep { width: 1px; height: 18px; background: var(--border); margin: 0 2px; }
 
         .vc.protected {
@@ -981,7 +1021,7 @@
         /* Status bar stats */
         .status-bar .st-stats { color: var(--info); font-weight: 600; }
 
-        /* VLOOKUP (Cerca Vert) Panel */
+        /* VLOOKUP (Filtri Avanzati) Panel */
         .vl-overlay {
             position: fixed; inset: 0;
             background: rgba(0,0,0,0.45);
@@ -1165,7 +1205,7 @@
             <button class="tb" id="btnUndo" onclick="undo()" style="display:none" title="Annulla (Ctrl+Z)">&#x21A9;</button>
             <button class="tb" id="btnRedo" onclick="redo()" style="display:none" title="Ripristina (Ctrl+Y)">&#x21AA;</button>
             <button class="tb" onclick="openFindReplace()" title="Trova e Sostituisci (Ctrl+H)">&#x1F50D; Sostituisci</button>
-            <button class="tb" onclick="openVlookup()" title="Cerca Vert / VLOOKUP (Ctrl+L)">&#x1F50D; Cerca Vert</button>
+            <button class="tb" onclick="openVlookup()" title="Filtri Avanzati (Ctrl+L)">&#x2699; Filtri Avanzati</button>
             <div class="toolbar-sep"></div>
             <div class="fmt-bar">
                 <button class="fmt-btn" id="fmtBold" onclick="toggleCellFormat('bold')" title="Grassetto (Ctrl+B)"><span class="fmt-icon">B</span></button>
@@ -1173,13 +1213,15 @@
                 <button class="fmt-btn" id="fmtUnderline" onclick="toggleCellFormat('underline')" title="Sottolineato (Ctrl+U)"><span class="fmt-icon fmt-icon-u">U</span></button>
                 <button class="fmt-btn" id="fmtStrike" onclick="toggleCellFormat('strikethrough')" title="Barrato (Ctrl+5)"><span class="fmt-icon fmt-icon-s">S</span></button>
                 <div class="fmt-sep"></div>
-                <div class="fmt-color-wrap">
-                    <div class="fmt-color-preview" id="fmtTextColorPreview" onclick="qs('#fmtTextColor').click()" title="Colore testo" style="color:var(--text)">A</div>
-                    <input type="color" id="fmtTextColor" value="#ef4444" onchange="setCellFormatColor('textColor', this.value)">
+                <div class="fmt-color-wrap" id="textColorWrap">
+                    <div class="fmt-color-preview" id="fmtTextColorPreview" onclick="toggleColorPalette('text')" title="Colore testo" style="color:var(--text)">A</div>
+                    <input type="color" id="fmtTextColor" value="#ef4444" onchange="setCellFormatColor('textColor', this.value); closeColorPalettes()">
+                    <div class="fmt-color-palette" id="textColorPalette"></div>
                 </div>
-                <div class="fmt-color-wrap">
-                    <div class="fmt-color-preview" id="fmtHighlightPreview" onclick="qs('#fmtHighlight').click()" title="Evidenzia cella" style="background:var(--bg-cell);color:var(--text-muted);font-size:0.7em">&#x1F58D;</div>
-                    <input type="color" id="fmtHighlight" value="#facc15" onchange="setCellFormatColor('bgColor', this.value)">
+                <div class="fmt-color-wrap" id="bgColorWrap">
+                    <div class="fmt-color-preview" id="fmtHighlightPreview" onclick="toggleColorPalette('bg')" title="Evidenzia cella" style="background:var(--bg-cell);color:var(--text-muted);font-size:0.7em">&#x1F58D;</div>
+                    <input type="color" id="fmtHighlight" value="#facc15" onchange="setCellFormatColor('bgColor', this.value); closeColorPalettes()">
+                    <div class="fmt-color-palette" id="bgColorPalette"></div>
                 </div>
                 <div class="fmt-sep"></div>
                 <button class="fmt-btn" onclick="clearCellFormat()" title="Cancella formattazione">&#x1F6AB;</button>
@@ -1253,7 +1295,7 @@
     <div class="vl-overlay" id="vlOverlay" onclick="closeVlookup()"></div>
     <div class="vl-panel" id="vlPanel">
         <div class="vl-hdr">
-            <h3>&#x1F50D; Cerca Vert <span style="font-size:0.7em;color:var(--text-muted);font-weight:400">(VLOOKUP)</span></h3>
+            <h3>&#x2699; Filtri Avanzati</h3>
             <button class="vl-close" onclick="closeVlookup()">&times;</button>
         </div>
         <div class="vl-body">
@@ -1426,7 +1468,7 @@ let colorFilterCol = '';     // column name for color filter
 let colorFilterColor = '';   // textColor value to filter by ('' = no filter)
 let podFilterSet = null;    // Set di valori filtro attivi, null = nessun filtro
 let podColName = '';        // nome colonna POD (auto-detected)
-let vlFilterCol = '';       // nome colonna usata per il filtro dal Cerca Vert
+let vlFilterCol = '';       // nome colonna usata per il filtro dai Filtri Avanzati
 let colTypes = {};          // colName -> 'date'|'time'|'number'|'text'
 let hiddenCols = new Set(); // set of hidden column indices
 let protectedCols = new Set(); // set of protected (read-only) column names (lowercase)
@@ -1696,7 +1738,6 @@ function hideColumn(ci) {
     updateLayout();
     renderVisible(true);
     updateHiddenColsBtn();
-    toast('Colonna "' + headers[ci] + '" nascosta', 'warning');
 }
 function showColumn(ci) {
     hiddenCols.delete(ci);
@@ -1705,7 +1746,6 @@ function showColumn(ci) {
     updateLayout();
     renderVisible(true);
     updateHiddenColsBtn();
-    toast('Colonna "' + headers[ci] + '" ripristinata', 'success');
 }
 function showAllColumns() {
     hiddenCols.clear();
@@ -1714,7 +1754,6 @@ function showAllColumns() {
     updateLayout();
     renderVisible(true);
     updateHiddenColsBtn();
-    toast('Tutte le colonne ripristinate', 'success');
 }
 function updateHiddenColsBtn() {
     // Badge on toolbar button
@@ -1744,7 +1783,6 @@ function resetColWidths() {
     buildHeader();
     updateLayout();
     renderVisible(true);
-    toast('Colonne ripristinate (larghezza + ordine)', 'success');
 }
 
 // ============================================================
@@ -1978,7 +2016,7 @@ function applyFilters() {
         var pass = true;
         var hasPending = pendingRows.has(row._row);
 
-        // Cerca Vert / POD filter (skip for rows with pending edits)
+        // Filtri Avanzati / POD filter (skip for rows with pending edits)
         if (!hasPending && podFilterSet) {
             var filterColName = vlFilterCol || podColName;
             if (filterColName) {
@@ -2447,7 +2485,6 @@ function selectEntireColumn(ci) {
     }
     renderVisible(true);
     updateSelectionStatus();
-    toast('\uD83D\uDCCA Colonna "' + headers[ci] + '" selezionata (' + filtered.length + ' celle)', 'info');
 }
 
 function selectEntireRow(rn) {
@@ -2481,7 +2518,6 @@ function selectEntireRow(rn) {
     updateSelectionStatus();
     var visibleCols = 0;
     for (var i = 0; i < colOrder.length; i++) { if (!hiddenCols.has(colOrder[i])) visibleCols++; }
-    toast('\uD83D\uDCCA Riga ' + rn + ' selezionata (' + visibleCols + ' celle)', 'info');
 }
 
 function isInSelRange(visIdx, ci) {
@@ -2542,7 +2578,6 @@ function startEdit(rn, ci, selectAll) {
         // Refresh visuals to remove lock styling
         buildHeader();
         renderVisible(true);
-        toast('\uD83D\uDD13 Colonna "' + headers[ci] + '" sbloccata per questa sessione', 'success');
     }
     if (editing) commitEdit();
     selectCell(rn, ci);
@@ -2923,7 +2958,6 @@ async function saveAll() {
                 redoStack = [];
                 updateChangeCount();
                 renderVisible(true);
-                toast('\u2705 ' + totalRows + ' righe (' + totalCells + ' celle) salvate \u2013 sync mappa...', 'success');
                 triggerMapSync();
             } else {
                 btn.disabled = false;
@@ -2969,7 +3003,6 @@ async function saveAll() {
         updateChangeCount();
         renderVisible(true);
         if (!fail) {
-            toast('\u2705 ' + ok + ' righe salvate \u2013 sync mappa...', 'success');
             triggerMapSync();
         } else {
             toast('\u26A0\uFE0F ' + ok + ' OK, ' + fail + ' errori', 'warning');
@@ -2982,7 +3015,6 @@ function triggerMapSync() {
     fetch('/api/filone/sync', { method: 'POST' }).then(function(r) {
         return r.json();
     }).then(function(d) {
-        if (d.success) toast('\uD83D\uDDFA\uFE0F Mappa aggiornata!', 'success');
     }).catch(function() { /* silent */ });
 }
 
@@ -3011,7 +3043,6 @@ function undo() {
 
     renderVisible(true);
     updateChangeCount();
-    toast('\u21A9 Annullat' + (count > 1 ? 'e ' + count + ' modifiche' : 'o'), 'warning');
 }
 
 function redo() {
@@ -3039,7 +3070,6 @@ function redo() {
 
     renderVisible(true);
     updateChangeCount();
-    toast('\u21AA Ripristinat' + (count > 1 ? 'e ' + count + ' modifiche' : 'o'), 'success');
 }
 
 function updateChangeCount() {
@@ -3079,7 +3109,7 @@ function openFilter(ci, x, y) {
     for (var i = 0; i < rawData.length; i++) {
         var row = rawData[i];
         var pass = true;
-        // Cerca Vert / POD filter
+        // Filtri Avanzati / POD filter
         if (podFilterSet) {
             var filterColName = vlFilterCol || podColName;
             if (filterColName) {
@@ -3311,7 +3341,7 @@ window.onbeforeunload = function(e) {
 };
 
 // ============================================================
-// VLOOKUP FILTER (Filtra sul filone dai risultati Cerca Vert)
+// VLOOKUP FILTER (Filtra sul filone dai risultati Filtri Avanzati)
 // ============================================================
 function vlApplyAsFilter() {
     if (vlResults.length === 0) { toast('Nessun risultato da filtrare', 'warning'); return; }
@@ -3327,14 +3357,12 @@ function vlApplyAsFilter() {
     vlFilterCol = cn;
     closeVlookup();
     applyFilters();
-    toast('\uD83D\uDD0E Filtro applicato: ' + vals.size + ' valori sulla colonna ' + cn, 'success');
 }
 
 function clearVlFilter() {
     podFilterSet = null;
     vlFilterCol = '';
     applyFilters();
-    toast('Filtro Cerca Vert rimosso', 'warning');
 }
 
 // ============================================================
@@ -3350,9 +3378,9 @@ function updateActiveFilterBadges() {
         html += '<span class="filter-badge">' + esc(cn) + ': ' + count + ' val <span class="badge-x" data-col="' + esc(cn) + '" onclick="removeColFilter(this.dataset.col)">\u2715</span></span>';
     }
 
-    // Cerca Vert filter badge
+    // Filtri Avanzati filter badge
     if (podFilterSet) {
-        var filterLabel = vlFilterCol || podColName || 'Cerca Vert';
+        var filterLabel = vlFilterCol || podColName || 'Filtri Avanzati';
         html += '<span class="filter-badge">\uD83D\uDD0D ' + esc(filterLabel) + ': ' + podFilterSet.size + ' <span class="badge-x" onclick="clearVlFilterQuick()">\u2715</span></span>';
     }
 
@@ -3560,7 +3588,6 @@ function cmShowAll() {
     renderVisible(true);
     updateHiddenColsBtn();
     buildColManagerList();
-    toast('Tutte le colonne visibili', 'success');
 }
 
 function cmResetOrder() {
@@ -3570,7 +3597,6 @@ function cmResetOrder() {
     buildHeader();
     renderVisible(true);
     buildColManagerList();
-    toast('Ordine colonne ripristinato', 'success');
 }
 
 // ============================================================
@@ -3603,7 +3629,6 @@ document.addEventListener('copy', function(e) {
     if (!text) return;
     e.preventDefault();
     e.clipboardData.setData('text/plain', text);
-    toast('\uD83D\uDCCB Copiato', 'success');
 });
 
 document.addEventListener('cut', function(e) {
@@ -3640,7 +3665,6 @@ document.addEventListener('cut', function(e) {
         }
     }
     if (cutCount > 0) renderVisible(true);
-    toast('\u2702\uFE0F Tagliato' + (cutCount > 1 ? ' ' + cutCount + ' celle' : ''), 'success');
 });
 
 document.addEventListener('paste', function(e) {
@@ -3704,7 +3728,6 @@ document.addEventListener('paste', function(e) {
         }
     }
     renderVisible(true);
-    toast('\uD83D\uDCCB Incollate ' + pasteCount + ' celle', 'success');
 });
 
 // ============================================================
@@ -3894,7 +3917,6 @@ function fnrReplaceAll() {
     fnrCurrentIdx = -1;
     renderVisible(true);
     qs('#fnrInfo').textContent = count + ' sostituzioni effettuate';
-    toast('\uD83D\uDD04 ' + count + ' sostituzioni', 'success');
 }
 
 // Enter key in find input triggers find next
@@ -3936,7 +3958,6 @@ function autoFitColumn(ci) {
 
     updateLayout();
     renderVisible(true);
-    toast('Colonna "' + cn + '" adattata (' + colWidths[ci] + 'px)', 'success');
 }
 
 // ============================================================
@@ -4007,10 +4028,6 @@ async function _syncFormatsToServer() {
         body.cleared = clearedKeys;
     }
 
-    // Svuota le code prima della chiamata
-    _fmtDirty = {};
-    _fmtCleared = [];
-
     try {
         var r = await fetch('/api/filone/formats', {
             method: 'PUT',
@@ -4019,25 +4036,19 @@ async function _syncFormatsToServer() {
         });
         if (r.ok) {
             var d = await r.json();
-            toast('\uD83C\uDFA8 Formattazione sincronizzata su Sheets (' + (d.updated || 0) + ' celle)', 'success');
-        } else {
-            toast('\u274C Errore sincronizzazione formattazione', 'error');
-            // Rimetti in coda i dirty non sincronizzati
+            // Sync riuscito: rimuovi solo le chiavi effettivamente inviate
             for (var i = 0; i < dirtyKeys.length; i++) {
-                if (!_fmtDirty[dirtyKeys[i]]) _fmtDirty[dirtyKeys[i]] = true;
+                if (_fmtDirty[dirtyKeys[i]]) delete _fmtDirty[dirtyKeys[i]];
             }
             for (var i = 0; i < clearedKeys.length; i++) {
-                if (_fmtCleared.indexOf(clearedKeys[i]) < 0) _fmtCleared.push(clearedKeys[i]);
+                var idx = _fmtCleared.indexOf(clearedKeys[i]);
+                if (idx >= 0) _fmtCleared.splice(idx, 1);
             }
+        } else {
+            toast('\u274C Errore sincronizzazione formattazione', 'error');
         }
     } catch(e) {
         toast('\u274C Errore rete sincronizzazione formattazione', 'error');
-        for (var i = 0; i < dirtyKeys.length; i++) {
-            if (!_fmtDirty[dirtyKeys[i]]) _fmtDirty[dirtyKeys[i]] = true;
-        }
-        for (var i = 0; i < clearedKeys.length; i++) {
-            if (_fmtCleared.indexOf(clearedKeys[i]) < 0) _fmtCleared.push(clearedKeys[i]);
-        }
     } finally {
         _fmtSyncing = false;
         // Se nel frattempo sono arrivate altre modifiche, rilancia
@@ -4093,6 +4104,61 @@ function toggleCellFormat(prop) {
     updateFormatToolbarState();
 }
 
+// ── Color Palette ──
+var _defaultColors = [
+    '#000000','#434343','#666666','#999999','#b7b7b7','#cccccc','#d9d9d9','#ffffff',
+    '#e06666','#ea9999','#f4cccc','#fce5cd','#fff2cc','#d9ead3','#d0e0e3','#cfe2f3',
+    '#cc0000','#e69138','#f1c232','#6aa84f','#45818e','#3d85c6','#674ea7','#a64d79',
+    '#990000','#b45f06','#bf9000','#38761d','#134f5c','#0b5394','#351c75','#741b47',
+    '#ef4444','#f97316','#facc15','#22c55e','#06b6d4','#3b82f6','#8b5cf6','#ec4899',
+];
+
+function _buildPaletteHTML(type) {
+    var prop = type === 'text' ? 'textColor' : 'bgColor';
+    var inputId = type === 'text' ? 'fmtTextColor' : 'fmtHighlight';
+    var html = '<div class="fmt-color-palette-grid">';
+    for (var i = 0; i < _defaultColors.length; i++) {
+        html += '<div class="fmt-color-swatch" style="background:' + _defaultColors[i] + '" '
+            + 'onclick="pickPaletteColor(\'' + prop + '\',\'' + _defaultColors[i] + '\',\'' + type + '\')" '
+            + 'title="' + _defaultColors[i] + '"></div>';
+    }
+    html += '</div>';
+    html += '<div class="fmt-color-palette-row" onclick="qs(\'#' + inputId + '\').click()">'
+        + '<div class="fmt-custom-swatch">+</div> Colore personalizzato</div>';
+    return html;
+}
+
+function toggleColorPalette(type) {
+    var palId = type === 'text' ? 'textColorPalette' : 'bgColorPalette';
+    var otherId = type === 'text' ? 'bgColorPalette' : 'textColorPalette';
+    var pal = qs('#' + palId);
+    var other = qs('#' + otherId);
+    if (other) other.classList.remove('open');
+    if (!pal.innerHTML) pal.innerHTML = _buildPaletteHTML(type);
+    pal.classList.toggle('open');
+}
+
+function closeColorPalettes() {
+    var t = qs('#textColorPalette'), b = qs('#bgColorPalette');
+    if (t) t.classList.remove('open');
+    if (b) b.classList.remove('open');
+}
+
+function pickPaletteColor(prop, color, type) {
+    setCellFormatColor(prop, color);
+    closeColorPalettes();
+    // Sync the hidden input value too
+    if (type === 'text') qs('#fmtTextColor').value = color;
+    else qs('#fmtHighlight').value = color;
+}
+
+// Close palettes on outside click
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('#textColorWrap') && !e.target.closest('#bgColorWrap')) {
+        closeColorPalettes();
+    }
+});
+
 function setCellFormatColor(prop, color) {
     var keys = getSelectedCellKeys();
     if (keys.length === 0) { toast('Seleziona almeno una cella', 'warning'); return; }
@@ -4126,7 +4192,6 @@ function clearCellFormat() {
     _scheduleFmtSync();
     renderVisible(true);
     updateFormatToolbarState();
-    toast('Formattazione rimossa (' + keys.length + ' celle)', 'info');
 }
 
 function updateFormatToolbarState() {
@@ -4137,6 +4202,21 @@ function updateFormatToolbarState() {
     if (italicBtn) italicBtn.classList.toggle('active', !!fmt.italic);
     if (underBtn) underBtn.classList.toggle('active', !!fmt.underline);
     if (strikeBtn) strikeBtn.classList.toggle('active', !!fmt.strikethrough);
+    // Aggiorna icone colore testo e sfondo
+    var textPrev = qs('#fmtTextColorPreview');
+    var bgPrev = qs('#fmtHighlightPreview');
+    if (textPrev) {
+        textPrev.style.color = fmt.textColor || 'var(--text)';
+    }
+    if (bgPrev) {
+        if (fmt.bgColor) {
+            bgPrev.style.background = fmt.bgColor;
+            bgPrev.style.color = '#000';
+        } else {
+            bgPrev.style.background = 'var(--bg-cell)';
+            bgPrev.style.color = 'var(--text-muted)';
+        }
+    }
 }
 
 function getCellFormat(rn, cn) {
@@ -4360,11 +4440,10 @@ function cfmClearAll() {
     rebuildCondRulesByCol();
     cfmRender();
     renderVisible(true);
-    toast('Regole eliminate', 'warning');
 }
 
 // ============================================================
-// VLOOKUP (CERCA VERT) - Ricerca intuitiva
+// FILTRI AVANZATI - Ricerca intuitiva
 // ============================================================
 var vlMatchMode = 'exact'; // 'exact', 'contains', 'starts'
 var vlSearchMode = 'single'; // 'single' or 'multi'
@@ -4761,7 +4840,6 @@ function vlGoToRow(tr) {
     
     if (vi < 0) {
         // Row not visible (filtered out) — clear filters first
-        toast('Riga ' + rn + ' filtrata. Rimuovo filtri...', 'warning');
         colFilters = {};
         podFilterSet = null;
         vlFilterCol = '';
@@ -4781,16 +4859,14 @@ function vlGoToRow(tr) {
         selectCell(rn, sci);
         ensureVisible(vi, sci);
         renderVisible(true);
-        toast('Riga ' + rn + ' selezionata', 'success');
     }
 }
 
 function vlCopySingle(val) {
     if (navigator.clipboard) {
-        navigator.clipboard.writeText(val).then(function() { toast('Valore copiato!', 'success'); });
+        navigator.clipboard.writeText(val).then(function() {});
     } else {
         vlFallbackCopy(val);
-        toast('Valore copiato!', 'success');
     }
 }
 
@@ -4817,12 +4893,9 @@ function vlCopyResults() {
     var text = lines.join('\n');
     
     if (navigator.clipboard) {
-        navigator.clipboard.writeText(text).then(function() {
-            toast('\uD83D\uDCCB ' + vlResults.length + ' risultati copiati!', 'success');
-        });
+        navigator.clipboard.writeText(text).then(function() {});
     } else {
         vlFallbackCopy(text);
-        toast('\uD83D\uDCCB ' + vlResults.length + ' risultati copiati!', 'success');
     }
 }
 
@@ -4860,7 +4933,6 @@ function vlExportCSV() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    toast('\uD83D\uDCE5 CSV esportato (' + vlResults.length + ' righe)', 'success');
 }
 
 function vlFallbackCopy(text) {
@@ -5054,7 +5126,6 @@ function vlExcelFileLoaded() {
     vlExcelAddMapping();
     qs('#vlMergeResult').innerHTML = '';
 
-    toast('\uD83D\uDCC2 File caricato: ' + vlExcelData.length + ' righe', 'success');
 }
 
 function vlExcelAddMapping() {
@@ -5245,11 +5316,9 @@ function vlExcelMerge() {
         qs('#btnSave').disabled = false;
         applyFilters();
         renderVisible(true);
-        toast('\uD83D\uDD04 Merge completato: ' + updated + ' righe aggiornate, ' + cellsChanged + ' celle modificate', 'success');
         qs('#vlMergeResult').innerHTML = '<div class="vl-merge-result success">\u2705 Merge completato! <strong>' + updated +
             '</strong> righe, <strong>' + cellsChanged + '</strong> celle modificate. Ricorda di <strong>salvare</strong> le modifiche.</div>';
     } else {
-        toast('Nessuna modifica necessaria: i dati sono gi\u00e0 aggiornati', 'info');
         qs('#vlMergeResult').innerHTML = '<div class="vl-merge-result warning">\u2139 Nessuna modifica: i dati del filone corrispondono gi\u00e0 all\'Excel.</div>';
     }
 }
@@ -5265,7 +5334,6 @@ function vlExcelClear() {
     qs('#vlExcelFileInput').value = '';
     qs('#vlMergeResult').innerHTML = '';
     qs('#vlExcelPreviewWrap').style.display = 'none';
-    toast('File Excel rimosso', 'warning');
 }
 
 // ============================================================
@@ -5340,7 +5408,7 @@ function vlExcelClear() {
 
             // Ricontrolla editing DOPO la fetch: l'utente potrebbe aver iniziato
             // a modificare una cella durante l'attesa della risposta
-            if (editing) { _ssePendingRefresh = true; return; }
+            if (editing) { _ssePendingRefresh = true; _sseRefreshing = false; return; }
 
             var newData = d.data;
 
@@ -5419,13 +5487,7 @@ function vlExcelClear() {
             qs('#infoRighe').innerHTML = '<strong>' + rawData.length + '</strong> righe &times; <strong>' + headers.length + '</strong> colonne';
 
             var hasRecentSaves = Object.keys(_recentSaves).length > 0;
-            if (hasPending) {
-                toast('\uD83D\uDD04 Dati aggiornati (modifiche pendenti mantenute)', 'info');
-            } else if (hasRecentSaves) {
-                toast('\uD83D\uDD04 Dati aggiornati (salvataggi recenti protetti)', 'info');
-            } else {
-                toast('\uD83D\uDD04 Dati aggiornati dal server', 'success');
-            }
+
         } catch(e) {
             // Refresh fallito silenziosamente
         } finally {

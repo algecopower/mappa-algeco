@@ -1723,6 +1723,12 @@
                     <i class="fas fa-robot"></i>
                     Cerca con AI
                 </button>
+
+                <button class="bulk-email-btn" id="aggiornaOperatoriBtn" onclick="aggiornaOperatoriBulk()" disabled
+                        style="background: linear-gradient(135deg, #e67e22, #d35400);">
+                    <i class="fas fa-user-cog"></i>
+                    Aggiorna Operatori
+                </button>
             </div>
 
         </div>
@@ -2294,6 +2300,16 @@
             if (aiBtn) {
                 aiBtn.disabled = numSocieta === 0;
                 aiBtn.title = numSocieta > 0 ? `${numSocieta} società` : 'Nessuna società nei contatti';
+            }
+
+            // Abilita/disabilita pulsante aggiorna operatori
+            const conOperatore = contatti.filter(c => (c.matricola_operatore || '').trim());
+            const opBtn = document.getElementById('aggiornaOperatoriBtn');
+            if (opBtn) {
+                opBtn.disabled = conOperatore.length === 0;
+                opBtn.title = conOperatore.length > 0
+                    ? `Aggiorna operatore per ${conOperatore.length} contatori`
+                    : 'Nessuna matricola operatore disponibile';
             }
             
             if (filtered.length === 0) {
@@ -3678,6 +3694,57 @@
             // Splitta per separatori comuni
             const parti = campo.split(/[\/,;\s]+/).map(s => s.trim()).filter(s => s.includes('@'));
             return parti.map(e => ({ email: e, pec: isPec(e) }));
+        }
+
+        async function aggiornaOperatoriBulk() {
+            const conOperatore = contatti.filter(c => (c.matricola_operatore || '').trim() && (c.pod || '').trim());
+            if (conOperatore.length === 0) {
+                showToast('Nessun contatore con matricola operatore disponibile', 'error');
+                return;
+            }
+
+            // Mostra conferma con dettaglio
+            const dettaglio = conOperatore.map(c =>
+                `• ${c.nome || c.pod} → ${c.matricola_operatore}`
+            ).join('\n');
+
+            if (!confirm(
+                `Aggiornare la colonna Operatore sul filone per ${conOperatore.length} contatori?\n\n${dettaglio}`
+            )) return;
+
+            const btn = document.getElementById('aggiornaOperatoriBtn');
+            const oldHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Aggiornamento...';
+
+            try {
+                const payload = conOperatore.map(c => ({
+                    pod: c.pod,
+                    matricola_operatore: c.matricola_operatore
+                }));
+
+                const resp = await fetch('/api/distinte/aggiorna-operatori', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contatori: payload })
+                });
+                const result = await resp.json();
+
+                if (result.success) {
+                    showToast(`Operatore aggiornato per ${result.aggiornati} contatori`, 'success');
+                    if (result.errori && result.errori.length > 0) {
+                        console.warn('Errori aggiornamento operatori:', result.errori);
+                    }
+                } else {
+                    showToast(result.error || 'Errore aggiornamento operatori', 'error');
+                }
+            } catch (err) {
+                console.error('Errore aggiornamento operatori:', err);
+                showToast('Errore di rete durante l\'aggiornamento', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = oldHtml;
+            }
         }
 
         function apriBulkEmailModal() {

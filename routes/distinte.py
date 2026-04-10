@@ -769,6 +769,7 @@ def parse_distinta_endpoint():
             contatto.setdefault('telefono_filone', '')
             contatto.setdefault('email_filone', '')
             contatto.setdefault('matricola_filone', '')
+            contatto.setdefault('matricola_operatore', '')
             contatto.setdefault('pod_filone', '')
             contatto.setdefault('eneltel_filone', '')
             contatto.setdefault('tipologia_contatore', '')
@@ -875,6 +876,72 @@ def sovrascrivi_valore_filone():
 
     except Exception as e:
         return _api_error(e, 'sovrascrittura valore filone')
+
+
+@bp.route('/api/distinte/aggiorna-operatori', methods=['POST'])
+@login_required
+def aggiorna_operatori_filone():
+    """
+    Aggiorna in blocco la colonna Operatore sul filone usando la matricola
+    operatore estratta dalle distinte.
+    Body: {"contatori": [{"pod": "IT...", "matricola_operatore": "AG18966"}, ...]}
+    """
+    try:
+        data = request.json
+        contatori = data.get('contatori', [])
+
+        if not contatori:
+            return jsonify({'error': 'Nessun contatore da aggiornare'}), 400
+
+        ws = get_worksheet()
+        header_map = get_header_map()
+
+        # Trova la colonna Operatore
+        col_operatore = None
+        for col_name in ['Operatore', 'OPERATORE', 'operatore']:
+            if col_name in header_map:
+                col_operatore = header_map[col_name]
+                break
+
+        if col_operatore is None:
+            return jsonify({'error': 'Colonna Operatore non trovata nel filone'}), 400
+
+        aggiornati = 0
+        errori = []
+        updates = []
+
+        for item in contatori:
+            pod = (item.get('pod') or '').strip().upper()
+            matricola = (item.get('matricola_operatore') or '').strip()
+
+            if not pod or not matricola:
+                continue
+
+            row = find_row_by_pod(pod)
+            if row is None:
+                errori.append(f'POD {pod} non trovato')
+                continue
+
+            updates.append({
+                'range': gspread.utils.rowcol_to_a1(row, col_operatore),
+                'values': [[matricola]]
+            })
+            aggiornati += 1
+
+        if updates:
+            _sheets_retry(ws.batch_update, updates)
+            _callbacks['trigger_sync_after_edit']()
+
+        return jsonify({
+            'success': True,
+            'aggiornati': aggiornati,
+            'errori': errori,
+            'message': f'Operatore aggiornato per {aggiornati} contatori'
+                       + (f' ({len(errori)} errori)' if errori else '')
+        })
+
+    except Exception as e:
+        return _api_error(e, 'aggiornamento operatori')
 
 
 @bp.route('/api/distinte/salva-nota', methods=['POST'])

@@ -1207,3 +1207,116 @@ def download_excel_lettere(filename):
         download_name=safe_name,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
+
+
+# ============================================================
+# CELL CHANGE LOG — storico modifiche celle filone
+# ============================================================
+
+_cell_log_lock = threading.Lock()
+_CELL_LOG_MAX = 50000  # max entries nel file di log
+
+def _get_cell_log_path():
+    return os.path.join('data', PROVINCIA_ATTIVA.lower(), 'cell_log.json')
+
+def _load_cell_log():
+    path = _get_cell_log_path()
+    if os.path.exists(path):
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            return []
+    return []
+
+def _save_cell_log(log_data):
+    path = _get_cell_log_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    # Tronca se troppo grande
+    if len(log_data) > _CELL_LOG_MAX:
+        log_data = log_data[-_CELL_LOG_MAX:]
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump(log_data, f, ensure_ascii=False)
+
+
+@bp.route('/api/filone/log', methods=['POST'])
+@login_required
+def save_cell_log():
+    """Registra le modifiche alle celle del filone.
+
+    Body JSON: { "changes": [ { "row": 42, "col": "NOTE APP", "old": "...", "new": "..." }, ... ] }
+    """
+    try:
+        data = request.json
+        if not data or 'changes' not in data:
+            return jsonify({'error': 'Formato non valido'}), 400
+
+        changes = data['changes']
+        if not isinstance(changes, list) or not changes:
+            return jsonify({'ok': True, 'logged': 0})
+
+        username = _get_username()
+        ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+        entries = []
+        for c in changes:
+            row = c.get('row')
+            col = c.get('col', '')
+            old_val = c.get('old', '')
+            new_val = c.get('new', '')
+            if row is None or not col:
+                continue
+            entries.append({
+                'ts': ts,
+                'user': username,
+                'row': int(row),
+                'col': str(col),
+                'old': str(old_val)[:500],
+                'new': str(new_val)[:500],
+            })
+
+        if entries:
+            with _cell_log_lock:
+                log = _load_cell_log()
+                log.extend(entries)
+                _save_cell_log(log)
+
+        return jsonify({'ok': True, 'logged': len(entries)})
+    except Exception as e:
+        logger.warning(f"[CellLog] Errore salvataggio log: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/filone/log', methods=['GET'])
+@login_required
+def get_cell_log():
+    """Restituisce lo storico modifiche per una cella specifica o tutte.
+
+    Query params:
+      - row (int, opzionale): filtra per riga
+      - col (str, opzionale): filtra per colonna
+      - limit (int, default 50): max risultati
+    """
+    try:
+        row_filter = request.args.get('row', type=int)
+        col_filter = request.args.get('col', '')
+        limit = request.args.get('limit', 50, type=int)
+        limit = min(limit, 200)
+
+        with _cell_log_lock:
+            log = _load_cell_log()
+
+        # Filtra
+        results = []
+        for entry in reversed(log):  # più recenti prima
+            if row_filter is not None and entry.get('row') != row_filter:
+                continue
+            if col_filter and entry.get('col') != col_filter:
+                continue
+            results.append(entry)
+            if len(results) >= limit:
+                break
+
+        return jsonify({'history': results})
+    except Exception as e:
+        return _api_error(e, 'lettura log celle')

@@ -1199,6 +1199,50 @@
             .vl-panel { width: 98vw; }
             .vl-config { flex-direction: column; }
         }
+
+        /* Cell History Log */
+        .cell-log-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5); z-index: 9998; display: none;
+        }
+        .cell-log-panel {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            z-index: 9999; width: 680px; max-width: 95vw;
+            max-height: 80vh; display: none; flex-direction: column;
+        }
+        .cell-log-hdr {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 12px 16px; border-bottom: 1px solid var(--border);
+        }
+        .cell-log-hdr h3 { margin: 0; font-size: 0.95em; color: var(--primary); }
+        .cell-log-close {
+            background: none; border: none; font-size: 1.3em; cursor: pointer;
+            color: var(--text-muted); padding: 0 4px;
+        }
+        .cell-log-close:hover { color: var(--danger); }
+        .cell-log-body {
+            padding: 12px 16px; overflow-y: auto; max-height: 60vh;
+        }
+        .cell-log-table {
+            width: 100%; border-collapse: collapse; font-size: 0.8em;
+        }
+        .cell-log-table th {
+            position: sticky; top: 0; background: var(--bg-header);
+            color: var(--text-header); padding: 6px 8px; text-align: left;
+            font-weight: 600; border-bottom: 2px solid var(--border); white-space: nowrap;
+        }
+        .cell-log-table td {
+            padding: 5px 8px; border-bottom: 1px solid var(--border);
+            vertical-align: top; max-width: 200px; word-break: break-word;
+        }
+        .cell-log-table tr:nth-child(even) { background: var(--bg-cell-alt); }
+        .cell-log-table tr:hover { background: rgba(52,152,219,0.07); }
+        .cell-log-ts { white-space: nowrap; color: var(--text-muted); font-size: 0.92em; }
+        .cell-log-user { font-weight: 600; color: var(--info); white-space: nowrap; }
+        .cell-log-old { color: var(--danger); }
+        .cell-log-new { color: var(--success); font-weight: 500; }
     </style>
 </head>
 <body>
@@ -1242,6 +1286,7 @@
             </div>
             <div class="toolbar-sep"></div>
             <button class="tb" id="btnAggiungiNota" onclick="aggiungiNotaFilone()" title="Aggiungi nota con data (DD/MM) in testa alla cella selezionata">&#x1F4DD; Nota</button>
+            <button class="tb" id="btnCellHistory" onclick="showCellHistoryForSelection()" title="Mostra storico modifiche della cella selezionata">&#x1F4DC; Storico</button>
             <div class="toolbar-sep"></div>
             <button class="tb" id="btnHiddenCols" onclick="openColManager()" title="Gestione colonne">&#x2630; Colonne</button>
             <button class="tb" onclick="openCondFormat()" title="Formattazione condizionale">&#x1F3A8; Formato</button>
@@ -1306,6 +1351,15 @@
                 <button class="a" onclick="closeCondFormat()">Chiudi</button>
             </div>
         </div>
+    </div>
+    <!-- Cell History Log Panel -->
+    <div class="cell-log-overlay" id="cellLogOverlay" onclick="closeCellHistory()"></div>
+    <div class="cell-log-panel" id="cellLogPanel">
+        <div class="cell-log-hdr">
+            <h3 id="cellLogTitle">&#x1F4DC; Storico modifiche</h3>
+            <button class="cell-log-close" onclick="closeCellHistory()">&times;</button>
+        </div>
+        <div class="cell-log-body" id="cellLogBody"></div>
     </div>
     <!-- VLOOKUP Panel -->
     <div class="vl-overlay" id="vlOverlay" onclick="closeVlookup()"></div>
@@ -2449,6 +2503,17 @@ qs('#gridBody').addEventListener('dblclick', function(e) {
     startEdit(+vrow.dataset.rn, +vc.dataset.ci);
 });
 
+qs('#gridBody').addEventListener('contextmenu', function(e) {
+    var vc = e.target.closest('.vc[data-ci]');
+    if (!vc) return;
+    e.preventDefault();
+    var vrow = vc.parentElement;
+    var rn = +vrow.dataset.rn;
+    var ci = +vc.dataset.ci;
+    selectCell(rn, ci);
+    showCellHistory(rn, headers[ci]);
+});
+
 function selectCell(rn, ci, noRedraw) {
     if (editing) commitEdit();
     selRow = rn;
@@ -2999,6 +3064,11 @@ async function saveAll() {
     var changes = Object.values(pending);
     if (!changes.length) return;
 
+    // Cattura le modifiche per il log PRIMA di pulire pending
+    var logEntries = changes.map(function(c) {
+        return { row: c.row, col: c.col, old: c.old, 'new': c.val };
+    });
+
     var btn = qs('#btnSave');
     btn.disabled = true;
     var origHtml = btn.innerHTML;
@@ -3039,6 +3109,7 @@ async function saveAll() {
                 updateChangeCount();
                 renderVisible(true);
                 triggerMapSync();
+                _sendCellLog(logEntries);
             } else {
                 btn.disabled = false;
                 toast('\u274C Errore bulk: ' + (res.error || 'sconosciuto'), 'error');
@@ -3084,6 +3155,7 @@ async function saveAll() {
         renderVisible(true);
         if (!fail) {
             triggerMapSync();
+            _sendCellLog(logEntries);
         } else {
             toast('\u26A0\uFE0F ' + ok + ' OK, ' + fail + ' errori', 'warning');
             if (ok > 0) triggerMapSync();
@@ -3096,6 +3168,63 @@ function triggerMapSync() {
         return r.json();
     }).then(function(d) {
     }).catch(function() { /* silent */ });
+}
+
+function _sendCellLog(entries) {
+    if (!entries || !entries.length) return;
+    fetch('/api/filone/log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ changes: entries })
+    }).catch(function() { /* silent */ });
+}
+
+function showCellHistory(rn, col) {
+    if (rn == null || !col) return;
+    var overlay = qs('#cellLogOverlay');
+    var panel = qs('#cellLogPanel');
+    var body = qs('#cellLogBody');
+    var title = qs('#cellLogTitle');
+
+    title.textContent = '\uD83D\uDCDC Storico: Riga ' + rn + ' \u2022 ' + col;
+    body.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted)">Caricamento...</div>';
+    overlay.style.display = 'block';
+    panel.style.display = 'flex';
+
+    fetch('/api/filone/log?row=' + rn + '&col=' + encodeURIComponent(col) + '&limit=50')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            var hist = data.history || [];
+            if (hist.length === 0) {
+                body.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted)">\uD83D\uDCED Nessuna modifica registrata per questa cella.</div>';
+                return;
+            }
+            var html = '<table class="cell-log-table"><thead><tr><th>Data/Ora</th><th>Utente</th><th>Vecchio valore</th><th>Nuovo valore</th></tr></thead><tbody>';
+            for (var i = 0; i < hist.length; i++) {
+                var h = hist[i];
+                html += '<tr>';
+                html += '<td class="cell-log-ts">' + esc(h.ts || '') + '</td>';
+                html += '<td class="cell-log-user">' + esc(h.user || '') + '</td>';
+                html += '<td class="cell-log-old">' + esc(h.old || '') + '</td>';
+                html += '<td class="cell-log-new">' + esc(h['new'] || '') + '</td>';
+                html += '</tr>';
+            }
+            html += '</tbody></table>';
+            body.innerHTML = html;
+        })
+        .catch(function() {
+            body.innerHTML = '<div style="text-align:center;padding:20px;color:var(--danger)">Errore nel caricamento dello storico.</div>';
+        });
+}
+
+function closeCellHistory() {
+    qs('#cellLogOverlay').style.display = 'none';
+    qs('#cellLogPanel').style.display = 'none';
+}
+
+function showCellHistoryForSelection() {
+    if (selRow < 0 || selCol < 0) { toast('Seleziona prima una cella', 'warning'); return; }
+    showCellHistory(selRow, headers[selCol]);
 }
 
 function undo() {

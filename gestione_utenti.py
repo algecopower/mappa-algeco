@@ -12,6 +12,7 @@ Uso:
   python gestione_utenti.py --reset NOME      # Reset password con nuova casuale
   python gestione_utenti.py --toggle NOME     # Attiva/Disattiva utente
   python gestione_utenti.py --bulk N          # Crea N utenti in bulk
+  python gestione_utenti.py --province NOME TORINO,PAVIA  # Imposta province utente
 """
 import sys
 import os
@@ -26,7 +27,12 @@ from moduli.auth import (
     reset_password,
     list_users,
     toggle_user_active,
-    generate_password
+    generate_password,
+    get_user_province,
+    set_user_province,
+    set_user_role,
+    PROVINCE_DISPONIBILI,
+    RUOLI_DISPONIBILI
 )
 
 
@@ -43,11 +49,13 @@ def stampa_utenti(utenti):
         print("\n📭 Nessun utente registrato.")
         return
     
-    print(f"\n{'Username':<20} {'Attivo':<8} {'Ultimo login':<20}")
-    print("-" * 50)
+    print(f"\n{'Username':<20} {'Attivo':<8} {'Ruolo':<8} {'Province':<20} {'Ultimo login':<20}")
+    print("-" * 78)
     
     for u in utenti:
         stato = "✅" if u.get('active', True) else "❌"
+        ruolo = u.get('ruolo', 'user')
+        province = ', '.join(u.get('province', ['TUTTE']))
         ultimo = u.get('last_login') or 'Mai'
         if ultimo and ultimo != 'Mai':
             # Formatta data
@@ -58,7 +66,7 @@ def stampa_utenti(utenti):
             except Exception:
                 pass
         
-        print(f"{u['username']:<20} {stato:<8} {ultimo:<20}")
+        print(f"{u['username']:<20} {stato:<8} {ruolo:<8} {province:<20} {ultimo:<20}")
     
     print(f"\nTotale: {len(utenti)} utenti")
 
@@ -233,6 +241,60 @@ def toggle_utente_interattivo():
         print(f"\n❌ {msg}")
 
 
+def gestisci_province_interattivo():
+    """Gestisce le province accessibili per un utente."""
+    print("\n🗺️  GESTIONE PROVINCE UTENTE")
+    print("-" * 40)
+    
+    # Mostra utenti esistenti
+    utenti = list_users()
+    if not utenti:
+        print("📭 Nessun utente registrato.")
+        return
+    
+    stampa_utenti(utenti)
+    
+    username = input("\nUsername: ").strip()
+    if not username:
+        print("❌ Username vuoto!")
+        return
+    
+    province_attuali = get_user_province(username)
+    if not province_attuali and province_attuali != []:
+        print(f"❌ Utente '{username}' non trovato")
+        return
+    
+    print(f"\nProvince attuali di '{username}': {', '.join(province_attuali) if province_attuali else 'nessuna'}")
+    print(f"Province disponibili: {', '.join(PROVINCE_DISPONIBILI)}")
+    print()
+    
+    for i, prov in enumerate(PROVINCE_DISPONIBILI, 1):
+        stato = "✅" if prov in province_attuali else "❌"
+        print(f"  {i}. {prov} {stato}")
+    
+    print()
+    print("Inserisci le province separate da virgola (es: TORINO,PAVIA)")
+    print("oppure 'tutte' per assegnare tutte le province:")
+    
+    scelta = input("\nProvince: ").strip().upper()
+    
+    if scelta == 'TUTTE':
+        nuove_province = list(PROVINCE_DISPONIBILI)
+    else:
+        nuove_province = [p.strip() for p in scelta.split(',') if p.strip()]
+    
+    if not nuove_province:
+        print("❌ Nessuna provincia specificata!")
+        return
+    
+    success, msg = set_user_province(username, nuove_province)
+    
+    if success:
+        print(f"\n✅ {msg}")
+    else:
+        print(f"\n❌ {msg}")
+
+
 def menu_principale():
     """Menu principale interattivo."""
     while True:
@@ -245,6 +307,7 @@ def menu_principale():
         print("  4. 🗑️  Elimina utente")
         print("  5. 🔄 Reset password")
         print("  6. 🔒 Attiva/Disattiva utente")
+        print("  7. 🗺️  Gestione province")
         print("  0. 🚪 Esci")
         
         scelta = input("\nScelta: ").strip()
@@ -274,6 +337,10 @@ def menu_principale():
             toggle_utente_interattivo()
             input("\nPremi INVIO per continuare...")
         
+        elif scelta == '7':
+            gestisci_province_interattivo()
+            input("\nPremi INVIO per continuare...")
+        
         elif scelta == '0':
             print("\n👋 Arrivederci!\n")
             break
@@ -293,6 +360,8 @@ def main():
     parser.add_argument('--reset', metavar='USERNAME', help='Reset password utente')
     parser.add_argument('--toggle', '-t', metavar='USERNAME', help='Attiva/Disattiva utente')
     parser.add_argument('--bulk', '-b', type=int, metavar='N', help='Crea N utenti in bulk')
+    parser.add_argument('--province', nargs=2, metavar=('USERNAME', 'PROVINCE'),
+                        help='Imposta province utente (es: --province giada TORINO,PAVIA)')
     
     args = parser.parse_args()
     
@@ -346,6 +415,17 @@ def main():
         if success:
             stato = "attivo" if new_state else "disabilitato"
             print(f"\n✅ Utente '{args.toggle}' ora è {stato}")
+        else:
+            print(f"\n❌ {msg}")
+        return
+    
+    # Gestione province
+    if args.province:
+        username, province_str = args.province
+        province = [p.strip() for p in province_str.split(',')]
+        success, msg = set_user_province(username, province)
+        if success:
+            print(f"\n✅ {msg}")
         else:
             print(f"\n❌ {msg}")
         return

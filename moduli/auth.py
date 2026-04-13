@@ -80,10 +80,18 @@ def save_users(users: dict) -> bool:
         return False
 
 
-def create_user(username: str, password: str = None) -> tuple:
+# Province disponibili nel sistema
+PROVINCE_DISPONIBILI = ['TORINO', 'PAVIA']
+
+# Ruoli disponibili
+RUOLI_DISPONIBILI = ['admin', 'user']
+
+
+def create_user(username: str, password: str = None, province: list = None, ruolo: str = 'user') -> tuple:
     """
     Crea un nuovo utente.
     Se password non è specificata, ne genera una casuale.
+    Se province non è specificata, assegna tutte le province.
     Ritorna (success: bool, message: str, password: str se generata).
     """
     users = load_users()
@@ -96,6 +104,18 @@ def create_user(username: str, password: str = None) -> tuple:
     
     if username in users:
         return False, f"Utente '{username}' già esistente", None
+    
+    # Province di default: tutte
+    if province is None:
+        province = list(PROVINCE_DISPONIBILI)
+    else:
+        province = [p.upper() for p in province if p.upper() in PROVINCE_DISPONIBILI]
+        if not province:
+            return False, "Nessuna provincia valida specificata", None
+    
+    # Valida ruolo
+    if ruolo not in RUOLI_DISPONIBILI:
+        ruolo = 'user'
     
     # Genera password se non fornita
     generated_password = None
@@ -112,7 +132,9 @@ def create_user(username: str, password: str = None) -> tuple:
         'salt': salt,
         'created_at': datetime.now().isoformat(),
         'last_login': None,
-        'active': True
+        'active': True,
+        'province': province,
+        'ruolo': ruolo
     }
     
     if save_users(users):
@@ -167,9 +189,10 @@ def reset_password(username: str, new_password: str = None) -> tuple:
         return False, "Errore nel salvataggio", None
 
 
-def authenticate(username: str, password: str) -> tuple:
+def authenticate(username: str, password: str, provincia_attiva: str = None) -> tuple:
     """
     Autentica un utente.
+    Se provincia_attiva è specificata, verifica che l'utente abbia accesso.
     Ritorna (success: bool, user_data: dict o None, message: str).
     """
     users = load_users()
@@ -189,12 +212,20 @@ def authenticate(username: str, password: str) -> tuple:
     if not verify_password(password, user['password_hash'], user['salt']):
         return False, None, "Credenziali non valide"
     
+    # Verifica accesso alla provincia
+    if provincia_attiva:
+        province_utente = user.get('province', list(PROVINCE_DISPONIBILI))
+        if provincia_attiva.upper() not in province_utente:
+            return False, None, f"Non hai accesso alla provincia {provincia_attiva}"
+    
     # Aggiorna last_login
     users[username]['last_login'] = datetime.now().isoformat()
     save_users(users)
     
     return True, {
         'username': username,
+        'province': user.get('province', list(PROVINCE_DISPONIBILI)),
+        'ruolo': user.get('ruolo', 'user'),
     }, "Login effettuato"
 
 
@@ -206,10 +237,61 @@ def list_users() -> list:
             'username': username,
             'created_at': data.get('created_at'),
             'last_login': data.get('last_login'),
-            'active': data.get('active', True)
+            'active': data.get('active', True),
+            'province': data.get('province', list(PROVINCE_DISPONIBILI)),
+            'ruolo': data.get('ruolo', 'user')
         }
         for username, data in users.items()
     ]
+
+
+def get_user_province(username: str) -> list:
+    """Ritorna le province accessibili per un utente."""
+    users = load_users()
+    username = username.strip().lower()
+    if username not in users:
+        return []
+    return users[username].get('province', list(PROVINCE_DISPONIBILI))
+
+
+def set_user_province(username: str, province: list) -> tuple:
+    """Imposta le province accessibili per un utente. Ritorna (success, message)."""
+    users = load_users()
+    username = username.strip().lower()
+    
+    if username not in users:
+        return False, f"Utente '{username}' non trovato"
+    
+    # Valida province
+    province_valide = [p.upper() for p in province if p.upper() in PROVINCE_DISPONIBILI]
+    if not province_valide:
+        return False, "Nessuna provincia valida specificata"
+    
+    users[username]['province'] = province_valide
+    
+    if save_users(users):
+        return True, f"Province di '{username}' aggiornate: {', '.join(province_valide)}"
+    else:
+        return False, "Errore nel salvataggio"
+
+
+def set_user_role(username: str, ruolo: str) -> tuple:
+    """Imposta il ruolo di un utente. Ritorna (success, message)."""
+    users = load_users()
+    username = username.strip().lower()
+    
+    if username not in users:
+        return False, f"Utente '{username}' non trovato"
+    
+    if ruolo not in RUOLI_DISPONIBILI:
+        return False, f"Ruolo '{ruolo}' non valido. Ruoli disponibili: {', '.join(RUOLI_DISPONIBILI)}"
+    
+    users[username]['ruolo'] = ruolo
+    
+    if save_users(users):
+        return True, f"Ruolo di '{username}' aggiornato a '{ruolo}'"
+    else:
+        return False, "Errore nel salvataggio"
 
 
 def toggle_user_active(username: str) -> tuple:
@@ -245,6 +327,20 @@ def login_required(f):
                 return jsonify({'error': 'Autenticazione richiesta'}), 401
             # Altrimenti redirect al login
             return redirect(url_for('login_page'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+def admin_required(f):
+    """Decoratore per proteggere le route che richiedono ruolo admin."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user' not in session:
+            if request.path.startswith('/api/'):
+                return jsonify({'error': 'Autenticazione richiesta'}), 401
+            return redirect(url_for('login_page'))
+        if session['user'].get('ruolo') != 'admin':
+            return jsonify({'error': 'Permessi insufficienti'}), 403
         return f(*args, **kwargs)
     return decorated_function
 

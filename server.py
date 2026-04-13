@@ -553,7 +553,12 @@ logging.basicConfig(level=logging.INFO, format=_log_format, datefmt='%H:%M:%S')
 logger = logging.getLogger('mappa_algeco')
 
 # Modulo autenticazione
-from moduli.auth import init_auth, login_required, authenticate, load_users
+from moduli.auth import (
+    init_auth, login_required, admin_required, authenticate, load_users,
+    create_user, delete_user, reset_password, toggle_user_active,
+    list_users, get_user_province, set_user_province, set_user_role,
+    PROVINCE_DISPONIBILI, RUOLI_DISPONIBILI
+)
 
 # Modulo calendario condiviso
 from moduli.calendario import (
@@ -678,6 +683,33 @@ def csrf_check():
         if origin and origin not in _TRUSTED_ORIGINS:
             return jsonify({'error': 'Richiesta bloccata: origine non autorizzata'}), 403
     return None
+
+
+@app.before_request
+def check_provincia_access():
+    """Verifica che l'utente loggato abbia accesso alla provincia di questa istanza."""
+    # Escludi pagine pubbliche
+    if request.path in ('/login', '/api/login', '/api/logout', '/logout'):
+        return None
+    # Escludi risorse statiche
+    if request.path.startswith('/static/'):
+        return None
+
+    if 'user' in session:
+        # Rileggi province aggiornate da users.json
+        username = session['user'].get('username', '')
+        users = load_users()
+        if username in users:
+            province_utente = users[username].get('province', list(PROVINCE_DISPONIBILI))
+            session['user']['province'] = province_utente
+        else:
+            province_utente = session['user'].get('province', [])
+
+        if province_utente and PROVINCIA_ATTIVA.upper() not in province_utente:
+            session.clear()
+            if request.path.startswith('/api/'):
+                return jsonify({'error': f'Non hai accesso alla provincia {PROVINCIA_ATTIVA}'}), 403
+            return redirect(url_for('login_page'))
 
 # _api_error importato da moduli.shared (vedi sotto)
 
@@ -830,7 +862,7 @@ def api_login():
     if not username or not password:
         return jsonify({'success': False, 'message': 'Username e password richiesti'}), 400
     
-    success, user_data, message = authenticate(username, password)
+    success, user_data, message = authenticate(username, password, PROVINCIA_ATTIVA)
     
     if success:
         _clear_attempts(client_ip)
@@ -864,7 +896,16 @@ def logout_redirect():
 def api_current_user():
     """Ritorna l'utente corrente (se autenticato)."""
     if 'user' in session:
-        return jsonify({'authenticated': True, 'user': session['user']})
+        user_data = dict(session['user'])
+        # Aggiorna ruolo dal file utenti (potrebbe essere cambiato)
+        users = load_users()
+        username = user_data.get('username', '')
+        if username in users:
+            user_data['ruolo'] = users[username].get('ruolo', 'user')
+            user_data['province'] = users[username].get('province', list(PROVINCE_DISPONIBILI))
+            # Aggiorna anche la sessione
+            session['user'] = user_data
+        return jsonify({'authenticated': True, 'user': user_data})
     return jsonify({'authenticated': False}), 401
 
 
@@ -1088,6 +1129,113 @@ def update_settings():
         return jsonify({'success': True, 'message': 'Impostazioni salvate. Ri-sincronizzazione in corso...'})
     except Exception as e:
         return _api_error(e, 'salvataggio impostazioni')
+
+
+# ============================================================================
+# API GESTIONE UTENTI (solo admin)
+# ============================================================================
+
+@app.route('/api/admin/users', methods=['GET'])
+@admin_required
+def api_admin_list_users():
+    """Lista tutti gli utenti (solo admin)."""
+    utenti = list_users()
+    return jsonify({'success': True, 'users': utenti, 'province_disponibili': PROVINCE_DISPONIBILI, 'ruoli_disponibili': RUOLI_DISPONIBILI})
+
+
+@app.route('/api/admin/users', methods=['POST'])
+@admin_required
+def api_admin_create_user():
+    """Crea un nuovo utente (solo admin)."""
+    data = request.get_json()
+    if not data:
+        return jsonify({'success': False, 'message': 'Dati mancanti'}), 400
+
+    username = data.get('username', '').strip()
+    password = data.get('password', '').strip() or None
+    province = data.get('province')
+    ruolo = data.get('ruolo', 'user')
+
+    if not username:
+        return jsonify({'success': False, 'message': 'Username richiesto'}), 400
+
+    if password and len(password) < 8:
+        return jsonify({'success': False, 'message': 'Password troppo corta (min 8 caratteri)'}), 400
+
+    success, msg, generated_pass = create_user(username, password, province, ruolo)
+    if success:
+        return jsonify({'success': True, 'message': msg, 'password_generata': generated_pass})
+    return jsonify({'success': False, 'message': msg}), 400
+
+
+@app.route('/api/admin/users/<username>', methods=['DELETE'])
+@admin_required
+def api_admin_delete_user(username):
+    """Elimina un utente (solo admin)."""
+    current_user = session.get('user', {}).get('username', '')
+    if username.lower() == current_user.lower():
+        return jsonify({'success': False, 'message': 'Non puoi eliminare il tuo stesso account'}), 400
+
+    success, msg = delete_user(username)
+    if success:
+        return jsonify({'success': True, 'message': msg})
+    return jsonify({'success': False, 'message': msg}), 404
+
+
+@app.route('/api/admin/users/<username>/reset-password', methods=['POST'])
+@admin_required
+def api_admin_reset_password(username):
+    """Reset password di un utente (solo admin)."""
+    success, msg, new_pass = reset_password(username)
+    if success:
+        return jsonify({'success': True, 'message': msg, 'new_password': new_pass})
+    return jsonify({'success': False, 'message': msg}), 404
+
+
+@app.route('/api/admin/users/<username>/toggle', methods=['POST'])
+@admin_required
+def api_admin_toggle_user(username):
+    """Attiva/disattiva un utente (solo admin)."""
+    current_user = session.get('user', {}).get('username', '')
+    if username.lower() == current_user.lower():
+        return jsonify({'success': False, 'message': 'Non puoi disattivare il tuo stesso account'}), 400
+
+    success, msg, new_state = toggle_user_active(username)
+    if success:
+        return jsonify({'success': True, 'message': msg, 'active': new_state})
+    return jsonify({'success': False, 'message': msg}), 404
+
+
+@app.route('/api/admin/users/<username>/province', methods=['PUT'])
+@admin_required
+def api_admin_set_province(username):
+    """Imposta le province di un utente (solo admin)."""
+    data = request.get_json()
+    if not data or 'province' not in data:
+        return jsonify({'success': False, 'message': 'Province richieste'}), 400
+
+    success, msg = set_user_province(username, data['province'])
+    if success:
+        return jsonify({'success': True, 'message': msg})
+    return jsonify({'success': False, 'message': msg}), 400
+
+
+@app.route('/api/admin/users/<username>/ruolo', methods=['PUT'])
+@admin_required
+def api_admin_set_role(username):
+    """Imposta il ruolo di un utente (solo admin)."""
+    data = request.get_json()
+    if not data or 'ruolo' not in data:
+        return jsonify({'success': False, 'message': 'Ruolo richiesto'}), 400
+
+    current_user = session.get('user', {}).get('username', '')
+    if username.lower() == current_user.lower():
+        return jsonify({'success': False, 'message': 'Non puoi modificare il tuo stesso ruolo'}), 400
+
+    success, msg = set_user_role(username, data['ruolo'])
+    if success:
+        return jsonify({'success': True, 'message': msg})
+    return jsonify({'success': False, 'message': msg}), 400
 
 
 # File statici dalla cartella data/

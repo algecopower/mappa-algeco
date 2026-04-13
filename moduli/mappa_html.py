@@ -3037,6 +3037,148 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             border: 1px solid rgba(231, 76, 60, 0.3);
         }}
 
+        /* Admin users table */
+        .admin-users-table {{
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0 3px;
+            font-size: 13px;
+        }}
+
+        .admin-users-table th {{
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+            padding: 6px 8px;
+            text-align: left;
+            font-weight: 600;
+        }}
+
+        .admin-users-table td {{
+            padding: 8px;
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+        }}
+
+        .admin-users-table td:first-child {{
+            border-left: 1px solid var(--border);
+            border-radius: 8px 0 0 8px;
+        }}
+
+        .admin-users-table td:last-child {{
+            border-right: 1px solid var(--border);
+            border-radius: 0 8px 8px 0;
+        }}
+
+        .admin-users-table .user-username {{
+            font-weight: 600;
+        }}
+
+        .admin-badge {{
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }}
+
+        .admin-badge-admin {{
+            background: rgba(102, 126, 234, 0.15);
+            color: #667eea;
+        }}
+
+        [data-theme="dark"] .admin-badge-admin {{
+            background: rgba(233, 69, 96, 0.15);
+            color: #e94560;
+        }}
+
+        .admin-badge-user {{
+            background: rgba(149, 165, 166, 0.15);
+            color: #95a5a6;
+        }}
+
+        .admin-province-tag {{
+            display: inline-block;
+            padding: 2px 7px;
+            border-radius: 6px;
+            font-size: 11px;
+            margin: 1px 2px;
+            background: rgba(52, 152, 219, 0.12);
+            color: #3498db;
+            font-weight: 500;
+        }}
+
+        .admin-actions-btn {{
+            background: none;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 4px 8px;
+            cursor: pointer;
+            font-size: 13px;
+            color: var(--text-primary);
+            transition: all 0.15s;
+        }}
+
+        .admin-actions-btn:hover {{
+            background: var(--bg-tertiary);
+        }}
+
+        .admin-action-menu {{
+            position: absolute;
+            right: 0;
+            top: 100%;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+            z-index: 100;
+            min-width: 180px;
+            padding: 6px;
+            display: none;
+        }}
+
+        .admin-action-menu.visible {{
+            display: block;
+        }}
+
+        .admin-action-item {{
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border: none;
+            background: none;
+            width: 100%;
+            text-align: left;
+            cursor: pointer;
+            font-size: 13px;
+            color: var(--text-primary);
+            border-radius: 6px;
+            transition: background 0.15s;
+        }}
+
+        .admin-action-item:hover {{
+            background: var(--bg-secondary);
+        }}
+
+        .admin-action-item.danger {{
+            color: #e74c3c;
+        }}
+
+        .admin-action-item.danger:hover {{
+            background: rgba(231, 76, 60, 0.08);
+        }}
+
+        .settings-tab-admin {{
+            border-left: 1px solid var(--border);
+            margin-left: 4px;
+            padding-left: 12px !important;
+        }}
+
         /* Column mapping table */
         .settings-colonne-table {{
             width: 100%;
@@ -3681,6 +3823,11 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                 <span class="gp-btn-text">Impostazioni</span>
                 <span class="gp-btn-desc">Configura operatori, deposito, percorsi e date</span>
             </button>
+            <button class="gestionale-panel-btn gp-btn-logout" onclick="effettuaLogout()" style="border-top: 1px solid var(--border); margin-top: 4px; padding-top: 12px;">
+                <span class="gp-btn-icon">🚪</span>
+                <span class="gp-btn-text">Disconnetti</span>
+                <span class="gp-btn-desc">Esci dall'account corrente</span>
+            </button>
         </div>
     </div>
 
@@ -3848,6 +3995,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                 <button class="settings-tab" data-tab="date" onclick="switchSettingsTab('date')">📅 Date</button>
                 <button class="settings-tab" data-tab="colonne" onclick="switchSettingsTab('colonne')">📋 Colonne</button>
                 <button class="settings-tab" data-tab="sync" onclick="switchSettingsTab('sync')">🔄 Sync</button>
+                <button class="settings-tab settings-tab-admin" data-tab="utenti" onclick="switchSettingsTab('utenti')" id="tabUtentiBtn" style="display:none">🔑 Utenti</button>
             </div>
             <div class="settings-body">
                 <div class="settings-loading-overlay" id="settingsLoadingOverlay">
@@ -3986,6 +4134,65 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                     <p style="font-size: 12px; color: var(--text-secondary); margin-top: 8px;">
                         Ogni quanti secondi il server controlla modifiche sul foglio Google. Minimo 30s, consigliato 180s.
                     </p>
+                </div>
+
+                <!-- Tab: Utenti (solo admin) -->
+                <div class="settings-section" id="settingsTab_utenti">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                        <h3 style="margin:0">Gestione Account</h3>
+                        <button class="settings-btn-add" onclick="mostraFormNuovoUtente()">➕ Nuovo utente</button>
+                    </div>
+
+                    <!-- Form creazione nuovo utente (nascosto di default) -->
+                    <div id="formNuovoUtente" style="display:none; background:var(--bg-secondary); border-radius:10px; padding:14px; margin-bottom:14px; border:1px solid var(--border);">
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                            <div class="settings-field" style="margin-bottom:0">
+                                <label>Username</label>
+                                <input type="text" id="nuovoUtente_username" placeholder="es: mario" autocomplete="off">
+                            </div>
+                            <div class="settings-field" style="margin-bottom:0">
+                                <label>Password (vuoto = auto)</label>
+                                <input type="text" id="nuovoUtente_password" placeholder="min 8 caratteri" autocomplete="new-password">
+                            </div>
+                        </div>
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px;">
+                            <div class="settings-field" style="margin-bottom:0">
+                                <label>Ruolo</label>
+                                <select id="nuovoUtente_ruolo">
+                                    <option value="user">User</option>
+                                    <option value="admin">Admin</option>
+                                </select>
+                            </div>
+                            <div class="settings-field" style="margin-bottom:0">
+                                <label>Province</label>
+                                <div id="nuovoUtente_province" style="display:flex; gap:10px; align-items:center; height:36px;"></div>
+                            </div>
+                        </div>
+                        <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:12px;">
+                            <button class="settings-btn-cancel" style="padding:6px 14px; font-size:13px;" onclick="nascondiFormNuovoUtente()">Annulla</button>
+                            <button class="settings-btn-save" style="padding:6px 14px; font-size:13px;" onclick="creaNuovoUtente()">✅ Crea</button>
+                        </div>
+                    </div>
+
+                    <!-- Password generata -->
+                    <div id="passwordGenerataBox" style="display:none; background:var(--bg-secondary); border-radius:10px; padding:14px; margin-bottom:14px; border:2px solid #f39c12;">
+                        <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                            <span style="font-size:18px;">🔐</span>
+                            <strong>Password generata per <span id="passwordGenerataUser"></span></strong>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <code id="passwordGenerataValue" style="font-size:16px; background:var(--bg-primary); padding:6px 12px; border-radius:6px; letter-spacing:1px; flex:1; user-select:all;"></code>
+                            <button onclick="copiaPasswordGenerata()" style="padding:6px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg-secondary); cursor:pointer; font-size:14px;" title="Copia">📋</button>
+                        </div>
+                        <p style="font-size:11px; color:var(--text-secondary); margin-top:6px;">⚠️ Salva questa password, non sarà più visibile!</p>
+                    </div>
+
+                    <div id="adminUsersStatus" class="settings-status"></div>
+
+                    <!-- Tabella utenti -->
+                    <div id="adminUsersTableContainer">
+                        <div style="text-align:center; padding:20px; color:var(--text-secondary);">Caricamento...</div>
+                    </div>
                 </div>
             </div>
             <div class="settings-footer">
@@ -10531,6 +10738,14 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             document.getElementById('settingsStatus').className = 'settings-status';
             document.getElementById('settingsStatus').textContent = '';
         }}
+
+        async function effettuaLogout() {{
+            if (!confirm('Vuoi disconnetterti?')) return;
+            try {{
+                await fetch('/api/logout', {{ method: 'POST' }});
+            }} catch(e) {{}}
+            window.location.href = '/login';
+        }}
         
         function switchSettingsTab(tabName) {{
             // Aggiorna tabs
@@ -10542,6 +10757,10 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             // Carica colonne on-demand quando si apre il tab
             if (tabName === 'colonne') {{
                 caricaColonneFilone();
+            }}
+            // Carica utenti on-demand quando si apre il tab
+            if (tabName === 'utenti') {{
+                caricaUtentiAdmin();
             }}
         }}
         
@@ -10965,6 +11184,328 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         function resetMappaturaColonne() {{
             mappaturaColonneCustom = {{}};
             renderTabellaMappatura();
+        }}
+
+        // ============================================================
+        // GESTIONE UTENTI (admin panel)
+        // ============================================================
+        let adminUsersData = null;
+        let adminProvinceDisponibili = [];
+        let adminRuoliDisponibili = [];
+
+        // Mostra tab Utenti solo se l'utente corrente è admin
+        (async function checkAdminTab() {{
+            try {{
+                const r = await fetch('/api/user');
+                const d = await r.json();
+                if (d.authenticated && d.user && d.user.ruolo === 'admin') {{
+                    const tabBtn = document.getElementById('tabUtentiBtn');
+                    if (tabBtn) tabBtn.style.display = '';
+                }}
+            }} catch(e) {{}}
+        }})();
+
+        async function caricaUtentiAdmin() {{
+            try {{
+                const r = await fetch('/api/admin/users');
+                if (r.status === 403) {{
+                    document.getElementById('adminUsersTableContainer').innerHTML =
+                        '<p style="text-align:center; color:var(--text-secondary); padding:20px;">🔒 Accesso riservato agli amministratori</p>';
+                    return;
+                }}
+                const data = await r.json();
+                if (data.success) {{
+                    adminUsersData = data.users;
+                    adminProvinceDisponibili = data.province_disponibili || [];
+                    adminRuoliDisponibili = data.ruoli_disponibili || [];
+                    renderTabellaUtenti();
+                }}
+            }} catch(e) {{
+                mostraAdminStatus('❌ Errore caricamento utenti: ' + e.message, 'error');
+            }}
+        }}
+
+        function renderTabellaUtenti() {{
+            if (!adminUsersData) return;
+            const container = document.getElementById('adminUsersTableContainer');
+
+            if (adminUsersData.length === 0) {{
+                container.innerHTML = '<p style="text-align:center; color:var(--text-secondary); padding:20px;">Nessun utente registrato</p>';
+                return;
+            }}
+
+            let html = `<table class="admin-users-table">
+                <thead><tr>
+                    <th>Utente</th>
+                    <th>Ruolo</th>
+                    <th>Province</th>
+                    <th>Stato</th>
+                    <th>Ultimo login</th>
+                    <th></th>
+                </tr></thead><tbody>`;
+
+            for (const u of adminUsersData) {{
+                const ruoloBadge = u.ruolo === 'admin'
+                    ? '<span class="admin-badge admin-badge-admin">Admin</span>'
+                    : '<span class="admin-badge admin-badge-user">User</span>';
+
+                const provinceTags = (u.province || []).map(p =>
+                    `<span class="admin-province-tag">${{p}}</span>`
+                ).join('');
+
+                const statoIcon = u.active ? '🟢' : '🔴';
+                const statoText = u.active ? 'Attivo' : 'Disabilitato';
+
+                let ultimoLogin = 'Mai';
+                if (u.last_login) {{
+                    try {{
+                        const d = new Date(u.last_login);
+                        ultimoLogin = d.toLocaleDateString('it-IT') + ' ' + d.toLocaleTimeString('it-IT', {{hour:'2-digit', minute:'2-digit'}});
+                    }} catch(e) {{}}
+                }}
+
+                html += `<tr>
+                    <td class="user-username">${{u.username}}</td>
+                    <td>${{ruoloBadge}}</td>
+                    <td>${{provinceTags}}</td>
+                    <td style="white-space:nowrap">${{statoIcon}} ${{statoText}}</td>
+                    <td style="font-size:12px; color:var(--text-secondary)">${{ultimoLogin}}</td>
+                    <td style="position:relative; text-align:right;">
+                        <button class="admin-actions-btn" onclick="toggleUserMenu(this, '${{u.username}}')">⋯</button>
+                        <div class="admin-action-menu" id="menu_${{u.username}}">
+                            <button class="admin-action-item" onclick="adminResetPassword('${{u.username}}')">🔄 Reset password</button>
+                            <button class="admin-action-item" onclick="adminCambiaRuolo('${{u.username}}', '${{u.ruolo}}')">🔑 Cambia ruolo</button>
+                            <button class="admin-action-item" onclick="adminCambiaProvince('${{u.username}}')">🗺️ Modifica province</button>
+                            <button class="admin-action-item" onclick="adminToggleUtente('${{u.username}}', ${{u.active}})">${{u.active ? '🔒 Disattiva' : '🔓 Attiva'}}</button>
+                            <button class="admin-action-item danger" onclick="adminEliminaUtente('${{u.username}}')">🗑️ Elimina</button>
+                        </div>
+                    </td>
+                </tr>`;
+            }}
+
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }}
+
+        function toggleUserMenu(btn, username) {{
+            // Chiudi tutti i menu aperti
+            document.querySelectorAll('.admin-action-menu.visible').forEach(m => m.classList.remove('visible'));
+            const menu = document.getElementById('menu_' + username);
+            menu.classList.toggle('visible');
+            // Chiudi cliccando fuori
+            setTimeout(() => {{
+                const handler = (e) => {{
+                    if (!menu.contains(e.target) && e.target !== btn) {{
+                        menu.classList.remove('visible');
+                        document.removeEventListener('click', handler);
+                    }}
+                }};
+                document.addEventListener('click', handler);
+            }}, 10);
+        }}
+
+        function mostraFormNuovoUtente() {{
+            const form = document.getElementById('formNuovoUtente');
+            form.style.display = 'block';
+            document.getElementById('nuovoUtente_username').value = '';
+            document.getElementById('nuovoUtente_password').value = '';
+            document.getElementById('nuovoUtente_ruolo').value = 'user';
+            // Popola checkbox province
+            const cont = document.getElementById('nuovoUtente_province');
+            cont.innerHTML = adminProvinceDisponibili.map(p =>
+                `<label style="display:flex; align-items:center; gap:4px; font-size:13px; cursor:pointer;">
+                    <input type="checkbox" value="${{p}}" checked> ${{p}}
+                </label>`
+            ).join('');
+            document.getElementById('nuovoUtente_username').focus();
+        }}
+
+        function nascondiFormNuovoUtente() {{
+            document.getElementById('formNuovoUtente').style.display = 'none';
+        }}
+
+        async function creaNuovoUtente() {{
+            const username = document.getElementById('nuovoUtente_username').value.trim();
+            const password = document.getElementById('nuovoUtente_password').value.trim();
+            const ruolo = document.getElementById('nuovoUtente_ruolo').value;
+            const provinceChecks = document.querySelectorAll('#nuovoUtente_province input[type=checkbox]:checked');
+            const province = Array.from(provinceChecks).map(cb => cb.value);
+
+            if (!username) {{
+                mostraAdminStatus('❌ Username richiesto', 'error');
+                return;
+            }}
+            if (password && password.length < 8) {{
+                mostraAdminStatus('❌ Password troppo corta (min 8 caratteri)', 'error');
+                return;
+            }}
+            if (province.length === 0) {{
+                mostraAdminStatus('❌ Seleziona almeno una provincia', 'error');
+                return;
+            }}
+
+            try {{
+                const r = await fetch('/api/admin/users', {{
+                    method: 'POST',
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify({{ username, password: password || null, province, ruolo }})
+                }});
+                const data = await r.json();
+                if (data.success) {{
+                    mostraAdminStatus('✅ ' + data.message, 'success');
+                    nascondiFormNuovoUtente();
+                    if (data.password_generata) {{
+                        mostraPasswordGenerata(username, data.password_generata);
+                    }}
+                    caricaUtentiAdmin();
+                }} else {{
+                    mostraAdminStatus('❌ ' + data.message, 'error');
+                }}
+            }} catch(e) {{
+                mostraAdminStatus('❌ Errore: ' + e.message, 'error');
+            }}
+        }}
+
+        function mostraPasswordGenerata(username, password) {{
+            document.getElementById('passwordGenerataUser').textContent = username;
+            document.getElementById('passwordGenerataValue').textContent = password;
+            document.getElementById('passwordGenerataBox').style.display = 'block';
+        }}
+
+        function copiaPasswordGenerata() {{
+            const pass = document.getElementById('passwordGenerataValue').textContent;
+            navigator.clipboard.writeText(pass).then(() => {{
+                mostraAdminStatus('📋 Password copiata negli appunti', 'success');
+            }}).catch(() => {{
+                // Fallback
+                const range = document.createRange();
+                range.selectNode(document.getElementById('passwordGenerataValue'));
+                window.getSelection().removeAllRanges();
+                window.getSelection().addRange(range);
+            }});
+        }}
+
+        async function adminResetPassword(username) {{
+            if (!confirm(`Vuoi resettare la password di "${{username}}"?\\nVerrà generata una nuova password casuale.`)) return;
+            try {{
+                const r = await fetch(`/api/admin/users/${{username}}/reset-password`, {{ method: 'POST' }});
+                const data = await r.json();
+                if (data.success) {{
+                    mostraAdminStatus('✅ ' + data.message, 'success');
+                    if (data.new_password) {{
+                        mostraPasswordGenerata(username, data.new_password);
+                    }}
+                }} else {{
+                    mostraAdminStatus('❌ ' + data.message, 'error');
+                }}
+            }} catch(e) {{
+                mostraAdminStatus('❌ Errore: ' + e.message, 'error');
+            }}
+        }}
+
+        async function adminCambiaRuolo(username, ruoloAttuale) {{
+            const nuovoRuolo = ruoloAttuale === 'admin' ? 'user' : 'admin';
+            if (!confirm(`Cambiare il ruolo di "${{username}}" da "${{ruoloAttuale}}" a "${{nuovoRuolo}}"?`)) return;
+            try {{
+                const r = await fetch(`/api/admin/users/${{username}}/ruolo`, {{
+                    method: 'PUT',
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify({{ ruolo: nuovoRuolo }})
+                }});
+                const data = await r.json();
+                if (data.success) {{
+                    mostraAdminStatus('✅ ' + data.message, 'success');
+                    caricaUtentiAdmin();
+                }} else {{
+                    mostraAdminStatus('❌ ' + data.message, 'error');
+                }}
+            }} catch(e) {{
+                mostraAdminStatus('❌ Errore: ' + e.message, 'error');
+            }}
+        }}
+
+        async function adminCambiaProvince(username) {{
+            // Trova utente
+            const utente = adminUsersData.find(u => u.username === username);
+            if (!utente) return;
+
+            const provinceAttuali = utente.province || [];
+
+            // Crea prompt con checkbox
+            let msg = `Province per "${{username}}":\\n\\n`;
+            for (const p of adminProvinceDisponibili) {{
+                msg += `${{provinceAttuali.includes(p) ? '☑' : '☐'}} ${{p}}\\n`;
+            }}
+            msg += `\\nInserisci le province separate da virgola (es: TORINO,PAVIA):`;
+
+            const input = prompt(msg, provinceAttuali.join(','));
+            if (input === null) return;
+
+            const nuoveProvince = input.split(',').map(s => s.trim().toUpperCase()).filter(s => s);
+            if (nuoveProvince.length === 0) {{
+                mostraAdminStatus('❌ Seleziona almeno una provincia', 'error');
+                return;
+            }}
+
+            try {{
+                const r = await fetch(`/api/admin/users/${{username}}/province`, {{
+                    method: 'PUT',
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify({{ province: nuoveProvince }})
+                }});
+                const data = await r.json();
+                if (data.success) {{
+                    mostraAdminStatus('✅ ' + data.message, 'success');
+                    caricaUtentiAdmin();
+                }} else {{
+                    mostraAdminStatus('❌ ' + data.message, 'error');
+                }}
+            }} catch(e) {{
+                mostraAdminStatus('❌ Errore: ' + e.message, 'error');
+            }}
+        }}
+
+        async function adminToggleUtente(username, attivoAttuale) {{
+            const azione = attivoAttuale ? 'disattivare' : 'attivare';
+            if (!confirm(`Vuoi ${{azione}} l'utente "${{username}}"?`)) return;
+            try {{
+                const r = await fetch(`/api/admin/users/${{username}}/toggle`, {{ method: 'POST' }});
+                const data = await r.json();
+                if (data.success) {{
+                    mostraAdminStatus('✅ ' + data.message, 'success');
+                    caricaUtentiAdmin();
+                }} else {{
+                    mostraAdminStatus('❌ ' + data.message, 'error');
+                }}
+            }} catch(e) {{
+                mostraAdminStatus('❌ Errore: ' + e.message, 'error');
+            }}
+        }}
+
+        async function adminEliminaUtente(username) {{
+            if (!confirm(`⚠️ ATTENZIONE\\n\\nVuoi eliminare definitivamente l'utente "${{username}}"?\\nQuesta azione è irreversibile!`)) return;
+            try {{
+                const r = await fetch(`/api/admin/users/${{username}}`, {{ method: 'DELETE' }});
+                const data = await r.json();
+                if (data.success) {{
+                    mostraAdminStatus('✅ ' + data.message, 'success');
+                    document.getElementById('passwordGenerataBox').style.display = 'none';
+                    caricaUtentiAdmin();
+                }} else {{
+                    mostraAdminStatus('❌ ' + data.message, 'error');
+                }}
+            }} catch(e) {{
+                mostraAdminStatus('❌ Errore: ' + e.message, 'error');
+            }}
+        }}
+
+        function mostraAdminStatus(msg, tipo) {{
+            const el = document.getElementById('adminUsersStatus');
+            el.textContent = msg;
+            el.className = `settings-status ${{tipo}}`;
+            if (tipo === 'success') {{
+                setTimeout(() => {{ el.className = 'settings-status'; }}, 5000);
+            }}
         }}
 
         // ============================================================

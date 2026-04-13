@@ -633,7 +633,7 @@ from routes.distinte import bp as distinte_bp
 from routes.calendario import bp as calendario_bp
 from routes.sigilli import bp as sigilli_bp
 from routes.sync import bp as sync_bp
-from routes.postit import bp as postit_bp
+from routes.bacheca import bp as bacheca_bp
 from routes.dashboard import bp as dashboard_bp
 from routes.report import bp as report_bp
 
@@ -642,7 +642,7 @@ app.register_blueprint(distinte_bp)
 app.register_blueprint(calendario_bp)
 app.register_blueprint(sigilli_bp)
 app.register_blueprint(sync_bp)
-app.register_blueprint(postit_bp)
+app.register_blueprint(bacheca_bp)
 app.register_blueprint(dashboard_bp)
 app.register_blueprint(report_bp)
 

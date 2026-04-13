@@ -218,7 +218,7 @@
         }
         .bar-val { width: 36px; font-size: 0.82em; font-weight: 700; text-align: left; }
 
-        /* ---- Item rows (activities, postit) ---- */
+        /* ---- Item rows (activities, bacheca) ---- */
         .item-row {
             display: flex; align-items: flex-start; gap: 10px;
             padding: 11px 14px; border-radius: 10px; margin-bottom: 6px;
@@ -231,12 +231,16 @@
         .item-desc { font-size: 0.78em; color: var(--text-muted); margin-top: 2px; }
         .item-meta { font-size: 0.72em; color: var(--text-muted); white-space: nowrap; text-align: right; flex-shrink: 0; }
 
-        .postit-card {
+        .bacheca-dash-card {
             padding: 12px 14px; border-radius: 10px; margin-bottom: 6px;
-            border-left: 4px solid var(--danger); background: var(--bg-inner);
+            border-left: 4px solid var(--warning); background: var(--bg-inner);
         }
-        .postit-card .p-text { font-size: 0.88em; margin-bottom: 3px; }
-        .postit-card .p-meta { font-size: 0.72em; color: var(--text-muted); display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+        .bacheca-dash-card[data-cat="scadenza"] { border-left-color: var(--danger); }
+        .bacheca-dash-card[data-cat="promemoria"] { border-left-color: var(--warning); }
+        .bacheca-dash-card[data-cat="appuntamento"] { border-left-color: var(--info); }
+        .bacheca-dash-card[data-cat="riunione"] { border-left-color: #8b5cf6; }
+        .bacheca-dash-card .b-text { font-size: 0.88em; margin-bottom: 3px; }
+        .bacheca-dash-card .b-meta { font-size: 0.72em; color: var(--text-muted); display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 
         /* ---- Badges ---- */
         .badge { display: inline-block; padding: 2px 9px; border-radius: 10px; font-size: 0.72em; font-weight: 600; }
@@ -472,11 +476,11 @@
         </div>
         <div class="panel">
             <div class="panel-header">
-                <h3><i class="fas fa-exclamation-triangle"></i> Post-it urgenti</h3>
-                <span class="badge badge-red" id="postit-badge">0</span>
+                <h3><i class="fas fa-clipboard-list"></i> Bacheca Promemoria</h3>
+                <span class="badge badge-orange" id="bacheca-badge">0</span>
             </div>
-            <div class="panel-hint">Post-it con priorità alta o in scadenza entro 2 giorni. Richiedono attenzione immediata.</div>
-            <div id="postit-content"><div class="section-loading"><i class="fas fa-spinner fa-spin"></i></div></div>
+            <div class="panel-hint">Promemoria urgenti: scadenze e attività per oggi o con data imminente (entro 2 giorni). <a href="/calendario" style="color:var(--primary)">Apri calendario</a></div>
+            <div id="bacheca-content"><div class="section-loading"><i class="fas fa-spinner fa-spin"></i></div></div>
         </div>
     </div>
 
@@ -587,7 +591,7 @@ async function loadDashboard() {
 function render(data) {
     const f = data.filone || {};
     const c = data.calendario || {};
-    const p = data.postit || {};
+    const b = data.bacheca || {};
 
     // ---- Header ----
     const prov = (data.provincia || '').charAt(0) + (data.provincia || '').slice(1).toLowerCase();
@@ -624,8 +628,8 @@ function render(data) {
     const attDaFare = (c.oggi || 0) - (c.oggi_completate || 0);
     if (attDaFare > 0)
         parts.push(`${attDaFare} attività in calendario da completare`);
-    if ((p.alta_priorita || 0) + (p.in_scadenza || 0) > 0)
-        parts.push(`${(p.alta_priorita||0) + (p.in_scadenza||0)} post-it urgenti in attesa`);
+    if ((b.urgenti || 0) > 0)
+        parts.push(`${b.urgenti} promemoria urgenti in bacheca`);
     document.getElementById('wb-body').innerHTML = parts.join('. ') + '.';
 
     // ---- KPI oggi ----
@@ -660,7 +664,7 @@ function render(data) {
     renderInstallati(f.installati_mese, f.installati_totale, f.operatori);
     renderComuni(f.top_comuni_oggi || []);
     renderAttivita(c.prossime || [], c);
-    renderPostit(p);
+    renderBacheca(b);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -965,29 +969,31 @@ function renderAttivita(prossime, cal) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// POST-IT URGENTI
+// BACHECA PROMEMORIA
 // ═══════════════════════════════════════════════════════════
-function renderPostit(p) {
-    const el = document.getElementById('postit-content');
-    const total = (p.alta_priorita || 0) + (p.in_scadenza || 0);
-    document.getElementById('postit-badge').textContent = total;
+function renderBacheca(b) {
+    const el = document.getElementById('bacheca-content');
+    const total = b.urgenti || 0;
+    document.getElementById('bacheca-badge').textContent = total;
 
-    const items = p.items_urgenti || [];
+    const items = b.items_urgenti || [];
     if (!items.length) {
-        el.innerHTML = '<div class="section-empty"><i class="fas fa-check-circle" style="color:var(--success)"></i>Nessun post-it urgente — tutto sotto controllo!</div>';
+        el.innerHTML = '<div class="section-empty"><i class="fas fa-check-circle" style="color:var(--success)"></i>Nessun promemoria urgente — tutto sotto controllo!</div>';
         return;
     }
+    const catIcn = { appuntamento: '📍', promemoria: '🔔', scadenza: '⏰', riunione: '👥', altro: '📋' };
     let html = '';
-    for (const n of items) {
-        const scad = n.scadenza ? `Scade il ${formatDataBrv(n.scadenza)}` : '';
-        const prio = n.priorita === 'alta' ? '<span class="badge badge-red">PRIORITÀ ALTA</span>' :
-                     n.priorita === 'media' ? '<span class="badge badge-orange">MEDIA</span>' : '';
-        html += `<div class="postit-card">
-            <div class="p-text">${esc(n.testo || '')}</div>
-            <div class="p-meta">
-                ${prio}
-                ${n.categoria ? `<span>${esc(n.categoria)}</span>` : ''}
-                ${scad ? `<span style="color:var(--danger)">${scad}</span>` : ''}
+    for (const a of items) {
+        const cat = a.categoria || 'altro';
+        const icn = catIcn[cat] || '📋';
+        const dataStr = a.data ? formatDataBrv(a.data) : '';
+        const oraStr = a.ora ? ` alle ${a.ora}` : '';
+        html += `<div class="bacheca-dash-card" data-cat="${esc(cat)}">
+            <div class="b-text">${icn} ${esc(a.titolo || '')}</div>
+            <div class="b-meta">
+                <span>${esc(cat)}</span>
+                ${dataStr ? `<span>${dataStr}${oraStr}</span>` : ''}
+                ${a.creato_da && a.creato_da !== 'sistema' ? `<span>👤 ${esc(a.creato_da)}</span>` : ''}
             </div>
         </div>`;
     }

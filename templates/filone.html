@@ -1375,6 +1375,10 @@
                     </div>
                     <div id="vlExcelLoaded" style="display:none">
                         <div class="vl-excel-info" id="vlExcelFileInfo"></div>
+                        <div style="margin:8px 0;display:flex;align-items:center;gap:8px">
+                            <label style="font-size:0.8em;color:var(--text-muted);white-space:nowrap">&#x1F4CB; Riga intestazione:</label>
+                            <select id="vlExcelHeaderRow" style="padding:3px 6px;border:1px solid var(--border);border-radius:4px;background:var(--bg-cell);color:var(--text);font-size:0.85em" onchange="vlChangeHeaderRow()"></select>
+                        </div>
                         <div style="margin-top:10px">
                             <div class="vl-config" style="margin-bottom:8px">
                                 <div class="vl-field">
@@ -4962,6 +4966,8 @@ var vlExcelData = null;     // [{col1: val, col2: val, ...}, ...]
 var vlExcelHeaders = [];    // ['col1', 'col2', ...]
 var vlExcelFileName = '';
 var vlExcelMappings = [];   // [{excelCol, filoneCol}, ...]
+var vlExcelRawRows = [];    // All rows as arrays (including header rows) for re-parsing
+var vlExcelHeaderRowIdx = 0; // 0-based index of the header row
 
 // Drag & Drop
 (function() {
@@ -5041,20 +5047,15 @@ function vlParseCSV(text) {
     if (firstLine.indexOf('\t') >= 0 && firstLine.split('\t').length > firstLine.split(';').length) sep = '\t';
     else if (firstLine.indexOf(',') >= 0 && firstLine.split(',').length > firstLine.split(';').length) sep = ',';
 
-    vlExcelHeaders = _csvParseLine(lines[0], sep);
-    vlExcelData = [];
-
-    for (var i = 1; i < lines.length; i++) {
+    // Store all rows as arrays for re-parsing with different header row
+    vlExcelRawRows = [];
+    for (var i = 0; i < lines.length; i++) {
         var line = lines[i].trim();
         if (!line) continue;
-        var parts = _csvParseLine(line, sep);
-        var row = {};
-        for (var j = 0; j < vlExcelHeaders.length; j++) {
-            row[vlExcelHeaders[j]] = (parts[j] || '').trim();
-        }
-        vlExcelData.push(row);
+        vlExcelRawRows.push(_csvParseLine(line, sep));
     }
-
+    vlExcelHeaderRowIdx = 0;
+    vlBuildDataFromRawRows();
     vlExcelFileLoaded();
 }
 
@@ -5078,27 +5079,81 @@ function vlDoParseXLSX(buffer) {
         var wb = XLSX.read(buffer, { type: 'array' });
         var sheetName = wb.SheetNames[0];
         var sheet = wb.Sheets[sheetName];
-        var json = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+        // Get all rows as arrays (no header interpretation)
+        var aoa = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
 
-        if (json.length === 0) { toast('Il foglio Excel \u00e8 vuoto', 'warning'); return; }
+        if (aoa.length === 0) { toast('Il foglio Excel \u00e8 vuoto', 'warning'); return; }
 
-        vlExcelHeaders = Object.keys(json[0]);
-        vlExcelData = json.map(function(row) {
-            var r = {};
-            for (var k in row) { r[k] = (row[k] != null ? row[k] : '').toString().trim(); }
-            return r;
+        vlExcelRawRows = aoa.map(function(row) {
+            return row.map(function(v) { return (v != null ? v : '').toString().trim(); });
         });
+        vlExcelHeaderRowIdx = 0;
 
+        // Auto-detect header row: find first row with >50% non-empty cells
+        var maxCols = 0;
+        for (var i = 0; i < vlExcelRawRows.length; i++) {
+            if (vlExcelRawRows[i].length > maxCols) maxCols = vlExcelRawRows[i].length;
+        }
+        if (maxCols > 0) {
+            for (var i = 0; i < Math.min(vlExcelRawRows.length, 10); i++) {
+                var nonEmpty = vlExcelRawRows[i].filter(function(v) { return v !== ''; }).length;
+                if (nonEmpty >= maxCols * 0.5 && nonEmpty > 1) {
+                    vlExcelHeaderRowIdx = i;
+                    break;
+                }
+            }
+        }
+
+        vlBuildDataFromRawRows();
         vlExcelFileLoaded();
     } catch(e) {
         toast('Errore nella lettura del file Excel: ' + e.message, 'error');
     }
 }
 
+function vlBuildDataFromRawRows() {
+    if (!vlExcelRawRows.length) return;
+    var hdrRow = vlExcelRawRows[vlExcelHeaderRowIdx] || [];
+    vlExcelHeaders = hdrRow.map(function(v, i) {
+        return v ? v.toString().trim() : ('Col_' + (i + 1));
+    });
+    vlExcelData = [];
+    for (var i = vlExcelHeaderRowIdx + 1; i < vlExcelRawRows.length; i++) {
+        var parts = vlExcelRawRows[i];
+        // Skip empty rows
+        var hasData = parts.some(function(v) { return v !== ''; });
+        if (!hasData) continue;
+        var row = {};
+        for (var j = 0; j < vlExcelHeaders.length; j++) {
+            row[vlExcelHeaders[j]] = (parts[j] != null ? parts[j] : '').toString().trim();
+        }
+        vlExcelData.push(row);
+    }
+}
+
+function vlChangeHeaderRow() {
+    var sel = qs('#vlExcelHeaderRow');
+    vlExcelHeaderRowIdx = parseInt(sel.value, 10) || 0;
+    vlBuildDataFromRawRows();
+    vlExcelFileLoaded();
+}
+
 function vlExcelFileLoaded() {
     qs('#vlExcelLoaded').style.display = '';
     qs('#vlExcelSection').classList.add('vl-excel-loaded');
     qs('#vlExcelDropzone').style.display = 'none';
+
+    // Populate header row selector
+    var hdrSel = qs('#vlExcelHeaderRow');
+    var maxPreview = Math.min(vlExcelRawRows.length, 20);
+    var hdrHtml = '';
+    for (var i = 0; i < maxPreview; i++) {
+        var preview = (vlExcelRawRows[i] || []).filter(function(v) { return v !== ''; }).slice(0, 4).join(', ');
+        if (preview.length > 60) preview = preview.substring(0, 57) + '...';
+        var sel = i === vlExcelHeaderRowIdx ? ' selected' : '';
+        hdrHtml += '<option value="' + i + '"' + sel + '>Riga ' + (i + 1) + ': ' + esc(preview) + '</option>';
+    }
+    hdrSel.innerHTML = hdrHtml;
 
     // File info
     qs('#vlExcelFileInfo').innerHTML = '\uD83D\uDCC4 <strong>' + esc(vlExcelFileName) + '</strong> &mdash; ' +
@@ -5328,6 +5383,8 @@ function vlExcelClear() {
     vlExcelHeaders = [];
     vlExcelFileName = '';
     vlExcelMappings = [];
+    vlExcelRawRows = [];
+    vlExcelHeaderRowIdx = 0;
     qs('#vlExcelLoaded').style.display = 'none';
     qs('#vlExcelDropzone').style.display = '';
     qs('#vlExcelSection').classList.remove('vl-excel-loaded');
@@ -5530,6 +5587,6 @@ async function manualRefresh() {
     }
 }
 </script>
-<script src="/static/postit.js"></script>
+<script src="/static/bacheca.js"></script>
 </body>
 </html>

@@ -12,7 +12,6 @@ from collections import Counter, defaultdict
 from flask import Blueprint, jsonify, send_file
 from moduli.auth import login_required
 from moduli.calendario import get_attivita
-from moduli.postit import get_postit
 from config import PROVINCIA_ATTIVA, MATRICOLE_VIP, COLORI_TECNICI, OPERATORI_DICT
 
 logger = logging.getLogger('mappa_algeco')
@@ -391,19 +390,19 @@ def api_dashboard():
             'prossime': attivita_prossime,
         }
 
-        # 3. Post-it attivi
-        postit = get_postit(provincia=PROVINCIA_ATTIVA)
-        postit_alti = [p for p in postit if p.get('priorita') == 'alta']
-        postit_in_scadenza = [
-            p for p in postit
-            if p.get('scadenza') and p.get('scadenza') <= (date.today() + timedelta(days=2)).isoformat()
+        # 3. Bacheca promemoria (basata sul calendario, esclusi boxbeat)
+        bacheca_items = [a for a in tutte_attivita if a.get('categoria') != 'boxbeat' and not a.get('completata')]
+        bacheca_oggi = [a for a in bacheca_items if a.get('data') == oggi_str]
+        bacheca_urgenti = [
+            a for a in bacheca_items
+            if a.get('data') and a.get('data') <= (date.today() + timedelta(days=2)).isoformat()
         ]
 
-        postit_stats = {
-            'totale': len(postit),
-            'alta_priorita': len(postit_alti),
-            'in_scadenza': len(postit_in_scadenza),
-            'items_urgenti': (postit_alti + postit_in_scadenza)[:5],
+        bacheca_stats = {
+            'totale': len(bacheca_items),
+            'oggi': len(bacheca_oggi),
+            'urgenti': len(bacheca_urgenti),
+            'items_urgenti': bacheca_urgenti[:5],
         }
 
         return jsonify({
@@ -413,7 +412,7 @@ def api_dashboard():
             'timestamp': datetime.now().isoformat(),
             'filone': filone_stats,
             'calendario': cal_stats,
-            'postit': postit_stats,
+            'bacheca': bacheca_stats,
         })
 
     except Exception as e:

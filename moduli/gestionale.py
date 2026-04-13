@@ -1438,6 +1438,23 @@ def genera_css_gestionale():
             gap: 6px;
         }
         
+        .backup-btn-excel {
+            padding: 6px 14px;
+            background: linear-gradient(135deg, #2980b9 0%, #3498db 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.8em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .backup-btn-excel:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 3px 10px rgba(41, 128, 185, 0.3);
+        }
+        
         .backup-btn-ripristina {
             padding: 6px 14px;
             background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
@@ -3321,6 +3338,9 @@ def genera_js_gestionale():
                                 </div>
                             </div>
                             <div class="backup-item-actions">
+                                <button class="backup-btn-excel" onclick="scaricaBackupExcel('${{b.filename}}')" title="Scarica come Excel">
+                                    📥 Excel
+                                </button>
                                 <button class="backup-btn-ripristina" onclick="ripristinaBackup('${{b.filename}}', '${{dataFormatted}}')">
                                     🔄 Ripristina
                                 </button>
@@ -3441,6 +3461,11 @@ def genera_js_gestionale():
             }} catch (err) {{
                 mostraBackupStatus('❌ Errore: ' + err.message, 'error');
             }}
+        }}
+        
+        function scaricaBackupExcel(filename) {{
+            // Download diretto tramite link
+            window.location.href = '/api/backup/scarica_excel?filename=' + encodeURIComponent(filename);
         }}
     '''
 

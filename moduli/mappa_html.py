@@ -3128,14 +3128,12 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         }}
 
         .admin-action-menu {{
-            position: absolute;
-            right: 0;
-            top: 100%;
+            position: fixed;
             background: var(--bg-primary);
             border: 1px solid var(--border);
             border-radius: 10px;
             box-shadow: 0 8px 24px rgba(0,0,0,0.15);
-            z-index: 100;
+            z-index: 16000;
             min-width: 180px;
             padding: 6px;
             display: none;
@@ -11270,7 +11268,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                     <td>${{provinceTags}}</td>
                     <td style="white-space:nowrap">${{statoIcon}} ${{statoText}}</td>
                     <td style="font-size:12px; color:var(--text-secondary)">${{ultimoLogin}}</td>
-                    <td style="position:relative; text-align:right;">
+                    <td style="text-align:right;">
                         <button class="admin-actions-btn" onclick="toggleUserMenu(this, '${{u.username}}')">⋯</button>
                         <div class="admin-action-menu" id="menu_${{u.username}}">
                             <button class="admin-action-item" onclick="adminResetPassword('${{u.username}}')">🔄 Reset password</button>
@@ -11291,6 +11289,10 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             // Chiudi tutti i menu aperti
             document.querySelectorAll('.admin-action-menu.visible').forEach(m => m.classList.remove('visible'));
             const menu = document.getElementById('menu_' + username);
+            // Posiziona il menu vicino al bottone
+            const rect = btn.getBoundingClientRect();
+            menu.style.top = (rect.bottom + 4) + 'px';
+            menu.style.right = (window.innerWidth - rect.right) + 'px';
             menu.classList.toggle('visible');
             // Chiudi cliccando fuori
             setTimeout(() => {{

@@ -4,6 +4,7 @@ Blueprint: Sync, Backup e Upload BoxBeat.
 """
 import os
 import re
+import io
 import json
 import logging
 import traceback
@@ -11,7 +12,7 @@ from datetime import datetime
 
 import pandas as pd
 import gspread.utils
-from flask import Blueprint, request, jsonify, session
+from flask import Blueprint, request, jsonify, session, send_file
 
 from moduli.auth import login_required
 from moduli.shared import (
@@ -131,6 +132,59 @@ def api_backup_elimina():
         return jsonify(risultato)
     except Exception as e:
         return _api_error(e, 'eliminazione backup')
+
+
+@bp.route('/api/backup/scarica_excel')
+@login_required
+def api_backup_scarica_excel():
+    """Scarica un backup come file Excel (.xlsx)."""
+    try:
+        filename = request.args.get('filename', '')
+        if not filename:
+            return jsonify({'error': 'Filename richiesto'}), 400
+
+        # Validazione nome file
+        if not filename.startswith('filone_') or not filename.endswith('.json'):
+            return jsonify({'error': 'Nome file non valido'}), 400
+
+        backup_dir = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            'backup', PROVINCIA_ATTIVA.lower()
+        )
+        percorso = os.path.realpath(os.path.join(backup_dir, filename))
+        if not percorso.startswith(os.path.realpath(backup_dir) + os.sep):
+            return jsonify({'error': 'Percorso non valido'}), 400
+
+        if not os.path.exists(percorso):
+            return jsonify({'error': 'File di backup non trovato'}), 404
+
+        with open(percorso, 'r', encoding='utf-8') as f:
+            backup_data = json.load(f)
+
+        headers = backup_data.get('headers', [])
+        righe = backup_data.get('righe', [])
+
+        if not headers:
+            return jsonify({'error': 'Backup vuoto o corrotto'}), 400
+
+        # Crea DataFrame e genera Excel in memoria
+        df = pd.DataFrame(righe, columns=headers)
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='FILONE')
+        output.seek(0)
+
+        # Nome file Excel: stessa base ma .xlsx
+        nome_excel = filename.replace('.json', '.xlsx')
+
+        return send_file(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=nome_excel
+        )
+    except Exception as e:
+        return _api_error(e, 'download Excel backup')
 
 
 # ============================================================================

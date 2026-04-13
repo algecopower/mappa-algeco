@@ -1241,6 +1241,8 @@
                 <button class="fmt-btn" onclick="clearCellFormat()" title="Cancella formattazione">&#x1F6AB;</button>
             </div>
             <div class="toolbar-sep"></div>
+            <button class="tb" id="btnAggiungiNota" onclick="aggiungiNotaFilone()" title="Aggiungi nota con data (DD/MM) in testa alla cella selezionata">&#x1F4DD; Nota</button>
+            <div class="toolbar-sep"></div>
             <button class="tb" id="btnHiddenCols" onclick="openColManager()" title="Gestione colonne">&#x2630; Colonne</button>
             <button class="tb" onclick="openCondFormat()" title="Formattazione condizionale">&#x1F3A8; Formato</button>
             <div class="toolbar-sep"></div>
@@ -2588,6 +2590,58 @@ function getDisplayValByRn(rn, cn) {
     var idx = rowIndex[rn];
     if (idx !== undefined) return (rawData[idx][cn] != null ? rawData[idx][cn] : '').toString();
     return '';
+}
+
+// Utility condivisa: costruisce nota con data DD/MM in testa, separata da //
+function buildNotaConData(testoNota, notaAttuale) {
+    var now = new Date();
+    var dd = String(now.getDate()).padStart(2, '0');
+    var mm = String(now.getMonth() + 1).padStart(2, '0');
+    var nuovaNota = dd + '/' + mm + ' ' + testoNota.trim();
+    if (notaAttuale && notaAttuale.trim()) {
+        return nuovaNota + ' // ' + notaAttuale.trim();
+    }
+    return nuovaNota;
+}
+
+function aggiungiNotaFilone() {
+    if (selRow < 0 || selCol < 0) { toast('Seleziona prima una cella', 'warning'); return; }
+    if (editing) commitEdit();
+
+    var cn = headers[selCol];
+    var rn = selRow;
+
+    // Check protected
+    if (isProtected(cn) && !unlockedCols.has(cn.toLowerCase())) {
+        if (!confirm('\uD83D\uDD12 La colonna "' + cn + '" è protetta.\n\nVuoi sbloccarla per questa sessione?')) return;
+        unlockedCols.add(cn.toLowerCase());
+        buildHeader();
+        renderVisible(true);
+    }
+
+    var testoNota = prompt('Inserisci la nota da aggiungere a "' + cn + '":');
+    if (!testoNota || !testoNota.trim()) return;
+
+    var valAttuale = getDisplayValByRn(rn, cn);
+    var nuovoValore = buildNotaConData(testoNota, valAttuale);
+
+    // Create pending edit (same as commitEdit)
+    var ck = rn + ':' + cn;
+    var idx = rowIndex[rn];
+    var serverVal = idx !== undefined ? (rawData[idx][cn] != null ? rawData[idx][cn] : '').toString() : '';
+    var oldVal = pending[ck] ? pending[ck].val : serverVal;
+
+    pending[ck] = { row: rn, col: cn, old: serverVal, val: nuovoValore };
+
+    if (nuovoValore !== oldVal) {
+        undoGroupId++;
+        undoStack.push({ rn: rn, cn: cn, oldVal: oldVal, newVal: nuovoValore, group: undoGroupId });
+        redoStack = [];
+    }
+
+    refreshRowByRn(rn);
+    updateChangeCount();
+    toast('\uD83D\uDCDD Nota aggiunta a riga ' + rn + ', colonna "' + cn + '"', 'success');
 }
 
 // ============================================================

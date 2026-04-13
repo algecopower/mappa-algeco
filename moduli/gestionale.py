@@ -1750,18 +1750,22 @@ def genera_js_gestionale():
             return false;
         }}
         
+        // Utility condivisa: costruisce nota con data DD/MM in testa, separata da //
+        function buildNotaConData(testoNota, notaAttuale) {{
+            const now = new Date();
+            const dd = String(now.getDate()).padStart(2, '0');
+            const mm = String(now.getMonth() + 1).padStart(2, '0');
+            let nuovaNota = `${{dd}}/${{mm}} ${{testoNota.trim()}}`;
+            if (notaAttuale && notaAttuale.trim()) {{
+                return nuovaNota + ' // ' + notaAttuale.trim();
+            }}
+            return nuovaNota;
+        }}
+        
         // Funzione per aggiungere una nota con data DD/MM in testa
         function aggiungiNotaConData(context) {{
             const testoNota = prompt('Inserisci la nota da aggiungere:');
             if (!testoNota || !testoNota.trim()) return;
-            
-            // Data corrente in formato DD/MM
-            const now = new Date();
-            const dd = String(now.getDate()).padStart(2, '0');
-            const mm = String(now.getMonth() + 1).padStart(2, '0');
-            const prefisso = `${{dd}}/${{mm}}`;
-            
-            const nuovaNota = `${{prefisso}} ${{testoNota.trim()}}`;
             
             // Trova la textarea delle note nel contesto corretto
             let textarea;
@@ -1772,12 +1776,7 @@ def genera_js_gestionale():
             }}
             
             if (textarea) {{
-                const attuale = textarea.value.trim();
-                if (attuale) {{
-                    textarea.value = nuovaNota + ' // ' + attuale;
-                }} else {{
-                    textarea.value = nuovaNota;
-                }}
+                textarea.value = buildNotaConData(testoNota, textarea.value);
             }}
         }}
         

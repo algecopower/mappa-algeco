@@ -1383,6 +1383,33 @@
         "ora_appuntamento": "09:00/11:00",
         "data_pianificata": "2026-04-14"
       }
+    },
+    {
+      "id": "4f60bb4a",
+      "titolo": "Appuntamento AZIENDA AGRICOLA CASETTA AGNESE - POIRINO ore 16:30-17:00",
+      "data": "2026-04-17",
+      "ora": "16:30",
+      "ora_fine": "17:00",
+      "descrizione": "POD: IT001E02948991\nENELTEL: 29489912\nNominativo: AZIENDA AGRICOLA CASETTA AGNESE\nIndirizzo: GIOVINO 12\nComune: POIRINO\nOrigine: contatore",
+      "categoria": "boxbeat",
+      "provincia": "TORINO",
+      "creato_da": "giada",
+      "creato_il": "2026-04-13T12:22:14.940607",
+      "completata": false,
+      "completata_da": null,
+      "completata_il": null,
+      "boxbeat_data": {
+        "pod": "IT001E02948991",
+        "eneltel": "29489912",
+        "nominativo": "AZIENDA AGRICOLA CASETTA AGNESE",
+        "via": "GIOVINO",
+        "civico": "12",
+        "comune": "POIRINO",
+        "note": "",
+        "origine": "contatore",
+        "ora_appuntamento": "16:30-17:00",
+        "data_pianificata": "2026-04-17"
+      }
     }
   ]
 }

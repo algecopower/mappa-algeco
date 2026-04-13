@@ -889,6 +889,55 @@ def update_filone_bulk():
         return _api_error(e, 'aggiornamento bulk filone')
 
 
+@bp.route('/api/filone/append', methods=['POST'])
+@login_required
+def append_filone_rows():
+    """Aggiunge nuove righe in fondo al FILONE.
+
+    Body JSON: { "rows": [ { "col_name": "value", ... }, ... ] }
+    Ogni dizionario rappresenta una nuova riga; le chiavi sono i nomi delle colonne del filone.
+    """
+    try:
+        data = request.json
+        if not data or 'rows' not in data:
+            return jsonify({'error': 'Formato non valido. Atteso: {"rows": [...]}'}), 400
+
+        new_rows = data['rows']
+        if not new_rows or not isinstance(new_rows, list):
+            return jsonify({'error': 'Nessuna riga da aggiungere'}), 400
+
+        if len(new_rows) > 5000:
+            return jsonify({'error': 'Troppo righe (max 5000)'}), 400
+
+        ws = get_worksheet()
+        _header_map = get_header_map()
+        ordered_headers = get_headers()
+
+        # Costruisci righe come liste ordinate secondo le colonne del foglio
+        rows_to_append = []
+        for row_data in new_rows:
+            row_values = [''] * len(ordered_headers)
+            for col_name, value in row_data.items():
+                if col_name.startswith('_'):
+                    continue
+                if col_name in _header_map:
+                    col_idx = _header_map[col_name] - 1  # _header_map è 1-based
+                    row_values[col_idx] = str(value) if value is not None else ''
+            rows_to_append.append(row_values)
+
+        if not rows_to_append:
+            return jsonify({'error': 'Nessun campo valido da aggiungere'}), 400
+
+        # Append in batch
+        ws.append_rows(rows_to_append, value_input_option='USER_ENTERED')
+
+        logger.info(f"[Filone] ✅ Append: {len(rows_to_append)} nuove righe aggiunte")
+        return jsonify({'success': True, 'rows_added': len(rows_to_append)})
+
+    except Exception as e:
+        return _api_error(e, 'aggiunta righe filone')
+
+
 @bp.route('/api/genera-orari-lettere', methods=['POST'])
 @login_required
 def genera_orari_lettere():

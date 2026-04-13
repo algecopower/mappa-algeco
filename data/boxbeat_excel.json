@@ -67,6 +67,23 @@
       "provincia": "TORINO",
       "creato_da": "giada",
       "registrato_il": "2026-04-13T11:59:04.494721"
+    },
+    {
+      "id": "c73ed6c0",
+      "data_appuntamento": "2026-04-17",
+      "orario": "16:30-17:00",
+      "pod": "IT001E02948991",
+      "eneltel": "29489912",
+      "nominativo": "AZIENDA AGRICOLA CASETTA AGNESE",
+      "via": "GIOVINO",
+      "civico": "12",
+      "comune": "POIRINO",
+      "note": "",
+      "data_pianificata": "2026-04-17",
+      "origine": "contatore",
+      "provincia": "TORINO",
+      "creato_da": "giada",
+      "registrato_il": "2026-04-13T12:22:14.943200"
     }
   ]
 }

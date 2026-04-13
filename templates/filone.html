@@ -853,6 +853,20 @@
         .vl-merge-result { margin-top: 8px; padding: 8px 10px; border-radius: 6px; font-size: 0.82em; }
         .vl-merge-result.success { background: rgba(46,204,113,0.1); border: 1px solid var(--success); color: var(--success); }
         .vl-merge-result.warning { background: rgba(243,156,18,0.1); border: 1px solid var(--warning); color: var(--warning); }
+        .vl-import-mode-toggle {
+            display: flex; gap: 0; margin-bottom: 12px; border: 1px solid var(--border);
+            border-radius: 6px; overflow: hidden;
+        }
+        .vl-import-mode-toggle button {
+            flex: 1; padding: 7px 10px; border: none; background: var(--bg-card);
+            color: var(--text-muted); font-size: 0.78em; cursor: pointer;
+            transition: all 0.15s; font-weight: 500; border-right: 1px solid var(--border);
+        }
+        .vl-import-mode-toggle button:last-child { border-right: none; }
+        .vl-import-mode-toggle button:hover { color: var(--text); background: var(--bg-cell-alt); }
+        .vl-import-mode-toggle button.active {
+            background: var(--primary); color: #fff; font-weight: 700;
+        }
         .vl-filter-btn {
             padding: 6px 12px; border: 1px solid var(--info); border-radius: 4px;
             background: rgba(52,152,219,0.1); color: var(--info); font-size: 0.78em;
@@ -1363,10 +1377,18 @@
             <!-- TAB 2: Importa Excel -->
             <div class="vl-tab-content" id="vlTabImport">
                 <div class="vl-excel-section" id="vlExcelSection">
-                    <p style="font-size:0.82em;color:var(--text-muted);margin:0 0 10px">
-                        &#x1F4A1; Carica un file Excel esterno, seleziona la colonna chiave per il match (es. POD),
-                        poi mappa le colonne da importare verso le colonne del filone. I dati verranno scritti
-                        dove c&rsquo;&egrave; corrispondenza.
+                    <div class="vl-import-mode-toggle" id="vlImportModeToggle" style="display:none">
+                        <button class="active" data-mode="merge" onclick="vlSetImportMode('merge')">&#x1F504; Aggiorna dati esistenti</button>
+                        <button data-mode="append" onclick="vlSetImportMode('append')">&#x2795; Aggiungi nuove righe</button>
+                    </div>
+                    <p id="vlImportHintMerge" style="font-size:0.82em;color:var(--text-muted);margin:0 0 10px">
+                        &#x1F4A1; <strong>Compila o aggiorna</strong> righe gi&agrave; presenti nel filone.
+                        Scegli una colonna in comune tra l&rsquo;Excel e il filone (es. POD) per trovare le righe corrispondenti,
+                        poi indica quali colonne dell&rsquo;Excel vuoi copiare nel filone. I dati verranno scritti solo dove c&rsquo;&egrave; corrispondenza.
+                    </p>
+                    <p id="vlImportHintAppend" style="font-size:0.82em;color:var(--text-muted);margin:0 0 10px;display:none">
+                        &#x1F4A1; <strong>Inserisci righe completamente nuove</strong> in fondo al filone (es. aggiungere una nuova LCL).
+                        Mappa le colonne dell&rsquo;Excel alle colonne del filone e tutte le righe verranno aggiunte in coda, senza bisogno di cercare corrispondenze.
                     </p>
                     <div class="vl-excel-dropzone" id="vlExcelDropzone" onclick="qs('#vlExcelFileInput').click()">
                         <div style="font-size:1.5em;margin-bottom:6px">&#x1F4C2;</div>
@@ -1379,7 +1401,7 @@
                             <label style="font-size:0.8em;color:var(--text-muted);white-space:nowrap">&#x1F4CB; Riga intestazione:</label>
                             <select id="vlExcelHeaderRow" style="padding:3px 6px;border:1px solid var(--border);border-radius:4px;background:var(--bg-cell);color:var(--text);font-size:0.85em" onchange="vlChangeHeaderRow()"></select>
                         </div>
-                        <div style="margin-top:10px">
+                        <div style="margin-top:10px" id="vlExcelKeySection">
                             <div class="vl-config" style="margin-bottom:8px">
                                 <div class="vl-field">
                                     <label>&#x1F511; Colonna chiave Excel (per match)</label>
@@ -1403,8 +1425,8 @@
                         <div id="vlMergeResult"></div>
                         <div class="vl-excel-actions">
                             <button class="d" onclick="vlExcelClear()">&#x1F5D1; Rimuovi file</button>
-                            <button onclick="vlExcelPreview()">&#x1F441; Anteprima</button>
-                            <button class="a" onclick="vlExcelMerge()" id="vlExcelMergeBtn">&#x1F504; Esegui Merge</button>
+                            <button onclick="vlExcelImportMode === 'merge' ? vlExcelPreview() : vlExcelAppendPreview()">&#x1F441; Anteprima</button>
+                            <button class="a" onclick="vlExcelImportMode === 'merge' ? vlExcelMerge() : vlExcelAppend()" id="vlExcelMergeBtn">&#x1F504; Esegui Merge</button>
                         </div>
                     </div>
                 </div>
@@ -4959,6 +4981,19 @@ function vlSwitchTab(tab) {
     contents.forEach(function(c) { c.classList.toggle('active', c.id === (tab === 'search' ? 'vlTabSearch' : 'vlTabImport')); });
 }
 
+function vlSetImportMode(mode) {
+    vlExcelImportMode = mode;
+    var btns = document.querySelectorAll('#vlImportModeToggle button');
+    btns.forEach(function(b) { b.classList.toggle('active', b.dataset.mode === mode); });
+    var isMerge = mode === 'merge';
+    qs('#vlImportHintMerge').style.display = isMerge ? '' : 'none';
+    qs('#vlImportHintAppend').style.display = isMerge ? 'none' : '';
+    qs('#vlExcelKeySection').style.display = isMerge ? '' : 'none';
+    qs('#vlExcelMergeBtn').innerHTML = isMerge ? '&#x1F504; Esegui Merge' : '&#x2795; Aggiungi Righe';
+    qs('#vlExcelPreviewWrap').style.display = 'none';
+    qs('#vlMergeResult').innerHTML = '';
+}
+
 // ============================================================
 // EXCEL IMPORT & MERGE (within VLOOKUP panel)
 // ============================================================
@@ -4968,6 +5003,7 @@ var vlExcelFileName = '';
 var vlExcelMappings = [];   // [{excelCol, filoneCol}, ...]
 var vlExcelRawRows = [];    // All rows as arrays (including header rows) for re-parsing
 var vlExcelHeaderRowIdx = 0; // 0-based index of the header row
+var vlExcelImportMode = 'merge'; // 'merge' or 'append'
 
 // Drag & Drop
 (function() {
@@ -5142,6 +5178,8 @@ function vlExcelFileLoaded() {
     qs('#vlExcelLoaded').style.display = '';
     qs('#vlExcelSection').classList.add('vl-excel-loaded');
     qs('#vlExcelDropzone').style.display = 'none';
+    qs('#vlImportModeToggle').style.display = 'flex';
+    vlSetImportMode(vlExcelImportMode);
 
     // Populate header row selector
     var hdrSel = qs('#vlExcelHeaderRow');
@@ -5378,6 +5416,119 @@ function vlExcelMerge() {
     }
 }
 
+function vlExcelAppendPreview() {
+    if (!vlExcelData || vlExcelData.length === 0) {
+        qs('#vlExcelPreviewWrap').style.display = 'none';
+        return;
+    }
+
+    var validMappings = vlExcelMappings.filter(function(m) { return m.excelCol && m.filoneCol; });
+    if (validMappings.length === 0) {
+        qs('#vlExcelPreviewWrap').style.display = 'none';
+        qs('#vlMergeResult').innerHTML = '<div class="vl-merge-result warning">\u26A0 Aggiungi almeno una mappatura colonne per l\'anteprima.</div>';
+        return;
+    }
+
+    var wrap = qs('#vlExcelPreviewWrap');
+    wrap.style.display = '';
+
+    // Header
+    var thHtml = '<tr><th>#</th>';
+    for (var m = 0; m < validMappings.length; m++) {
+        thHtml += '<th style="color:var(--info)">' + esc(validMappings[m].filoneCol) + ' \u2190 ' + esc(validMappings[m].excelCol) + '</th>';
+    }
+    thHtml += '</tr>';
+    qs('#vlExcelPreviewHead').innerHTML = thHtml;
+
+    // Body (max 10 rows preview)
+    var maxPreview = Math.min(vlExcelData.length, 10);
+    var tbHtml = '';
+    for (var p = 0; p < maxPreview; p++) {
+        tbHtml += '<tr><td><strong>' + (p + 1) + '</strong></td>';
+        for (var m2 = 0; m2 < validMappings.length; m2++) {
+            var val = (vlExcelData[p][validMappings[m2].excelCol] || '').toString();
+            tbHtml += '<td>' + esc(val) + '</td>';
+        }
+        tbHtml += '</tr>';
+    }
+    qs('#vlExcelPreviewBody').innerHTML = tbHtml;
+
+    qs('#vlMergeResult').innerHTML = '<div class="vl-merge-result success">\u2795 <strong>' + vlExcelData.length +
+        '</strong> righe verranno aggiunte in fondo al filone &mdash; ' + validMappings.length +
+        ' colonn' + (validMappings.length === 1 ? 'a' : 'e') + ' mappat' + (validMappings.length === 1 ? 'a' : 'e') + '</div>';
+}
+
+function vlExcelAppend() {
+    if (!vlExcelData || vlExcelData.length === 0) { toast('Nessun file Excel caricato', 'warning'); return; }
+
+    var validMappings = vlExcelMappings.filter(function(m) { return m.excelCol && m.filoneCol; });
+    if (validMappings.length === 0) { toast('Aggiungi almeno una mappatura colonne', 'warning'); return; }
+
+    // Check for protected columns
+    var protectedHit = [];
+    for (var pm = 0; pm < validMappings.length; pm++) {
+        if (protectedCols.has(validMappings[pm].filoneCol.toLowerCase()) && !unlockedCols.has(validMappings[pm].filoneCol.toLowerCase())) {
+            protectedHit.push(validMappings[pm].filoneCol);
+        }
+    }
+    if (protectedHit.length > 0) {
+        toast('\u26A0 Colonne protette: ' + protectedHit.join(', ') + '. Sblocca prima dal men\u00f9 colonne.', 'error');
+        return;
+    }
+
+    // Build rows to append
+    var rowsToSend = [];
+    for (var i = 0; i < vlExcelData.length; i++) {
+        var row = {};
+        var hasData = false;
+        for (var m = 0; m < validMappings.length; m++) {
+            var val = (vlExcelData[i][validMappings[m].excelCol] || '').toString().trim();
+            row[validMappings[m].filoneCol] = val;
+            if (val) hasData = true;
+        }
+        if (hasData) rowsToSend.push(row);
+    }
+
+    if (rowsToSend.length === 0) {
+        toast('Nessuna riga con dati da aggiungere', 'warning');
+        return;
+    }
+
+    // Confirm
+    if (!confirm('Stai per aggiungere ' + rowsToSend.length + ' nuove righe in fondo al filone. Continuare?')) return;
+
+    // Disable button
+    var btn = qs('#vlExcelMergeBtn');
+    btn.disabled = true;
+    btn.innerHTML = '\u23F3 Invio in corso...';
+
+    fetch('/api/filone/append', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rows: rowsToSend })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(resp) {
+        btn.disabled = false;
+        btn.innerHTML = '\u2795 Aggiungi Righe';
+        if (resp.success) {
+            qs('#vlMergeResult').innerHTML = '<div class="vl-merge-result success">\u2705 <strong>' +
+                resp.rows_added + '</strong> righe aggiunte con successo! Il filone verr\u00e0 ricaricato.</div>';
+            toast('\u2705 ' + resp.rows_added + ' righe aggiunte al filone', 'success');
+            // Reload filone data
+            setTimeout(function() { loadData(); }, 1500);
+        } else {
+            qs('#vlMergeResult').innerHTML = '<div class="vl-merge-result warning">\u26A0 Errore: ' + esc(resp.error || 'Errore sconosciuto') + '</div>';
+            toast('Errore nell\'aggiunta righe: ' + (resp.error || ''), 'error');
+        }
+    })
+    .catch(function(err) {
+        btn.disabled = false;
+        btn.innerHTML = '\u2795 Aggiungi Righe';
+        toast('Errore di rete: ' + err.message, 'error');
+    });
+}
+
 function vlExcelClear() {
     vlExcelData = null;
     vlExcelHeaders = [];
@@ -5385,12 +5536,14 @@ function vlExcelClear() {
     vlExcelMappings = [];
     vlExcelRawRows = [];
     vlExcelHeaderRowIdx = 0;
+    vlExcelImportMode = 'merge';
     qs('#vlExcelLoaded').style.display = 'none';
     qs('#vlExcelDropzone').style.display = '';
     qs('#vlExcelSection').classList.remove('vl-excel-loaded');
     qs('#vlExcelFileInput').value = '';
     qs('#vlMergeResult').innerHTML = '';
     qs('#vlExcelPreviewWrap').style.display = 'none';
+    qs('#vlImportModeToggle').style.display = 'none';
 }
 
 // ============================================================

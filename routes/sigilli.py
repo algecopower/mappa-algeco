@@ -12,7 +12,8 @@ from flask import Blueprint, request, jsonify
 
 from moduli.auth import login_required
 from moduli.shared import (
-    get_worksheet, _trova_indice_multi, _api_error,
+    get_worksheet, get_header_map, find_row_by_eneltel,
+    _trova_indice_multi, _api_error,
 )
 from config import PROVINCIA_ATTIVA, COLONNE_SIGILLI
 
@@ -155,41 +156,25 @@ def salva_sigillo(eneltel):
         if not sigillo:
             return jsonify({'error': 'Sigillo vuoto'}), 400
 
-        ws = get_worksheet()
-        all_data = ws.get_all_values()
-        headers = all_data[0] if all_data else []
-
-        # Trova indice colonna ENELTEL
-        idx_eneltel = None
-        for i, h in enumerate(headers):
-            if h.strip().upper() == 'ENELTEL':
-                idx_eneltel = i
-                break
-
-        if idx_eneltel is None:
-            return jsonify({'error': 'Colonna ENELTEL non trovata'}), 400
-
-        # Trova la riga del contatore
-        row_num = None
-        for row_idx, row in enumerate(all_data[1:], start=2):
-            if idx_eneltel < len(row) and row[idx_eneltel].strip() == eneltel:
-                row_num = row_idx
-                break
-
+        # Usa helper cached: cerca riga per ENELTEL (scarica solo 1 colonna)
+        row_num = find_row_by_eneltel(eneltel)
         if row_num is None:
             return jsonify({'error': f'Contatore {eneltel} non trovato'}), 404
 
-        # Trova colonna SIGILLO
-        idx_sigillo = _trova_indice_multi(headers, 'SIGILLO', 'Sigillo', 'sigillo', chiave_mapping='sigillo')
+        # Usa header map cached per trovare colonna SIGILLO
+        _header_map = get_header_map()
+        col_sigillo = None
+        for col_name in ['SIGILLO', 'Sigillo', 'sigillo']:
+            if col_name in _header_map:
+                col_sigillo = _header_map[col_name]
+                break
 
-        if idx_sigillo is None:
+        if col_sigillo is None:
             return jsonify({'error': 'Colonna SIGILLO non trovata'}), 400
 
-        # Calcola riferimento cella (A1 notation)
-        col_letter = gspread.utils.rowcol_to_a1(1, idx_sigillo + 1)[:-1]  # Rimuovi il numero riga
-        cell_ref = f"{col_letter}{row_num}"
-
-        # Aggiorna valore sigillo
+        # Scrivi direttamente la cella
+        cell_ref = gspread.utils.rowcol_to_a1(row_num, col_sigillo)
+        ws = get_worksheet()
         ws.update_acell(cell_ref, sigillo)
 
         logger.info(f"[SIGILLI] ✅ Sigillo '{sigillo}' salvato per {eneltel} (cella {cell_ref})")
@@ -322,37 +307,25 @@ def salva_matricola(eneltel):
         if not matricola:
             return jsonify({'error': 'Matricola vuota'}), 400
 
-        ws = get_worksheet()
-        all_data = ws.get_all_values()
-        headers = all_data[0] if all_data else []
-
-        # Trova indice colonna ENELTEL
-        idx_eneltel = _trova_indice_multi(headers, 'ENELTEL', 'Eneltel', 'eneltel', chiave_mapping='eneltel')
-
-        if idx_eneltel is None:
-            return jsonify({'error': 'Colonna ENELTEL non trovata'}), 400
-
-        # Trova la riga del contatore
-        row_num = None
-        for row_idx, row in enumerate(all_data[1:], start=2):
-            if idx_eneltel < len(row) and row[idx_eneltel].strip() == eneltel:
-                row_num = row_idx
-                break
-
+        # Usa helper cached: cerca riga per ENELTEL (scarica solo 1 colonna)
+        row_num = find_row_by_eneltel(eneltel)
         if row_num is None:
             return jsonify({'error': f'Contatore {eneltel} non trovato'}), 404
 
-        # Trova colonna Matricola
-        idx_matricola = _trova_indice_multi(headers, 'Matricola CE inst', 'Matricola misuratore installato', chiave_mapping='matricola_installata')
+        # Usa header map cached per trovare colonna Matricola
+        _header_map = get_header_map()
+        col_matricola = None
+        for col_name in ['Matricola CE inst', 'Matricola misuratore installato', 'MATRICOLA CE INST']:
+            if col_name in _header_map:
+                col_matricola = _header_map[col_name]
+                break
 
-        if idx_matricola is None:
+        if col_matricola is None:
             return jsonify({'error': 'Colonna Matricola non trovata'}), 400
 
-        # Calcola riferimento cella (A1 notation)
-        col_letter = gspread.utils.rowcol_to_a1(1, idx_matricola + 1)[:-1]
-        cell_ref = f"{col_letter}{row_num}"
-
-        # Aggiorna valore matricola
+        # Scrivi direttamente la cella
+        cell_ref = gspread.utils.rowcol_to_a1(row_num, col_matricola)
+        ws = get_worksheet()
         ws.update_acell(cell_ref, matricola)
 
         logger.info(f"[MATRICOLE] ✅ Matricola '{matricola}' salvata per {eneltel} (cella {cell_ref})")

@@ -3139,49 +3139,65 @@ def genera_js_gestionale():
                 const result = await response.json();
                 
                 if (response.ok && result.success) {{
-                    status.className = 'sigilli-card-status visible success';
-                    status.textContent = '✅ Sigillo salvato!';
-                    card.classList.add('completato');
+                    // RIMUOVI dalla lista dati PRIMA di toccare il DOM
+                    sigilliData = sigilliData.filter(c => c.eneltel !== eneltel);
                     
-                    // Mostra il valore salvato con pulsante modifica
-                    input.value = sigillo;
-                    input.disabled = true;
-                    btn.style.display = 'none';
+                    // Aggiorna contatori (riacquisisci i nodi dal DOM, potrebbero essere cambiati)
+                    const countEl = document.getElementById('sigilliCount');
+                    if (countEl) countEl.textContent = `(${{sigilliData.length}} da completare)`;
+                    const tabCountEl = document.getElementById('tabSigilliCount');
+                    if (tabCountEl) tabCountEl.textContent = sigilliData.length;
                     
-                    // Crea pulsante modifica
-                    let editBtn = document.getElementById(`sigillo-edit-${{idx}}`);
-                    if (!editBtn) {{
-                        editBtn = document.createElement('button');
-                        editBtn.id = `sigillo-edit-${{idx}}`;
-                        editBtn.className = 'btn-modifica-sigillo';
-                        editBtn.innerHTML = '✏️ Modifica';
-                        editBtn.onclick = function() {{ modificaSigillo(idx); }};
-                        input.parentNode.appendChild(editBtn);
+                    // Riacquisisci i nodi DOM (potrebbero essere stati ricreati da un re-render)
+                    const card2 = document.getElementById(`sigillo-card-${{idx}}`);
+                    const input2 = document.getElementById(`sigillo-input-${{idx}}`);
+                    const btn2 = document.getElementById(`sigillo-btn-${{idx}}`);
+                    const status2 = document.getElementById(`sigillo-status-${{idx}}`);
+                    
+                    if (card2) {{
+                        status2.className = 'sigilli-card-status visible success';
+                        status2.textContent = '✅ Sigillo salvato!';
+                        card2.classList.add('completato');
+                        
+                        input2.value = sigillo;
+                        input2.disabled = true;
+                        btn2.style.display = 'none';
+                        
+                        let editBtn = document.getElementById(`sigillo-edit-${{idx}}`);
+                        if (!editBtn) {{
+                            editBtn = document.createElement('button');
+                            editBtn.id = `sigillo-edit-${{idx}}`;
+                            editBtn.className = 'btn-modifica-sigillo';
+                            editBtn.innerHTML = '✏️ Modifica';
+                            editBtn.onclick = function() {{ modificaSigillo(idx); }};
+                            input2.parentNode.appendChild(editBtn);
+                        }}
+                        
+                        focusNextInput(card2, 'sigillo-input');
                     }}
                     
-                    // RIMUOVI dalla lista dati per preservare lo stato anche dopo cambio filtro
-                    const eneltelSalvato = card.dataset.eneltel;
-                    sigilliData = sigilliData.filter(c => c.eneltel !== eneltelSalvato);
-                    
-                    // Aggiorna contatori
-                    const remaining = sigilliData.length;
-                    document.getElementById('sigilliCount').textContent = `(${{remaining}} da completare)`;
-                    document.getElementById('tabSigilliCount').textContent = remaining;
-                    
-                    // Focus sul prossimo
-                    focusNextInput(card, 'sigillo-input');
-                    
                 }} else {{
-                    btn.disabled = false;
-                    input.disabled = false;
-                    status.className = 'sigilli-card-status visible error';
-                    status.textContent = '❌ ' + (result.error || 'Errore sconosciuto');
+                    // Riacquisisci nodi DOM per mostrare errore
+                    const btn2 = document.getElementById(`sigillo-btn-${{idx}}`);
+                    const input2 = document.getElementById(`sigillo-input-${{idx}}`);
+                    const status2 = document.getElementById(`sigillo-status-${{idx}}`);
+                    if (btn2) btn2.disabled = false;
+                    if (input2) input2.disabled = false;
+                    if (status2) {{
+                        status2.className = 'sigilli-card-status visible error';
+                        status2.textContent = '❌ ' + (result.error || 'Errore sconosciuto');
+                    }}
                 }}
             }} catch (err) {{
-                btn.disabled = false;
-                input.disabled = false;
-                status.className = 'sigilli-card-status visible error';
-                status.textContent = '❌ Errore di connessione: ' + err.message;
+                const btn2 = document.getElementById(`sigillo-btn-${{idx}}`);
+                const input2 = document.getElementById(`sigillo-input-${{idx}}`);
+                const status2 = document.getElementById(`sigillo-status-${{idx}}`);
+                if (btn2) btn2.disabled = false;
+                if (input2) input2.disabled = false;
+                if (status2) {{
+                    status2.className = 'sigilli-card-status visible error';
+                    status2.textContent = '❌ Errore di connessione: ' + err.message;
+                }}
             }}
         }}
         
@@ -3216,33 +3232,48 @@ def genera_js_gestionale():
                 const result = await response.json();
                 
                 if (response.ok && result.success) {{
-                    status.className = 'sigilli-card-status visible success';
-                    status.textContent = '✅ Matricola salvata!';
-                    card.classList.add('completato');
+                    // RIMUOVI dalla lista dati PRIMA di toccare il DOM
+                    matricoleData = matricoleData.filter(c => c.eneltel !== eneltel);
                     
-                    // RIMUOVI dalla lista dati per preservare lo stato anche dopo cambio filtro
-                    const eneltelSalvato = card.dataset.eneltel;
-                    matricoleData = matricoleData.filter(c => c.eneltel !== eneltelSalvato);
+                    // Aggiorna contatori (riacquisisci nodi dal DOM)
+                    const countEl = document.getElementById('sigilliCount');
+                    if (countEl) countEl.textContent = `(${{matricoleData.length}} da completare)`;
+                    const tabCountEl = document.getElementById('tabMatricoleCount');
+                    if (tabCountEl) tabCountEl.textContent = matricoleData.length;
                     
-                    // Aggiorna contatori
-                    const remaining = matricoleData.length;
-                    document.getElementById('sigilliCount').textContent = `(${{remaining}} da completare)`;
-                    document.getElementById('tabMatricoleCount').textContent = remaining;
-                    
-                    // Focus sul prossimo
-                    focusNextInput(card, 'matricola-input');
+                    // Riacquisisci i nodi DOM (potrebbero essere stati ricreati)
+                    const card2 = document.getElementById(`matricola-card-${{idx}}`);
+                    if (card2) {{
+                        const status2 = document.getElementById(`matricola-status-${{idx}}`);
+                        if (status2) {{
+                            status2.className = 'sigilli-card-status visible success';
+                            status2.textContent = '✅ Matricola salvata!';
+                        }}
+                        card2.classList.add('completato');
+                        focusNextInput(card2, 'matricola-input');
+                    }}
                     
                 }} else {{
-                    btn.disabled = false;
-                    input.disabled = false;
-                    status.className = 'sigilli-card-status visible error';
-                    status.textContent = '❌ ' + (result.error || 'Errore sconosciuto');
+                    const btn2 = document.getElementById(`matricola-btn-${{idx}}`);
+                    const input2 = document.getElementById(`matricola-input-${{idx}}`);
+                    const status2 = document.getElementById(`matricola-status-${{idx}}`);
+                    if (btn2) btn2.disabled = false;
+                    if (input2) input2.disabled = false;
+                    if (status2) {{
+                        status2.className = 'sigilli-card-status visible error';
+                        status2.textContent = '❌ ' + (result.error || 'Errore sconosciuto');
+                    }}
                 }}
             }} catch (err) {{
-                btn.disabled = false;
-                input.disabled = false;
-                status.className = 'sigilli-card-status visible error';
-                status.textContent = '❌ Errore di connessione: ' + err.message;
+                const btn2 = document.getElementById(`matricola-btn-${{idx}}`);
+                const input2 = document.getElementById(`matricola-input-${{idx}}`);
+                const status2 = document.getElementById(`matricola-status-${{idx}}`);
+                if (btn2) btn2.disabled = false;
+                if (input2) input2.disabled = false;
+                if (status2) {{
+                    status2.className = 'sigilli-card-status visible error';
+                    status2.textContent = '❌ Errore di connessione: ' + err.message;
+                }}
             }}
         }}
         

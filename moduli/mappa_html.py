@@ -2465,7 +2465,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             position: fixed;
             bottom: 70px;
             right: 12px;
-            width: 340px;
+            width: 260px;
             max-height: 480px;
             background: var(--bg-secondary);
             border: 1px solid var(--border);
@@ -2489,7 +2489,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 16px 20px;
+            padding: 10px 14px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
         }}
@@ -2500,18 +2500,18 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
 
         .gestionale-panel-title {{
             font-weight: 700;
-            font-size: 16px;
+            font-size: 14px;
         }}
 
         .gestionale-panel-close {{
             background: rgba(255,255,255,0.2);
             border: none;
             color: white;
-            width: 28px;
-            height: 28px;
+            width: 24px;
+            height: 24px;
             border-radius: 50%;
             cursor: pointer;
-            font-size: 14px;
+            font-size: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -2523,10 +2523,10 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         }}
 
         .gestionale-panel-body {{
-            padding: 12px;
+            padding: 6px;
             display: flex;
             flex-direction: column;
-            gap: 8px;
+            gap: 4px;
             overflow-y: auto;
             max-height: 380px;
         }}
@@ -2534,10 +2534,10 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         .gestionale-panel-btn {{
             display: flex;
             align-items: center;
-            gap: 14px;
-            padding: 14px 16px;
+            gap: 10px;
+            padding: 8px 10px;
             border: 1px solid var(--border);
-            border-radius: 12px;
+            border-radius: 8px;
             background: var(--bg-secondary);
             cursor: pointer;
             transition: all 0.2s ease;
@@ -2553,23 +2553,20 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         }}
 
         .gp-btn-icon {{
-            font-size: 24px;
+            font-size: 18px;
             flex-shrink: 0;
-            width: 36px;
+            width: 24px;
             text-align: center;
         }}
 
         .gp-btn-text {{
             font-weight: 600;
-            font-size: 14px;
+            font-size: 13px;
             display: block;
         }}
 
         .gp-btn-desc {{
-            font-size: 11px;
-            color: var(--text-secondary);
-            display: block;
-            margin-top: 2px;
+            display: none;
         }}
 
         @media (max-width: 768px) {{
@@ -3821,7 +3818,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                 <span class="gp-btn-text">Impostazioni</span>
                 <span class="gp-btn-desc">Configura operatori, deposito, percorsi e date</span>
             </button>
-            <button class="gestionale-panel-btn gp-btn-logout" onclick="effettuaLogout()" style="border-top: 1px solid var(--border); margin-top: 4px; padding-top: 12px;">
+            <button class="gestionale-panel-btn gp-btn-logout" onclick="effettuaLogout()" style="border-top: 1px solid var(--border); margin-top: 2px; padding-top: 8px;">
                 <span class="gp-btn-icon">🚪</span>
                 <span class="gp-btn-text">Disconnetti</span>
                 <span class="gp-btn-desc">Esci dall'account corrente</span>

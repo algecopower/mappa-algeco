@@ -43,7 +43,7 @@ logger = logging.getLogger('mappa_algeco')
 # Colonne protette nella vista Excel (non modificabili dall'utente)
 # Centralizzate: stesse colonne per entrambe le province
 _COLONNE_PROTETTE_BASE = [
-    'LCL', 'TIPO_MISURATORE', 'MOT. RICH.', 'MID', 'TIPOLOGIA ZONA',
+    'LCL', 'TIPO_MISURATORE', 'MOT. RICH.', 'MID', 'SIGILLO', 'TIPOLOGIA ZONA',
     'POD', 'ENELTEL', 'CODICE_ANTE_SOSTITUZIONE', 'MATRICOLA_ANTE_SOSTITUZIONE',
     'MATRICOLA CE INST', 'COD.', 'DATA INSTALLAZIONE', 'ESITO'
 ]

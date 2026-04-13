@@ -601,20 +601,6 @@ from config import (
     MATRICOLE_VIP,
 )
 
-# Colonne protette nella vista Excel (non modificabili dall'utente)
-COLONNE_PROTETTE_FILONE = {
-    'TORINO': [
-        'LCL', 'TIPO_MISURATORE', 'MOT. RICH.', 'MID', 'TIPOLOGIA ZONA',
-        'POD', 'ENELTEL', 'CODICE_ANTE_SOSTITUZIONE', 'MATRICOLA_ANTE_SOSTITUZIONE',
-        'MATRICOLA CE INST', 'COD.', 'DATA INSTALLAZIONE', 'ESITO'
-    ],
-    'PAVIA': [
-        'LCL', 'INIZIO LCL', 'FINE LCL', 'NDIS', 'TIPOLOGIA CE',
-        'ENELTEL', 'POD', 'CODICE MISURATORE IN OPERA', 'MATRICOLA MISURATORE IN OPERA',
-        'DATA INSTALLAZIONE', 'ESITO', 'CODICE POST', 'MATRICOLA POST'
-    ]
-}
-
 app = Flask(__name__, static_folder='.')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # Limite upload: 16 MB
 

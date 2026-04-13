@@ -402,11 +402,17 @@ def upload_BOXBEAT():
                     })
 
                 # Cancella eventuale testo nella colonna SIGILLO
+                # MA preserva i codici sigillo reali (es. 20198337Z)
                 if 'SIGILLO' in _header_map:
-                    all_updates.append({
-                        'range': gspread.utils.rowcol_to_a1(row_num, _header_map['SIGILLO']),
-                        'values': [['']]
-                    })
+                    sigillo_attuale = ''
+                    if row_num - 1 < len(all_data) and _header_map['SIGILLO'] - 1 < len(all_data[row_num - 1]):
+                        sigillo_attuale = str(all_data[row_num - 1][_header_map['SIGILLO'] - 1]).strip()
+                    # Preserva se contiene un codice sigillo reale (cifre + lettera)
+                    if not re.search(r'\d+[A-Za-z]', sigillo_attuale):
+                        all_updates.append({
+                            'range': gspread.utils.rowcol_to_a1(row_num, _header_map['SIGILLO']),
+                            'values': [['']]
+                        })
 
                 file_aggiornati += 1
 

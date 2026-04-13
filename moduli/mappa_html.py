@@ -12511,6 +12511,17 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                 _allPlanMarkersMap = null;
             }}
             _planCardsRenderedSet = null;
+            // Rimuovi scroll handler lazy-load delle planning cards
+            if (_planCardsScrollHandler) {{
+                document.getElementById('results').removeEventListener('scroll', _planCardsScrollHandler);
+                _planCardsScrollHandler = null;
+            }}
+            if (_planCardsBatchTimer) {{
+                clearTimeout(_planCardsBatchTimer);
+                _planCardsBatchTimer = null;
+            }}
+            _planCardsCurrentList = [];
+            _planCardsRendered = 0;
             markers = [];
             document.getElementById('sidebar').classList.remove('planning-mode');
             // Restore normal view

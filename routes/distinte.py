@@ -23,10 +23,11 @@ from moduli.auth import login_required
 from moduli.shared import (
     get_worksheet, get_header_map, get_headers,
     find_row_by_eneltel, find_row_by_pod,
+    build_pod_row_map,
     _imposta_appuntamento_su_filone, _rimuovi_appuntamento_da_filone,
     _api_error, _get_colonna_note, _get_username,
     _trova_indice_multi,
-    _callbacks, _sheets_retry,
+    _callbacks, _sheets_retry, _gsheets_write_lock,
 )
 from moduli.distinte_manager import (
     parse_distinta_pdf,
@@ -908,7 +909,7 @@ def aggiorna_operatori_filone():
 
         aggiornati = 0
         errori = []
-        updates = []
+        pod_matricole = []  # (pod, matricola) per rimappatura
 
         for item in contatori:
             pod = (item.get('pod') or '').strip().upper()
@@ -917,20 +918,30 @@ def aggiorna_operatori_filone():
             if not pod or not matricola:
                 continue
 
+            # Verifica che il POD esista (lookup iniziale)
             row = find_row_by_pod(pod)
             if row is None:
                 errori.append(f'POD {pod} non trovato')
                 continue
 
-            updates.append({
-                'range': gspread.utils.rowcol_to_a1(row, col_operatore),
-                'values': [[matricola]]
-            })
+            pod_matricole.append((pod, matricola))
             aggiornati += 1
 
-        if updates:
-            _sheets_retry(ws.batch_update, updates)
-            _callbacks['trigger_sync_after_edit']()
+        if pod_matricole:
+            # Rimappa righe con lookup fresco subito prima della scrittura
+            fresh_pod_map = build_pod_row_map()
+            updates = []
+            for pod, matricola in pod_matricole:
+                fresh_row = fresh_pod_map.get(pod)
+                if fresh_row is None:
+                    continue
+                updates.append({
+                    'range': gspread.utils.rowcol_to_a1(fresh_row, col_operatore),
+                    'values': [[matricola]]
+                })
+            if updates:
+                _sheets_retry(ws.batch_update, updates)
+                _callbacks['trigger_sync_after_edit']()
 
         return jsonify({
             'success': True,
@@ -976,26 +987,28 @@ def salva_nota_distinte():
 
         col = header_map[col_note]
 
-        # Leggi nota esistente
-        nota_attuale = ws.cell(row, col).value or ''
+        # Sezione critica: lettura-modifica-scrittura
+        with _gsheets_write_lock:
+            # Leggi nota esistente
+            nota_attuale = ws.cell(row, col).value or ''
 
-        if sovrascrivere:
-            # Sovrascrive completamente (il client gestisce già la concatenazione)
-            nuova_nota = nota
-        else:
-            # Logica legacy: concatena
-            if not nota:
-                nuova_nota = nota_attuale
-            elif not nota_attuale:
+            if sovrascrivere:
+                # Sovrascrive completamente (il client gestisce già la concatenazione)
                 nuova_nota = nota
             else:
-                if nota not in nota_attuale:
-                    nuova_nota = f"{nota_attuale} // {nota}"
-                else:
+                # Logica legacy: concatena
+                if not nota:
                     nuova_nota = nota_attuale
+                elif not nota_attuale:
+                    nuova_nota = nota
+                else:
+                    if nota not in nota_attuale:
+                        nuova_nota = f"{nota_attuale} // {nota}"
+                    else:
+                        nuova_nota = nota_attuale
 
-        # Aggiorna
-        ws.update_cell(row, col, nuova_nota)
+            # Aggiorna
+            ws.update_cell(row, col, nuova_nota)
 
         return jsonify({
             'success': True,

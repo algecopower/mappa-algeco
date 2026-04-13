@@ -1899,6 +1899,10 @@ def genera_js_gestionale():
                         btnRimuoviApp.style.display = 'inline-flex';
                     }}
                     
+                    // Refresh istantaneo della mappa
+                    if (typeof updateContatoriVisibili === 'function') updateContatoriVisibili();
+                    if (typeof refreshCurrentView === 'function') refreshCurrentView();
+                    
                 }} else {{
                     statusDiv.className = 'appuntamento-status visible error';
                     statusDiv.textContent = '❌ ' + (result.error || 'Errore sconosciuto');
@@ -2010,6 +2014,10 @@ def genera_js_gestionale():
                         
                         // Aggiorna sidebar e popup (ma non la mappa intera)
                         aggiornaUIDopoModifica(currentFullscreenEneltel, contatori[idx]);
+                        
+                        // Refresh istantaneo della mappa con i dati locali aggiornati
+                        if (typeof updateContatoriVisibili === 'function') updateContatoriVisibili();
+                        if (typeof refreshCurrentView === 'function') refreshCurrentView();
                     }}
                     
                 }} else {{
@@ -2603,6 +2611,10 @@ def genera_js_gestionale():
                             appStatus.textContent = '✅ Appuntamento rimosso';
                         }}
                     }}
+                    
+                    // Refresh istantaneo della mappa
+                    if (typeof updateContatoriVisibili === 'function') updateContatoriVisibili();
+                    if (typeof refreshCurrentView === 'function') refreshCurrentView();
                 }} else {{
                     alert('❌ Errore: ' + (result.error || 'Errore sconosciuto'));
                 }}

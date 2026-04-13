@@ -1946,6 +1946,30 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             100% {{ box-shadow: 0 0 0 0 rgba(233, 69, 96, 0); }}
         }}
 
+        /* Toast aggiornamento mappa */
+        .mappa-toast {{
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%) translateY(80px);
+            background: rgba(37, 211, 102, 0.95);
+            color: #fff;
+            padding: 10px 22px;
+            border-radius: 30px;
+            font-size: 0.88em;
+            font-weight: 600;
+            box-shadow: 0 6px 24px rgba(0,0,0,0.25);
+            z-index: 20000;
+            pointer-events: none;
+            opacity: 0;
+            transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease;
+            backdrop-filter: blur(6px);
+        }}
+        .mappa-toast.visible {{
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }}
+
         /* Marker sovrapposti (cluster) */
         .marker-cluster {{
             position: relative;
@@ -4244,6 +4268,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
     </div>
 
     <div class="update-indicator" id="updateIndicator">🔄 Aggiornamento...</div>
+    <div class="mappa-toast" id="mappaToast"></div>
 
     <!-- Print Button -->
     <button class="print-button" id="printButton" onclick="openPrintPreview()">
@@ -9433,9 +9458,16 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         // ============================================================
         let lastTimestamp = dataTimestamp;
 
-        // Refresh SOLO mappa, NON toccare la sidebar (preserva lo stato dell'utente)
+        // Refresh SMART: ri-renderizza la vista corrente con animazioni per nuovi marker
         function refreshCurrentView() {{
-            // Salva ID del contatore con popup aperto (se presente)
+            // Salva gli eneltel attuali per rilevare nuovi marker
+            const oldEneltels = new Set(markers.filter(m => m.contatore).map(m => m.contatore.eneltel));
+
+            // Salva scroll sidebar
+            const resultsDiv = document.getElementById('results');
+            const savedScroll = resultsDiv ? resultsDiv.scrollTop : 0;
+
+            // Salva popup aperto
             let openPopupContatoreId = null;
             markers.forEach(m => {{
                 if (m.isPopupOpen && m.isPopupOpen() && m.contatore) {{
@@ -9443,47 +9475,77 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                 }}
             }});
 
-            // Imposta flag per preservare zoom/centro
             preserveMapView = true;
             isAutoRefresh = true;
 
             try {{
-                // NON rigenerare la sidebar - aggiorna solo i marker sulla mappa
-                // La sidebar rimane intatta per non interrompere l'utente
-                
-                // Aggiorna solo i dati nei marker esistenti senza ricrearli
-                // I popup usano funzioni dinamiche, quindi si aggiornano automaticamente
-                markers.forEach(marker => {{
-                    if (marker.contatore) {{
-                        // Trova il contatore aggiornato
-                        const updated = contatori.find(c => c.id === marker.contatore.id || c.eneltel === marker.contatore.eneltel);
-                        if (updated) {{
-                            marker.contatore = updated;
-                            // Se il popup è aperto, forza il refresh del contenuto
-                            if (marker.isPopupOpen && marker.isPopupOpen()) {{
-                                const popup = marker.getPopup();
-                                if (popup) popup.update();
+                // Ri-renderizza completamente la vista corrente
+                switch (currentView) {{
+                    case 'zone':
+                        mostraVistaZone(document.getElementById('searchInput')?.value || '');
+                        break;
+                    case 'towns':
+                        mostraVistaComuni(document.getElementById('searchInput')?.value || '');
+                        break;
+                    case 'detail':
+                        if (currentZona && currentData) {{
+                            const isZona = zone.some(z => z.nome === currentZona);
+                            if (isZona) {{
+                                apriDettaglio(currentZona, currentData);
+                            }} else {{
+                                apriDettaglioComune(currentZona, currentData);
                             }}
                         }}
-                    }}
-                }});
-                
-                // Aggiorna anche il marker pinnato
-                if (pinnedContatore && pinnedMarker) {{
-                    const updatedPin = contatori.find(c => c.eneltel === pinnedContatore.eneltel);
-                    if (updatedPin) {{
-                        pinnedContatore = updatedPin;
-                        pinnedMarker.setLatLng([updatedPin.lat, updatedPin.lon]);
-                        // Il popup si aggiorna automaticamente (binding dinamico)
-                        if (pinnedMarker.isPopupOpen && pinnedMarker.isPopupOpen()) {{
-                            const popup = pinnedMarker.getPopup();
-                            if (popup) popup.update();
+                        break;
+                    case 'operatore':
+                        if (currentOperatore && currentData) {{
+                            mostraPercorsoCompletoOperatore(currentOperatore, currentData);
                         }}
-                    }}
+                        break;
+                    case 'tuttiOperatori':
+                        if (currentData) {{
+                            mostraPercorsoTuttiOperatori(currentData);
+                        }}
+                        break;
+                    case 'search-results':
+                        // Per i risultati di ricerca, aggiorna solo i dati nei marker esistenti
+                        // (non possiamo ri-eseguire la query di ricerca)
+                        markers.forEach(marker => {{
+                            if (marker.contatore) {{
+                                const updated = contatori.find(c => c.id === marker.contatore.id || c.eneltel === marker.contatore.eneltel);
+                                if (updated) {{
+                                    marker.contatore = updated;
+                                    if (marker.isPopupOpen && marker.isPopupOpen()) {{
+                                        const popup = marker.getPopup();
+                                        if (popup) popup.update();
+                                    }}
+                                }}
+                            }}
+                        }});
+                        break;
+                    default:
+                        mostraVistaZone();
                 }}
             }} finally {{
-                // Reset flag auto-refresh (SEMPRE, anche in caso di errore)
                 isAutoRefresh = false;
+            }}
+
+            // Ripristina scroll sidebar
+            if (resultsDiv && savedScroll > 0) {{
+                resultsDiv.scrollTop = savedScroll;
+            }}
+
+            // Rileva nuovi marker e anima la loro comparsa
+            const newEneltels = new Set(markers.filter(m => m.contatore).map(m => m.contatore.eneltel));
+            const addedEneltels = new Set([...newEneltels].filter(e => !oldEneltels.has(e)));
+            const removedCount = [...oldEneltels].filter(e => !newEneltels.has(e)).length;
+
+            // Mostra toast se ci sono cambiamenti
+            if (addedEneltels.size > 0 || removedCount > 0) {{
+                const parts = [];
+                if (addedEneltels.size > 0) parts.push(`+${{addedEneltels.size}} nuov${{addedEneltels.size === 1 ? 'o' : 'i'}}`);
+                if (removedCount > 0) parts.push(`-${{removedCount}} rimoss${{removedCount === 1 ? 'o' : 'i'}}`);
+                showMappaToast(`✨ Mappa aggiornata: ${{parts.join(', ')}}`);
             }}
 
             // Ripristina popup se era aperto
@@ -9491,10 +9553,23 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                 setTimeout(() => {{
                     const marker = markers.find(m => m.contatore && m.contatore.id === openPopupContatoreId);
                     if (marker) marker.openPopup();
-                }}, 100);
+                }}, 150);
             }}
-            
-            console.log('🔄 Refresh completato - sidebar intatta, dati marker aggiornati');
+
+            console.log(`🔄 Smart refresh: vista=${{currentView}}, nuovi=${{addedEneltels.size}}, rimossi=${{removedCount}}`);
+        }}
+
+        // Toast discreto in basso al centro per notificare aggiornamenti
+        let _mappaToastTimeout = null;
+        function showMappaToast(msg) {{
+            const toast = document.getElementById('mappaToast');
+            if (!toast) return;
+            toast.textContent = msg;
+            toast.classList.add('visible');
+            clearTimeout(_mappaToastTimeout);
+            _mappaToastTimeout = setTimeout(() => {{
+                toast.classList.remove('visible');
+            }}, 3500);
         }}
 
         // Flash discreto sull'orario quando i dati vengono aggiornati
@@ -9543,6 +9618,19 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                 const data = JSON.parse(e.data);
                 console.log('[SSE] 📢 Dati modificati:', data);
                 await reloadData();
+            }});
+            
+            eventSource.addEventListener('data_changing', (e) => {{
+                console.log('[SSE] ⏳ Sync esterno in corso...');
+                showMappaToast('⏳ Aggiornamento dati in corso...');
+                // Mostra clessidra sul pulsante refresh
+                const btn = document.getElementById('refreshBtn');
+                if (btn && !_refreshWaitingForSSE) {{
+                    _refreshWaitingForSSE = true;
+                    btn.textContent = '⏳';
+                    btn.disabled = true;
+                    btn.style.opacity = '0.7';
+                }}
             }});
             
             eventSource.addEventListener('sync_complete', async (e) => {{

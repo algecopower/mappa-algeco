@@ -267,7 +267,11 @@ def genera_excel_lettere(df, date_da_elaborare, filename=None, tappe_per_fascia=
         data_fine = datetime.strptime(date_da_elaborare[-1], '%Y-%m-%d')
         giorno_inizio = data_inizio.strftime('%d-%m')
         giorno_fine = data_fine.strftime('%d-%m')
-        filename = f"LETTERE {PROVINCIA_ATTIVA.upper()} DAL {giorno_inizio} AL {giorno_fine}.xlsx"
+        nome_file = f"LETTERE {PROVINCIA_ATTIVA.upper()} DAL {giorno_inizio} AL {giorno_fine}.xlsx"
+        # Salva nella cartella dedicata output/lettere/
+        cartella_lettere = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'output', 'lettere')
+        os.makedirs(cartella_lettere, exist_ok=True)
+        filename = os.path.join(cartella_lettere, nome_file)
     
     print(f"\n📅 Date da elaborare: {len(date_da_elaborare)}")
     for d in date_da_elaborare:

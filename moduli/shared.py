@@ -37,6 +37,7 @@ _headers = None
 _header_map = None        # {col_name: 1-based index}
 _worksheet_initialized = False
 _sheets_lock = threading.Lock()
+_gsheets_write_lock = threading.Lock()  # Serializza operazioni di scrittura su Google Sheets
 
 
 def _sheets_retry(func, *args, max_retries=3, **kwargs):
@@ -206,16 +207,66 @@ def _get_username():
 # RICERCA RIGHE
 # ============================================================================
 
+def _get_col_index(col_type='pod'):
+    """Restituisce l'indice 1-based della colonna POD o ENELTEL dalla header_map."""
+    if col_type == 'pod':
+        for name in ['POD', 'Pod', 'pod', 'Codice POD']:
+            if name in _header_map:
+                return _header_map[name]
+    else:
+        for name in ['ENELTEL', 'Eneltel', 'eneltel']:
+            if name in _header_map:
+                return _header_map[name]
+    return None
+
+
+def build_pod_row_map():
+    """Costruisce una mappa fresca POD→riga (1-based) leggendo dal foglio.
+
+    Utile per batch update: costruisci la mappa subito prima di scrivere
+    per evitare problemi di righe spostate.
+    """
+    ws = get_worksheet()
+    col = _get_col_index('pod')
+    if col is None:
+        return {}
+    values = ws.col_values(col)
+    result = {}
+    for i, val in enumerate(values[1:], start=2):
+        v = str(val).strip().upper()
+        if v:
+            result[v] = i
+    return result
+
+
+def verify_row_pod(row_num, expected_pod):
+    """Verifica che alla riga row_num ci sia il POD atteso.
+
+    Legge la cella POD dalla riga indicata e confronta.
+    Restituisce True se corrispondono, False se la riga è stata spostata.
+    """
+    ws = get_worksheet()
+    col = _get_col_index('pod')
+    if col is None:
+        return False
+    actual = str(ws.cell(row_num, col).value or '').strip().upper()
+    return actual == str(expected_pod).strip().upper()
+
+
+def verify_row_eneltel(row_num, expected_eneltel):
+    """Verifica che alla riga row_num ci sia l'ENELTEL atteso."""
+    ws = get_worksheet()
+    col = _get_col_index('eneltel')
+    if col is None:
+        return False
+    actual = str(ws.cell(row_num, col).value or '').lstrip('0')
+    return actual == str(expected_eneltel).lstrip('0')
+
+
 def find_row_by_eneltel(eneltel):
     """Trova la riga corrispondente a un ENELTEL (1-based) o None."""
     ws = get_worksheet()
-
-    col_eneltel = None
-    for col_name in ['ENELTEL', 'Eneltel', 'eneltel']:
-        if col_name in _header_map:
-            col_eneltel = _header_map[col_name]
-            break
-
+    col_eneltel = _get_col_index('eneltel')
     if col_eneltel is None:
         return None
 
@@ -230,13 +281,7 @@ def find_row_by_eneltel(eneltel):
 def find_row_by_pod(pod):
     """Trova la riga corrispondente a un POD (1-based) o None."""
     ws = get_worksheet()
-
-    col_pod = None
-    for col_name in ['POD', 'Pod', 'pod', 'Codice POD']:
-        if col_name in _header_map:
-            col_pod = _header_map[col_name]
-            break
-
+    col_pod = _get_col_index('pod')
     if col_pod is None:
         return None
 
@@ -253,17 +298,18 @@ def find_row_by_pod(pod):
 # ============================================================================
 
 def update_cell(row, col_name, value):
-    """Aggiorna una singola cella."""
-    ws = get_worksheet()
-    if col_name not in _header_map:
-        return False, f"Colonna '{col_name}' non trovata"
-    col = _header_map[col_name]
-    ws.update_cell(row, col, value)
+    """Aggiorna una singola cella (thread-safe)."""
+    with _gsheets_write_lock:
+        ws = get_worksheet()
+        if col_name not in _header_map:
+            return False, f"Colonna '{col_name}' non trovata"
+        col = _header_map[col_name]
+        ws.update_cell(row, col, value)
     return True, "OK"
 
 
 def update_row_fields(eneltel, fields):
-    """Aggiorna più campi di una riga identificata da ENELTEL."""
+    """Aggiorna più campi di una riga identificata da ENELTEL (thread-safe)."""
     logger.info(f"🔧 update_row_fields: ENELTEL={eneltel}, campi={fields}")
 
     row = find_row_by_eneltel(eneltel)
@@ -271,7 +317,6 @@ def update_row_fields(eneltel, fields):
         return False, f"ENELTEL {eneltel} non trovato"
 
     logger.info(f"   Trovata riga: {row}")
-    ws = get_worksheet()
 
     updates = []
     errors = []
@@ -289,9 +334,11 @@ def update_row_fields(eneltel, fields):
         })
 
     if updates:
-        logger.info(f"   📝 batch_update con {len(updates)} celle...")
-        ws.batch_update(updates)
-        logger.info(f"   ✅ batch_update completato!")
+        with _gsheets_write_lock:
+            ws = get_worksheet()
+            logger.info(f"   📝 batch_update con {len(updates)} celle...")
+            ws.batch_update(updates)
+            logger.info(f"   ✅ batch_update completato!")
 
     if errors:
         return True, f"Aggiornato con warning: {', '.join(errors)}"
@@ -322,29 +369,29 @@ def register_callbacks(**kw):
 def _imposta_appuntamento_su_filone(row, orario, data_app='', note_extra='',
                                      origine='contatore', pod_override=None,
                                      eneltel_override=None, nota_corrente=None):
-    """Logica condivisa per impostare appuntamento su una riga del filone."""
+    """Logica condivisa per impostare appuntamento su una riga del filone (thread-safe)."""
     col_note = _get_colonna_note()
-    ws = get_worksheet()
     if col_note not in _header_map:
         raise ValueError(f'Colonna {col_note} non trovata')
 
     col = _header_map[col_note]
-    # Se il frontend ha inviato il contenuto corrente della textarea, usalo
-    # per non perdere eventuali modifiche non ancora salvate
-    nota_attuale = nota_corrente if nota_corrente is not None else (ws.cell(row, col).value or '')
 
-    # Logica unificata: APP + orario nelle note
-    nota_app = f"APP {orario}"
+    # Sezione critica: lettura-modifica-scrittura della cella nota
+    with _gsheets_write_lock:
+        ws = get_worksheet()
+        nota_attuale = nota_corrente if nota_corrente is not None else (ws.cell(row, col).value or '')
 
-    if 'APP' in nota_attuale.upper():
-        nota_attuale = re.sub(
-            r'APP\s*\d{1,2}[:.]\d{2}(?:\s*[-/]\s*\d{1,2}[:.]\d{2})?',
-            '', nota_attuale, flags=re.IGNORECASE
-        )
-        nota_attuale = nota_attuale.strip(' /|-')
+        nota_app = f"APP {orario}"
 
-    nuova_nota = f"{nota_app} // {nota_attuale}" if nota_attuale else nota_app
-    ws.update_cell(row, col, nuova_nota)
+        if 'APP' in nota_attuale.upper():
+            nota_attuale = re.sub(
+                r'APP\s*\d{1,2}[:.]\d{2}(?:\s*[-/]\s*\d{1,2}[:.]\d{2})?',
+                '', nota_attuale, flags=re.IGNORECASE
+            )
+            nota_attuale = nota_attuale.strip(' /|-')
+
+        nuova_nota = f"{nota_app} // {nota_attuale}" if nota_attuale else nota_app
+        ws.update_cell(row, col, nuova_nota)
 
     # Auto-crea promemoria Appuntamento
     try:
@@ -383,24 +430,26 @@ def _imposta_appuntamento_su_filone(row, orario, data_app='', note_extra='',
 
 
 def _rimuovi_appuntamento_da_filone(row, nota_corrente=None):
-    """Logica condivisa per rimuovere appuntamento da una riga del filone."""
+    """Logica condivisa per rimuovere appuntamento da una riga del filone (thread-safe)."""
     col_note = _get_colonna_note()
-    ws = get_worksheet()
 
     if col_note not in _header_map:
         raise ValueError(f'Colonna {col_note} non trovata')
 
     col = _header_map[col_note]
-    nota_attuale = nota_corrente if nota_corrente is not None else (ws.cell(row, col).value or '')
 
-    # Logica unificata: rimuovi 'APP orario' dalle note
-    nuova_nota = re.sub(
-        r'APP\s*\d{1,2}[:.]\d{2}(?:\s*[-/]\s*\d{1,2}[:.]\d{2})?',
-        '', nota_attuale, flags=re.IGNORECASE
-    )
-    nuova_nota = re.sub(r'\s*//\s*', ' // ', nuova_nota).strip(' /|-')
-    nuova_nota = re.sub(r'^//\s*|\s*//\s*$', '', nuova_nota).strip()
-    ws.update_cell(row, col, nuova_nota)
+    # Sezione critica: lettura-modifica-scrittura della cella nota
+    with _gsheets_write_lock:
+        ws = get_worksheet()
+        nota_attuale = nota_corrente if nota_corrente is not None else (ws.cell(row, col).value or '')
+
+        nuova_nota = re.sub(
+            r'APP\s*\d{1,2}[:.]\d{2}(?:\s*[-/]\s*\d{1,2}[:.]\d{2})?',
+            '', nota_attuale, flags=re.IGNORECASE
+        )
+        nuova_nota = re.sub(r'\s*//\s*', ' // ', nuova_nota).strip(' /|-')
+        nuova_nota = re.sub(r'^//\s*|\s*//\s*$', '', nuova_nota).strip()
+        ws.update_cell(row, col, nuova_nota)
 
     _callbacks['trigger_sync_after_edit']()
     return {'nuova_nota': nuova_nota}

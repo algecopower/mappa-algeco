@@ -1312,10 +1312,12 @@ from config import (
 
 _sync_running = False
 _sync_thread = None
+_sync_lock = threading.Lock()      # Impedisce esecuzioni concorrenti di sincronizza_dati
+_sync_needed = threading.Event()   # Segnala che serve un sync ASAP (dopo modifica utente)
 
 
-def sincronizza_dati():
-    """Funzione di sincronizzazione dati."""
+def _do_sincronizza_dati():
+    """Logica effettiva di sincronizzazione (chiamare solo con _sync_lock acquisito)."""
     logger.info(f"[SYNC {time_module.strftime('%H:%M:%S')}] {'='*50}")
     logger.info(f"[SYNC {time_module.strftime('%H:%M:%S')}] Sincronizzazione - {PROVINCIA_ATTIVA}")
     logger.info(f"[SYNC {time_module.strftime('%H:%M:%S')}] {'='*50}")
@@ -1371,25 +1373,50 @@ def sincronizza_dati():
         return False
 
 
+def sincronizza_dati():
+    """Sincronizza dati con protezione da esecuzione concorrente.
+    
+    Blocca fino a quando il lock è disponibile, poi esegue la sync.
+    Per uso non-bloccante, usare direttamente _sync_lock.acquire(blocking=False).
+    """
+    with _sync_lock:
+        return _do_sincronizza_dati()
+
+
 def background_sync_loop():
-    """Loop di sincronizzazione in background."""
+    """Loop di sincronizzazione in background.
+    
+    Esegue sync periodiche ogni INTERVALLO_SYNC_SECONDI.
+    Si risveglia anticipatamente se _sync_needed viene segnalato (dopo modifica utente).
+    Salta l'iterazione se un altro sync è già in corso.
+    """
     global _sync_running
     
     logger.info(f"[SYNC] 🔄 Thread di sync avviato (intervallo: {INTERVALLO_SYNC_SECONDI}s)")
     
     while _sync_running:
-        try:
-            sincronizza_dati()
-                
-        except Exception as e:
-            logger.error(f"[SYNC] ❌ Errore nel loop: {e}")
-            traceback.print_exc()
+        # Prova ad acquisire il lock senza bloccare
+        acquired = _sync_lock.acquire(blocking=False)
+        if acquired:
+            try:
+                _do_sincronizza_dati()
+            except Exception as e:
+                logger.error(f"[SYNC] ❌ Errore nel loop: {e}")
+                traceback.print_exc()
+            finally:
+                _sync_lock.release()
+        else:
+            logger.info("[SYNC] ⏳ Sync periodico saltato (altro sync in corso)")
         
-        # Sleep interrompibile
+        # Sleep interrompibile — si risveglia se c'è un sync pendente
+        _sync_needed.clear()
         for _ in range(INTERVALLO_SYNC_SECONDI):
             if not _sync_running:
                 break
-            time_module.sleep(1)
+            if _sync_needed.wait(timeout=1.0):
+                _sync_needed.clear()
+                logger.info("[SYNC] ⚡ Risveglio anticipato per modifica dati")
+                break
     
     logger.info("[SYNC] 🛑 Thread di sync terminato")
 
@@ -1407,46 +1434,17 @@ def avvia_sync_background():
     logger.info("[SYNC] ✅ Sync in background avviato")
 
 
-# Lock per evitare sync multipli simultanei da modifiche
-_edit_sync_lock = threading.Lock()
-_edit_sync_in_progress = False
-_edit_sync_pending = False  # Flag per richieste pendenti durante sync
-
 def trigger_sync_after_edit():
-    """Triggera un sync immediato dopo una modifica dalla mappa."""
-    global _edit_sync_in_progress, _edit_sync_pending
+    """Triggera un sync il prima possibile dopo una modifica utente.
     
-    def do_sync():
-        global _edit_sync_in_progress, _edit_sync_pending
-        should_continue = True
-        while should_continue:
-            try:
-                logger.info("[SYNC] ⚡ Sync immediato dopo modifica...")
-                sincronizza_dati()
-            except Exception as e:
-                logger.error(f"[SYNC] ❌ Errore durante sync: {e}")
-            
-            # Controlla se ci sono richieste pendenti (fuori dal finally)
-            with _edit_sync_lock:
-                if _edit_sync_pending:
-                    # C'è una richiesta pendente, fai un altro sync
-                    logger.info("[SYNC] 🔄 Richiesta pendente rilevata, nuovo sync...")
-                    _edit_sync_pending = False
-                    # should_continue rimane True, il loop continua
-                else:
-                    _edit_sync_in_progress = False
-                    should_continue = False  # Esci dal loop
-    
-    with _edit_sync_lock:
-        if _edit_sync_in_progress:
-            # Sync già in corso, segna come pendente
-            _edit_sync_pending = True
-            logger.info("[SYNC] ⏳ Sync già in corso, segnata richiesta pendente")
-            return
-        _edit_sync_in_progress = True
-    
-    # Avvia sync in thread separato per non bloccare la risposta HTTP
-    threading.Thread(target=do_sync, daemon=True).start()
+    Non blocca: segnala al background loop di risvegliarsi e fare sync.
+    Se un sync è già in corso, verrà eseguito un nuovo sync subito dopo.
+    Più modifiche ravvicinate vengono coalizzate in un singolo sync.
+    """
+    # Notifica immediata ai client: aggiornamento in arrivo
+    sse_notify_all('data_changing', {'status': 'sync_started'})
+    _sync_needed.set()
+    logger.info("[SYNC] ⚡ Sync richiesto dopo modifica")
 
 
 def _extract_contatore_data_from_row(row_num):
@@ -1539,7 +1537,7 @@ register_callbacks(
     registra_appuntamento_excel=registra_appuntamento_excel,
     extract_contatore_data=_extract_contatore_data_from_row,
     sincronizza_dati=sincronizza_dati,
-    is_sync_running=lambda: _sync_running,
+    is_sync_running=lambda: _sync_lock.locked(),
     get_sync_interval=lambda: INTERVALLO_SYNC_SECONDI,
 )
 

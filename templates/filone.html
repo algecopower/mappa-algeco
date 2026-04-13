@@ -3079,6 +3079,16 @@ async function saveAll() {
         perRow[c.row][c.col] = c.val;
     });
 
+    // Aggiungi àncora POD per ogni riga (verifica anti-spostamento righe)
+    if (podColName) {
+        for (var rn in perRow) {
+            var di = rowIndex[+rn];
+            if (di !== undefined && rawData[di][podColName]) {
+                perRow[rn]['_anchor_pod'] = rawData[di][podColName];
+            }
+        }
+    }
+
     var totalRows = Object.keys(perRow).length;
     var totalCells = changes.length;
 

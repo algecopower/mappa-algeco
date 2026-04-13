@@ -18,6 +18,9 @@ from moduli.shared import (
     get_header_map,
     get_headers,
     find_row_by_eneltel,
+    find_row_by_pod,
+    verify_row_pod,
+    build_pod_row_map,
     update_row_fields,
     _imposta_appuntamento_su_filone,
     _rimuovi_appuntamento_da_filone,
@@ -234,24 +237,36 @@ def bulk_pianifica():
             return jsonify({'error': 'Nessun campo valido da aggiornare'}), 400
 
         # Trova tutte le righe corrispondenti agli eneltel
-        all_updates = []
+        eneltel_updates = {}  # {eneltel: [(col_idx, value), ...]}
         trovati = 0
         non_trovati = []
 
         for eneltel in enteltels:
-            row = find_row_by_eneltel(str(eneltel).strip())
+            eneltel_str = str(eneltel).strip()
+            row = find_row_by_eneltel(eneltel_str)
             if row is None:
-                non_trovati.append(str(eneltel))
+                non_trovati.append(eneltel_str)
                 continue
             trovati += 1
-            for campo, (col_name, col_idx, value) in fields_to_set.items():
+            eneltel_updates[eneltel_str] = [
+                (col_idx, value)
+                for campo, (col_name, col_idx, value) in fields_to_set.items()
+            ]
+
+        if not eneltel_updates:
+            return jsonify({'error': 'Nessun contatore trovato nel filone'}), 404
+
+        # Rimappa righe con lookup fresco subito prima della scrittura
+        all_updates = []
+        for eneltel_str, updates_list in eneltel_updates.items():
+            fresh_row = find_row_by_eneltel(eneltel_str)
+            if fresh_row is None:
+                continue
+            for col_idx, value in updates_list:
                 all_updates.append({
-                    'range': gspread.utils.rowcol_to_a1(row, col_idx),
+                    'range': gspread.utils.rowcol_to_a1(fresh_row, col_idx),
                     'values': [[value]]
                 })
-
-        if not all_updates:
-            return jsonify({'error': 'Nessun contatore trovato nel filone'}), 404
 
         # Esecuzione in chunk
         CHUNK_SIZE = 500
@@ -890,6 +905,17 @@ def update_filone_row(row_num):
         if not fields:
             return jsonify({'error': 'Nessun campo da aggiornare'}), 400
 
+        # Verifica àncora POD (se il client l'ha inviata)
+        anchor_pod = fields.pop('_anchor_pod', None)
+        if anchor_pod:
+            if not verify_row_pod(row_num, anchor_pod):
+                # Riga spostata! Cerca la riga corretta
+                new_row = find_row_by_pod(anchor_pod)
+                if new_row is None:
+                    return jsonify({'error': f'POD {anchor_pod} non trovato nel filone (righe spostate)'}), 409
+                logger.warning(f"[Filone] ⚠️ Riga spostata: {row_num} → {new_row} per POD {anchor_pod}")
+                row_num = new_row
+
         ws = get_worksheet()
         _header_map = get_header_map()
 
@@ -1017,6 +1043,35 @@ def update_filone_bulk():
         if not rows_dict:
             return jsonify({'error': 'Nessuna riga da aggiornare'}), 400
 
+        # Verifica àncora POD: se presente, controlla che le righe non siano spostate
+        has_anchors = any(
+            isinstance(f, dict) and '_anchor_pod' in f
+            for f in rows_dict.values()
+        )
+        row_remap = {}  # {old_row_str: new_row_num}
+        if has_anchors:
+            fresh_pod_map = build_pod_row_map()
+            righe_spostate = 0
+            for row_num_str, fields in rows_dict.items():
+                anchor = fields.get('_anchor_pod')
+                if anchor:
+                    try:
+                        old_row = int(row_num_str)
+                    except (ValueError, TypeError):
+                        continue
+                    anchor_upper = str(anchor).strip().upper()
+                    fresh_row = fresh_pod_map.get(anchor_upper)
+                    if fresh_row is None:
+                        logger.warning(f"[Filone Bulk] POD {anchor} non trovato, riga {row_num_str} saltata")
+                        row_remap[row_num_str] = None  # Segna come da saltare
+                    elif fresh_row != old_row:
+                        righe_spostate += 1
+                        row_remap[row_num_str] = fresh_row
+                    else:
+                        row_remap[row_num_str] = old_row
+            if righe_spostate:
+                logger.warning(f"[Filone Bulk] ⚠️ {righe_spostate} righe spostate, rimappate")
+
         ws = get_worksheet()
         _header_map = get_header_map()
 
@@ -1028,10 +1083,16 @@ def update_filone_bulk():
         protette = set(c.lower() for c in COLONNE_PROTETTE_FILONE.get(PROVINCIA_ATTIVA, _COLONNE_PROTETTE_BASE))
 
         for row_num_str, fields in rows_dict.items():
-            try:
-                row_num = int(row_num_str)
-            except (ValueError, TypeError):
-                continue
+            # Usa riga rimappata se disponibile
+            if row_num_str in row_remap:
+                row_num = row_remap[row_num_str]
+                if row_num is None:
+                    continue  # POD non trovato, salta
+            else:
+                try:
+                    row_num = int(row_num_str)
+                except (ValueError, TypeError):
+                    continue
             if row_num < 2:
                 continue
 
@@ -1055,6 +1116,16 @@ def update_filone_bulk():
         for i in range(0, len(all_updates), CHUNK_SIZE):
             chunk = all_updates[i:i + CHUNK_SIZE]
             ws.batch_update(chunk)
+
+        # Aggiorna rows_dict con righe rimappate per il rilevamento appuntamenti
+        if row_remap:
+            remapped_dict = {}
+            for row_num_str, fields in rows_dict.items():
+                if row_num_str in row_remap and row_remap[row_num_str] is not None:
+                    remapped_dict[str(row_remap[row_num_str])] = fields
+                else:
+                    remapped_dict[row_num_str] = fields
+            rows_dict = remapped_dict
 
         # Rilevamento appuntamenti (per tutte le righe modificate)
         try:
@@ -1446,9 +1517,14 @@ def download_excel_lettere(filename):
     if not safe_name.endswith('.xlsx'):
         return jsonify({'error': 'Tipo file non consentito'}), 400
 
-    # Risali dalla cartella moduli/ alla root del progetto
-    filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', safe_name)
+    # Cerca nella cartella dedicata output/lettere/
+    project_root = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+    filepath = os.path.join(project_root, 'output', 'lettere', safe_name)
     filepath = os.path.normpath(filepath)
+    # Fallback: cerca anche nella root del progetto (vecchi file)
+    if not os.path.exists(filepath):
+        filepath = os.path.join(project_root, safe_name)
+        filepath = os.path.normpath(filepath)
     if not os.path.exists(filepath):
         return jsonify({'error': 'File non trovato'}), 404
 

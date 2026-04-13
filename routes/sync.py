@@ -18,6 +18,7 @@ from moduli.auth import login_required
 from moduli.shared import (
     get_worksheet, get_header_map, get_headers,
     find_row_by_eneltel, find_row_by_pod,
+    build_pod_row_map, verify_row_pod,
     _api_error, _get_username, _callbacks,
     _trova_indice_colonna, _trova_indice_multi,
 )
@@ -48,6 +49,11 @@ def filone_trigger_sync():
 def trigger_sync():
     """Triggera una sincronizzazione manuale."""
     try:
+        is_running = _callbacks.get('is_sync_running', lambda: False)()
+        if is_running:
+            # Sync già in corso, segnala che serve un altro sync dopo
+            _callbacks['trigger_sync_after_edit']()
+            return jsonify({'success': True, 'message': 'Sync già in corso, verrà rieseguito al termine'})
         result = _callbacks['sincronizza_dati']()
         return jsonify({'success': result, 'message': 'Sync completato' if result else 'Sync fallito'})
     except Exception as e:
@@ -245,7 +251,8 @@ def upload_BOXBEAT():
         col_dest_data = cfg.get('colonna_dest_data_inst', 'Data Installazione')
         col_dest_esito = cfg.get('colonna_dest_esito', 'Esito')
 
-        # Raccogli TUTTI gli aggiornamenti da tutti i file
+        # Raccogli aggiornamenti per POD (rimappati prima della scrittura)
+        pod_updates = {}  # {POD: [(col_idx, valore), ...]}
         all_updates = []
         totale_righe = 0
         totale_esito_ok = 0
@@ -366,14 +373,15 @@ def upload_BOXBEAT():
                 if row_num is None:
                     continue
 
+                # Accumula aggiornamenti per POD (col_idx, valore)
+                if pod not in pod_updates:
+                    pod_updates[pod] = []
+
                 # Operatore
                 if col_matricola_bb and col_dest_op in _header_map:
                     operatore = str(row_bb[col_matricola_bb]).strip()
                     if operatore and operatore != 'nan':
-                        all_updates.append({
-                            'range': gspread.utils.rowcol_to_a1(row_num, _header_map[col_dest_op]),
-                            'values': [[operatore]]
-                        })
+                        pod_updates[pod].append((_header_map[col_dest_op], operatore))
 
                 # Data installazione
                 if col_data_bb and col_dest_data in _header_map:
@@ -389,17 +397,11 @@ def upload_BOXBEAT():
                                 parts = data_str.split('-')
                                 if len(parts) == 3 and len(parts[0]) == 4:
                                     data_str = f"{parts[2]}/{parts[1]}/{parts[0]}"
-                        all_updates.append({
-                            'range': gspread.utils.rowcol_to_a1(row_num, _header_map[col_dest_data]),
-                            'values': [[data_str]]
-                        })
+                        pod_updates[pod].append((_header_map[col_dest_data], data_str))
 
                 # Esito
                 if col_dest_esito in _header_map:
-                    all_updates.append({
-                        'range': gspread.utils.rowcol_to_a1(row_num, _header_map[col_dest_esito]),
-                        'values': [['ESITO OK']]
-                    })
+                    pod_updates[pod].append((_header_map[col_dest_esito], 'ESITO OK'))
 
                 # Cancella eventuale testo nella colonna SIGILLO
                 # MA preserva i codici sigillo reali (es. 20198337Z)
@@ -409,15 +411,35 @@ def upload_BOXBEAT():
                         sigillo_attuale = str(all_data[row_num - 1][_header_map['SIGILLO'] - 1]).strip()
                     # Preserva se contiene un codice sigillo reale (cifre + lettera)
                     if not re.search(r'\d+[A-Za-z]', sigillo_attuale):
-                        all_updates.append({
-                            'range': gspread.utils.rowcol_to_a1(row_num, _header_map['SIGILLO']),
-                            'values': [['']]
-                        })
+                        pod_updates[pod].append((_header_map['SIGILLO'], ''))
 
                 file_aggiornati += 1
 
             aggiornati += file_aggiornati
             file_elaborati.append({'nome': file.filename, 'righe': len(df), 'esito_ok': len(df_ok), 'esito_ko': len(df_ko), 'aggiornati': file_aggiornati})
+
+        # RIMAPPA: ri-leggi POD dal foglio fresco per avere righe aggiornate
+        if pod_updates:
+            fresh_pod_map = build_pod_row_map()
+            all_updates = []
+            pods_spostati = 0
+
+            for pod, updates_list in pod_updates.items():
+                fresh_row = fresh_pod_map.get(pod)
+                if fresh_row is None:
+                    logger.warning(f"[BOXBEAT] POD {pod} non trovato nella rimappatura, saltato")
+                    continue
+                old_row = pod_to_row.get(pod)
+                if old_row != fresh_row:
+                    pods_spostati += 1
+                for col_idx, value in updates_list:
+                    all_updates.append({
+                        'range': gspread.utils.rowcol_to_a1(fresh_row, col_idx),
+                        'values': [[value]]
+                    })
+
+            if pods_spostati:
+                logger.warning(f"[BOXBEAT] ⚠️ {pods_spostati} POD avevano righe spostate, rimappati correttamente")
 
         # ESEGUI UN SOLO BATCH UPDATE per tutti i file
         if all_updates:

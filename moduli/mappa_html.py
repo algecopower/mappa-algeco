@@ -3576,6 +3576,432 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
 
         /* CSS Gestionale */
         {genera_css_gestionale()}
+
+        /* ============================================ */
+        /* MODALITÀ PIANIFICAZIONE                      */
+        /* ============================================ */
+        .planning-mode .header-top,
+        .planning-mode .toggles,
+        .planning-mode .filters,
+        .planning-mode .breadcrumb,
+        .planning-mode .stats-bar {{
+            display: none !important;
+        }}
+        .planning-mode .header {{
+            padding: 0;
+            border: none;
+            background: none;
+        }}
+        .planning-mode .sidebar {{
+            width: 370px;
+        }}
+        /* Planning header strip */
+        .planning-header {{
+            display: none;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 12px;
+            background: linear-gradient(135deg, rgba(6,182,212,0.15) 0%, rgba(6,182,212,0.05) 100%);
+            border-bottom: 1px solid var(--border);
+        }}
+        .planning-mode .planning-header {{
+            display: flex;
+        }}
+        .planning-header h2 {{
+            margin: 0;
+            font-size: 0.92rem;
+            color: var(--accent-secondary, #06b6d4);
+            white-space: nowrap;
+        }}
+        .planning-header .btn-exit-planning {{
+            margin-left: auto;
+            padding: 3px 10px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: var(--bg-tertiary);
+            color: var(--text);
+            cursor: pointer;
+            font-size: 0.75rem;
+            transition: all 0.15s;
+        }}
+        .planning-header .btn-exit-planning:hover {{
+            background: var(--danger, #ef4444);
+            color: #fff;
+            border-color: var(--danger, #ef4444);
+        }}
+        /* Planning filters panel */
+        .planning-filters {{
+            display: none;
+            flex-direction: column;
+            gap: 0;
+            padding: 0;
+            border-bottom: 1px solid var(--border);
+            max-height: 50vh;
+            overflow-y: auto;
+        }}
+        .planning-mode .planning-filters {{
+            display: flex;
+        }}
+        .planning-filter-section {{
+            padding: 6px 12px;
+        }}
+        .planning-filter-section + .planning-filter-section {{
+            border-top: 1px solid var(--border);
+        }}
+        .planning-filter-section-title {{
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            margin-bottom: 5px;
+        }}
+        .planning-filter-section-title.pian {{
+            color: #25d366;
+        }}
+        .planning-filter-grid {{
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 4px 8px;
+            align-items: center;
+        }}
+        .planning-filter-grid label {{
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }}
+        .planning-filter-grid input,
+        .planning-filter-grid select {{
+            width: 100%;
+            min-width: 0;
+            padding: 4px 8px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: var(--bg-tertiary);
+            color: var(--text);
+            font-size: 0.78rem;
+            box-sizing: border-box;
+        }}
+        .planning-filter-grid input:focus,
+        .planning-filter-grid select:focus {{
+            border-color: var(--accent-secondary, #06b6d4);
+            outline: none;
+        }}
+        .planning-filter-chips {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: 3px;
+        }}
+        .planning-filter-chip {{
+            padding: 2px 8px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: var(--bg-tertiary);
+            color: var(--text-muted);
+            font-size: 0.7rem;
+            cursor: pointer;
+            transition: all 0.15s;
+            user-select: none;
+        }}
+        .planning-filter-chip:hover {{
+            border-color: var(--accent-secondary, #06b6d4);
+        }}
+        .planning-filter-chip.active {{
+            background: rgba(6, 182, 212, 0.2);
+            border-color: var(--accent-secondary, #06b6d4);
+            color: var(--text);
+        }}
+        .planning-toggle-label {{
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            padding: 2px 6px;
+            border-radius: 8px;
+            transition: color 0.15s;
+        }}
+        .planning-toggle-label:hover {{
+            color: var(--text);
+        }}
+        .planning-toggle-label input[type="checkbox"] {{
+            accent-color: var(--accent-secondary, #06b6d4);
+            width: 14px;
+            height: 14px;
+        }}
+        .planning-stats {{
+            display: none;
+            justify-content: space-between;
+            align-items: center;
+            padding: 3px 12px;
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border);
+        }}
+        .planning-mode .planning-stats {{
+            display: flex;
+        }}
+        .planning-stats strong {{
+            color: var(--accent-secondary, #06b6d4);
+        }}
+        /* Selection toolbar */
+        .planning-selection-bar {{
+            display: none;
+            align-items: center;
+            gap: 4px;
+            padding: 5px 8px;
+            background: linear-gradient(135deg, rgba(6,182,212,0.08) 0%, rgba(37,211,102,0.05) 100%);
+            border-bottom: 1px solid var(--border);
+            flex-wrap: nowrap;
+            min-height: 0;
+        }}
+        .planning-mode .planning-selection-bar {{
+            display: flex;
+        }}
+        .planning-sel-tools {{
+            display: flex;
+            gap: 3px;
+            flex-shrink: 0;
+        }}
+        .planning-sel-tools button {{
+            padding: 3px 7px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: var(--bg-tertiary);
+            color: var(--text);
+            cursor: pointer;
+            font-size: 0.7rem;
+            transition: all 0.15s;
+            white-space: nowrap;
+        }}
+        .planning-sel-tools button:hover {{
+            border-color: var(--accent-secondary, #06b6d4);
+        }}
+        .planning-sel-tools button.active {{
+            background: rgba(6, 182, 212, 0.25);
+            border-color: var(--accent-secondary, #06b6d4);
+            color: #fff;
+        }}
+        .planning-sel-count {{
+            font-size: 0.72rem;
+            color: var(--text);
+            margin-left: auto;
+            white-space: nowrap;
+        }}
+        .planning-sel-count strong {{
+            color: var(--accent-secondary, #06b6d4);
+        }}
+        .btn-assign-bulk {{
+            padding: 4px 10px;
+            border-radius: 6px;
+            border: none;
+            background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+            color: #fff;
+            cursor: pointer;
+            font-size: 0.75rem;
+            font-weight: 600;
+            transition: all 0.15s;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }}
+        .btn-assign-bulk:hover {{
+            box-shadow: 0 2px 8px rgba(6,182,212,0.3);
+        }}
+        .btn-assign-bulk:disabled {{
+            opacity: 0.4;
+            cursor: not-allowed;
+        }}
+        /* Planning contatore card in sidebar */
+        .planning-card {{
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 6px 8px;
+            margin-bottom: 3px;
+            cursor: pointer;
+            transition: all 0.15s;
+            font-size: 0.78rem;
+        }}
+        .planning-card:hover {{
+            border-color: var(--accent-secondary, #06b6d4);
+        }}
+        .planning-card.selected {{
+            background: rgba(6, 182, 212, 0.12);
+            border-color: var(--accent-secondary, #06b6d4);
+        }}
+        .planning-card.pianificato {{
+            border-left: 3px solid #25d366;
+        }}
+        .planning-card.pianificato.selected {{
+            border-left-color: #25d366;
+        }}
+        .planning-card .pc-header {{
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }}
+        .planning-card .pc-checkbox {{
+            width: 14px;
+            height: 14px;
+            accent-color: #06b6d4;
+            cursor: pointer;
+            flex-shrink: 0;
+        }}
+        .planning-card .pc-nome {{
+            font-weight: 600;
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: 0.76rem;
+        }}
+        .planning-card .pc-badges {{
+            display: flex;
+            gap: 3px;
+            flex-shrink: 0;
+        }}
+        .planning-card .pc-badge {{
+            padding: 1px 6px;
+            border-radius: 6px;
+            font-size: 0.68rem;
+            font-weight: 600;
+        }}
+        .planning-card .pc-badge.phone {{
+            background: rgba(37, 211, 102, 0.2);
+            color: #25d366;
+        }}
+        .planning-card .pc-badge.no-phone {{
+            background: rgba(239, 68, 68, 0.15);
+            color: #ef4444;
+        }}
+        .planning-card .pc-badge.no-date {{
+            background: rgba(6, 182, 212, 0.2);
+            color: #06b6d4;
+        }}
+        .planning-card .pc-badge.old-date {{
+            background: rgba(245, 158, 11, 0.2);
+            color: #f59e0b;
+        }}
+        .planning-card .pc-detail {{
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 2px;
+            padding-left: 22px;
+        }}
+        /* Bulk assign modal */
+        .bulk-assign-overlay {{
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(4px);
+            z-index: 10000;
+            align-items: center;
+            justify-content: center;
+        }}
+        .bulk-assign-overlay.visible {{
+            display: flex;
+        }}
+        .bulk-assign-modal {{
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 24px;
+            width: 380px;
+            max-width: 90vw;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }}
+        .bulk-assign-modal h3 {{
+            margin: 0 0 16px 0;
+            color: var(--accent-secondary, #06b6d4);
+            font-size: 1.1rem;
+        }}
+        .bulk-assign-field {{
+            margin-bottom: 14px;
+        }}
+        .bulk-assign-field label {{
+            display: block;
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }}
+        .bulk-assign-field input,
+        .bulk-assign-field select {{
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: var(--bg-tertiary);
+            color: var(--text);
+            font-size: 0.9rem;
+            box-sizing: border-box;
+        }}
+        .bulk-assign-field input:focus,
+        .bulk-assign-field select:focus {{
+            border-color: var(--accent-secondary, #06b6d4);
+            outline: none;
+        }}
+        .bulk-assign-actions {{
+            display: flex;
+            gap: 10px;
+            margin-top: 18px;
+        }}
+        .bulk-assign-actions button {{
+            flex: 1;
+            padding: 10px;
+            border-radius: 10px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: all 0.15s;
+        }}
+        .bulk-assign-actions .btn-cancel {{
+            background: var(--bg-tertiary);
+            color: var(--text);
+            border: 1px solid var(--border);
+        }}
+        .bulk-assign-actions .btn-confirm {{
+            background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+            color: #fff;
+        }}
+        .bulk-assign-actions .btn-confirm:hover {{
+            transform: scale(1.02);
+            box-shadow: 0 4px 12px rgba(6,182,212,0.3);
+        }}
+        /* Map selection overlays */
+        .selection-rect {{
+            position: absolute;
+            border: 2px dashed #06b6d4;
+            background: rgba(6, 182, 212, 0.1);
+            pointer-events: none;
+            z-index: 1000;
+        }}
+        .selection-lasso {{
+            position: absolute;
+            z-index: 1000;
+            pointer-events: none;
+        }}
+        .map-selection-active {{
+            cursor: crosshair !important;
+        }}
+        /* Selected marker highlight */
+        .marker-selected {{
+            filter: drop-shadow(0 0 6px #06b6d4) drop-shadow(0 0 12px #06b6d4);
+        }}
+        /* Planning mode toggle button (normal mode) */
+        .btn-planning-mode {{
+            padding: 5px 10px;
+            border-radius: 8px;
+            border: 1px solid rgba(6,182,212,0.4);
+            background: rgba(6,182,212,0.1);
+            color: var(--accent-secondary, #06b6d4);
+            cursor: pointer;
+            font-size: 0.78rem;
+            font-weight: 600;
+            transition: all 0.15s;
+        }}
+        .btn-planning-mode:hover {{
+            background: rgba(6,182,212,0.2);
+            border-color: #06b6d4;
+        }}
     </style>
 </head>
 <body data-theme="dark">
@@ -3604,9 +4030,84 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                     <button class="toggle-btn" id="searchModeToggle" onclick="toggleAdvancedSearchModal()">🔍 Ricerca Utente</button>
                     <button class="toggle-btn" id="addressSearchToggle" onclick="toggleAddressSearchModal()">📍 Cerca Indirizzo</button>
                     <button class="toggle-btn" id="refreshBtn" onclick="refreshDati()" title="Aggiorna dati">🔄</button>
+                    <button class="btn-planning-mode" id="btnPlanningMode" onclick="enterPlanningMode()" title="Modalità Pianificazione">📋 Pianifica</button>
                 </div>
             </div>
             
+            <!-- Planning Mode Header -->
+            <div class="planning-header" id="planningHeader">
+                <h2>📋 Pianificazione</h2>
+                <span id="planningBadge" style="font-size: 0.78rem; color: var(--text-muted);">0 schedulabili</span>
+                <button class="btn-exit-planning" onclick="exitPlanningMode()">✕ Esci</button>
+            </div>
+            
+            <!-- Planning Filters -->
+            <div class="planning-filters" id="planningFilters">
+                <!-- Toggle schedulabili/pianificati -->
+                <div class="planning-filter-section">
+                    <div class="planning-filter-chips" style="gap: 10px; justify-content: center; padding: 4px 0;">
+                        <label class="planning-toggle-label" style="display:flex;align-items:center;gap:4px;cursor:pointer;user-select:none;">
+                            <input type="checkbox" id="planShowSchedulabili" checked onchange="applyPlanningFilters()">
+                            <span>📋 Schedulabili</span>
+                        </label>
+                        <label class="planning-toggle-label" style="display:flex;align-items:center;gap:4px;cursor:pointer;user-select:none;">
+                            <input type="checkbox" id="planShowPianificati" checked onchange="onPlanTogglePianificati()">
+                            <span>📅 Pianificati</span>
+                        </label>
+                    </div>
+                </div>
+                <!-- Sezione filtri comuni -->
+                <div class="planning-filter-section">
+                    <div class="planning-filter-grid">
+                        <label>👤 Nome</label>
+                        <input type="text" id="planFilterNome" placeholder="Cerca nominativo..." autocomplete="off" oninput="applyPlanningFilters()">
+                        <label>🗺️ Zona</label>
+                        <select id="planFilterZona" onchange="onPlanZonaChange()"><option value="">Tutte le zone</option></select>
+                        <label>🏘️ Comune</label>
+                        <select id="planFilterComune" onchange="applyPlanningFilters()"><option value="">Tutti i comuni</option></select>
+                        <label>📞 Telefono</label>
+                        <div class="planning-filter-chips">
+                            <span class="planning-filter-chip active" data-plan-tel="tutti" onclick="setPlanFilterTel('tutti')">Tutti</span>
+                            <span class="planning-filter-chip" data-plan-tel="con" onclick="setPlanFilterTel('con')">Con ☎️</span>
+                            <span class="planning-filter-chip" data-plan-tel="senza" onclick="setPlanFilterTel('senza')">Senza</span>
+                        </div>
+                        <label>⚡ Tipologia</label>
+                        <select id="planFilterTipologia" onchange="applyPlanningFilters()"><option value="">Tutte le tipologie</option></select>
+                        <label>📍 Posizione</label>
+                        <select id="planFilterPosizione" onchange="applyPlanningFilters()"><option value="">Tutte le posizioni</option></select>
+                        <label>🏷️ LCL</label>
+                        <select id="planFilterLCL" onchange="onPlanLCLChange()"><option value="">Tutti LCL</option></select>
+                    </div>
+                </div>
+                <!-- Sezione filtri pianificati -->
+                <div class="planning-filter-section" id="planFiltersPianificatiSection">
+                    <div class="planning-filter-section-title pian">📅 Filtri pianificati</div>
+                    <div class="planning-filter-grid">
+                        <label>📅 Data</label>
+                        <select id="planFilterData" onchange="applyPlanningFilters()"><option value="">Tutte le date</option></select>
+                        <label>👷 Operatore</label>
+                        <select id="planFilterOperatore" onchange="applyPlanningFilters()"><option value="">Tutti gli operatori</option></select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="planning-stats" id="planningStatsRow">
+                <span id="planningFilteredCount">Filtrati: <strong>0</strong></span>
+                <span id="planningSelectedCount">Selezionati: <strong>0</strong></span>
+            </div>
+            
+            <!-- Selection Toolbar -->
+            <div class="planning-selection-bar" id="planningSelBar">
+                <div class="planning-sel-tools">
+                    <button id="btnSelRect" onclick="startSelectionMode('rect')" title="Selezione rettangolo">▭</button>
+                    <button id="btnSelLasso" onclick="startSelectionMode('lasso')" title="Selezione libera">✂</button>
+                    <button id="btnSelAll" onclick="selectAllVisible()" title="Seleziona tutti">☑</button>
+                    <button id="btnSelNone" onclick="deselectAll()" title="Deseleziona tutti">☐</button>
+                </div>
+                <span class="planning-sel-count" id="planSelCount"><strong>0</strong> sel.</span>
+                <button class="btn-assign-bulk" id="btnAssignBulk" onclick="openBulkAssignModal()" disabled>📅 Assegna</button>
+            </div>
+
             <div class="breadcrumb" id="breadcrumb">
                 <button class="btn-back" onclick="tornaAlleZone()" title="Torna alle zone">←</button>
                 <span class="breadcrumb-text" id="breadcrumbText"></span>
@@ -3652,36 +4153,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                         </select>
                     </div>
                 </div>
-                <div class="search-row" id="schedulabiliFilterRow" style="margin-top: 6px;">
-                    <label class="filter-chip schedulabili-chip" id="schedulabiliChip" style="display: flex; align-items: center; gap: 6px; cursor: pointer; width: 100%;">
-                        <input type="checkbox" id="filterSchedulabiliCheckbox" onchange="toggleSchedulabili()">
-                        <span>📋 Schedulabili</span>
-                        <span class="schedulabili-badge" id="schedulabiliBadge" style="margin-left: auto; background: var(--accent-secondary, #06b6d4); color: #fff; border-radius: 10px; padding: 1px 8px; font-size: 0.75rem; font-weight: 700;">0</span>
-                    </label>
-                </div>
-                <div class="sched-filters-panel" id="schedFiltersPanel">
-                    <div class="sched-filter-row">
-                        <label>⚡ Tipologia</label>
-                        <select id="schedFilterTipologia" onchange="applySchedFilters()">
-                            <option value="">Tutte</option>
-                        </select>
-                    </div>
-                    <div class="sched-filter-row">
-                        <label>📅 Stato</label>
-                        <div class="sched-filter-chips">
-                            <span class="sched-filter-chip active" data-sched-stato="tutti" onclick="setSchedStato('tutti')">Tutti</span>
-                            <span class="sched-filter-chip" data-sched-stato="senza_data" onclick="setSchedStato('senza_data')">Senza data</span>
-                            <span class="sched-filter-chip" data-sched-stato="data_passata" onclick="setSchedStato('data_passata')">Data passata</span>
-                        </div>
-                    </div>
-                    <div class="sched-filter-row">
-                        <label>📍 Posizione</label>
-                        <select id="schedFilterPosizione" onchange="applySchedFilters()">
-                            <option value="">Tutte</option>
-                        </select>
-                    </div>
-                    <div class="sched-filters-count" id="schedFiltersCount"></div>
-                </div>
+                <!-- schedulabili panel rimosso: si accede dalla pianificazione -->
 
                 <!-- Advanced Search Panel -->
                 <div class="advanced-search-panel" id="advancedSearchPanel">
@@ -3746,6 +4218,28 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             <input type="range" id="zoomSlider" min="5" max="19" step="0.25" value="10">
             <span class="zoom-label" id="zoomIn" title="Zoom in">+</span>
             <span class="zoom-value" id="zoomValue">10.0x</span>
+        </div>
+    </div>
+
+    <!-- Bulk Assign Modal (Planning Mode) -->
+    <div class="bulk-assign-overlay" id="bulkAssignOverlay" onclick="if(event.target===this) closeBulkAssignModal()">
+        <div class="bulk-assign-modal">
+            <h3>📅 Assegna Data e Operatore</h3>
+            <p style="font-size: 0.82rem; color: var(--text-muted); margin: 0 0 16px 0;" id="bulkAssignCount">0 contatori selezionati</p>
+            <div class="bulk-assign-field">
+                <label>📅 Data Pianificata</label>
+                <input type="date" id="bulkAssignData">
+            </div>
+            <div class="bulk-assign-field">
+                <label>👷 Operatore</label>
+                <select id="bulkAssignOperatore">
+                    <option value="">— Nessuno (non modificare) —</option>
+                </select>
+            </div>
+            <div class="bulk-assign-actions">
+                <button class="btn-cancel" onclick="closeBulkAssignModal()">Annulla</button>
+                <button class="btn-confirm" id="btnBulkConfirm" onclick="executeBulkAssign()">✅ Assegna</button>
+            </div>
         </div>
     </div>
 
@@ -4620,6 +5114,11 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         }}
         
         function clearMap() {{
+            // Rimuovi planning layer group in blocco se presente
+            if (planningLayerGroup) {{
+                map.removeLayer(planningLayerGroup);
+                planningLayerGroup = null;
+            }}
             markers.forEach(m => map.removeLayer(m));
             markers = [];
             zoneCircles.forEach(c => map.removeLayer(c));
@@ -6562,6 +7061,9 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             
             if (!data) return; // Nessuna data selezionata
             
+            // Forza zoom sulla zona dell'operatore
+            preserveMapView = false;
+            
             if (!operatore) {{
                 // Mostra il percorso di TUTTI gli operatori insieme
                 mostraPercorsoTuttiOperatori(data);
@@ -6581,9 +7083,8 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             document.getElementById('breadcrumb').classList.add('visible');
             document.getElementById('breadcrumbText').innerHTML = `<strong>📅 ${{formatDate(data)}}</strong> → <span style="color: var(--accent)">👥 Tutti gli operatori</span> (percorsi unificati)`;
             
-            // Nascondi i filtri dettaglio ma mantieni schedulabili
+            // Nascondi i filtri dettaglio
             document.getElementById('detailFilters').style.display = 'none';
-            document.getElementById('schedulabiliFilterRow').style.display = 'flex';
             
             // Filtra tutti i contatori per questa data
             let contatoriData = contatori.filter(c => c.data === data);
@@ -6871,9 +7372,8 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             document.getElementById('breadcrumb').classList.add('visible');
             document.getElementById('breadcrumbText').innerHTML = `<strong>📅 ${{formatDate(data)}}</strong> → <span style="color: var(--accent)">👤 ${{nomeOp}}</span> (percorso completo)`;
             
-            // Nascondi i filtri dettaglio ma mantieni schedulabili
+            // Nascondi i filtri dettaglio
             document.getElementById('detailFilters').style.display = 'none';
-            document.getElementById('schedulabiliFilterRow').style.display = 'flex';
             
             // Filtra TUTTI i contatori dell'operatore per questa data (tutti i comuni)
             let contatoriOperatore = contatori.filter(c => 
@@ -7240,7 +7740,6 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             // Ripristina select filtro date (ma non durante auto-refresh)
             if (!isAutoRefresh) {{
                 document.getElementById('dataFilterRow').style.display = 'flex';
-                document.getElementById('schedulabiliFilterRow').style.display = 'flex';
                 document.getElementById('detailFilters').style.display = 'none';
                 filterAppuntamentiOnly = false;
                 mostraRotteAttivo = false;
@@ -7440,10 +7939,9 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                 const hiddenDates = z.date.slice(5);
                 const hasMore = hiddenDates.length > 0;
                 
-                // Badge schedulabili (mostrato nella vista normale solo se > 0) - ora cliccabile per toggle inline
+                // Badge schedulabili - cliccabile per aprire pianificazione pre-filtrata per zona
                 const schedZoneId = z.nome.replace(/[^a-zA-Z0-9]/g, '_');
-                const schedBadge = numSchedulabili > 0 ? `<div class="zone-schedulabili-badge" onclick="event.stopPropagation(); toggleSchedInline('zona', '${{schedZoneId}}', '${{z.nome.replace(/'/g, "\\\\'")}}')" style="margin-top: 4px; font-size: 0.75rem; color: var(--accent-secondary, #06b6d4);" id="schedBadge_${{schedZoneId}}">📋 ${{numSchedulabili}} schedulabil${{numSchedulabili === 1 ? 'e' : 'i'}} ▸</div>` : '';
-                const schedInlineList = numSchedulabili > 0 ? buildSchedInlineZona(z, schedZoneId) : '';
+                const schedBadge = numSchedulabili > 0 ? `<div class="zone-schedulabili-badge" onclick="event.stopPropagation(); enterPlanningMode({{zona: '${{z.nome.replace(/'/g, "\\\\'")}}'}})" style="margin-top: 4px; font-size: 0.75rem; color: var(--accent-secondary, #06b6d4); cursor: pointer;" id="schedBadge_${{schedZoneId}}">📋 ${{numSchedulabili}} schedulabil${{numSchedulabili === 1 ? 'e' : 'i'}} →</div>` : '';
                 
                 return `
                 <div class="zone-card" data-zona="${{z.nome}}" onclick="selezionaZona('${{z.nome.replace(/'/g, "\\\\'")}}')">
@@ -7459,7 +7957,6 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                         <span>🧭 ${{z.direzione}}</span>
                     </div>
                     ${{schedBadge}}
-                    ${{schedInlineList}}
                     ${{z.date.length > 0 ? `
                         <div class="date-list" id="dateList_${{z.nome.replace(/[^a-zA-Z0-9]/g, '_')}}">
                             ${{visibleDates.map(d => `
@@ -7722,7 +8219,6 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             // Ripristina select filtro date (ma non durante auto-refresh)
             if (!isAutoRefresh) {{
                 document.getElementById('dataFilterRow').style.display = 'flex';
-                document.getElementById('schedulabiliFilterRow').style.display = 'flex';
                 document.getElementById('detailFilters').style.display = 'none';
                 filterAppuntamentiOnly = false;
                 mostraRotteAttivo = false;
@@ -7953,10 +8449,9 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                 const hiddenDates = c.date.slice(5);
                 const hasMore = hiddenDates.length > 0;
 
-                // Badge schedulabili (mostrato nella vista normale solo se > 0) - ora cliccabile per toggle inline
+                // Badge schedulabili - cliccabile per aprire pianificazione pre-filtrata per comune
                 const schedComuneId = c.nome.replace(/[^a-zA-Z0-9]/g, '_');
-                const schedBadge = numSchedulabili > 0 ? `<div class="zone-schedulabili-badge" onclick="event.stopPropagation(); toggleSchedInline('comune', '${{schedComuneId}}', '${{c.nome.replace(/'/g, "\\\\'")}}')" style="margin-top: 4px; font-size: 0.75rem; color: var(--accent-secondary, #06b6d4);" id="schedBadge_${{schedComuneId}}">📋 ${{numSchedulabili}} schedulabil${{numSchedulabili === 1 ? 'e' : 'i'}} ▸</div>` : '';
-                const schedInlineList = numSchedulabili > 0 ? buildSchedInlineComune(c.nome, schedComuneId) : '';
+                const schedBadge = numSchedulabili > 0 ? `<div class="zone-schedulabili-badge" onclick="event.stopPropagation(); enterPlanningMode({{comune: '${{c.nome.replace(/'/g, "\\\\'")}}'}})" style="margin-top: 4px; font-size: 0.75rem; color: var(--accent-secondary, #06b6d4); cursor: pointer;" id="schedBadge_${{schedComuneId}}">📋 ${{numSchedulabili}} schedulabil${{numSchedulabili === 1 ? 'e' : 'i'}} →</div>` : '';
 
                 return `
                 <div class="zone-card" data-comune="${{c.nome}}" onclick="selezionaComune('${{c.nome.replace(/'/g, "\\\\'")}}')">
@@ -7967,7 +8462,6 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                     </div>
                     ${{lclStr ? `<div class="zone-lcl">${{lclStr}}</div>` : ''}}
                     ${{schedBadge}}
-                    ${{schedInlineList}}
                     ${{c.date.length > 0 ? `
                         <div class="date-list" id="dateList_${{c.nome.replace(/[^a-zA-Z0-9]/g, '_')}}">
                             ${{visibleDates.map(d => `
@@ -8109,8 +8603,6 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
 
             // Mostra toggle al posto del select in vista dettaglio
             document.getElementById('dataFilterRow').style.display = 'none';
-            document.getElementById('schedulabiliFilterRow').style.display = 'flex';
-            document.getElementById('schedFiltersPanel').classList.toggle('visible', filterSchedulabili);
             document.getElementById('detailFilters').style.display = 'flex';
             document.getElementById('soloAppuntamentiCheckbox').checked = filterAppuntamentiOnly;
 
@@ -8187,8 +8679,6 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
 
             // Mostra toggle al posto del select in vista dettaglio
             document.getElementById('dataFilterRow').style.display = 'none';
-            document.getElementById('schedulabiliFilterRow').style.display = 'flex';
-            document.getElementById('schedFiltersPanel').classList.toggle('visible', filterSchedulabili);
             document.getElementById('detailFilters').style.display = 'flex';
             document.getElementById('soloAppuntamentiCheckbox').checked = filterAppuntamentiOnly;
 
@@ -9099,7 +9589,12 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                 // Ricalcola e refresh
                 updateContatoriVisibili();
                 updateSchedulabiliBadge();
-                refreshCurrentView();
+                if (planningMode) {{
+                    populatePlanningDropdowns();
+                    applyPlanningFilters(true);
+                }} else {{
+                    refreshCurrentView();
+                }}
                 
                 // Aggiorna UI
                 document.getElementById('updateTime').textContent = formatTimestamp(dataTimestamp);
@@ -11504,6 +11999,938 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             el.className = `settings-status ${{tipo}}`;
             if (tipo === 'success') {{
                 setTimeout(() => {{ el.className = 'settings-status'; }}, 5000);
+            }}
+        }}
+
+        // ============================================================
+        // MODALITÀ PIANIFICAZIONE
+        // ============================================================
+        let planningMode = false;
+        let planFilterTel = 'tutti';
+        // Rimosso planFilterStato: ora usiamo toggle schedulabili/pianificati
+        let planSelectedEnteltels = new Set();
+        let selectionMode = null; // null, 'rect', 'lasso'
+        let selectionStartPoint = null;
+        let selectionOverlay = null;
+        let lassoPoints = [];
+        let lassoSvg = null;
+        let planningContatoriFiltrati = [];
+        let planningLayerGroup = null;
+        let _planFilterTimer = null;
+        let _allPlanMarkersMap = null;  // Map<eneltel, L.circleMarker> - cache persistente
+        let _allPlanContatori = [];     // Cache contatori pianificabili per filtri dipendenti
+        let _planCardsRenderedSet = null;  // Set di eneltel attualmente visibili nelle card
+        let _planCardsBatchTimer = null;
+
+        function enterPlanningMode(opts) {{
+            planningMode = true;
+            document.getElementById('sidebar').classList.add('planning-mode');
+            // Reset filters
+            planFilterTel = 'tutti';
+            planSelectedEnteltels.clear();
+            document.getElementById('planFilterNome').value = '';
+            document.getElementById('planFilterData').value = '';
+            document.getElementById('planFilterOperatore').value = '';
+            document.getElementById('planFilterZona').value = '';
+            document.getElementById('planFilterComune').value = '';
+            document.getElementById('planFilterTipologia').value = '';
+            document.getElementById('planFilterPosizione').value = '';
+            document.getElementById('planFilterLCL').value = '';
+            // Reset toggles
+            document.getElementById('planShowSchedulabili').checked = true;
+            document.getElementById('planShowPianificati').checked = true;
+            // Reset chip UI
+            document.querySelectorAll('[data-plan-tel]').forEach(el => el.classList.toggle('active', el.dataset.planTel === 'tutti'));
+            // Pre-build all planning markers (cache)
+            _buildAllPlanMarkers();
+            // Populate dropdowns and apply
+            populatePlanningDropdowns();
+            // Apply pre-filter if provided (zona or comune)
+            if (opts) {{
+                if (opts.zona) {{
+                    document.getElementById('planFilterZona').value = opts.zona;
+                    onPlanZonaChange(true);
+                }}
+                if (opts.comune) {{
+                    document.getElementById('planFilterComune').value = opts.comune;
+                }}
+            }}
+            applyPlanningFilters();
+        }}
+
+        function exitPlanningMode() {{
+            planningMode = false;
+            stopSelectionMode();
+            planSelectedEnteltels.clear();
+            // Rimuovi layer group e cache marker
+            if (planningLayerGroup) {{
+                map.removeLayer(planningLayerGroup);
+                planningLayerGroup = null;
+            }}
+            if (_allPlanMarkersMap) {{
+                _allPlanMarkersMap = null;
+            }}
+            _planCardsRenderedSet = null;
+            markers = [];
+            document.getElementById('sidebar').classList.remove('planning-mode');
+            // Restore normal view
+            preserveMapView = true;
+            mostraVistaZone();
+        }}
+
+        function populatePlanningDropdowns() {{
+            // Get ALL non-annullati with valid coordinates (schedulabili + pianificati)
+            const oggiStr = getOggiStr();
+            _allPlanContatori = contatori.filter(c => {{
+                if (c.annullato) return false;
+                if (!isValidCoordinate(c.lat, c.lon)) return false;
+                const sd = !c.data || c.data === '';
+                const dp = c.data && c.data < oggiStr;
+                const pian = c.data && c.data >= oggiStr;
+                return sd || dp || pian;
+            }});
+            const allPlan = _allPlanContatori;
+
+            // Comuni
+            const comuni = new Set();
+            allPlan.forEach(c => {{ if (c.comune) comuni.add(c.comune); }});
+            const selComune = document.getElementById('planFilterComune');
+            selComune.innerHTML = '<option value="">Tutti</option>';
+            Array.from(comuni).sort().forEach(com => {{
+                const o = document.createElement('option');
+                o.value = com; o.textContent = com;
+                selComune.appendChild(o);
+            }});
+
+            // Zone
+            const selZona = document.getElementById('planFilterZona');
+            selZona.innerHTML = '<option value="">Tutte le zone</option>';
+            zone.forEach(z => {{
+                const o = document.createElement('option');
+                o.value = z.nome; o.textContent = z.nome;
+                selZona.appendChild(o);
+            }});
+
+            // Tipologia
+            const tipologie = new Set();
+            allPlan.forEach(c => {{ if (c.tipo_ce && c.tipo_ce.trim()) tipologie.add(c.tipo_ce.trim()); }});
+            const selTipo = document.getElementById('planFilterTipologia');
+            selTipo.innerHTML = '<option value="">Tutte</option>';
+            Array.from(tipologie).sort().forEach(t => {{
+                const o = document.createElement('option');
+                o.value = t; o.textContent = t;
+                selTipo.appendChild(o);
+            }});
+
+            // Posizione
+            const posizioni = new Map();
+            allPlan.forEach(c => {{
+                const raw = (c.note || '').trim();
+                if (!raw) return;
+                const norm = normalizePosizione(raw);
+                if (norm && !posizioni.has(norm)) posizioni.set(norm, norm.charAt(0).toUpperCase() + norm.slice(1));
+            }});
+            const selPos = document.getElementById('planFilterPosizione');
+            selPos.innerHTML = '<option value="">Tutte</option>';
+            Array.from(posizioni.entries()).sort((a,b) => a[1].localeCompare(b[1])).forEach(([n, l]) => {{
+                const o = document.createElement('option');
+                o.value = n; o.textContent = l;
+                selPos.appendChild(o);
+            }});
+
+            // LCL
+            const lcls = new Set();
+            allPlan.forEach(c => {{ if (c.lcl) lcls.add(c.lcl); }});
+            const selLCL = document.getElementById('planFilterLCL');
+            selLCL.innerHTML = '<option value="">Tutti</option>';
+            Array.from(lcls).sort().forEach(l => {{
+                const o = document.createElement('option');
+                o.value = l; o.textContent = l;
+                selLCL.appendChild(o);
+            }});
+
+            // Date (solo future)
+            const dateSet = new Set();
+            allPlan.forEach(c => {{ if (c.data && c.data !== '' && c.data >= oggiStr) dateSet.add(c.data); }});
+            const selData = document.getElementById('planFilterData');
+            selData.innerHTML = '<option value="">Tutte le date</option>';
+            Array.from(dateSet).sort().forEach(d => {{
+                const o = document.createElement('option');
+                o.value = d; o.textContent = '📅 ' + formatDate(d);
+                selData.appendChild(o);
+            }});
+
+            // Operatori (from pianificati)
+            const opSet = new Set();
+            allPlan.forEach(c => {{ if (c.tecnico && c.tecnico !== 'TUTTI') opSet.add(c.tecnico); }});
+            const selOp = document.getElementById('planFilterOperatore');
+            selOp.innerHTML = '<option value="">Tutti</option>';
+            const oNone = document.createElement('option');
+            oNone.value = '__NESSUNO__'; oNone.textContent = '📦 Senza operatore';
+            selOp.appendChild(oNone);
+            Array.from(opSet).sort().forEach(op => {{
+                const o = document.createElement('option');
+                o.value = op;
+                o.textContent = (reverseOperatoriDict[op] || op) + (reverseOperatoriDict[op] ? ' (' + op + ')' : '');
+                selOp.appendChild(o);
+            }});
+
+            // Popola dropdown operatori nel modal di assegnazione
+            const selOpModal = document.getElementById('bulkAssignOperatore');
+            selOpModal.innerHTML = '<option value="">— Nessuno (non modificare) —</option>';
+            if (operatoriDict) {{
+                Object.entries(operatoriDict).forEach(([nome, matricola]) => {{
+                    const o = document.createElement('option');
+                    o.value = matricola;
+                    o.textContent = nome + ' (' + matricola + ')';
+                    selOpModal.appendChild(o);
+                }});
+            }}
+        }}
+
+        // setPlanFilterStato rimosso: sostituito da toggle schedulabili/pianificati
+
+        function onPlanTogglePianificati() {{
+            const checked = document.getElementById('planShowPianificati').checked;
+            const section = document.getElementById('planFiltersPianificatiSection');
+            section.style.display = checked ? '' : 'none';
+            if (!checked) {{
+                // Reset filtri pianificati quando disattivati
+                document.getElementById('planFilterData').value = '';
+                document.getElementById('planFilterOperatore').value = '';
+            }}
+            applyPlanningFilters();
+        }}
+
+        function setPlanFilterTel(val) {{
+            planFilterTel = val;
+            document.querySelectorAll('[data-plan-tel]').forEach(el => {{
+                el.classList.toggle('active', el.dataset.planTel === val);
+            }});
+            applyPlanningFilters();
+        }}
+
+        function onPlanLCLChange() {{
+            // Aggiorna dropdown comuni in base alla LCL selezionata e alla zona
+            const lclVal = document.getElementById('planFilterLCL').value;
+            const zonaVal = document.getElementById('planFilterZona').value;
+            const selComune = document.getElementById('planFilterComune');
+            const prevComune = selComune.value;
+            let source = _allPlanContatori;
+            if (lclVal) source = source.filter(c => c.lcl === lclVal);
+            const comuni = new Set();
+            source.forEach(c => {{ if (c.comune) comuni.add(c.comune); }});
+            // Interseca con i comuni della zona se selezionata
+            let comuniFinali = comuni;
+            if (zonaVal) {{
+                const z = zone.find(zz => zz.nome === zonaVal);
+                if (z) {{
+                    const zonaComuniSet = new Set(z.comuni);
+                    comuniFinali = new Set([...comuni].filter(c => zonaComuniSet.has(c)));
+                }}
+            }}
+            selComune.innerHTML = '<option value="">Tutti</option>';
+            Array.from(comuniFinali).sort().forEach(com => {{
+                const o = document.createElement('option');
+                o.value = com; o.textContent = com;
+                selComune.appendChild(o);
+            }});
+            if (comuniFinali.has(prevComune)) {{
+                selComune.value = prevComune;
+            }} else {{
+                selComune.value = '';
+            }}
+            applyPlanningFilters();
+        }}
+
+        function onPlanZonaChange(skipApply) {{
+            const zonaVal = document.getElementById('planFilterZona').value;
+            const selComune = document.getElementById('planFilterComune');
+            const prevComune = selComune.value;
+            // Determina comuni disponibili dalla zona selezionata
+            let comuniDisponibili;
+            if (zonaVal) {{
+                const z = zone.find(zz => zz.nome === zonaVal);
+                comuniDisponibili = z ? new Set(z.comuni) : new Set();
+            }} else {{
+                // Nessuna zona selezionata: mostra tutti i comuni (rispettando LCL se attivo)
+                const lclVal = document.getElementById('planFilterLCL').value;
+                const source = lclVal ? _allPlanContatori.filter(c => c.lcl === lclVal) : _allPlanContatori;
+                comuniDisponibili = new Set();
+                source.forEach(c => {{ if (c.comune) comuniDisponibili.add(c.comune); }});
+            }}
+            selComune.innerHTML = '<option value="">Tutti</option>';
+            Array.from(comuniDisponibili).sort().forEach(com => {{
+                const o = document.createElement('option');
+                o.value = com; o.textContent = com;
+                selComune.appendChild(o);
+            }});
+            if (comuniDisponibili.has(prevComune)) {{
+                selComune.value = prevComune;
+            }} else {{
+                selComune.value = '';
+            }}
+            if (!skipApply) applyPlanningFilters();
+        }}
+
+        function getPlanningContatori() {{
+            const oggiStr = getOggiStr();
+            const nomeFilter = (document.getElementById('planFilterNome').value || '').toLowerCase().trim();
+            const dataFilter = document.getElementById('planFilterData').value;
+            const opFilter = document.getElementById('planFilterOperatore').value;
+            const zonaFilter = document.getElementById('planFilterZona').value;
+            const comuneFilter = document.getElementById('planFilterComune').value;
+            const tipologiaFilter = document.getElementById('planFilterTipologia').value;
+            const posizioneFilter = document.getElementById('planFilterPosizione').value;
+            const lclFilter = document.getElementById('planFilterLCL').value;
+
+            // Pre-calcola comuni della zona selezionata
+            let zonaComuniSet = null;
+            if (zonaFilter) {{
+                const z = zone.find(zz => zz.nome === zonaFilter);
+                if (z) {{
+                    zonaComuniSet = new Set(z.comuni.map(c => c.toLowerCase()));
+                }}
+            }}
+
+            return contatori.filter(c => {{
+                if (c.annullato) return false;
+                if (!isValidCoordinate(c.lat, c.lon)) return false;
+
+                const isSenzaData = !c.data || c.data === '';
+                const isDataPassata = c.data && c.data < oggiStr;
+                const isPianificato = c.data && c.data >= oggiStr;
+                const isSchedulabile = isSenzaData || isDataPassata;
+
+                // Must be schedulabile (senza data / data passata) OR pianificato
+                if (!isSchedulabile && !isPianificato) return false;
+
+                // Toggle filter: mostra/nascondi schedulabili e pianificati
+                const showSched = document.getElementById('planShowSchedulabili').checked;
+                const showPian = document.getElementById('planShowPianificati').checked;
+                if (isSchedulabile && !showSched) return false;
+                if (isPianificato && !showPian) return false;
+
+                // Nome
+                if (nomeFilter && !(c.cliente || '').toLowerCase().includes(nomeFilter)) return false;
+
+                // Data singola (filtra solo i pianificati, gli schedulabili passano sempre)
+                if (dataFilter && isPianificato && c.data !== dataFilter) return false;
+
+                // Operatore (filtra solo i pianificati, gli schedulabili passano sempre)
+                if (opFilter && isPianificato) {{
+                    if (opFilter === '__NESSUNO__' && c.tecnico && c.tecnico !== 'TUTTI') return false;
+                    if (opFilter !== '__NESSUNO__' && c.tecnico !== opFilter) return false;
+                }}
+
+                // Telefono
+                if (planFilterTel === 'con' && (!c.telefono || c.telefono.trim() === '')) return false;
+                if (planFilterTel === 'senza' && c.telefono && c.telefono.trim() !== '') return false;
+
+                // Zona
+                if (zonaComuniSet && !zonaComuniSet.has((c.comune || '').toLowerCase())) return false;
+
+                // Comune
+                if (comuneFilter && c.comune !== comuneFilter) return false;
+
+                // Tipologia
+                if (tipologiaFilter && (c.tipo_ce || '').toLowerCase() !== tipologiaFilter.toLowerCase()) return false;
+
+                // Posizione
+                if (posizioneFilter && normalizePosizione(c.note || '') !== posizioneFilter) return false;
+
+                // LCL
+                if (lclFilter && c.lcl !== lclFilter) return false;
+
+                return true;
+            }});
+        }}
+
+        function applyPlanningFilters(keepView) {{
+            if (!planningMode) return;
+            // Debounce: evita chiamate ripetute ravvicinate (es. toggle rapidi)
+            if (_planFilterTimer) cancelAnimationFrame(_planFilterTimer);
+            _planFilterTimer = requestAnimationFrame(() => {{
+                _applyPlanningFiltersNow(keepView);
+            }});
+        }}
+
+        function _applyPlanningFiltersNow(keepView) {{
+            planningContatoriFiltrati = getPlanningContatori();
+
+            // Count by type for badge
+            const oggiStr = getOggiStr();
+            let nSched = 0, nPian = 0;
+            planningContatoriFiltrati.forEach(c => {{
+                if (c.data && c.data >= oggiStr) nPian++;
+                else nSched++;
+            }});
+            document.getElementById('planningBadge').textContent = nSched + ' sched. · ' + nPian + ' pian.';
+            document.getElementById('planningFilteredCount').innerHTML = 'Filtrati: <strong>' + planningContatoriFiltrati.length + '</strong>';
+            updatePlanSelCount();
+
+            renderPlanningCards(planningContatoriFiltrati);
+            _updatePlanningMapFromCache(planningContatoriFiltrati, keepView);
+        }}
+
+        // Rendering card lazy: prime 80 subito, poi carica scrollando
+        const PLAN_CARDS_PAGE = 80;
+        let _planCardsCurrentList = [];
+        let _planCardsRendered = 0;
+        let _planCardsScrollHandler = null;
+
+        function renderPlanningCards(lista) {{
+            const resultsDiv = document.getElementById('results');
+            const oggiStr = getOggiStr();
+            
+            if (_planCardsBatchTimer) {{
+                clearTimeout(_planCardsBatchTimer);
+                _planCardsBatchTimer = null;
+            }}
+
+            // Rimuovi scroll handler precedente
+            if (_planCardsScrollHandler) {{
+                resultsDiv.removeEventListener('scroll', _planCardsScrollHandler);
+                _planCardsScrollHandler = null;
+            }}
+
+            _planCardsCurrentList = lista;
+            _planCardsRendered = 0;
+
+            if (lista.length === 0) {{
+                resultsDiv.innerHTML = '<div style="text-align:center; padding:40px 20px; color:var(--text-muted);"><p>Nessun contatore con i filtri correnti</p></div>';
+                return;
+            }}
+
+            // Render primo batch subito
+            const firstBatch = lista.slice(0, PLAN_CARDS_PAGE);
+            resultsDiv.innerHTML = _buildPlanCardHtml(firstBatch, oggiStr);
+            _planCardsRendered = firstBatch.length;
+
+            // Lazy load on scroll
+            if (lista.length > PLAN_CARDS_PAGE) {{
+                _planCardsScrollHandler = function() {{
+                    if (_planCardsRendered >= _planCardsCurrentList.length) return;
+                    const el = resultsDiv;
+                    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 200) {{
+                        const nextBatch = _planCardsCurrentList.slice(_planCardsRendered, _planCardsRendered + PLAN_CARDS_PAGE);
+                        if (nextBatch.length > 0) {{
+                            el.insertAdjacentHTML('beforeend', _buildPlanCardHtml(nextBatch, getOggiStr()));
+                            _planCardsRendered += nextBatch.length;
+                        }}
+                    }}
+                }};
+                resultsDiv.addEventListener('scroll', _planCardsScrollHandler, {{ passive: true }});
+            }}
+        }}
+
+        function _buildPlanCardHtml(items, oggiStr) {{
+            return items.map(c => {{
+                const selected = planSelectedEnteltels.has(c.eneltel);
+                const hasTel = c.telefono && c.telefono.trim() !== '';
+                const isSenzaData = !c.data || c.data === '';
+                const isDataPassata = c.data && c.data < oggiStr;
+                const isPianificato = c.data && c.data >= oggiStr;
+                const opDisplay = c.tecnico && c.tecnico !== 'TUTTI' ? (reverseOperatoriDict[c.tecnico] || c.tecnico) : '';
+
+                let badges = '';
+                if (isPianificato) {{
+                    badges += '<span class="pc-badge" style="background:rgba(37,211,102,0.15);color:#25d366;">📅 ' + formatDate(c.data) + '</span>';
+                    if (opDisplay) badges += '<span class="pc-badge" style="background:rgba(99,102,241,0.15);color:#818cf8;">👷 ' + opDisplay + '</span>';
+                }} else {{
+                    if (hasTel) badges += '<span class="pc-badge phone">📞</span>';
+                    else badges += '<span class="pc-badge no-phone">No ☎️</span>';
+                    if (isSenzaData) badges += '<span class="pc-badge no-date">No data</span>';
+                    if (isDataPassata) badges += '<span class="pc-badge old-date">⏰ ' + formatDate(c.data) + '</span>';
+                }}
+
+                return `<div class="planning-card ${{selected ? 'selected' : ''}} ${{isPianificato ? 'pianificato' : ''}}" data-eneltel="${{c.eneltel}}" onclick="togglePlanSelect('${{c.eneltel}}')">
+                    <div class="pc-header">
+                        <input type="checkbox" class="pc-checkbox" ${{selected ? 'checked' : ''}} onclick="event.stopPropagation(); togglePlanSelect('${{c.eneltel}}')">
+                        <span class="pc-nome">${{c.cliente || 'N/D'}}</span>
+                        <div class="pc-badges">${{badges}}</div>
+                    </div>
+                    <div class="pc-detail">📍 ${{c.comune}} · ${{c.via || 'N/A'}} ${{c.civico || ''}} ${{c.tipo_ce ? '· ⚡ ' + c.tipo_ce : ''}}</div>
+                </div>`;
+            }}).join('');
+        }}
+
+        function togglePlanSelect(eneltel) {{
+            if (planSelectedEnteltels.has(eneltel)) {{
+                planSelectedEnteltels.delete(eneltel);
+            }} else {{
+                planSelectedEnteltels.add(eneltel);
+            }}
+            // Update card appearance
+            const card = document.querySelector(`.planning-card[data-eneltel="${{eneltel}}"]`);
+            if (card) {{
+                card.classList.toggle('selected', planSelectedEnteltels.has(eneltel));
+                const cb = card.querySelector('.pc-checkbox');
+                if (cb) cb.checked = planSelectedEnteltels.has(eneltel);
+            }}
+            // Update marker appearance
+            updateMarkerSelection(eneltel);
+            updatePlanSelCount();
+        }}
+
+        function selectAllVisible() {{
+            planningContatoriFiltrati.forEach(c => planSelectedEnteltels.add(c.eneltel));
+            // Update all cards
+            document.querySelectorAll('.planning-card').forEach(card => {{
+                card.classList.add('selected');
+                const cb = card.querySelector('.pc-checkbox');
+                if (cb) cb.checked = true;
+            }});
+            // Update markers
+            markers.forEach(m => _applyMarkerSelectionStyle(m));
+            updatePlanSelCount();
+        }}
+
+        function deselectAll() {{
+            planSelectedEnteltels.clear();
+            document.querySelectorAll('.planning-card').forEach(card => {{
+                card.classList.remove('selected');
+                const cb = card.querySelector('.pc-checkbox');
+                if (cb) cb.checked = false;
+            }});
+            markers.forEach(m => _applyMarkerSelectionStyle(m));
+            updatePlanSelCount();
+        }}
+
+        function updatePlanSelCount() {{
+            const count = planSelectedEnteltels.size;
+            document.getElementById('planSelCount').innerHTML = '<strong>' + count + '</strong> sel.';
+            document.getElementById('planningSelectedCount').innerHTML = 'Selezionati: <strong>' + count + '</strong>';
+            document.getElementById('btnAssignBulk').disabled = count === 0;
+        }}
+
+        function updateMarkerSelection(eneltel) {{
+            const marker = markers.find(m => m.contatore && m.contatore.eneltel === eneltel);
+            if (!marker) return;
+            _applyMarkerSelectionStyle(marker);
+        }}
+
+        function _applyMarkerSelectionStyle(m) {{
+            if (!m.contatore) return;
+            const selected = planSelectedEnteltels.has(m.contatore.eneltel);
+            const baseColor = m.coloreTecnico || '#06b6d4';
+            m.setStyle({{
+                radius: selected ? 10 : 7,
+                fillColor: selected ? '#25d366' : baseColor,
+                color: selected ? '#fff' : 'rgba(255,255,255,0.7)',
+                weight: selected ? 3 : 2
+            }});
+        }}
+
+        function renderPlanningMap(lista, keepView) {{
+            if (!_allPlanMarkersMap) _buildAllPlanMarkers();
+            _updatePlanningMapFromCache(lista, keepView);
+        }}
+
+        // Costruisce TUTTI i marker e li aggiunge alla mappa UNA VOLTA
+        function _buildAllPlanMarkers() {{
+            _allPlanMarkersMap = new Map();
+            const oggiStr = getOggiStr();
+            const layerArr = [];
+
+            contatori.forEach(c => {{
+                if (c.annullato) return;
+                if (!isValidCoordinate(c.lat, c.lon)) return;
+                const isSenzaData = !c.data || c.data === '';
+                const isDataPassata = c.data && c.data < oggiStr;
+                const isPianificato = c.data && c.data >= oggiStr;
+                if (!isSenzaData && !isDataPassata && !isPianificato) return;
+
+                let baseColor;
+                if (isPianificato) {{
+                    baseColor = (c.tecnico && c.tecnico !== 'TUTTI') ? getColore(c.tecnico) : '#888';
+                }} else {{
+                    baseColor = '#06b6d4';
+                }}
+                // Crea marker nascosto (radius 0)
+                const cm = L.circleMarker([c.lat, c.lon], {{
+                    radius: 0,
+                    fillColor: baseColor,
+                    color: 'rgba(255,255,255,0.7)',
+                    weight: 0,
+                    opacity: 0,
+                    fillOpacity: 0,
+                    interactive: false
+                }})
+                    .bindPopup(() => createContatorePopup(c, isPianificato ? '\U0001f4c5' : '\U0001f4cb', baseColor));
+                cm.contatore = c;
+                cm.coloreTecnico = baseColor;
+                cm._planVisible = false;
+                _allPlanMarkersMap.set(c.eneltel, cm);
+                layerArr.push(cm);
+            }});
+
+            // Aggiungi TUTTI alla mappa in un colpo solo (rimangono nascosti)
+            if (layerArr.length > 0) {{
+                planningLayerGroup = L.featureGroup(layerArr).addTo(map);
+            }}
+        }}
+
+        // Aggiorna visibilit\u00e0 marker dalla cache (NESSUN add/remove, solo setStyle)
+        function _updatePlanningMapFromCache(lista, keepView) {{
+            let savedCenter = null;
+            let savedZoom = null;
+            if (keepView) {{
+                savedCenter = map.getCenter();
+                savedZoom = map.getZoom();
+            }}
+
+            // Pulisci zone/routes non-planning
+            zoneCircles.forEach(c => map.removeLayer(c));
+            zoneCircles = [];
+            eneltelLabels.forEach(l => map.removeLayer(l));
+            eneltelLabels = [];
+            clearRoutes();
+
+            if (!_allPlanMarkersMap) return;
+
+            // Set di eneltel visibili per lookup veloce
+            const visibleSet = new Set(lista.map(c => c.eneltel));
+            const oggiStr = getOggiStr();
+            markers = [];
+
+            // Nascondi tutti quelli non filtrati, mostra quelli filtrati
+            _allPlanMarkersMap.forEach((cm, eneltel) => {{
+                if (visibleSet.has(eneltel)) {{
+                    const c = cm.contatore;
+                    const selected = planSelectedEnteltels.has(eneltel);
+                    const isPianificato = c.data && c.data >= oggiStr;
+                    let baseColor = cm.coloreTecnico;
+                    if (isPianificato) {{
+                        baseColor = (c.tecnico && c.tecnico !== 'TUTTI') ? getColore(c.tecnico) : '#888';
+                        cm.coloreTecnico = baseColor;
+                    }}
+                    cm.setStyle({{
+                        radius: selected ? 10 : 7,
+                        fillColor: selected ? '#25d366' : baseColor,
+                        color: selected ? '#fff' : 'rgba(255,255,255,0.7)',
+                        weight: selected ? 3 : 2,
+                        opacity: 1,
+                        fillOpacity: 0.85
+                    }});
+                    cm.options.interactive = true;
+                    cm._planVisible = true;
+                    markers.push(cm);
+                }} else if (cm._planVisible) {{
+                    // Nascondi solo se era visibile (evita setStyle inutili)
+                    cm.setStyle({{
+                        radius: 0, weight: 0, opacity: 0, fillOpacity: 0
+                    }});
+                    cm.options.interactive = false;
+                    cm._planVisible = false;
+                }}
+            }});
+
+            if (savedCenter && savedZoom) {{
+                map.setView(savedCenter, savedZoom);
+            }} else if (markers.length > 0) {{
+                const allPoints = markers.map(m => [m.contatore.lat, m.contatore.lon]);
+                map.fitBounds(L.latLngBounds(allPoints), {{ padding: [50, 50] }});
+            }}
+        }}
+
+        // ============================================================
+        // SELEZIONE RETTANGOLARE E LIBERA
+        // ============================================================
+        function startSelectionMode(mode) {{
+            if (selectionMode === mode) {{
+                stopSelectionMode();
+                return;
+            }}
+            stopSelectionMode();
+            selectionMode = mode;
+            
+            // Toggle button active state
+            document.getElementById('btnSelRect').classList.toggle('active', mode === 'rect');
+            document.getElementById('btnSelLasso').classList.toggle('active', mode === 'lasso');
+            
+            // Disable map dragging during selection
+            map.dragging.disable();
+            map.getContainer().classList.add('map-selection-active');
+            
+            // Bind mouse events on map container
+            const mapEl = map.getContainer();
+            mapEl.addEventListener('mousedown', onSelectionMouseDown);
+            mapEl.addEventListener('mousemove', onSelectionMouseMove);
+            mapEl.addEventListener('mouseup', onSelectionMouseUp);
+        }}
+
+        function stopSelectionMode() {{
+            selectionMode = null;
+            document.getElementById('btnSelRect').classList.remove('active');
+            document.getElementById('btnSelLasso').classList.remove('active');
+            
+            map.dragging.enable();
+            map.getContainer().classList.remove('map-selection-active');
+            
+            const mapEl = map.getContainer();
+            mapEl.removeEventListener('mousedown', onSelectionMouseDown);
+            mapEl.removeEventListener('mousemove', onSelectionMouseMove);
+            mapEl.removeEventListener('mouseup', onSelectionMouseUp);
+            
+            // Remove selection overlay
+            if (selectionOverlay) {{
+                selectionOverlay.remove();
+                selectionOverlay = null;
+            }}
+            if (lassoSvg) {{
+                lassoSvg.remove();
+                lassoSvg = null;
+            }}
+            lassoPoints = [];
+            selectionStartPoint = null;
+        }}
+
+        function onSelectionMouseDown(e) {{
+            if (!selectionMode) return;
+            if (e.button !== 0) return; // left click only
+            
+            const mapRect = map.getContainer().getBoundingClientRect();
+            const x = e.clientX - mapRect.left;
+            const y = e.clientY - mapRect.top;
+            selectionStartPoint = {{ x, y }};
+            
+            if (selectionMode === 'rect') {{
+                // Create rectangle overlay
+                selectionOverlay = document.createElement('div');
+                selectionOverlay.className = 'selection-rect';
+                selectionOverlay.style.left = x + 'px';
+                selectionOverlay.style.top = y + 'px';
+                selectionOverlay.style.width = '0';
+                selectionOverlay.style.height = '0';
+                map.getContainer().appendChild(selectionOverlay);
+            }} else if (selectionMode === 'lasso') {{
+                lassoPoints = [{{ x, y }}];
+                // Create SVG for lasso
+                lassoSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                lassoSvg.style.position = 'absolute';
+                lassoSvg.style.top = '0';
+                lassoSvg.style.left = '0';
+                lassoSvg.style.width = '100%';
+                lassoSvg.style.height = '100%';
+                lassoSvg.style.pointerEvents = 'none';
+                lassoSvg.style.zIndex = '1000';
+                map.getContainer().appendChild(lassoSvg);
+            }}
+            
+            e.preventDefault();
+            e.stopPropagation();
+        }}
+
+        function onSelectionMouseMove(e) {{
+            if (!selectionStartPoint) return;
+
+            const mapRect = map.getContainer().getBoundingClientRect();
+            const x = e.clientX - mapRect.left;
+            const y = e.clientY - mapRect.top;
+
+            if (selectionMode === 'rect' && selectionOverlay) {{
+                const left = Math.min(selectionStartPoint.x, x);
+                const top = Math.min(selectionStartPoint.y, y);
+                const w = Math.abs(x - selectionStartPoint.x);
+                const h = Math.abs(y - selectionStartPoint.y);
+                selectionOverlay.style.left = left + 'px';
+                selectionOverlay.style.top = top + 'px';
+                selectionOverlay.style.width = w + 'px';
+                selectionOverlay.style.height = h + 'px';
+            }} else if (selectionMode === 'lasso' && lassoSvg) {{
+                lassoPoints.push({{ x, y }});
+                // Draw polyline
+                const pointsStr = lassoPoints.map(p => p.x + ',' + p.y).join(' ');
+                lassoSvg.innerHTML = `<polyline points="${{pointsStr}}" fill="rgba(6,182,212,0.1)" stroke="#06b6d4" stroke-width="2" stroke-dasharray="5,5"/>`;
+            }}
+            
+            e.preventDefault();
+        }}
+
+        function onSelectionMouseUp(e) {{
+            if (!selectionStartPoint) return;
+
+            const mapRect = map.getContainer().getBoundingClientRect();
+
+            if (selectionMode === 'rect') {{
+                const x = e.clientX - mapRect.left;
+                const y = e.clientY - mapRect.top;
+                const left = Math.min(selectionStartPoint.x, x);
+                const top = Math.min(selectionStartPoint.y, y);
+                const right = Math.max(selectionStartPoint.x, x);
+                const bottom = Math.max(selectionStartPoint.y, y);
+
+                // Select markers inside rectangle
+                selectMarkersInBounds(left, top, right, bottom);
+
+                if (selectionOverlay) {{
+                    selectionOverlay.remove();
+                    selectionOverlay = null;
+                }}
+            }} else if (selectionMode === 'lasso') {{
+                // Close the polygon
+                if (lassoPoints.length > 2) {{
+                    selectMarkersInPolygon(lassoPoints);
+                }}
+                if (lassoSvg) {{
+                    lassoSvg.remove();
+                    lassoSvg = null;
+                }}
+                lassoPoints = [];
+            }}
+
+            selectionStartPoint = null;
+            e.preventDefault();
+        }}
+
+        function selectMarkersInBounds(left, top, right, bottom) {{
+            const mapContainer = map.getContainer();
+            markers.forEach(m => {{
+                if (!m.contatore) return;
+                const point = map.latLngToContainerPoint(m.getLatLng());
+                if (point.x >= left && point.x <= right && point.y >= top && point.y <= bottom) {{
+                    planSelectedEnteltels.add(m.contatore.eneltel);
+                    _applyMarkerSelectionStyle(m);
+                }}
+            }});
+            // Update sidebar cards and counts
+            syncSelectionToCards();
+            updatePlanSelCount();
+        }}
+
+        function selectMarkersInPolygon(polygon) {{
+            markers.forEach(m => {{
+                if (!m.contatore) return;
+                const point = map.latLngToContainerPoint(m.getLatLng());
+                if (isPointInPolygon(point.x, point.y, polygon)) {{
+                    planSelectedEnteltels.add(m.contatore.eneltel);
+                    _applyMarkerSelectionStyle(m);
+                }}
+            }});
+            syncSelectionToCards();
+            updatePlanSelCount();
+        }}
+
+        function isPointInPolygon(x, y, polygon) {{
+            // Ray-casting algorithm
+            let inside = false;
+            for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {{
+                const xi = polygon[i].x, yi = polygon[i].y;
+                const xj = polygon[j].x, yj = polygon[j].y;
+                const intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+                if (intersect) inside = !inside;
+            }}
+            return inside;
+        }}
+
+        function syncSelectionToCards() {{
+            document.querySelectorAll('.planning-card').forEach(card => {{
+                const eneltel = card.dataset.eneltel;
+                const sel = planSelectedEnteltels.has(eneltel);
+                card.classList.toggle('selected', sel);
+                const cb = card.querySelector('.pc-checkbox');
+                if (cb) cb.checked = sel;
+            }});
+        }}
+
+        // ============================================================
+        // BULK ASSIGN
+        // ============================================================
+        function openBulkAssignModal() {{
+            if (planSelectedEnteltels.size === 0) return;
+            document.getElementById('bulkAssignCount').textContent = planSelectedEnteltels.size + ' contatori selezionati';
+            document.getElementById('bulkAssignData').value = '';
+            document.getElementById('bulkAssignOperatore').value = '';
+            document.getElementById('bulkAssignOverlay').classList.add('visible');
+        }}
+
+        function closeBulkAssignModal() {{
+            document.getElementById('bulkAssignOverlay').classList.remove('visible');
+        }}
+
+        async function executeBulkAssign() {{
+            const dataPian = document.getElementById('bulkAssignData').value;
+            const operatore = document.getElementById('bulkAssignOperatore').value;
+
+            if (!dataPian && !operatore) {{
+                alert('Seleziona almeno una data o un operatore.');
+                return;
+            }}
+
+            const enteltels = Array.from(planSelectedEnteltels);
+            const btn = document.getElementById('btnBulkConfirm');
+            btn.disabled = true;
+            btn.textContent = '⏳ Salvataggio...';
+
+            try {{
+                const response = await fetch(window.location.origin + '/api/contatori/bulk-pianifica', {{
+                    method: 'PUT',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify({{
+                        enteltels: enteltels,
+                        data_pian: dataPian,
+                        operatore: operatore
+                    }})
+                }});
+
+                const result = await response.json();
+                if (response.ok && result.success) {{
+                    // Aggiorna contatori locali
+                    enteltels.forEach(en => {{
+                        const c = contatori.find(cc => cc.eneltel === en);
+                        if (c) {{
+                            if (dataPian) c.data = dataPian;
+                            if (operatore) c.tecnico = operatore;
+                        }}
+                    }});
+                    
+                    closeBulkAssignModal();
+                    planSelectedEnteltels.clear();
+                    
+                    const msg = '✅ ' + result.aggiornati + ' contatori aggiornati' + 
+                        (result.non_trovati_count ? ' (' + result.non_trovati_count + ' non trovati)' : '');
+                    alert(msg);
+                    
+                    // Scarica Excel con contatori assegnati
+                    try {{
+                        const excelResp = await fetch(window.location.origin + '/api/contatori/excel-assegnati', {{
+                            method: 'POST',
+                            headers: {{ 'Content-Type': 'application/json' }},
+                            body: JSON.stringify({{
+                                enteltels: enteltels,
+                                data_pian: dataPian,
+                                operatore: operatore
+                            }})
+                        }});
+                        if (excelResp.ok) {{
+                            const blob = await excelResp.blob();
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            const disposition = excelResp.headers.get('Content-Disposition');
+                            const match = disposition && disposition.match(/filename="?([^"]+)"?/);
+                            a.download = match ? match[1] : 'assegnazione.xlsx';
+                            document.body.appendChild(a);
+                            a.click();
+                            a.remove();
+                            URL.revokeObjectURL(url);
+                        }}
+                    }} catch (excelErr) {{
+                        console.warn('Errore download excel assegnati:', excelErr);
+                    }}
+                    
+                    // Refresh planning view
+                    populatePlanningDropdowns();
+                    applyPlanningFilters(true);
+                }} else {{
+                    alert('❌ Errore: ' + (result.error || 'Errore sconosciuto'));
+                }}
+            }} catch (err) {{
+                alert('❌ Errore di connessione: ' + err.message);
+            }} finally {{
+                btn.disabled = false;
+                btn.textContent = '✅ Assegna';
             }}
         }}
 

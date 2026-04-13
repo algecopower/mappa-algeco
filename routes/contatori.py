@@ -180,6 +180,257 @@ def update_contatore(eneltel):
         return _api_error(e, 'aggiornamento contatore')
 
 
+@bp.route('/api/contatori/bulk-pianifica', methods=['PUT'])
+@login_required
+def bulk_pianifica():
+    """Assegna data e/o operatore a più contatori in bulk (per modalità pianificazione).
+
+    Body JSON: {
+        "enteltels": ["123456", "789012", ...],
+        "data_pian": "2026-04-15",   // opzionale
+        "operatore": "AE101392"      // opzionale (matricola o nome)
+    }
+    Almeno uno tra data_pian e operatore deve essere presente.
+    """
+    try:
+        data = request.json
+        if not data:
+            return jsonify({'error': 'Body JSON richiesto'}), 400
+
+        enteltels = data.get('enteltels', [])
+        data_pian = data.get('data_pian', '').strip()
+        operatore = data.get('operatore', '').strip()
+
+        if not enteltels:
+            return jsonify({'error': 'Nessun contatore selezionato'}), 400
+        if not data_pian and not operatore:
+            return jsonify({'error': 'Specificare almeno data o operatore'}), 400
+        if len(enteltels) > 500:
+            return jsonify({'error': 'Massimo 500 contatori per volta'}), 400
+
+        # Valida data se presente
+        if data_pian:
+            try:
+                datetime.strptime(data_pian, '%Y-%m-%d')
+            except ValueError:
+                return jsonify({'error': 'Formato data non valido (atteso YYYY-MM-DD)'}), 400
+
+        campi_ammessi = CAMPI_MODIFICABILI.get(PROVINCIA_ATTIVA, {})
+        ws = get_worksheet()
+        _header_map = get_header_map()
+
+        # Prepara i campi da aggiornare
+        fields_to_set = {}
+        if data_pian and 'data_pian' in campi_ammessi:
+            col_name = campi_ammessi['data_pian']
+            if col_name in _header_map:
+                fields_to_set['data_pian'] = (col_name, _header_map[col_name], data_pian)
+        if operatore and 'operatore' in campi_ammessi:
+            col_name = campi_ammessi['operatore']
+            if col_name in _header_map:
+                fields_to_set['operatore'] = (col_name, _header_map[col_name], operatore)
+
+        if not fields_to_set:
+            return jsonify({'error': 'Nessun campo valido da aggiornare'}), 400
+
+        # Trova tutte le righe corrispondenti agli eneltel
+        all_updates = []
+        trovati = 0
+        non_trovati = []
+
+        for eneltel in enteltels:
+            row = find_row_by_eneltel(str(eneltel).strip())
+            if row is None:
+                non_trovati.append(str(eneltel))
+                continue
+            trovati += 1
+            for campo, (col_name, col_idx, value) in fields_to_set.items():
+                all_updates.append({
+                    'range': gspread.utils.rowcol_to_a1(row, col_idx),
+                    'values': [[value]]
+                })
+
+        if not all_updates:
+            return jsonify({'error': 'Nessun contatore trovato nel filone'}), 404
+
+        # Esecuzione in chunk
+        CHUNK_SIZE = 500
+        for i in range(0, len(all_updates), CHUNK_SIZE):
+            chunk = all_updates[i:i + CHUNK_SIZE]
+            ws.batch_update(chunk)
+
+        # Triggera sync per rigenerare JSON
+        _callbacks['trigger_sync_after_edit']()
+
+        username = _get_username()
+        logger.info(f"[Pianificazione] ✅ {username}: bulk update {trovati} contatori"
+                     f" (data={data_pian or '-'}, op={operatore or '-'})")
+
+        result = {
+            'success': True,
+            'aggiornati': trovati,
+            'celle': len(all_updates),
+        }
+        if non_trovati:
+            result['non_trovati'] = non_trovati[:20]  # Limita per non appesantire la risposta
+            result['non_trovati_count'] = len(non_trovati)
+        return jsonify(result)
+
+    except Exception as e:
+        return _api_error(e, 'bulk pianificazione')
+
+
+@bp.route('/api/contatori/excel-assegnati', methods=['POST'])
+@login_required
+def excel_contatori_assegnati():
+    """Genera un file Excel con POD e operatore dei contatori appena assegnati.
+
+    Body JSON: {
+        "enteltels": ["123456", "789012", ...],
+        "data_pian": "2026-04-15",   // opzionale, per includere nel nome file
+        "operatore": "AE101392"      // opzionale, per includere nel nome file
+    }
+    Restituisce direttamente il file .xlsx.
+    """
+    try:
+        from io import BytesIO
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+        data = request.json
+        if not data:
+            return jsonify({'error': 'Body JSON richiesto'}), 400
+
+        enteltels = data.get('enteltels', [])
+        data_pian = data.get('data_pian', '').strip()
+        operatore = data.get('operatore', '').strip()
+
+        if not enteltels:
+            return jsonify({'error': 'Nessun contatore specificato'}), 400
+
+        ws_sheet = get_worksheet()
+        all_values = ws_sheet.get_all_values()
+        if not all_values:
+            return jsonify({'error': 'Filone vuoto'}), 500
+
+        headers = all_values[0]
+        rows = all_values[1:]
+
+        # Trova indici colonne necessarie
+        def find_col(names):
+            for name in names:
+                if name in headers:
+                    return headers.index(name)
+            return None
+
+        col_eneltel = find_col(['Eneltel', 'ENELTEL'])
+        col_pod = find_col(['POD', 'Pod', 'pod'])
+        col_operatore = find_col(['Operatore', 'OPERATORE', 'operatore'])
+        col_nominativo = find_col(['NOMINATIVO', 'Nominativo', 'Cliente', 'CLIENTE'])
+        col_indirizzo = find_col(['Indirizzo', 'Via', 'VIA', 'Via Num'])
+        col_civico = find_col(['Num', 'NUM', 'civico', 'CIVICO'])
+        col_comune = find_col(['Comune', 'COMUNE'])
+        col_data_pian = find_col(['DATA PIAN', 'DATA_PIAN', 'PROG', 'DATA'])
+
+        if col_eneltel is None:
+            return jsonify({'error': 'Colonna ENELTEL non trovata'}), 500
+
+        # Filtra righe corrispondenti
+        enteltels_set = set(str(e).strip() for e in enteltels)
+        righe_trovate = []
+        for row in rows:
+            eneltel_val = str(row[col_eneltel]).strip() if col_eneltel < len(row) else ''
+            if eneltel_val in enteltels_set:
+                righe_trovate.append(row)
+
+        if not righe_trovate:
+            return jsonify({'error': 'Nessun contatore trovato'}), 404
+
+        # Crea Excel
+        wb = Workbook()
+        ws_xl = wb.active
+        ws_xl.title = 'Contatori Assegnati'
+
+        # Definisci colonne da esportare
+        colonne_export = []
+        colonne_export.append(('POD', col_pod))
+        colonne_export.append(('Operatore', col_operatore))
+        colonne_export.append(('ENELTEL', col_eneltel))
+        colonne_export.append(('Nominativo', col_nominativo))
+        colonne_export.append(('Indirizzo', col_indirizzo))
+        colonne_export.append(('Civico', col_civico))
+        colonne_export.append(('Comune', col_comune))
+        colonne_export.append(('Data Pianificazione', col_data_pian))
+
+        # Filtra colonne che esistono
+        colonne_export = [(name, idx) for name, idx in colonne_export if idx is not None]
+
+        # Header
+        header_font = Font(bold=True, color='FFFFFF', size=11)
+        header_fill = PatternFill(start_color='2E86C1', end_color='2E86C1', fill_type='solid')
+        header_alignment = Alignment(horizontal='center', vertical='center')
+        thin_border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+
+        for col_num, (col_name, _) in enumerate(colonne_export, 1):
+            cell = ws_xl.cell(row=1, column=col_num, value=col_name)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = header_alignment
+            cell.border = thin_border
+
+        # Dati
+        data_alignment = Alignment(horizontal='left', vertical='center')
+        for row_num, row_data in enumerate(righe_trovate, 2):
+            for col_num, (col_name, src_idx) in enumerate(colonne_export, 1):
+                val = str(row_data[src_idx]).strip() if src_idx < len(row_data) else ''
+                # Converti date YYYY-MM-DD in DD/MM/YYYY
+                if col_name == 'Data Pianificazione' and val and re.match(r'^\d{4}-\d{2}-\d{2}$', val):
+                    val = f"{val[8:10]}/{val[5:7]}/{val[0:4]}"
+                cell = ws_xl.cell(row=row_num, column=col_num, value=val)
+                cell.alignment = data_alignment
+                cell.border = thin_border
+
+        # Auto-dimensiona colonne
+        from openpyxl.utils import get_column_letter
+        for col_num, (col_name, _) in enumerate(colonne_export, 1):
+            max_len = len(col_name)
+            for row_num in range(2, len(righe_trovate) + 2):
+                val = ws_xl.cell(row=row_num, column=col_num).value or ''
+                max_len = max(max_len, len(str(val)))
+            ws_xl.column_dimensions[get_column_letter(col_num)].width = min(max_len + 3, 40)
+
+        # Freeze prima riga
+        ws_xl.freeze_panes = 'A2'
+
+        # Genera nome file
+        parts = ['ASSEGNAZIONE', PROVINCIA_ATTIVA]
+        if data_pian:
+            parts.append(data_pian.replace('-', ''))
+        if operatore:
+            parts.append(operatore)
+        filename = '_'.join(parts) + '.xlsx'
+
+        # Salva in memoria e restituisci
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name=filename,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+
+    except Exception as e:
+        return _api_error(e, 'generazione excel assegnati')
+
+
 @bp.route('/api/contatore/<eneltel>/appuntamento', methods=['POST'])
 @login_required
 def set_appuntamento(eneltel):

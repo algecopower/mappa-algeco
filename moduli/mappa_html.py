@@ -1233,6 +1233,100 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             margin-top: 8px;
         }}
 
+        .detail-operatore-container {{
+            position: relative;
+            width: 100%;
+        }}
+        
+        .detail-operatore-trigger {{
+            width: 100%;
+            padding: 7px 32px 7px 12px;
+            border: 2px solid var(--border);
+            border-radius: 20px;
+            font-size: 12px;
+            outline: none;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all 0.3s;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            font-weight: 500;
+            text-align: left;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            user-select: none;
+        }}
+        
+        .detail-operatore-trigger:hover {{
+            border-color: var(--accent);
+        }}
+        
+        .detail-operatore-trigger.active {{
+            border-color: var(--accent);
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23e84c65' d='M6 3l5 5H1z'/%3E%3C/svg%3E");
+        }}
+        
+        .detail-operatore-dropdown {{
+            display: none;
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            right: 0;
+            background: var(--bg-secondary);
+            border: 2px solid var(--accent);
+            border-radius: 12px;
+            z-index: 1000;
+            max-height: 260px;
+            overflow-y: auto;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+        }}
+        
+        .detail-operatore-dropdown.open {{
+            display: block;
+        }}
+        
+        .detail-operatore-item {{
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            cursor: pointer;
+            transition: background 0.15s;
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-primary);
+        }}
+        
+        .detail-operatore-item:first-child {{
+            border-radius: 10px 10px 0 0;
+        }}
+        
+        .detail-operatore-item:last-child {{
+            border-radius: 0 0 10px 10px;
+        }}
+        
+        .detail-operatore-item:hover {{
+            background: var(--bg-tertiary);
+        }}
+        
+        .detail-operatore-item input[type="checkbox"] {{
+            width: 15px;
+            height: 15px;
+            cursor: pointer;
+            accent-color: var(--accent);
+            flex-shrink: 0;
+        }}
+        
+        .detail-operatore-item .op-color-dot {{
+            width: 11px;
+            height: 11px;
+            border-radius: 3px;
+            flex-shrink: 0;
+        }}
+
         .filter-chip {{
             flex: 1;
             display: flex;
@@ -1383,17 +1477,18 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             50% {{ transform: scale(1.2); }}
         }}
 
-        /* Dropdown operatore per percorso giornata */
+        /* Dropdown operatore multi-select per percorso giornata */
         .operatore-filter-container {{
             display: none;
             min-width: 170px;
+            position: relative;
         }}
         
         .operatore-filter-container.visible {{
             display: block;
         }}
         
-        #operatoreFilter {{
+        .operatore-multi-trigger {{
             width: 100%;
             padding: 9px 36px 9px 14px;
             border: 2px solid var(--border);
@@ -1404,22 +1499,82 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             color: var(--text-primary);
             cursor: pointer;
             transition: all 0.3s;
-            appearance: none;
-            -webkit-appearance: none;
-            -moz-appearance: none;
             background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
             background-repeat: no-repeat;
             background-position: right 14px center;
             font-weight: 500;
+            text-align: left;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            user-select: none;
         }}
         
-        #operatoreFilter:focus {{
+        .operatore-multi-trigger:hover {{
             border-color: var(--accent);
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23e84c65' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
         }}
         
-        #operatoreFilter:hover {{
+        .operatore-multi-trigger.active {{
             border-color: var(--accent);
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23e84c65' d='M6 3l5 5H1z'/%3E%3C/svg%3E");
+        }}
+        
+        .operatore-multi-dropdown {{
+            display: none;
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            right: 0;
+            background: var(--bg-secondary);
+            border: 2px solid var(--accent);
+            border-radius: 12px;
+            z-index: 1000;
+            max-height: 260px;
+            overflow-y: auto;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+        }}
+        
+        .operatore-multi-dropdown.open {{
+            display: block;
+        }}
+        
+        .operatore-multi-item {{
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            cursor: pointer;
+            transition: background 0.15s;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-primary);
+        }}
+        
+        .operatore-multi-item:first-child {{
+            border-radius: 10px 10px 0 0;
+        }}
+        
+        .operatore-multi-item:last-child {{
+            border-radius: 0 0 10px 10px;
+        }}
+        
+        .operatore-multi-item:hover {{
+            background: var(--bg-tertiary);
+        }}
+        
+        .operatore-multi-item input[type="checkbox"] {{
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+            accent-color: var(--accent);
+            flex-shrink: 0;
+        }}
+        
+        .operatore-multi-item .op-color-dot {{
+            width: 12px;
+            height: 12px;
+            border-radius: 3px;
+            flex-shrink: 0;
         }}
 
         .toggle-label input[type="checkbox"] {{
@@ -4156,14 +4311,10 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                     </div>
                 </div>
                 <div class="detail-filters" id="detailFilters" style="display: none;">
-                    <label class="filter-chip">
-                        <input type="checkbox" id="showAllDatesCheckbox" onchange="toggleAllDates()">
-                        <span>📅 Tutti i contatori</span>
-                    </label>
-                    <label class="filter-chip">
-                        <input type="checkbox" id="soloAppuntamentiCheckbox" onchange="toggleFiltroAppuntamenti()">
-                        <span>📞 Solo app.</span>
-                    </label>
+                    <div class="detail-operatore-container">
+                        <div class="detail-operatore-trigger" id="detailOperatoreTrigger" onclick="toggleDetailOperatoreDropdown()">👥 Tutti gli operatori</div>
+                        <div class="detail-operatore-dropdown" id="detailOperatoreDropdown"></div>
+                    </div>
                 </div>
                 <div class="search-row" id="dataFilterRow" style="margin-top: 10px;">
                     <div class="search-box">
@@ -4172,9 +4323,8 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                         </select>
                     </div>
                     <div class="operatore-filter-container" id="operatoreFilterContainer">
-                        <select id="operatoreFilter" onchange="onOperatoreFilterChange()">
-                            <option value="">👥 Tutti gli operatori</option>
-                        </select>
+                        <div class="operatore-multi-trigger" id="operatoreMultiTrigger" onclick="toggleOperatoreDropdown()">👥 Tutti gli operatori</div>
+                        <div class="operatore-multi-dropdown" id="operatoreMultiDropdown"></div>
                     </div>
                 </div>
                 <!-- schedulabili panel rimosso: si accede dalla pianificazione -->
@@ -4977,6 +5127,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         let currentDateIndex = -1;
         let preserveMapView = false; // Flag per preservare la vista corrente
         let showAllDatesInDetail = false; // Flag per mostrare tutte le date in vista dettaglio
+        let detailSelectedOperatori = new Set(); // Operatori selezionati nella vista dettaglio (vuoto = tutti)
         let isAutoRefresh = false; // Flag per evitare reset UI durante auto-refresh
         
         // ============================================================
@@ -5521,16 +5672,140 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         }}
 
         function toggleFiltroAppuntamenti() {{
-            const checkbox = document.getElementById('soloAppuntamentiCheckbox');
-            filterAppuntamentiOnly = checkbox.checked;
+            // Stub - filtro rimosso
+        }}
 
-            // Aggiorna la vista dettaglio
+        function populateDetailOperatoreChips() {{
+            const dropdown = document.getElementById('detailOperatoreDropdown');
+            const trigger = document.getElementById('detailOperatoreTrigger');
+            if (!dropdown || !trigger) return;
+            
+            // Trova tutti gli operatori nei contatori della zona/data corrente
+            const zonaInfo = zone.find(z => z.nome === currentZona);
+            let contatoriData;
+            
+            if (zonaInfo) {{
+                const comuniZona = zonaInfo.comuni.map(c => c.toLowerCase());
+                contatoriData = contatori.filter(c =>
+                    c.data === currentData &&
+                    comuniZona.includes(c.comune.toLowerCase())
+                );
+            }} else {{
+                contatoriData = contatori.filter(c =>
+                    c.data === currentData &&
+                    c.comune.toUpperCase() === currentZona.toUpperCase()
+                );
+            }}
+            
+            // Applica filtro LCL se attivo
+            if (currentLCL) {{
+                contatoriData = contatoriData.filter(c => c.lcl === currentLCL);
+            }}
+            
+            // Raggruppa per operatore con conteggio
+            const operatoriMap = new Map();
+            contatoriData.forEach(c => {{
+                const tec = c.tecnico || 'TUTTI';
+                operatoriMap.set(tec, (operatoriMap.get(tec) || 0) + 1);
+            }});
+            
+            const operatoriOrdinati = Array.from(operatoriMap.keys()).sort((a, b) => {{
+                if (a === 'TUTTI') return 1;
+                if (b === 'TUTTI') return -1;
+                return a.localeCompare(b);
+            }});
+            
+            // Se solo un operatore, nascondi il filtro
+            if (operatoriOrdinati.length <= 1) {{
+                dropdown.innerHTML = '';
+                trigger.style.display = 'none';
+                return;
+            }}
+            
+            trigger.style.display = '';
+            
+            let html = '';
+            operatoriOrdinati.forEach(op => {{
+                const count = operatoriMap.get(op);
+                const colore = getColore(op);
+                const nome = op === 'TUTTI' ? 'Senza Op.' : getDisplayName(op);
+                const isChecked = detailSelectedOperatori.size === 0 || detailSelectedOperatori.has(op);
+                html += `<label class="detail-operatore-item" onclick="event.stopPropagation()">
+                    <input type="checkbox" value="${{op}}" ${{isChecked ? 'checked' : ''}} onchange="onDetailOperatoreCheckChange()">
+                    <span class="op-color-dot" style="background:${{colore}}"></span>
+                    <span>${{nome}} (${{count}})</span>
+                </label>`;
+            }});
+            
+            dropdown.innerHTML = html;
+            updateDetailOperatoreTriggerText();
+        }}
+        
+        function toggleDetailOperatoreDropdown() {{
+            const dropdown = document.getElementById('detailOperatoreDropdown');
+            const trigger = document.getElementById('detailOperatoreTrigger');
+            const isOpen = dropdown.classList.contains('open');
+            dropdown.classList.toggle('open');
+            trigger.classList.toggle('active');
+            
+            if (!isOpen) {{
+                const closeHandler = (e) => {{
+                    if (!dropdown.contains(e.target) && e.target !== trigger) {{
+                        dropdown.classList.remove('open');
+                        trigger.classList.remove('active');
+                        document.removeEventListener('click', closeHandler);
+                    }}
+                }};
+                setTimeout(() => document.addEventListener('click', closeHandler), 0);
+            }}
+        }}
+        
+        function getDetailSelectedOperatori() {{
+            const checkboxes = document.querySelectorAll('#detailOperatoreDropdown input[type="checkbox"]');
+            const selected = [];
+            checkboxes.forEach(cb => {{ if (cb.checked) selected.push(cb.value); }});
+            return selected;
+        }}
+        
+        function updateDetailOperatoreTriggerText() {{
+            const trigger = document.getElementById('detailOperatoreTrigger');
+            if (!trigger) return;
+            const checkboxes = document.querySelectorAll('#detailOperatoreDropdown input[type="checkbox"]');
+            const total = checkboxes.length;
+            const selected = getDetailSelectedOperatori();
+            
+            if (selected.length === 0 || selected.length === total) {{
+                trigger.textContent = '👥 Tutti gli operatori';
+            }} else if (selected.length === 1) {{
+                const nome = selected[0] === 'TUTTI' ? 'Senza Op.' : getDisplayName(selected[0]);
+                trigger.textContent = '👤 ' + nome;
+            }} else {{
+                trigger.textContent = '👥 ' + selected.length + ' operatori';
+            }}
+        }}
+        
+        function onDetailOperatoreCheckChange() {{
+            const checkboxes = document.querySelectorAll('#detailOperatoreDropdown input[type="checkbox"]');
+            const total = checkboxes.length;
+            const selected = getDetailSelectedOperatori();
+            
+            detailSelectedOperatori.clear();
+            if (selected.length > 0 && selected.length < total) {{
+                selected.forEach(op => detailSelectedOperatori.add(op));
+            }}
+            // Se tutti o nessuno selezionati, set vuoto = mostra tutti
+            
+            updateDetailOperatoreTriggerText();
+            
+            // Riesegui la vista dettaglio
             if (currentView === 'detail' && currentData) {{
-                if (viewMode === 'zone') {{
+                preserveMapView = true;
+                if (zone.find(z => z.nome === currentZona)) {{
                     apriDettaglio(currentZona, currentData);
                 }} else {{
                     apriDettaglioComune(currentZona, currentData);
                 }}
+                preserveMapView = false;
             }}
         }}
 
@@ -5579,6 +5854,10 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                 }}
             }} else if (currentView === 'tuttiOperatori' && currentData) {{
                 mostraPercorsoTuttiOperatori(currentData);
+            }} else if (currentView === 'multiOperatori' && currentData) {{
+                const selOps = getSelectedOperatori();
+                if (selOps.length > 0) mostraPercorsoMultiOperatori(selOps, currentData);
+                else mostraPercorsoTuttiOperatori(currentData);
             }} else if (currentView === 'operatore' && currentOperatore && currentData) {{
                 mostraPercorsoCompletoOperatore(currentOperatore, currentData);
             }}
@@ -5671,6 +5950,10 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                 }}
             }} else if (currentView === 'tuttiOperatori' && currentData) {{
                 mostraPercorsoTuttiOperatori(currentData);
+            }} else if (currentView === 'multiOperatori' && currentData) {{
+                const selOps = getSelectedOperatori();
+                if (selOps.length > 0) mostraPercorsoMultiOperatori(selOps, currentData);
+                else mostraPercorsoTuttiOperatori(currentData);
             }} else if (currentView === 'operatore' && currentOperatore && currentData) {{
                 mostraPercorsoCompletoOperatore(currentOperatore, currentData);
             }} else if (viewMode === 'zone') {{
@@ -5844,6 +6127,10 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             // Riapplica vista corrente
             if (currentView === 'operatore' && currentOperatore && currentData) {{
                 mostraPercorsoCompletoOperatore(currentOperatore, currentData);
+            }} else if (currentView === 'multiOperatori' && currentData) {{
+                const selOps = getSelectedOperatori();
+                if (selOps.length > 0) mostraPercorsoMultiOperatori(selOps, currentData);
+                else mostraPercorsoTuttiOperatori(currentData);
             }} else if (currentView === 'detail' && currentZona && currentData) {{
                 apriDettaglioConRicerca(currentZona, currentData, '');
             }} else if (viewMode === 'zone') {{
@@ -5874,6 +6161,10 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             // Riapplica vista corrente senza filtri avanzati
             if (currentView === 'operatore' && currentOperatore && currentData) {{
                 mostraPercorsoCompletoOperatore(currentOperatore, currentData);
+            }} else if (currentView === 'multiOperatori' && currentData) {{
+                const selOps = getSelectedOperatori();
+                if (selOps.length > 0) mostraPercorsoMultiOperatori(selOps, currentData);
+                else mostraPercorsoTuttiOperatori(currentData);
             }} else if (currentView === 'detail' && currentZona && currentData) {{
                 apriDettaglioConRicerca(currentZona, currentData, '');
             }} else if (viewMode === 'zone') {{
@@ -5896,6 +6187,10 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             if (!nominativo && !pod && !eneltel && !comune && !via && !telefono) {{
                 if (currentView === 'operatore' && currentOperatore && currentData) {{
                     mostraPercorsoCompletoOperatore(currentOperatore, currentData);
+                }} else if (currentView === 'multiOperatori' && currentData) {{
+                    const selOps = getSelectedOperatori();
+                    if (selOps.length > 0) mostraPercorsoMultiOperatori(selOps, currentData);
+                    else mostraPercorsoTuttiOperatori(currentData);
                 }} else if (currentView === 'detail' && currentZona && currentData) {{
                     apriDettaglioConRicerca(currentZona, currentData, '');
                 }} else if (viewMode === 'zone') {{
@@ -6330,7 +6625,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                 if (currentView === 'detail') {{
                     // In vista dettaglio, fai il re-render completo per aggiornare tutti i marker
                     // (il contatore schedulabile verrà renderizzato normalmente nel loop)
-                }} else if (currentView === 'tuttiOperatori' || currentView === 'operatore') {{
+                }} else if (currentView === 'tuttiOperatori' || currentView === 'operatore' || currentView === 'multiOperatori') {{
                     // Le viste percorso hanno già i circleMarker schedulabili se filtro attivo
                     // Basta ri-renderizzare la mappa, il circleMarker ricompare da solo
                 }} else {{
@@ -6425,6 +6720,33 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                 }});
                 preserveMapView = true;
                 renderPercorsoTuttiOperatoriMappa(percorsiPerOperatore, currentData);
+                if (wasEneltel) {{
+                    setTimeout(() => {{
+                        const m = markers.find(mk => mk.contatore && mk.contatore.eneltel === wasEneltel);
+                        if (m) m.openPopup();
+                    }}, 100);
+                }}
+            }} else if (currentView === 'multiOperatori') {{
+                // Ricostruisci la mappa per gli operatori selezionati
+                const selOps = getSelectedOperatori();
+                let contatoriData = contatori.filter(c => c.data === currentData && selOps.includes(c.tecnico || 'TUTTI'));
+                if (currentLCL) contatoriData = contatoriData.filter(c => c.lcl === currentLCL);
+                const operatoriMap = new Map();
+                contatoriData.forEach(c => {{
+                    const tec = c.tecnico || 'TUTTI';
+                    if (!operatoriMap.has(tec)) operatoriMap.set(tec, []);
+                    operatoriMap.get(tec).push(c);
+                }});
+                const percorsiPerOperatore2 = [];
+                operatoriMap.forEach((contatoriOp, op) => {{
+                    percorsiPerOperatore2.push({{
+                        operatore: op,
+                        percorso: ordinaPercorsoJS(contatoriOp),
+                        colore: getColore(op)
+                    }});
+                }});
+                preserveMapView = true;
+                renderPercorsoTuttiOperatoriMappa(percorsiPerOperatore2, currentData);
                 if (wasEneltel) {{
                     setTimeout(() => {{
                         const m = markers.find(mk => mk.contatore && mk.contatore.eneltel === wasEneltel);
@@ -6570,6 +6892,27 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                 }});
                 preserveMapView = true;
                 renderPercorsoTuttiOperatoriMappa(percorsiPerOperatore, currentData);
+            }} else if (currentView === 'multiOperatori') {{
+                // Ricostruisci la mappa per gli operatori selezionati
+                const selOps = getSelectedOperatori();
+                let contatoriData = contatori.filter(c => c.data === currentData && selOps.includes(c.tecnico || 'TUTTI'));
+                if (currentLCL) contatoriData = contatoriData.filter(c => c.lcl === currentLCL);
+                const operatoriMap = new Map();
+                contatoriData.forEach(c => {{
+                    const tec = c.tecnico || 'TUTTI';
+                    if (!operatoriMap.has(tec)) operatoriMap.set(tec, []);
+                    operatoriMap.get(tec).push(c);
+                }});
+                const percorsiPerOperatore2 = [];
+                operatoriMap.forEach((contatoriOp, op) => {{
+                    percorsiPerOperatore2.push({{
+                        operatore: op,
+                        percorso: ordinaPercorsoJS(contatoriOp),
+                        colore: getColore(op)
+                    }});
+                }});
+                preserveMapView = true;
+                renderPercorsoTuttiOperatoriMappa(percorsiPerOperatore2, currentData);
             }} else if (currentView === 'operatore') {{
                 // Ricostruisci la mappa per singolo operatore
                 let contatoriOp = contatori.filter(c =>
@@ -6728,155 +7071,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         }}
 
         function toggleAllDates() {{
-            showAllDatesInDetail = document.getElementById('showAllDatesCheckbox').checked;
-
-            if (showAllDatesInDetail) {{
-                // Disabilita navigazione date
-                const nav = document.getElementById('dateNavigation');
-                nav.classList.remove('visible');
-
-                // Mostra TUTTI i contatori (tutte le date + schedulabili), esclusi annullati e senza coordinate
-                const zona = zone.find(z => z.nome === currentZona);
-                if (zona) {{
-                    // È una zona
-                    const comuniZona = zona.comuni.map(c => c.toLowerCase());
-                    let allContatori = contatori.filter(c => 
-                        comuniZona.includes(c.comune.toLowerCase()) &&
-                        !c.annullato &&
-                        isValidCoordinate(c.lat, c.lon)
-                    );
-
-                    if (currentLCL) {{
-                        allContatori = allContatori.filter(c => c.lcl === currentLCL);
-                    }}
-                    if (filterAppuntamentiOnly) {{
-                        allContatori = allContatori.filter(c => c.is_appuntamento);
-                    }}
-
-                    // Applica filtri schedulabili: mantieni i programmati, filtra gli schedulabili
-                    if (filterSchedulabili) {{
-                        const oggiStrF = getOggiStr();
-                        const schedIds = new Set(getContatoriSchedulabili().map(c => c.id));
-                        allContatori = allContatori.filter(c => {{
-                            const isSched = (!c.data || c.data === '' || c.data < oggiStrF);
-                            if (!isSched) return true; // programmato: tieni sempre
-                            return schedIds.has(c.id); // schedulabile: solo se passa i filtri
-                        }});
-                    }}
-
-                    // Separa programmati e schedulabili per il conteggio
-                    const oggiStr = getOggiStr();
-                    const numSchedulabili = allContatori.filter(c => !c.data || c.data === '' || c.data < oggiStr).length;
-
-                    const perTecnico = {{}};
-                    allContatori.forEach(c => {{
-                        const tec = c.tecnico || 'TUTTI';
-                        if (!perTecnico[tec]) perTecnico[tec] = [];
-                        perTecnico[tec].push(c);
-                    }});
-
-                    Object.keys(perTecnico).forEach(tec => {{
-                        perTecnico[tec] = ordinaPercorsoJS(perTecnico[tec]);
-                    }});
-
-                    renderDettaglioSidebar(perTecnico, 'Tutte');
-                    renderDettaglioMappa(perTecnico, 'Tutte');
-
-                    const totContatori = Object.values(perTecnico).flat().length;
-                    const totApp = Object.values(perTecnico).flat().filter(c => c.is_appuntamento).length;
-                    document.getElementById('statZone').textContent = Object.keys(perTecnico).length;
-                    document.getElementById('statContatori').textContent = totContatori;
-                    document.getElementById('statAppuntamenti').textContent = totApp;
-
-                    document.getElementById('breadcrumbText').innerHTML = `<strong>${{currentZona}}</strong> → Tutti (${{totContatori}}${{numSchedulabili > 0 ? `, 📋${{numSchedulabili}} sched.` : ''}})`;
-                }} else {{
-                    // È un comune singolo
-                    let allContatori = contatori.filter(c => 
-                        c.comune.toUpperCase() === currentZona.toUpperCase() &&
-                        !c.annullato &&
-                        isValidCoordinate(c.lat, c.lon)
-                    );
-
-                    if (currentLCL) {{
-                        allContatori = allContatori.filter(c => c.lcl === currentLCL);
-                    }}
-                    if (filterAppuntamentiOnly) {{
-                        allContatori = allContatori.filter(c => c.is_appuntamento);
-                    }}
-
-                    // Applica filtri schedulabili: mantieni i programmati, filtra gli schedulabili
-                    if (filterSchedulabili) {{
-                        const oggiStrF = getOggiStr();
-                        const schedIds = new Set(getContatoriSchedulabili().map(c => c.id));
-                        allContatori = allContatori.filter(c => {{
-                            const isSched = (!c.data || c.data === '' || c.data < oggiStrF);
-                            if (!isSched) return true; // programmato: tieni sempre
-                            return schedIds.has(c.id); // schedulabile: solo se passa i filtri
-                        }});
-                    }}
-
-                    const oggiStr = getOggiStr();
-                    const numSchedulabili = allContatori.filter(c => !c.data || c.data === '' || c.data < oggiStr).length;
-
-                    const perTecnico = {{}};
-                    allContatori.forEach(c => {{
-                        const tec = c.tecnico || 'TUTTI';
-                        if (!perTecnico[tec]) perTecnico[tec] = [];
-                        perTecnico[tec].push(c);
-                    }});
-
-                    Object.keys(perTecnico).forEach(tec => {{
-                        perTecnico[tec] = ordinaPercorsoJS(perTecnico[tec]);
-                    }});
-
-                    renderDettaglioSidebar(perTecnico, 'Tutte');
-                    renderDettaglioMappa(perTecnico, 'Tutte');
-
-                    const totContatori = Object.values(perTecnico).flat().length;
-                    const totApp = Object.values(perTecnico).flat().filter(c => c.is_appuntamento).length;
-                    document.getElementById('statZone').textContent = Object.keys(perTecnico).length;
-                    document.getElementById('statContatori').textContent = totContatori;
-                    document.getElementById('statAppuntamenti').textContent = totApp;
-
-                    document.getElementById('breadcrumbText').innerHTML = `<strong>${{currentZona}}</strong> → Tutti (${{totContatori}}${{numSchedulabili > 0 ? `, 📋${{numSchedulabili}} sched.` : ''}})`;
-                }}
-            }} else {{
-                // Riabilita navigazione e torna alla data corrente
-                const zona = zone.find(z => z.nome === currentZona);
-                
-                // Se currentData è null, seleziona la prima data disponibile
-                let dataTarget = currentData;
-                if (!dataTarget) {{
-                    if (zona) {{
-                        const dateZona = zona.date.map(d => d.data).sort();
-                        dataTarget = dateZona[0] || null;
-                    }} else {{
-                        // È un comune singolo
-                        const dateSet = new Set();
-                        contatori.forEach(c => {{
-                            if (c.comune.toUpperCase() === currentZona.toUpperCase() && c.data) {{
-                                dateSet.add(c.data);
-                            }}
-                        }});
-                        const dateComune = Array.from(dateSet).sort();
-                        dataTarget = dateComune[0] || null;
-                    }}
-                }}
-                
-                // Se ancora null, torna alla vista zone
-                if (!dataTarget) {{
-                    tornaAlleZone();
-                    return;
-                }}
-                
-                currentData = dataTarget;
-                
-                if (zona) {{
-                    apriDettaglio(currentZona, currentData);
-                }} else {{
-                    apriDettaglioComune(currentZona, currentData);
-                }}
-            }}
+            // Stub - filtro rimosso
         }}
 
         function navigateDate(direction) {{
@@ -6992,6 +7187,12 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                 // Se siamo nella vista percorso operatore, aggiorna con il filtro LCL
                 // (il cambio data è gestito da onDataFilterChange)
                 mostraPercorsoCompletoOperatore(currentOperatore, currentData);
+            }} else if (currentView === 'multiOperatori' && currentData) {{
+                const selOps = getSelectedOperatori();
+                if (selOps.length > 0) mostraPercorsoMultiOperatori(selOps, currentData);
+                else mostraPercorsoTuttiOperatori(currentData);
+            }} else if (currentView === 'tuttiOperatori' && currentData) {{
+                mostraPercorsoTuttiOperatori(currentData);
             }}
         }}
         
@@ -7001,10 +7202,10 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         function onDataFilterChange() {{
             const dataSelezionata = document.getElementById('dataFilter').value;
             const operatoreContainer = document.getElementById('operatoreFilterContainer');
-            const operatoreSelect = document.getElementById('operatoreFilter');
             
-            // Salva l'operatore precedentemente selezionato (se in vista operatore)
-            const operatorePrecedente = currentView === 'operatore' ? currentOperatore : operatoreSelect.value;
+            // Salva gli operatori precedentemente selezionati
+            const operatoriPrecedenti = (currentView === 'operatore' && currentOperatore) ? [currentOperatore] : 
+                                        (currentView === 'multiOperatori' ? getSelectedOperatori() : []);
             
             if (dataSelezionata) {{
                 // Popola il dropdown operatori per questa data
@@ -7012,22 +7213,21 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                 operatoreContainer.classList.add('visible');
                 
                 // Se eravamo in vista operatore, prova a mantenere lo stesso operatore
-                if (currentView === 'operatore' && operatorePrecedente) {{
-                    // Verifica se l'operatore esiste nella nuova data
+                if (currentView === 'operatore' && operatoriPrecedenti.length === 1) {{
+                    const opPrec = operatoriPrecedenti[0];
                     const operatoriData = new Set();
                     contatori.filter(c => c.data === dataSelezionata).forEach(c => {{
                         operatoriData.add(c.tecnico || 'TUTTI');
                     }});
                     
-                    if (operatoriData.has(operatorePrecedente)) {{
+                    if (operatoriData.has(opPrec)) {{
                         // Operatore esiste, selezionalo e aggiorna la vista
-                        operatoreSelect.value = operatorePrecedente;
+                        setSelectedOperatori([opPrec]);
                         currentData = dataSelezionata;
-                        mostraPercorsoCompletoOperatore(operatorePrecedente, dataSelezionata);
+                        mostraPercorsoCompletoOperatore(opPrec, dataSelezionata);
                         return;
                     }} else {{
-                        // Operatore non esiste per questa data, mostra tutti gli operatori
-                        operatoreSelect.value = '';
+                        resetOperatoreFilter();
                         currentOperatore = null;
                     }}
                 }}
@@ -7038,10 +7238,10 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             }} else {{
                 // Nascondi dropdown operatore e resetta
                 operatoreContainer.classList.remove('visible');
-                operatoreSelect.value = '';
+                resetOperatoreFilter();
                 
-                // Se eravamo in vista operatore/tuttiOperatori, torna alla vista zone
-                if (currentView === 'operatore' || currentView === 'tuttiOperatori') {{
+                // Se eravamo in vista operatore/tuttiOperatori/multiOperatori, torna alla vista zone
+                if (currentView === 'operatore' || currentView === 'tuttiOperatori' || currentView === 'multiOperatori') {{
                     currentOperatore = null;
                     currentView = 'zone';
                 }}
@@ -7052,7 +7252,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         }}
         
         function populateOperatoreFilter(data) {{
-            const select = document.getElementById('operatoreFilter');
+            const dropdown = document.getElementById('operatoreMultiDropdown');
             
             // Trova tutti gli operatori attivi per questa data
             const operatoriData = new Set();
@@ -7061,42 +7261,108 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                 operatoriData.add(tec);
             }});
             
-            // Ricostruisci le opzioni
-            select.innerHTML = '<option value="">👥 Tutti gli operatori</option>';
-            
             const operatoriOrdinati = Array.from(operatoriData).sort((a, b) => {{
                 if (a === 'TUTTI') return 1;
                 if (b === 'TUTTI') return -1;
                 return a.localeCompare(b);
             }});
             
+            let html = '';
             operatoriOrdinati.forEach(op => {{
                 const count = contatori.filter(c => c.data === data && (c.tecnico || 'TUTTI') === op).length;
                 const label = op === 'TUTTI' ? `📦 Senza Operatore (${{count}})` : `👤 ${{getDisplayName(op)}} (${{count}})`;
-                const option = document.createElement('option');
-                option.value = op;
-                option.textContent = label;
-                select.appendChild(option);
+                const colore = getColore(op);
+                html += `<label class="operatore-multi-item" data-operatore="${{op}}">
+                    <input type="checkbox" value="${{op}}" onchange="onOperatoreFilterChange()">
+                    <span class="op-color-dot" style="background:${{colore}}"></span>
+                    <span>${{label}}</span>
+                </label>`;
             }});
+            
+            dropdown.innerHTML = html;
+            updateOperatoreTriggerText();
+        }}
+        
+        function toggleOperatoreDropdown() {{
+            const dropdown = document.getElementById('operatoreMultiDropdown');
+            const trigger = document.getElementById('operatoreMultiTrigger');
+            const isOpen = dropdown.classList.contains('open');
+            dropdown.classList.toggle('open');
+            trigger.classList.toggle('active');
+            
+            if (!isOpen) {{
+                // Chiudi il dropdown se si clicca altrove
+                setTimeout(() => {{
+                    const closeHandler = function(e) {{
+                        const container = document.getElementById('operatoreFilterContainer');
+                        if (container && !container.contains(e.target)) {{
+                            dropdown.classList.remove('open');
+                            trigger.classList.remove('active');
+                            document.removeEventListener('click', closeHandler);
+                        }}
+                    }};
+                    document.addEventListener('click', closeHandler);
+                }}, 0);
+            }}
+        }}
+        
+        function getSelectedOperatori() {{
+            const checkboxes = document.querySelectorAll('#operatoreMultiDropdown input[type="checkbox"]:checked');
+            return Array.from(checkboxes).map(cb => cb.value);
+        }}
+        
+        function setSelectedOperatori(operatori) {{
+            const checkboxes = document.querySelectorAll('#operatoreMultiDropdown input[type="checkbox"]');
+            checkboxes.forEach(cb => {{
+                cb.checked = operatori.includes(cb.value);
+            }});
+            updateOperatoreTriggerText();
+        }}
+        
+        function resetOperatoreFilter() {{
+            const checkboxes = document.querySelectorAll('#operatoreMultiDropdown input[type="checkbox"]');
+            checkboxes.forEach(cb => {{ cb.checked = false; }});
+            updateOperatoreTriggerText();
+        }}
+        
+        function updateOperatoreTriggerText() {{
+            const trigger = document.getElementById('operatoreMultiTrigger');
+            const selected = getSelectedOperatori();
+            if (selected.length === 0) {{
+                trigger.textContent = '👥 Tutti gli operatori';
+            }} else if (selected.length === 1) {{
+                const op = selected[0];
+                trigger.textContent = op === 'TUTTI' ? '📦 Senza Operatore' : '👤 ' + getDisplayName(op);
+            }} else {{
+                trigger.textContent = '👤 ' + selected.length + ' operatori selezionati';
+            }}
         }}
         
         function onOperatoreFilterChange() {{
             const data = document.getElementById('dataFilter').value;
-            const operatore = document.getElementById('operatoreFilter').value;
+            const selected = getSelectedOperatori();
             
-            if (!data) return; // Nessuna data selezionata
+            if (!data) return;
             
             // Forza zoom sulla zona dell'operatore
             preserveMapView = false;
             
-            if (!operatore) {{
+            updateOperatoreTriggerText();
+            
+            if (selected.length === 0) {{
                 // Mostra il percorso di TUTTI gli operatori insieme
                 mostraPercorsoTuttiOperatori(data);
                 return;
             }}
             
-            // Mostra il percorso completo dell'operatore per la giornata
-            mostraPercorsoCompletoOperatore(operatore, data);
+            if (selected.length === 1) {{
+                // Mostra il percorso completo di un singolo operatore
+                mostraPercorsoCompletoOperatore(selected[0], data);
+                return;
+            }}
+            
+            // Multi-operatore: mostra i percorsi degli operatori selezionati
+            mostraPercorsoMultiOperatori(selected, data);
         }}
         
         function mostraPercorsoTuttiOperatori(data) {{
@@ -7160,6 +7426,70 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             document.getElementById('statAppuntamenti').textContent = tuttiContatori.filter(c => c.is_appuntamento).length;
         }}
         
+        function mostraPercorsoMultiOperatori(operatoriSelezionati, data) {{
+            currentView = 'multiOperatori';
+            currentData = data;
+            currentOperatore = null;
+            
+            // Mostra breadcrumb
+            const nomi = operatoriSelezionati.map(op => op === 'TUTTI' ? 'Senza Operatore' : getDisplayName(op));
+            document.getElementById('breadcrumb').classList.add('visible');
+            document.getElementById('breadcrumbText').innerHTML = `<strong>📅 ${{formatDate(data)}}</strong> → <span style="color: var(--accent)">👤 ${{nomi.join(', ')}}</span> (percorsi)`;
+            
+            // Nascondi i filtri dettaglio
+            document.getElementById('detailFilters').style.display = 'none';
+            
+            // Filtra i contatori per questa data e per gli operatori selezionati
+            let contatoriData = contatori.filter(c => 
+                c.data === data && operatoriSelezionati.includes(c.tecnico || 'TUTTI')
+            );
+            
+            // Applica filtro LCL se attivo
+            if (currentLCL) {{
+                contatoriData = contatoriData.filter(c => c.lcl === currentLCL);
+            }}
+            
+            // Raggruppa per operatore
+            const operatoriMap = new Map();
+            contatoriData.forEach(c => {{
+                const tec = c.tecnico || 'TUTTI';
+                if (!operatoriMap.has(tec)) {{
+                    operatoriMap.set(tec, []);
+                }}
+                operatoriMap.get(tec).push(c);
+            }});
+            
+            // Ordina ogni gruppo con l'algoritmo di ottimizzazione
+            const percorsiPerOperatore = [];
+            operatoriMap.forEach((contatoriOp, operatore) => {{
+                const percorsoOrdinato = ordinaPercorsoJS(contatoriOp);
+                percorsiPerOperatore.push({{
+                    operatore: operatore,
+                    percorso: percorsoOrdinato,
+                    colore: getColore(operatore)
+                }});
+            }});
+            
+            // Ordina operatori alfabeticamente (TUTTI per ultimo)
+            percorsiPerOperatore.sort((a, b) => {{
+                if (a.operatore === 'TUTTI') return 1;
+                if (b.operatore === 'TUTTI') return -1;
+                return a.operatore.localeCompare(b.operatore);
+            }});
+            
+            // Render sidebar con i percorsi selezionati
+            renderPercorsoTuttiOperatoriSidebar(percorsiPerOperatore, data);
+            
+            // Render mappa con i percorsi selezionati
+            renderPercorsoTuttiOperatoriMappa(percorsiPerOperatore, data);
+            
+            // Aggiorna statistiche
+            const tuttiContatori = percorsiPerOperatore.flatMap(p => p.percorso);
+            document.getElementById('statZone').textContent = new Set(tuttiContatori.map(c => c.comune)).size;
+            document.getElementById('statContatori').textContent = tuttiContatori.length;
+            document.getElementById('statAppuntamenti').textContent = tuttiContatori.filter(c => c.is_appuntamento).length;
+        }}
+        
         function renderPercorsoTuttiOperatoriSidebar(percorsiPerOperatore, data) {{
             const resultsDiv = document.getElementById('results');
             let html = '';
@@ -7185,7 +7515,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                 const comuniOp = new Set(percorso.map(c => c.comune)).size;
                 
                 html += `
-                    <div style="background: linear-gradient(135deg, var(--bg-tertiary) 0%, var(--bg-secondary) 100%); border-radius: 12px; padding: 12px; margin-bottom: 12px; border-left: 4px solid ${{colore}}; cursor: pointer;" onclick="document.getElementById('operatoreFilter').value='${{operatore}}'; onOperatoreFilterChange();">
+                    <div style="background: linear-gradient(135deg, var(--bg-tertiary) 0%, var(--bg-secondary) 100%); border-radius: 12px; padding: 12px; margin-bottom: 12px; border-left: 4px solid ${{colore}}; cursor: pointer;" onclick="setSelectedOperatori(['${{operatore}}']); onOperatoreFilterChange();">
                         <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
                             <div style="width: 14px; height: 14px; background: ${{colore}}; border-radius: 3px;"></div>
                             <div style="font-weight: 600; font-size: 1em; color: var(--text-primary);">👤 ${{nomeOp}}</div>
@@ -7761,6 +8091,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             currentView = 'zone';
             currentZona = null;
             currentData = null;
+            detailSelectedOperatori.clear();
 
             // Ripristina select filtro date (ma non durante auto-refresh)
             if (!isAutoRefresh) {{
@@ -7773,7 +8104,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                 const dataSelezionata = document.getElementById('dataFilter').value;
                 if (!dataSelezionata) {{
                     document.getElementById('operatoreFilterContainer').classList.remove('visible');
-                    document.getElementById('operatoreFilter').value = '';
+                    resetOperatoreFilter();
                 }}
 
                 document.getElementById('breadcrumb').classList.remove('visible');
@@ -8240,6 +8571,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             currentView = 'towns';
             currentZona = null;
             currentData = null;
+            detailSelectedOperatori.clear();
 
             // Ripristina select filtro date (ma non durante auto-refresh)
             if (!isAutoRefresh) {{
@@ -8252,7 +8584,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                 const dataSelezionata = document.getElementById('dataFilter').value;
                 if (!dataSelezionata) {{
                     document.getElementById('operatoreFilterContainer').classList.remove('visible');
-                    document.getElementById('operatoreFilter').value = '';
+                    resetOperatoreFilter();
                 }}
 
                 document.getElementById('breadcrumb').classList.remove('visible');
@@ -8620,16 +8952,11 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                 // Pulisci la ricerca
                 document.getElementById('searchInput').value = '';
                 updateSearchClearButton();
-
-                // Reset showAllDatesInDetail solo se non è un refresh
-                showAllDatesInDetail = false;
-                document.getElementById('showAllDatesCheckbox').checked = false;
             }}
 
             // Mostra toggle al posto del select in vista dettaglio
             document.getElementById('dataFilterRow').style.display = 'none';
             document.getElementById('detailFilters').style.display = 'flex';
-            document.getElementById('soloAppuntamentiCheckbox').checked = filterAppuntamentiOnly;
 
             document.getElementById('breadcrumb').classList.add('visible');
             document.getElementById('breadcrumbText').innerHTML = `<strong>${{comuneNome}}</strong> → ${{data}}`;
@@ -8652,9 +8979,10 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             if (currentLCL) {{
                 contatoriData = contatoriData.filter(c => c.lcl === currentLCL);
             }}
-            // Filtra per solo appuntamenti
-            if (filterAppuntamentiOnly) {{
-                contatoriData = contatoriData.filter(c => c.is_appuntamento);
+
+            // Filtra per operatori selezionati
+            if (detailSelectedOperatori.size > 0) {{
+                contatoriData = contatoriData.filter(c => detailSelectedOperatori.has(c.tecnico || 'TUTTI'));
             }}
 
             // Raggruppa per tecnico
@@ -8672,6 +9000,9 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
 
             renderDettaglioSidebar(perTecnico, data);
             renderDettaglioMappa(perTecnico, data);
+
+            // Popola i chip operatori
+            populateDetailOperatoreChips();
 
             const totContatori = Object.values(perTecnico).flat().length;
             const totApp = Object.values(perTecnico).flat().filter(c => c.is_appuntamento).length;
@@ -8696,16 +9027,11 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                 // Pulisci la ricerca
                 document.getElementById('searchInput').value = '';
                 updateSearchClearButton();
-
-                // Reset showAllDatesInDetail solo se non è un refresh
-                showAllDatesInDetail = false;
-                document.getElementById('showAllDatesCheckbox').checked = false;
             }}
 
             // Mostra toggle al posto del select in vista dettaglio
             document.getElementById('dataFilterRow').style.display = 'none';
             document.getElementById('detailFilters').style.display = 'flex';
-            document.getElementById('soloAppuntamentiCheckbox').checked = filterAppuntamentiOnly;
 
             document.getElementById('breadcrumb').classList.add('visible');
             document.getElementById('breadcrumbText').innerHTML = `<strong>${{zonaNome}}</strong> → ${{data}}`;
@@ -8731,9 +9057,10 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             if (currentLCL) {{
                 contatoriData = contatoriData.filter(c => c.lcl === currentLCL);
             }}
-            // Filtra per solo appuntamenti
-            if (filterAppuntamentiOnly) {{
-                contatoriData = contatoriData.filter(c => c.is_appuntamento);
+
+            // Filtra per operatori selezionati
+            if (detailSelectedOperatori.size > 0) {{
+                contatoriData = contatoriData.filter(c => detailSelectedOperatori.has(c.tecnico || 'TUTTI'));
             }}
 
             // Raggruppa per tecnico
@@ -8751,6 +9078,9 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             
             renderDettaglioSidebar(perTecnico, data);
             renderDettaglioMappa(perTecnico, data);
+
+            // Popola i chip operatori
+            populateDetailOperatoreChips();
 
             const totContatori = Object.values(perTecnico).flat().length;
             const totApp = Object.values(perTecnico).flat().filter(c => c.is_appuntamento).length;
@@ -8782,9 +9112,10 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             if (currentLCL) {{
                 contatoriData = contatoriData.filter(c => c.lcl === currentLCL);
             }}
-            // Filtra per solo appuntamenti
-            if (filterAppuntamentiOnly) {{
-                contatoriData = contatoriData.filter(c => c.is_appuntamento);
+
+            // Filtra per operatori selezionati
+            if (detailSelectedOperatori.size > 0) {{
+                contatoriData = contatoriData.filter(c => detailSelectedOperatori.has(c.tecnico || 'TUTTI'));
             }}
 
             // Filtra per ricerca se presente
@@ -9426,12 +9757,12 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             document.getElementById('breadcrumb').classList.remove('visible');
             document.getElementById('dateNavigation').classList.remove('visible');
             
-            // Se siamo nella vista operatore singolo, torna alla vista tutti operatori (mantieni data)
-            if (currentView === 'operatore') {{
+            // Se siamo nella vista operatore singolo o multi, torna alla vista tutti operatori (mantieni data)
+            if (currentView === 'operatore' || currentView === 'multiOperatori') {{
                 const dataSelezionata = document.getElementById('dataFilter').value;
                 if (dataSelezionata) {{
                     // Resetta solo l'operatore, mantieni la data
-                    document.getElementById('operatoreFilter').value = '';
+                    resetOperatoreFilter();
                     currentOperatore = null;
                     // Torna alla vista tutti operatori
                     mostraPercorsoTuttiOperatori(dataSelezionata);
@@ -9441,7 +9772,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             
             // Comportamento standard: resetta tutto (sia da tuttiOperatori che da altre viste)
             document.getElementById('dataFilter').value = '';
-            document.getElementById('operatoreFilter').value = '';
+            resetOperatoreFilter();
             document.getElementById('operatoreFilterContainer').classList.remove('visible');
             currentDataFiltro = '';
             currentOperatore = null;
@@ -9505,6 +9836,16 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                     case 'tuttiOperatori':
                         if (currentData) {{
                             mostraPercorsoTuttiOperatori(currentData);
+                        }}
+                        break;
+                    case 'multiOperatori':
+                        if (currentData) {{
+                            const selOps = getSelectedOperatori();
+                            if (selOps.length > 0) {{
+                                mostraPercorsoMultiOperatori(selOps, currentData);
+                            }} else {{
+                                mostraPercorsoTuttiOperatori(currentData);
+                            }}
                         }}
                         break;
                     case 'search-results':
@@ -9741,6 +10082,11 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             if (currentView === 'operatore' && currentOperatore && currentData) {{
                 // Se siamo nella vista percorso operatore, filtra i contatori dell'operatore
                 mostraPercorsoOperatoreConRicerca(currentOperatore, currentData, query);
+            }} else if (currentView === 'multiOperatori' && currentData) {{
+                // Se siamo nella vista multi-operatore, aggiorna senza ricerca inline
+                const selOps = getSelectedOperatori();
+                if (selOps.length > 0) mostraPercorsoMultiOperatori(selOps, currentData);
+                else mostraPercorsoTuttiOperatori(currentData);
             }} else if (currentView === 'detail') {{
                 // Se siamo nella vista dettaglio, filtra i contatori della zona/data corrente
                 apriDettaglioConRicerca(currentZona, currentData, query);
@@ -11251,7 +11597,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         function updatePrintButtonVisibility() {{
             const btn = document.getElementById('printButton');
             const btnTappe = document.getElementById('printTappeButton');
-            if (currentView === 'operatore') {{
+            if (currentView === 'operatore' || currentView === 'multiOperatori') {{
                 btn.classList.remove('hidden');
                 btnTappe.classList.remove('hidden');
             }} else {{
@@ -11294,6 +11640,12 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         const originalMostraPercorsoCompletoOperatore = mostraPercorsoCompletoOperatore;
         mostraPercorsoCompletoOperatore = function(...args) {{
             originalMostraPercorsoCompletoOperatore.apply(this, args);
+            updatePrintButtonVisibility();
+        }};
+
+        const originalMostraPercorsoMultiOperatori = mostraPercorsoMultiOperatori;
+        mostraPercorsoMultiOperatori = function(...args) {{
+            originalMostraPercorsoMultiOperatori.apply(this, args);
             updatePrintButtonVisibility();
         }};
 

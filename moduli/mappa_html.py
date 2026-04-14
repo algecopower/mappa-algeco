@@ -10189,58 +10189,10 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                 return copia;
             }});
 
-            // Funzione helper per estrarre minuti dall'orario per ordinamento
-            function estraiMinutiOrario(orarioStr) {{
-                if (!orarioStr || orarioStr.trim() === '') return 99999; // senza orario → in fondo
-
-                // Cerca primo orario nel formato HH:MM o H:MM o H.MM o HH.MM
-                const match = orarioStr.match(/(\d{{1,2}})[:.h](\d{{2}})/);
-                if (match) {{
-                    return parseInt(match[1]) * 60 + parseInt(match[2]);
-                }}
-
-                // Cerca solo ora (es: "8", "10")
-                const matchOra = orarioStr.match(/\b(\d{{1,2}})\b/);
-                if (matchOra) {{
-                    const ore = parseInt(matchOra[1]);
-                    if (ore >= 0 && ore <= 23) return ore * 60;
-                }}
-
-                return 99999;
-            }}
-
-            // Estrae i minuti dell'orario di FINE dalla stringa (secondo orario trovato)
-            function estraiMinutiFineOrario(orarioStr) {{
-                if (!orarioStr || orarioStr.trim() === '') return 99999;
-
-                // Cerca tutti gli orari nel formato HH:MM o H:MM o H.MM o HH.MM
-                const matches = [...orarioStr.matchAll(/(\d{{1,2}})[:.h](\d{{2}})/g)];
-                if (matches.length >= 2) {{
-                    return parseInt(matches[1][1]) * 60 + parseInt(matches[1][2]);
-                }}
-
-                // Cerca tutte le ore semplici (es: "dalle 8 alle 11")
-                const matchOre = [...orarioStr.matchAll(/\b(\d{{1,2}})\b/g)];
-                if (matchOre.length >= 2) {{
-                    const ore = parseInt(matchOre[matchOre.length - 1][1]);
-                    if (ore >= 0 && ore <= 23) return ore * 60;
-                }}
-
-                return 99999;
-            }}
-
-            // Ordina per orario: prima per inizio, poi per fascia più stretta (fine anticipata)
-            listaTappe.sort((a, b) => {{
-                const minA = estraiMinutiOrario(a._orari_display);
-                const minB = estraiMinutiOrario(b._orari_display);
-                if (minA !== minB) return minA - minB;
-                // A parità di orario di inizio, prima la fascia più stretta (fine minore)
-                const fineA = estraiMinutiFineOrario(a._orari_display);
-                const fineB = estraiMinutiFineOrario(b._orari_display);
-                if (fineA !== fineB) return fineA - fineB;
-                // A ulteriore parità, mantieni ordine percorso
-                return (a.ordine_tappa || 999) - (b.ordine_tappa || 999);
-            }});
+            // Usa lo stesso ordinamento del percorso (algoritmo di ottimizzazione)
+            const tappeOrdinate = ordinaPercorsoJS(listaTappe);
+            listaTappe.length = 0;
+            tappeOrdinate.forEach(t => listaTappe.push(t));
 
             // Info operatore e data
             const nomeOp = currentOperatore === 'TUTTI' ? 'Senza Operatore' : getDisplayName(currentOperatore);
@@ -10434,6 +10386,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
 <body>
     <div class="print-bar no-print">
         <button onclick="window.print()">🖨️ Stampa</button>
+        <button onclick="riordinaPerFasciaOraria()" style="margin-left:10px; background:#e67e22;">🕐 Riordina per Fascia Oraria</button>
     </div>
     <div class="header">
         <h1>📋 Tappe - ${{nomeOp}}</h1>
@@ -10471,6 +10424,58 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
 </body>
 </html>
 <scr` + `ipt>
+/* ── Riordina per Fascia Oraria (su richiesta) ── */
+function riordinaPerFasciaOraria() {{
+    function estraiMinutiOrario(orarioStr) {{
+        if (!orarioStr || orarioStr.trim() === '') return 99999;
+        const match = orarioStr.match(/([0-9]{{1,2}})[:.h]([0-9]{{2}})/);
+        if (match) return parseInt(match[1]) * 60 + parseInt(match[2]);
+        const matchOra = orarioStr.match(/(?:^|[^0-9])([0-9]{{1,2}})(?:$|[^0-9])/);
+        if (matchOra) {{
+            const ore = parseInt(matchOra[1]);
+            if (ore >= 0 && ore <= 23) return ore * 60;
+        }}
+        return 99999;
+    }}
+    function estraiMinutiFineOrario(orarioStr) {{
+        if (!orarioStr || orarioStr.trim() === '') return 99999;
+        const matches = [...orarioStr.matchAll(/([0-9]{{1,2}})[:.h]([0-9]{{2}})/g)];
+        if (matches.length >= 2) return parseInt(matches[1][1]) * 60 + parseInt(matches[1][2]);
+        const matchOre = [...orarioStr.matchAll(/(?:^|[^0-9])([0-9]{{1,2}})(?:$|[^0-9])/g)];
+        if (matchOre.length >= 2) {{
+            const ore = parseInt(matchOre[matchOre.length - 1][1]);
+            if (ore >= 0 && ore <= 23) return ore * 60;
+        }}
+        return 99999;
+    }}
+
+    const tbody = document.querySelector('tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+
+    // Estrai orario dalla colonna 2 (indice 2 = Orario)
+    rows.sort((a, b) => {{
+        const orarioA = a.cells[2] ? a.cells[2].textContent.trim() : '';
+        const orarioB = b.cells[2] ? b.cells[2].textContent.trim() : '';
+        const minA = estraiMinutiOrario(orarioA);
+        const minB = estraiMinutiOrario(orarioB);
+        if (minA !== minB) return minA - minB;
+        const fineA = estraiMinutiFineOrario(orarioA);
+        const fineB = estraiMinutiFineOrario(orarioB);
+        return fineA - fineB;
+    }});
+
+    // Rimuovi e reinserisci righe ordinate
+    rows.forEach(row => tbody.appendChild(row));
+
+    // Rinumera e ricalcola colori
+    rows.forEach((row, i) => {{
+        const cell = row.querySelector('.drag-handle');
+        if (cell) cell.textContent = '☰ ' + (i + 1);
+        const isApp = row.style.background === 'rgb(255, 243, 205)' || row.style.background === '#fff3cd';
+        if (!isApp) row.style.background = (i % 2 === 0) ? '#ffffff' : '#f8f9fa';
+    }});
+}}
+
 (function() {{
     /* ── Drag & Drop riordinamento righe ── */
     const tbody = document.querySelector('tbody');

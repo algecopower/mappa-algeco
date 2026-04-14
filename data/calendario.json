@@ -1410,21 +1410,6 @@
         "ora_appuntamento": "16:30-17:00",
         "data_pianificata": "2026-04-17"
       }
-    },
-    {
-      "id": "3a93324d",
-      "titolo": "PROVA",
-      "data": "2026-04-15",
-      "ora": "",
-      "ora_fine": "",
-      "descrizione": "",
-      "categoria": "promemoria",
-      "provincia": "TORINO",
-      "creato_da": "giada",
-      "creato_il": "2026-04-14T19:27:49.151916",
-      "completata": false,
-      "completata_da": null,
-      "completata_il": null
     }
   ]
 }

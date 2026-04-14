@@ -1137,8 +1137,8 @@ def api_admin_create_user():
     if not data:
         return jsonify({'success': False, 'message': 'Dati mancanti'}), 400
 
-    username = data.get('username', '').strip()
-    password = data.get('password', '').strip() or None
+    username = (data.get('username') or '').strip()
+    password = (data.get('password') or '').strip() or None
     province = data.get('province')
     ruolo = data.get('ruolo', 'user')
 

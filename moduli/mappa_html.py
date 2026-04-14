@@ -4161,6 +4161,9 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         .map-selection-active {{
             cursor: crosshair !important;
         }}
+        .map-selection-single {{
+            cursor: pointer !important;
+        }}
         /* Selected marker highlight */
         .marker-selected {{
             filter: drop-shadow(0 0 6px #06b6d4) drop-shadow(0 0 12px #06b6d4);
@@ -4278,6 +4281,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             <!-- Selection Toolbar -->
             <div class="planning-selection-bar" id="planningSelBar">
                 <div class="planning-sel-tools">
+                    <button id="btnSelSingle" onclick="startSelectionMode('single')" title="Selezione singola (clicca marker)">👆</button>
                     <button id="btnSelRect" onclick="startSelectionMode('rect')" title="Selezione rettangolo">▭</button>
                     <button id="btnSelLasso" onclick="startSelectionMode('lasso')" title="Selezione libera">✂</button>
                     <button id="btnSelAll" onclick="selectAllVisible()" title="Seleziona tutti">☑</button>
@@ -5871,19 +5875,22 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             const allSched = getContatoriSchedulabili();
             schedFilterTipologia = savedTipo;
             
-            const tipologie = new Set();
+            const tipologieMap = new Map();
             allSched.forEach(c => {{
-                if (c.tipo_ce && c.tipo_ce.trim() !== '') tipologie.add(c.tipo_ce.trim());
+                if (c.tipo_ce && c.tipo_ce.trim() !== '') {{
+                    const key = c.tipo_ce.trim().toLowerCase();
+                    if (!tipologieMap.has(key)) tipologieMap.set(key, c.tipo_ce.trim());
+                }}
             }});
             
             const select = document.getElementById('schedFilterTipologia');
             const currentVal = select.value;
             select.innerHTML = '<option value="">Tutte</option>';
-            Array.from(tipologie).sort().forEach(t => {{
+            Array.from(tipologieMap.values()).sort((a,b) => a.toLowerCase().localeCompare(b.toLowerCase())).forEach(t => {{
                 const opt = document.createElement('option');
                 opt.value = t;
                 opt.textContent = t;
-                if (t === currentVal) opt.selected = true;
+                if (t.toLowerCase() === (currentVal || '').toLowerCase()) opt.selected = true;
                 select.appendChild(opt);
             }});
         }}
@@ -12567,12 +12574,17 @@ function riordinaPerFasciaOraria() {{
                 selZona.appendChild(o);
             }});
 
-            // Tipologia
-            const tipologie = new Set();
-            allPlan.forEach(c => {{ if (c.tipo_ce && c.tipo_ce.trim()) tipologie.add(c.tipo_ce.trim()); }});
+            // Tipologia (merge case-insensitive)
+            const tipologieMap = new Map();
+            allPlan.forEach(c => {{
+                if (c.tipo_ce && c.tipo_ce.trim()) {{
+                    const key = c.tipo_ce.trim().toLowerCase();
+                    if (!tipologieMap.has(key)) tipologieMap.set(key, c.tipo_ce.trim());
+                }}
+            }});
             const selTipo = document.getElementById('planFilterTipologia');
             selTipo.innerHTML = '<option value="">Tutte</option>';
-            Array.from(tipologie).sort().forEach(t => {{
+            Array.from(tipologieMap.values()).sort((a,b) => a.toLowerCase().localeCompare(b.toLowerCase())).forEach(t => {{
                 const o = document.createElement('option');
                 o.value = t; o.textContent = t;
                 selTipo.appendChild(o);
@@ -13071,6 +13083,12 @@ function riordinaPerFasciaOraria() {{
                     }});
                     cm.options.interactive = true;
                     cm._planVisible = true;
+                    // In single-select mode, bind click handler instead of popup
+                    if (selectionMode === 'single') {{
+                        cm.unbindPopup();
+                        cm.off('click', _onSingleSelectMarkerClick);
+                        cm.on('click', _onSingleSelectMarkerClick);
+                    }}
                     markers.push(cm);
                 }} else if (cm._planVisible) {{
                     // Nascondi solo se era visibile (evita setStyle inutili)
@@ -13102,8 +13120,20 @@ function riordinaPerFasciaOraria() {{
             selectionMode = mode;
             
             // Toggle button active state
+            document.getElementById('btnSelSingle').classList.toggle('active', mode === 'single');
             document.getElementById('btnSelRect').classList.toggle('active', mode === 'rect');
             document.getElementById('btnSelLasso').classList.toggle('active', mode === 'lasso');
+            
+            if (mode === 'single') {{
+                // Single selection: click markers to toggle
+                map.getContainer().classList.add('map-selection-single');
+                // Disable popups, enable click-to-select on markers
+                markers.forEach(m => {{
+                    m.unbindPopup();
+                    m.on('click', _onSingleSelectMarkerClick);
+                }});
+                return;
+            }}
             
             // Disable map dragging during selection
             map.dragging.disable();
@@ -13117,12 +13147,20 @@ function riordinaPerFasciaOraria() {{
         }}
 
         function stopSelectionMode() {{
+            const wasSingle = selectionMode === 'single';
             selectionMode = null;
+            document.getElementById('btnSelSingle').classList.remove('active');
             document.getElementById('btnSelRect').classList.remove('active');
             document.getElementById('btnSelLasso').classList.remove('active');
             
             map.dragging.enable();
             map.getContainer().classList.remove('map-selection-active');
+            map.getContainer().classList.remove('map-selection-single');
+            
+            // Restore popups if exiting single mode
+            if (wasSingle) {{
+                _restorePlanMarkerPopups();
+            }}
             
             const mapEl = map.getContainer();
             mapEl.removeEventListener('mousedown', onSelectionMouseDown);
@@ -13140,6 +13178,33 @@ function riordinaPerFasciaOraria() {{
             }}
             lassoPoints = [];
             selectionStartPoint = null;
+        }}
+
+        function _onSingleSelectMarkerClick(e) {{
+            const m = e.target;
+            if (!m.contatore) return;
+            const eneltel = m.contatore.eneltel;
+            if (planSelectedEnteltels.has(eneltel)) {{
+                planSelectedEnteltels.delete(eneltel);
+            }} else {{
+                planSelectedEnteltels.add(eneltel);
+            }}
+            _applyMarkerSelectionStyle(m);
+            syncSelectionToCards();
+            updatePlanSelCount();
+        }}
+
+        function _restorePlanMarkerPopups() {{
+            const oggiStr = getOggiStr();
+            markers.forEach(m => {{
+                m.off('click', _onSingleSelectMarkerClick);
+                if (m.contatore) {{
+                    const c = m.contatore;
+                    const isPianificato = c.data && c.data >= oggiStr;
+                    const baseColor = m.coloreTecnico || '#06b6d4';
+                    m.bindPopup(() => createContatorePopup(c, isPianificato ? '\U0001f4c5' : '\U0001f4cb', baseColor));
+                }}
+            }});
         }}
 
         function onSelectionMouseDown(e) {{

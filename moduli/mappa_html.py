@@ -5899,7 +5899,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         // Normalizza la stringa posizione rimuovendo il prefisso numerico
         function normalizePosizione(val) {{
             if (!val) return '';
-            return val.replace(/^\d+\s*-\s*/, '').trim().toLowerCase();
+            return val.replace(/^[0-9]+ *- */, '').trim().toLowerCase();
         }}
 
         function populateSchedPosizioneDropdown() {{
@@ -10041,7 +10041,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                     const response = await fetch(window.location.href + '?t=' + Date.now(), {{ cache: 'no-store' }});
                     const text = await response.text();
 
-                    const match = text.match(/timestamp: "(\\d+)"/);
+                    const match = text.match(/timestamp: "([0-9]+)"/);
                     if (match && match[1] !== lastTimestamp) {{
                         document.getElementById('updateIndicator').style.display = 'block';
                         setTimeout(() => {{
@@ -11828,22 +11828,22 @@ function riordinaPerFasciaOraria() {{
             // Parsing ora inizio
             let oraInizio = 480;  // default 8:00
             const oraStr = document.getElementById('settings_ora_inizio').value.trim();
-            const oraMatch = oraStr.match(/^(\\d{{1,2}})[:.\\.](\\d{{2}})$/);
+            const oraMatch = oraStr.match(/^([0-9]{{1,2}})[:.\\.]([0-9]{{2}})$/);
             if (oraMatch) {{
                 oraInizio = parseInt(oraMatch[1]) * 60 + parseInt(oraMatch[2]);
             }} else {{
-                const oraMatch2 = oraStr.match(/^(\\d{{1,2}})$/);
+                const oraMatch2 = oraStr.match(/^([0-9]{{1,2}})$/);
                 if (oraMatch2) oraInizio = parseInt(oraMatch2[1]) * 60;
             }}
             
             // Parsing ora fine
             let oraFine = 1020;  // default 17:00
             const oraFineStr = document.getElementById('settings_ora_fine').value.trim();
-            const oraFineMatch = oraFineStr.match(/^(\\d{{1,2}})[:.\\.](\\d{{2}})$/);
+            const oraFineMatch = oraFineStr.match(/^([0-9]{{1,2}})[:.\\.]([0-9]{{2}})$/);
             if (oraFineMatch) {{
                 oraFine = parseInt(oraFineMatch[1]) * 60 + parseInt(oraFineMatch[2]);
             }} else {{
-                const oraFineMatch2 = oraFineStr.match(/^(\\d{{1,2}})$/);
+                const oraFineMatch2 = oraFineStr.match(/^([0-9]{{1,2}})$/);
                 if (oraFineMatch2) oraFine = parseInt(oraFineMatch2[1]) * 60;
             }}
             

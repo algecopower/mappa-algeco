@@ -10,6 +10,7 @@ from flask import Blueprint, request, jsonify, session, send_file
 from moduli.auth import login_required
 from moduli.shared import (
     get_worksheet, get_headers, get_header_map,
+    get_all_values_cached,
     _get_username, _api_error, _callbacks,
 )
 from moduli.calendario import (
@@ -443,8 +444,7 @@ def _recupera_dati_aggiornati_dal_filone() -> dict:
         'operatori': {},
     }
     try:
-        ws = get_worksheet()
-        all_data = ws.get_all_values()
+        all_data = get_all_values_cached()
         if not all_data:
             return risultato
         

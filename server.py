@@ -1299,6 +1299,8 @@ from moduli import (
     genera_report_distanze_con_cache,
     stampa_report_distanze,
     carica_dati_google_sheets,
+    dati_sono_cambiati,
+    cambiamento_e_strutturale,
     genera_report_zone,
     genera_mappa_html
 )
@@ -1315,9 +1317,23 @@ _sync_thread = None
 _sync_lock = threading.Lock()      # Impedisce esecuzioni concorrenti di sincronizza_dati
 _sync_needed = threading.Event()   # Segnala che serve un sync ASAP (dopo modifica utente)
 
+# Cache risultati ultimo sync riuscito (per light sync su modifiche cosmetiche)
+_last_report = None
+_last_risultato_zone = None
+
 
 def _do_sincronizza_dati():
-    """Logica effettiva di sincronizzazione (chiamare solo con _sync_lock acquisito)."""
+    """Logica effettiva di sincronizzazione (chiamare solo con _sync_lock acquisito).
+
+    Tre livelli di ottimizzazione:
+    1. Dati invariati (hash identico) → skip completo
+    2. Solo modifiche cosmetiche (telefono, email, note...) → light sync:
+       aggiorna solo i dati contatori nel JSON, riusa percorsi/zone in cache
+    3. Modifiche strutturali (data, operatore, coordinate, appuntamenti) → full sync:
+       ricalcola distanze, zone, percorsi, rigenera mappa
+    """
+    global _last_report, _last_risultato_zone
+
     logger.info(f"[SYNC {time_module.strftime('%H:%M:%S')}] {'='*50}")
     logger.info(f"[SYNC {time_module.strftime('%H:%M:%S')}] Sincronizzazione - {PROVINCIA_ATTIVA}")
     logger.info(f"[SYNC {time_module.strftime('%H:%M:%S')}] {'='*50}")
@@ -1325,15 +1341,37 @@ def _do_sincronizza_dati():
     start_loop = time_module.time()
     
     try:
-        # Carica cache
-        cache_distanze, cache_hash = carica_cache()
-        cache_distanze, cache_hash = pulisci_cache_vecchia(cache_distanze, cache_hash, giorni_da_mantenere=7)
-
-        # Carica dati
-        df = carica_dati_google_sheets()
+        # Carica dati (force=True → scarica sempre dal foglio nel sync periodico)
+        df = carica_dati_google_sheets(force=True)
         if df is None:
             logger.warning(f"[SYNC] ⚠️ Nessun dato caricato")
             return False
+
+        # LIVELLO 1: Se i dati non sono cambiati affatto, salta tutto
+        if not dati_sono_cambiati():
+            elapsed = time_module.time() - start_loop
+            logger.info(f"[SYNC] ⚡ Dati invariati, skip elaborazione ({elapsed:.1f}s)")
+            return True
+
+        # LIVELLO 2: Modifiche cosmetiche — light sync
+        if not cambiamento_e_strutturale() and _last_report is not None:
+            logger.info("[SYNC] 📝 Modifiche cosmetiche — light sync (riuso percorsi/zone in cache)")
+
+            # Rigenera solo i dati contatori nel JSON + HTML, riusando percorsi e zone
+            genera_mappa_html(df, _last_report, _last_risultato_zone, filename=FILE_MAPPA)
+
+            elapsed = time_module.time() - start_loop
+            logger.info(f"✅ Light sync completato in {elapsed:.1f}s")
+
+            sse_notify_all('sync_complete', {'source': 'light_sync'})
+            return True
+
+        # LIVELLO 3: Modifiche strutturali — full sync
+        logger.info("[SYNC] 🔧 Modifiche strutturali — full sync (ricalcolo percorsi)")
+
+        # Carica cache distanze
+        cache_distanze, cache_hash = carica_cache()
+        cache_distanze, cache_hash = pulisci_cache_vecchia(cache_distanze, cache_hash, giorni_da_mantenere=7)
 
         # Calcolo distanze
         logger.info("🚗 Verifica distanze (con cache)...")
@@ -1352,8 +1390,12 @@ def _do_sincronizza_dati():
         logger.info("🌐 Generazione mappa HTML...")
         genera_mappa_html(df, report, risultato_zone, filename=FILE_MAPPA)
 
+        # Salva per riuso nel light sync
+        _last_report = report
+        _last_risultato_zone = risultato_zone
+
         elapsed = time_module.time() - start_loop
-        logger.info(f"✅ Sync completato in {elapsed:.1f}s")
+        logger.info(f"✅ Full sync completato in {elapsed:.1f}s")
         
         # Backup periodico automatico (giornaliero, con pulizia mensile)
         try:
@@ -1363,7 +1405,7 @@ def _do_sincronizza_dati():
             logger.warning(f"[BACKUP] ⚠️ Errore nel backup periodico: {e_backup}")
         
         # Notifica tutti i client SSE che ci sono nuovi dati
-        sse_notify_all('sync_complete', {'source': 'background_sync'})
+        sse_notify_all('sync_complete', {'source': 'full_sync'})
         
         return True
         

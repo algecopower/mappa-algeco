@@ -19,6 +19,7 @@ from moduli.safe_json import json_read
 from moduli.auth import login_required
 from moduli.shared import (
     get_worksheet, get_header_map, get_headers,
+    invalidate_values_cache,
     find_row_by_eneltel, find_row_by_pod,
     build_pod_row_map, verify_row_pod,
     _api_error, _get_username, _callbacks,
@@ -448,6 +449,7 @@ def upload_BOXBEAT():
         if all_updates:
             logger.info(f"[BOXBEAT] Eseguo batch update con {len(all_updates)} celle...")
             ws.batch_update(all_updates)
+            invalidate_values_cache()
 
         return jsonify({
             'success': True,

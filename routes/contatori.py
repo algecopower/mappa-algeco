@@ -18,6 +18,8 @@ from moduli.shared import (
     get_worksheet,
     get_header_map,
     get_headers,
+    get_all_values_cached,
+    invalidate_values_cache,
     find_row_by_eneltel,
     find_row_by_pod,
     verify_row_pod,
@@ -316,6 +318,7 @@ def bulk_pianifica():
         for i in range(0, len(all_updates), CHUNK_SIZE):
             chunk = all_updates[i:i + CHUNK_SIZE]
             ws.batch_update(chunk)
+        invalidate_values_cache()
 
         # Triggera sync per rigenerare JSON
         _callbacks['trigger_sync_after_edit']()
@@ -557,13 +560,11 @@ def remove_appuntamento(eneltel):
 def get_filone():
     """
     Restituisce tutti i dati del FILONE per la vista Excel.
-    Carica tutti i dati in una sola volta (cache lato client).
+    Usa cache in memoria per evitare download ripetuti da Google Sheets.
     """
     try:
-        ws = get_worksheet()
-
-        # Ottieni tutti i dati
-        all_data = ws.get_all_values()
+        # Usa cache in memoria (non ri-scarica se dati freschi)
+        all_data = get_all_values_cached()
         headers = all_data[0] if all_data else []
         rows = all_data[1:] if len(all_data) > 1 else []
 
@@ -974,6 +975,7 @@ def update_filone_row(row_num):
 
         if updates:
             ws.batch_update(updates)
+            invalidate_values_cache()
 
         # === RILEVAMENTO APPUNTAMENTI MANUALI ===
         # "APP HH:MM" nella colonna NOTE APP (logica unificata)
@@ -1157,6 +1159,7 @@ def update_filone_bulk():
         for i in range(0, len(all_updates), CHUNK_SIZE):
             chunk = all_updates[i:i + CHUNK_SIZE]
             ws.batch_update(chunk)
+        invalidate_values_cache()
 
         # Aggiorna rows_dict con righe rimappate per il rilevamento appuntamenti
         if row_remap:
@@ -1293,6 +1296,7 @@ def append_filone_rows():
 
         # Append in batch
         ws.append_rows(rows_to_append, value_input_option='USER_ENTERED')
+        invalidate_values_cache()
 
         logger.info(f"[Filone] ✅ Append: {len(rows_to_append)} nuove righe aggiunte")
         return jsonify({'success': True, 'rows_added': len(rows_to_append)})
@@ -1505,6 +1509,7 @@ def genera_orari_lettere():
                 batch = updates[i:i + batch_size]
                 ws.batch_update(batch)
                 logger.info(f"   ✍️ Batch {i//batch_size + 1}: {len(batch)} celle aggiornate")
+            invalidate_values_cache()
 
         # Genera anche il file Excel lettere
         file_excel = None

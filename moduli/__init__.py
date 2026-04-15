@@ -34,7 +34,7 @@ from .fasce_orarie import (
     get_colore_fascia
 )
 
-from .data_loader import carica_dati_google_sheets
+from .data_loader import carica_dati_google_sheets, dati_sono_cambiati, cambiamento_e_strutturale
 
 from .zone_geografiche import (
     genera_report_zone,

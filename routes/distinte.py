@@ -24,7 +24,7 @@ from moduli.safe_json import json_read, json_write
 from moduli.shared import (
     get_worksheet, get_header_map, get_headers,
     find_row_by_eneltel, find_row_by_pod,
-    build_pod_row_map,
+    build_pod_row_map, invalidate_values_cache,
     _imposta_appuntamento_su_filone, _rimuovi_appuntamento_da_filone,
     _api_error, _get_colonna_note, _get_username,
     _trova_indice_multi,
@@ -856,6 +856,7 @@ def sovrascrivi_valore_filone():
         if col_name in header_map:
             col = header_map[col_name]
             ws.update_cell(row, col, valore)
+            invalidate_values_cache()
 
             # Triggera sync
             _callbacks['trigger_sync_after_edit']()
@@ -926,6 +927,7 @@ def aggiorna_operatori_filone():
 
         if updates:
             _sheets_retry(ws.batch_update, updates)
+            invalidate_values_cache()
             _callbacks['trigger_sync_after_edit']()
 
         return jsonify({
@@ -994,6 +996,7 @@ def salva_nota_distinte():
 
             # Aggiorna
             ws.update_cell(row, col, nuova_nota)
+            invalidate_values_cache()
 
         return jsonify({
             'success': True,
@@ -1114,6 +1117,7 @@ def segna_numero_errato():
         if 'ERRATO' not in valore_attuale.upper():
             nuovo_valore = f"{valore_attuale} ERRATO" if valore_attuale else "ERRATO"
             _sheets_retry(ws.update_acell, cell_ref, nuovo_valore)
+            invalidate_values_cache()
 
         # Applica formattazione strikethrough (con retry per evitare fallimenti da rate-limit)
         _sheets_retry(ws.format, cell_ref, {
@@ -1233,6 +1237,7 @@ def aggiorna_data_distinte():
 
         col = header_map[col_data]
         ws.update_cell(row, col, nuova_data)
+        invalidate_values_cache()
 
         # Triggera sync immediato per rigenerare i JSON
         _callbacks['trigger_sync_after_edit']()
@@ -1288,6 +1293,7 @@ def salva_telefono_filone():
 
         # Salva nel filone
         ws.update_cell(row, col_tel, valore)
+        invalidate_values_cache()
 
         # Triggera sync per aggiornare i JSON
         _callbacks['trigger_sync_after_edit']()
@@ -1336,6 +1342,7 @@ def salva_email_filone():
 
         # Salva nel filone
         ws.update_cell(row, col_email, email)
+        invalidate_values_cache()
 
         # Triggera sync per aggiornare i JSON
         _callbacks['trigger_sync_after_edit']()

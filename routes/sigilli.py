@@ -13,6 +13,7 @@ from flask import Blueprint, request, jsonify
 from moduli.auth import login_required
 from moduli.shared import (
     get_worksheet, get_header_map, find_row_by_eneltel,
+    invalidate_values_cache,
     _trova_indice_multi, _api_error,
 )
 from config import PROVINCIA_ATTIVA, COLONNE_SIGILLI
@@ -176,6 +177,7 @@ def salva_sigillo(eneltel):
         cell_ref = gspread.utils.rowcol_to_a1(row_num, col_sigillo)
         ws = get_worksheet()
         ws.update_acell(cell_ref, sigillo)
+        invalidate_values_cache()
 
         logger.info(f"[SIGILLI] ✅ Sigillo '{sigillo}' salvato per {eneltel} (cella {cell_ref})")
 
@@ -327,6 +329,7 @@ def salva_matricola(eneltel):
         cell_ref = gspread.utils.rowcol_to_a1(row_num, col_matricola)
         ws = get_worksheet()
         ws.update_acell(cell_ref, matricola)
+        invalidate_values_cache()
 
         logger.info(f"[MATRICOLE] ✅ Matricola '{matricola}' salvata per {eneltel} (cella {cell_ref})")
 

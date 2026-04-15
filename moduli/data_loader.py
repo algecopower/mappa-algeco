@@ -18,12 +18,40 @@ Colonne utilizzate dal FILONE:
 - Operatore          → TEC_K (tecnico)
 """
 import re
+import hashlib
 import logging
+import time as _time_module
+import threading
 import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
 logger = logging.getLogger('mappa_algeco')
+
+# ============================================================================
+# CACHE IN MEMORIA — evita ri-download e ri-processing inutili
+# ============================================================================
+_dl_cache_lock = threading.Lock()
+_dl_cached_df = None          # DataFrame processato
+_dl_cached_raw_hash = None    # Hash MD5 dei dati grezzi
+_dl_cache_timestamp = 0       # Timestamp ultimo download
+_dl_data_changed = True       # Flag: ultimo download ha trovato dati diversi?
+_dl_structural_change = True  # Flag: cambiamento strutturale (richiede ricalcolo percorsi)?
+_DL_CACHE_TTL = 30            # Secondi: non ri-scaricare entro questo intervallo
+
+# Colonne nel DataFrame processato che influenzano percorsi/mappa.
+# Se cambiano → ricalcola distanze, zone, percorsi.
+# Se NON cambiano → basta aggiornare i dati contatori nel JSON.
+_COLONNE_STRUTTURALI = [
+    'Eneltel_Key',        # identità riga (aggiunta/rimozione contatori)
+    'DATA_K',             # data pianificata (raggruppa percorsi per giorno)
+    'TEC_K',              # operatore (raggruppa percorsi per tecnico)
+    'Lat', 'Lon',         # coordinate (influenza calcolo distanze)
+    'IS_APPUNTAMENTO',    # appuntamento (influenza ordine tappe)
+    'ORA_APPUNTAMENTO',   # orario appuntamento (influenza ordine tappe)
+    'IS_ANNULLATO',       # annullamento (esclude dal percorso)
+    'COMUNE',             # comune (influenza analisi zone)
+]
 
 from config import (
     ID_FOGLIO_GOOGLE,
@@ -51,6 +79,74 @@ except ImportError:
 from config import USA_LOCALITA_COME_COMUNE
 
 from .percorso import normalizza_eneltel, estrai_orario
+
+
+def _hash_raw_values(values):
+    """Calcola hash MD5 dei dati grezzi del foglio per rilevare modifiche."""
+    data_str = str(values)
+    return hashlib.md5(data_str.encode()).hexdigest()
+
+
+def dati_sono_cambiati():
+    """Ritorna True se l'ultimo caricamento ha trovato dati modificati."""
+    return _dl_data_changed
+
+
+def cambiamento_e_strutturale():
+    """Ritorna True se il cambiamento rilevato riguarda colonne strutturali
+    (date, operatore, coordinate, appuntamenti) che richiedono ricalcolo percorsi.
+
+    Se False, basta aggiornare i dati contatori senza ricalcolare distanze/zone.
+    """
+    return _dl_structural_change
+
+
+def _rileva_cambiamento_strutturale(df_old, df_new):
+    """Confronta due DataFrame sulle colonne strutturali.
+
+    Ritorna True se almeno una colonna strutturale è cambiata
+    (nuovo contatore, data spostata, operatore cambiato, coordinate mosse, ecc.).
+    """
+    if df_old is None or df_new is None:
+        return True
+
+    # Numero righe diverso = contatori aggiunti o rimossi
+    if len(df_old) != len(df_new):
+        return True
+
+    cols = [c for c in _COLONNE_STRUTTURALI if c in df_old.columns and c in df_new.columns]
+    if not cols:
+        return True
+
+    try:
+        # Ordina per Eneltel_Key per confronto deterministico
+        key = 'Eneltel_Key'
+        if key not in cols:
+            return True
+
+        old_sorted = df_old[cols].sort_values(key).reset_index(drop=True)
+        new_sorted = df_new[cols].sort_values(key).reset_index(drop=True)
+
+        # Confronto colonna per colonna per log dettagliato
+        for col in cols:
+            if not old_sorted[col].equals(new_sorted[col]):
+                diff_count = (old_sorted[col] != new_sorted[col]).sum()
+                logger.info(f"   🔧 Cambiamento strutturale: colonna '{col}' ({diff_count} righe diverse)")
+                return True
+
+        return False
+    except Exception as e:
+        logger.warning(f"   ⚠️ Errore confronto strutturale: {e}, assumo strutturale")
+        return True
+
+
+def invalidate_data_cache():
+    """Invalida la cache del DataFrame (ad es. dopo scritture manuali)."""
+    global _dl_cached_df, _dl_cached_raw_hash, _dl_cache_timestamp
+    with _dl_cache_lock:
+        _dl_cached_df = None
+        _dl_cached_raw_hash = None
+        _dl_cache_timestamp = 0
 
 
 def trova_colonna(df, nomi_possibili, default=None, chiave_mapping=None):
@@ -123,8 +219,31 @@ def parse_data_flessibile(valore):
     return None
 
 
-def carica_dati_google_sheets():
-    """Carica tutti i dati direttamente dal FILONE (Google Sheet)."""
+def carica_dati_google_sheets(force=False):
+    """Carica tutti i dati direttamente dal FILONE (Google Sheet).
+
+    Con sistema di cache in memoria:
+    - Se force=False e la cache è fresca (< _DL_CACHE_TTL secondi), ritorna
+      il DataFrame in cache senza contattare Google Sheets.
+    - Se i dati scaricati sono identici all'ultima volta (hash MD5),
+      salta tutto il processing e ritorna il DataFrame in cache.
+    - Il flag dati_sono_cambiati() indica se i dati sono effettivamente diversi.
+
+    Args:
+        force: Se True, scarica sempre dal foglio (usato dal sync periodico).
+    """
+    global _dl_cached_df, _dl_cached_raw_hash, _dl_cache_timestamp, _dl_data_changed, _dl_structural_change
+
+    now = _time_module.time()
+
+    # Cache TTL: se non forzato e cache fresca, ritorna dal cache
+    if not force:
+        with _dl_cache_lock:
+            if _dl_cached_df is not None and (now - _dl_cache_timestamp) < _DL_CACHE_TTL:
+                logger.info("📊 Dati FILONE serviti da cache in memoria (nessun download)")
+                _dl_data_changed = False
+                _dl_structural_change = False
+                return _dl_cached_df.copy()
 
     logger.info("=" * 60)
     logger.info("📊 CARICAMENTO DATI DAL FILONE")
@@ -138,6 +257,20 @@ def carica_dati_google_sheets():
     client = gspread.authorize(creds)
     sheet = client.open_by_key(ID_FOGLIO_GOOGLE).get_worksheet_by_id(GID_SCHEDA)
     values = sheet.get_all_values()
+
+    # ================================================================
+    # HASH-BASED CHANGE DETECTION
+    # ================================================================
+    raw_hash = _hash_raw_values(values)
+
+    with _dl_cache_lock:
+        if raw_hash == _dl_cached_raw_hash and _dl_cached_df is not None:
+            _dl_cache_timestamp = _time_module.time()
+            _dl_data_changed = False
+            _dl_structural_change = False
+            logger.info(f"📊 Dati FILONE invariati (hash identico), skip processing")
+            logger.info("=" * 60)
+            return _dl_cached_df.copy()
 
     df = pd.DataFrame(values[1:], columns=values[0])
     df.columns = df.columns.str.strip()
@@ -507,5 +640,20 @@ def carica_dati_google_sheets():
     else:
         logger.info(f"   📍 TOTALE PUNTI: {len(df)}")
     logger.info("=" * 60)
-    
+
+    # ================================================================
+    # SALVA IN CACHE + RILEVA TIPO CAMBIAMENTO
+    # ================================================================
+    with _dl_cache_lock:
+        _dl_structural_change = _rileva_cambiamento_strutturale(_dl_cached_df, df)
+        _dl_cached_df = df.copy()
+        _dl_cached_raw_hash = raw_hash
+        _dl_cache_timestamp = _time_module.time()
+        _dl_data_changed = True
+
+    if _dl_structural_change:
+        logger.info("   🔧 Tipo cambiamento: STRUTTURALE (ricalcolo percorsi necessario)")
+    else:
+        logger.info("   📝 Tipo cambiamento: COSMETICO (solo aggiornamento dati)")
+
     return df

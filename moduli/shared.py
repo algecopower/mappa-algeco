@@ -39,6 +39,14 @@ _worksheet_initialized = False
 _sheets_lock = threading.Lock()
 _gsheets_write_lock = threading.Lock()  # Serializza operazioni di scrittura su Google Sheets
 
+# ============================================================================
+# CACHE VALORI FOGLIO (evita ri-download su ogni richiesta)
+# ============================================================================
+_cached_all_values = None
+_cached_all_values_ts = 0
+_values_cache_lock = threading.Lock()
+_VALUES_CACHE_TTL = 30  # secondi — non ri-scaricare entro questo intervallo
+
 
 def _sheets_retry(func, *args, max_retries=3, **kwargs):
     """
@@ -83,6 +91,50 @@ def _reset_sheets_client():
         _sheets_client = None
         _worksheet = None
         _worksheet_initialized = False
+    invalidate_values_cache()
+
+
+def invalidate_values_cache():
+    """Invalida la cache dei valori del foglio (dopo scritture).
+    Invalida anche la cache del DataFrame processato in data_loader."""
+    global _cached_all_values, _cached_all_values_ts
+    with _values_cache_lock:
+        _cached_all_values = None
+        _cached_all_values_ts = 0
+    # Invalida anche la cache del DataFrame processato
+    try:
+        from .data_loader import invalidate_data_cache
+        invalidate_data_cache()
+    except ImportError:
+        pass
+
+
+def get_all_values_cached(force=False):
+    """Ritorna tutti i valori del foglio con cache in memoria (thread-safe).
+
+    Se la cache è fresca (< _VALUES_CACHE_TTL secondi), ritorna i dati
+    in cache senza contattare Google Sheets.
+
+    Args:
+        force: Se True, scarica sempre dal foglio.
+    """
+    global _cached_all_values, _cached_all_values_ts
+    now = time.time()
+
+    if not force:
+        with _values_cache_lock:
+            if _cached_all_values is not None and (now - _cached_all_values_ts) < _VALUES_CACHE_TTL:
+                logger.debug("[Cache] Valori foglio serviti da cache in memoria")
+                return _cached_all_values
+
+    ws = get_worksheet()
+    values = _sheets_retry(ws.get_all_values)
+
+    with _values_cache_lock:
+        _cached_all_values = values
+        _cached_all_values_ts = time.time()
+
+    return values
 
 
 def get_sheets_client():
@@ -305,6 +357,7 @@ def update_cell(row, col_name, value):
             return False, f"Colonna '{col_name}' non trovata"
         col = _header_map[col_name]
         ws.update_cell(row, col, value)
+    invalidate_values_cache()
     return True, "OK"
 
 
@@ -339,6 +392,7 @@ def update_row_fields(eneltel, fields):
             logger.info(f"   📝 batch_update con {len(updates)} celle...")
             ws.batch_update(updates)
             logger.info(f"   ✅ batch_update completato!")
+        invalidate_values_cache()
 
     if errors:
         return True, f"Aggiornato con warning: {', '.join(errors)}"
@@ -392,6 +446,7 @@ def _imposta_appuntamento_su_filone(row, orario, data_app='', note_extra='',
 
         nuova_nota = f"{nota_app} // {nota_attuale}" if nota_attuale else nota_app
         ws.update_cell(row, col, nuova_nota)
+    invalidate_values_cache()
 
     # Auto-crea promemoria Appuntamento
     try:
@@ -450,6 +505,7 @@ def _rimuovi_appuntamento_da_filone(row, nota_corrente=None):
         nuova_nota = re.sub(r'\s*//\s*', ' // ', nuova_nota).strip(' /|-')
         nuova_nota = re.sub(r'^//\s*|\s*//\s*$', '', nuova_nota).strip()
         ws.update_cell(row, col, nuova_nota)
+    invalidate_values_cache()
 
     _callbacks['trigger_sync_after_edit']()
     return {'nuova_nota': nuova_nota}

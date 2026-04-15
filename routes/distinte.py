@@ -901,7 +901,10 @@ def aggiorna_operatori_filone():
 
         aggiornati = 0
         errori = []
-        pod_matricole = []  # (pod, matricola) per rimappatura
+        updates = []
+
+        # Leggi la mappa POD→riga una sola volta (1 chiamata API)
+        pod_map = build_pod_row_map()
 
         for item in contatori:
             pod = (item.get('pod') or '').strip().upper()
@@ -910,30 +913,20 @@ def aggiorna_operatori_filone():
             if not pod or not matricola:
                 continue
 
-            # Verifica che il POD esista (lookup iniziale)
-            row = find_row_by_pod(pod)
+            row = pod_map.get(pod)
             if row is None:
                 errori.append(f'POD {pod} non trovato')
                 continue
 
-            pod_matricole.append((pod, matricola))
+            updates.append({
+                'range': gspread.utils.rowcol_to_a1(row, col_operatore),
+                'values': [[matricola]]
+            })
             aggiornati += 1
 
-        if pod_matricole:
-            # Rimappa righe con lookup fresco subito prima della scrittura
-            fresh_pod_map = build_pod_row_map()
-            updates = []
-            for pod, matricola in pod_matricole:
-                fresh_row = fresh_pod_map.get(pod)
-                if fresh_row is None:
-                    continue
-                updates.append({
-                    'range': gspread.utils.rowcol_to_a1(fresh_row, col_operatore),
-                    'values': [[matricola]]
-                })
-            if updates:
-                _sheets_retry(ws.batch_update, updates)
-                _callbacks['trigger_sync_after_edit']()
+        if updates:
+            _sheets_retry(ws.batch_update, updates)
+            _callbacks['trigger_sync_after_edit']()
 
         return jsonify({
             'success': True,

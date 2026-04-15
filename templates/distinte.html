@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2">
-    <title>Gestione Distinte - Algeco Power</title>
+    <title>Gestione PDF E-Distribuzione - Algeco Power</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         :root {
@@ -1626,7 +1626,7 @@
         <header>
             <h1>
                 <i class="fas fa-file-alt"></i>
-                Gestione Distinte
+                Gestione PDF E-Distribuzione
             </h1>
             <span class="provincia-badge" id="provinciaBadge">TORINO</span>
         </header>
@@ -1635,15 +1635,26 @@
         <div class="upload-section" id="uploadSection">
             <label for="pdfInput">
                 <i class="fas fa-file-pdf"></i>
-                <span><strong>Carica file DistintaBase</strong></span>
+                <span><strong>Carica file PDF E-Distribuzione</strong></span>
                 <p>Trascina qui i file PDF o clicca per selezionare</p>
             </label>
             <input type="file" id="pdfInput" accept=".pdf" multiple>
+
+            <!-- Selettore tipo documento -->
+            <div style="margin-top: 12px; display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap;">
+                <span style="font-size: 0.85rem; color: var(--text-muted);">Tipo documento:</span>
+                <select id="tipoDocumento" style="padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); font-size: 0.85rem; cursor: pointer;">
+                    <option value="auto" selected>🔍 Auto-rileva</option>
+                    <option value="distinta">📋 Distinta Base</option>
+                    <option value="modulo_maxy">📄 Modulo Maxy</option>
+                </select>
+            </div>
+
             <div class="file-list" id="fileList"></div>
             <div style="margin-top: 15px;">
                 <button class="btn btn-primary" id="processBtn" disabled>
                     <i class="fas fa-cogs" style="color: white;"></i>
-                    Elabora Distinte
+                    Elabora PDF
                 </button>
             </div>
         </div>
@@ -2093,12 +2104,12 @@
 
         function handleFiles(files) {
             for (const file of files) {
-                if (file.type === 'application/pdf' && file.name.toLowerCase().startsWith('distintabase')) {
+                if (file.type === 'application/pdf') {
                     if (!selectedFiles.find(f => f.name === file.name)) {
                         selectedFiles.push(file);
                     }
-                } else if (file.type === 'application/pdf') {
-                    showToast('Il file deve iniziare con "DistintaBase"', 'warning');
+                } else {
+                    showToast('Sono accettati solo file PDF', 'warning');
                 }
             }
             renderFileList();
@@ -2132,6 +2143,9 @@
                 selectedFiles.forEach(file => {
                     formData.append('files', file);
                 });
+                // Invia il tipo documento selezionato
+                const tipoDoc = document.getElementById('tipoDocumento').value;
+                formData.append('tipo_documento', tipoDoc);
 
                 const resp = await fetch('/api/distinte/parse-distinta', {
                     method: 'POST',
@@ -2159,7 +2173,8 @@
                 document.getElementById('filtersSection').style.display = 'flex';
                 document.getElementById('alertsSection').style.display = differenze.length > 0 ? 'block' : 'none';
                 
-                showToast(`Elaborati ${contatti.length} contatti`);
+                const tipoLabel = data.tipo_documento === 'modulo_maxy' ? 'Modulo Maxy' : 'Distinta Base';
+                showToast(`Elaborati ${contatti.length} contatti da ${tipoLabel}`);
                 
             } catch (e) {
                 console.error('Errore elaborazione:', e);

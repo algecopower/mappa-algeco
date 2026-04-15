@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-Modulo per la gestione delle Distinte Base.
+Modulo per la gestione dei PDF E-Distribuzione (Distinte Base e Moduli Maxy).
 
 Funzionalità:
 - Parsing di file PDF DistintaBase
+- Parsing di file PDF Modulo Maxy (ordini di lavoro e-distribuzione)
 - Estrazione dati utenti (nome, telefono, indirizzo, data intervento)
 - Classificazione numeri (cellulare vs fisso)
 - Generazione messaggi WhatsApp
@@ -1334,3 +1335,377 @@ def classifica_contatti(lavori: List[Dict], dati_filone: Dict[str, Dict] = None)
             risultato['fisso'].append(lavoro)
     
     return risultato
+
+
+# =============================================================================
+# PARSING MODULO MAXY (ordini di lavoro e-distribuzione)
+# =============================================================================
+
+def rileva_tipo_pdf(pdf_path: str) -> str:
+    """
+    Rileva automaticamente il tipo di PDF: 'distinta' o 'modulo_maxy'.
+    
+    Il Modulo Maxy contiene keyword specifiche come "e-distribuzione",
+    "Lavoro RCMI", "Idrda:", "Fornitura in atto", "Arrivo previsto su cantiere".
+    La DistintaBase contiene "DistintaBase", "Preposto:", "S. P. I.".
+    
+    Returns:
+        'modulo_maxy' o 'distinta'
+    """
+    try:
+        with pdfplumber.open(pdf_path) as pdf:
+            if not pdf.pages:
+                return 'distinta'
+            
+            # Controlla le prime 2 pagine
+            for page in pdf.pages[:2]:
+                text = page.extract_text() or ''
+                text_lower = text.lower()
+                
+                # Keyword esclusive del Modulo Maxy
+                if ('idrda' in text_lower and 'fornitura' in text_lower and
+                    ('arrivo previsto' in text_lower or 'lavoro rcmi' in text_lower or
+                     'distribuzione' in text_lower)):
+                    return 'modulo_maxy'
+                
+                # Keyword esclusive della DistintaBase
+                if 'distintabase' in text_lower or 's. p. i.' in text_lower:
+                    return 'distinta'
+    except Exception as e:
+        logger.error(f"[PDF] Errore rilevamento tipo PDF: {e}")
+    
+    return 'distinta'  # Default
+
+
+def parse_modulo_maxy_pdf(pdf_path: str) -> List[Dict]:
+    """
+    Estrae i dati dagli ordini di lavoro Modulo Maxy (e-distribuzione).
+    
+    Ogni pagina del PDF corrisponde a un ordine di lavoro con un form strutturato.
+    I dati vengono estratti come testo e poi parsati con regex.
+    
+    Args:
+        pdf_path: Percorso al file PDF
+        
+    Returns:
+        Lista di dizionari con i dati estratti per ogni lavoro,
+        nello stesso formato di parse_distinta_pdf()
+    """
+    risultati = []
+    
+    try:
+        with pdfplumber.open(pdf_path) as pdf:
+            for page_num, page in enumerate(pdf.pages):
+                try:
+                    lavoro = _estrai_lavoro_da_pagina_maxy(page, page_num + 1)
+                    if lavoro and lavoro.get('pod'):
+                        risultati.append(lavoro)
+                except Exception as e:
+                    logger.error(f"[MAXY] Errore pagina {page_num + 1}: {e}")
+                    import traceback
+                    traceback.print_exc()
+    except Exception as e:
+        logger.error(f"[MAXY] Errore parsing PDF: {e}")
+        raise
+    
+    return risultati
+
+
+def _estrai_lavoro_da_pagina_maxy(page, page_num: int) -> Optional[Dict]:
+    """
+    Estrae i dati di un singolo lavoro da una pagina del Modulo Maxy.
+    
+    Usa estrazione basata su coordinate delle parole per gestire correttamente
+    i form PDF tabulari dove labels e valori possono essere su righe separate.
+    """
+    text = page.extract_text() or ''
+    words = page.extract_words(keep_blank_chars=True, x_tolerance=3, y_tolerance=3) or []
+    
+    if not text or len(text) < 50 or not words:
+        return None
+    
+    text_lower = text.lower()
+    if 'idrda' not in text_lower and 'pod' not in text_lower:
+        return None
+    
+    # Log per debug
+    logger.debug(f"[MAXY] Pagina {page_num} testo estratto:\n{text[:600]}")
+    
+    risultato = {
+        'lavoro': page_num,
+        'nome': '',
+        'telefono': '',
+        'indirizzo': '',
+        'civico': '',
+        'comune': '',
+        'cap': '',
+        'data_intervento': '',
+        'pod': '',
+        'eneltel': '',
+        'matricola_operatore': '',
+    }
+    
+    # === Raggruppa parole in righe per coordinata Y ===
+    sorted_words = sorted(words, key=lambda w: (w['top'], w['x0']))
+    lines = []
+    current_line = []
+    current_y = None
+    
+    for w in sorted_words:
+        if current_y is None or abs(w['top'] - current_y) <= 4:
+            current_line.append(w)
+            if current_y is None:
+                current_y = w['top']
+        else:
+            if current_line:
+                lines.append(sorted(current_line, key=lambda x: x['x0']))
+            current_line = [w]
+            current_y = w['top']
+    if current_line:
+        lines.append(sorted(current_line, key=lambda x: x['x0']))
+    
+    # --- Helper: testo di una riga ---
+    def line_text(line):
+        return ' '.join(w['text'].strip() for w in line if w['text'].strip())
+    
+    # --- Helper: verifica se una parola è un'etichetta del form ---
+    KNOWN_LABELS = {
+        'Cliente:', 'Indirizzo:', 'Localita:', 'Località:',
+        'Pos.', 'Mis.:', 'Eneltel:', 'POD:', 'N°:', 'Scala:',
+        'Piano:', 'Int.:', 'CAP:', 'Tel.:', ')Tel.:', 'Accesso:',
+        'Uso', 'CIT:', 'TIS:', 'TAM:', 'OdS', 'Codice', 'Preventivo:',
+        'SGQ:', 'Idrda:', 'Preposto:', 'Data', 'Priorità:',
+        'FORNITURA', 'Tensione', 'Fasi:', 'Lim.', 'Pot.', 'TA',
+        'Energia', 'Potenza', 'Note', 'Descrizione:', 'Nominativo',
+        'Firma', 'Operazione:', 'Op', 'Presa:', '(cft', 'Sez.:',
+        'Tipo:', 'Cod', 'Matricola:', 'Mis.', 'Cost.', 'ID',
+    }
+    
+    def _is_label(txt):
+        if not txt:
+            return False
+        if txt in KNOWN_LABELS:
+            return True
+        if txt.endswith(':') and len(txt) > 1 and any(c.isalpha() for c in txt[:-1]):
+            return True
+        return False
+    
+    # --- Helper: raccogli valori dopo un'etichetta sulla stessa riga ---
+    def _collect_same_line(line, after_idx):
+        parts = []
+        for j in range(after_idx + 1, len(line)):
+            txt = line[j]['text'].strip()
+            if not txt:
+                continue
+            if _is_label(txt):
+                break
+            parts.append(txt)
+        return ' '.join(parts) if parts else ''
+    
+    # --- Helper: cerca valore sotto l'etichetta (riga successiva, stessa colonna) ---
+    def _get_value_below(line_idx, word_idx, x_tol=80):
+        if line_idx + 1 >= len(lines):
+            return ''
+        label_w = lines[line_idx][word_idx]
+        label_x = label_w['x0']
+        # Determina il limite X destro: la prossima etichetta sulla stessa riga
+        max_x = float('inf')
+        for j in range(word_idx + 1, len(lines[line_idx])):
+            nxt = lines[line_idx][j]['text'].strip()
+            if _is_label(nxt):
+                max_x = lines[line_idx][j]['x0']
+                break
+        # Cerca valori nella riga sotto, nella stessa "colonna"
+        next_line = lines[line_idx + 1]
+        parts = []
+        for w in next_line:
+            if w['x0'] >= label_x - 10 and w['x0'] < max_x:
+                txt = w['text'].strip()
+                if txt and not _is_label(txt):
+                    parts.append(txt)
+        return ' '.join(parts) if parts else ''
+    
+    # --- Helper: estrai valore di un campo per prefisso etichetta ---
+    def _extract_field(label_prefix, x_tol=80):
+        label_lower = label_prefix.lower().rstrip(':')
+        for li, line in enumerate(lines):
+            for wi, w in enumerate(line):
+                wt = w['text'].strip().lower().rstrip(':')
+                if wt == label_lower or wt.startswith(label_lower):
+                    # Prova stessa riga
+                    val = _collect_same_line(line, wi)
+                    if val:
+                        return val
+                    # Prova riga sotto
+                    return _get_value_below(li, wi, x_tol)
+        return ''
+    
+    # === POD (formato unico, regex su testo è affidabile) ===
+    pod_match = re.search(r'(IT[A-Z0-9]{3}[A-Z]\d{8,})', text)
+    if pod_match:
+        risultato['pod'] = pod_match.group(1)
+    
+    # === ENELTEL ===
+    val = _extract_field('Eneltel')
+    if val:
+        digits = re.sub(r'[^\d]', '', val)
+        if len(digits) >= 9:
+            risultato['eneltel'] = digits[:9]
+    
+    # === CLIENTE ===
+    val = _extract_field('Cliente')
+    if val:
+        risultato['nome'] = val
+    
+    # === INDIRIZZO ===
+    val = _extract_field('Indirizzo')
+    if val:
+        risultato['indirizzo'] = val
+    
+    # === COMUNE (Localita/Località) ===
+    val = _extract_field('Localit')
+    if val:
+        risultato['comune'] = val.upper()
+    
+    # === CIVICO (N°) ===
+    # Gestione speciale: evita "N° Presa:" e prende solo il primo token
+    for li, line in enumerate(lines):
+        for wi, w in enumerate(line):
+            wt = w['text'].strip()
+            if wt in ('N°:', 'N°'):
+                # Salta se è "N° Presa:"
+                if wi + 1 < len(line):
+                    next_txt = line[wi + 1]['text'].strip().lower()
+                    if next_txt.startswith('presa'):
+                        continue
+                # Prova stessa riga
+                val = _collect_same_line(line, wi)
+                if not val:
+                    val = _get_value_below(li, wi, 60)
+                if val:
+                    parts = val.split()
+                    risultato['civico'] = parts[0] if parts else val
+                break
+        if risultato['civico']:
+            break
+    
+    # === CAP ===
+    val = _extract_field('CAP')
+    if val:
+        cap_match = re.search(r'(\d{5})', val)
+        if cap_match:
+            risultato['cap'] = cap_match.group(1)
+    
+    # === TELEFONO ===
+    # Cerca "Tel" in qualsiasi forma (Tel.:, )Tel.:, Tel:)
+    for li, line in enumerate(lines):
+        for wi, w in enumerate(line):
+            wt = w['text'].strip()
+            if 'Tel' in wt and ':' in wt:
+                # Trovata etichetta Tel - cerca numero dopo
+                val = _collect_same_line(line, wi)
+                if not val:
+                    val = _get_value_below(li, wi, 60)
+                if val:
+                    tel_digits = re.sub(r'[^\d]', '', val)
+                    if len(tel_digits) >= 8 and not re.match(r'^0+$', tel_digits):
+                        risultato['telefono'] = tel_digits
+                        break
+        if risultato['telefono']:
+            break
+    
+    # === DATA INTERVENTO ===
+    # Cerca data (DD/MM/YYYY) vicino a "Arrivo previsto su cantiere"
+    for li, line in enumerate(lines):
+        lt = line_text(line).lower()
+        if 'arrivo' in lt and 'previsto' in lt:
+            # Cerca data su questa riga e le successive 3
+            for check_li in range(li, min(li + 4, len(lines))):
+                check_text = line_text(lines[check_li])
+                date_match = re.search(r'(\d{2}/\d{2}/\d{4})', check_text)
+                if date_match:
+                    risultato['data_intervento'] = date_match.group(1)
+                    break
+            break
+    
+    # Fallback: Data Assegnazione (in fondo alla pagina)
+    if not risultato['data_intervento']:
+        for li, line in enumerate(lines):
+            lt = line_text(line).lower()
+            if 'data assegnazione' in lt:
+                date_match = re.search(r'(\d{2}/\d{2}/\d{4})', line_text(line))
+                if date_match:
+                    risultato['data_intervento'] = date_match.group(1)
+                    break
+                # Prova riga successiva
+                if li + 1 < len(lines):
+                    date_match = re.search(r'(\d{2}/\d{2}/\d{4})', line_text(lines[li + 1]))
+                    if date_match:
+                        risultato['data_intervento'] = date_match.group(1)
+                        break
+    
+    # === MATRICOLA OPERATORE (Preposto) ===
+    val = _extract_field('Preposto')
+    if val:
+        prep_match = re.search(r'(A[EG]\d+)', val)
+        if prep_match:
+            risultato['matricola_operatore'] = prep_match.group(1)
+    # Fallback regex su testo completo
+    if not risultato['matricola_operatore']:
+        prep_match = re.search(r'Preposto:\s*(A[EG]\d+)', text)
+        if prep_match:
+            risultato['matricola_operatore'] = prep_match.group(1)
+    
+    # === IDRDA (numero lavoro) ===
+    val = _extract_field('Idrda')
+    if val:
+        idrda_digits = re.sub(r'[^\d]', '', val)
+        if idrda_digits:
+            try:
+                risultato['lavoro'] = int(idrda_digits)
+            except ValueError:
+                pass
+    # Fallback regex su testo completo
+    if risultato['lavoro'] == page_num:
+        idrda_match = re.search(r'Idrda:\s*(\d+)', text)
+        if idrda_match:
+            try:
+                risultato['lavoro'] = int(idrda_match.group(1))
+            except ValueError:
+                pass
+    
+    # === LOG per debug ===
+    logger.info(
+        f"[MAXY] Pagina {page_num}: "
+        f"POD={risultato['pod']}, "
+        f"Cliente={risultato['nome']}, "
+        f"Ind={risultato['indirizzo']}, "
+        f"Civ={risultato['civico']}, "
+        f"Comune={risultato['comune']}, "
+        f"Tel={risultato['telefono']}, "
+        f"Data={risultato['data_intervento']}"
+    )
+    
+    return risultato
+
+
+def parse_pdf_auto(pdf_path: str, tipo: str = 'auto') -> tuple:
+    """
+    Parsa un PDF rilevando automaticamente il tipo o usando il tipo specificato.
+    
+    Args:
+        pdf_path: Percorso al file PDF
+        tipo: 'auto', 'distinta' o 'modulo_maxy'
+        
+    Returns:
+        Tupla (lista_lavori, tipo_rilevato)
+    """
+    if tipo == 'auto':
+        tipo = rileva_tipo_pdf(pdf_path)
+    
+    if tipo == 'modulo_maxy':
+        lavori = parse_modulo_maxy_pdf(pdf_path)
+    else:
+        lavori = parse_distinta_pdf(pdf_path)
+    
+    return lavori, tipo

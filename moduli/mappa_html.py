@@ -4472,8 +4472,8 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             </button>
             <a href="/distinte" target="_blank" class="gestionale-panel-btn gp-btn-distinte" style="text-decoration:none;">
                 <span class="gp-btn-icon">📋</span>
-                <span class="gp-btn-text">Gestione Distinte</span>
-                <span class="gp-btn-desc">Apri gestione distinte in nuova scheda</span>
+                <span class="gp-btn-text">Gestione PDF E-Distribuzione</span>
+                <span class="gp-btn-desc">Distinte e Moduli Maxy</span>
             </a>
             <a href="/calendario" target="_blank" class="gestionale-panel-btn gp-btn-distinte" style="text-decoration:none;">
                 <span class="gp-btn-icon">📅</span>

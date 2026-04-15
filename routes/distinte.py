@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Blueprint per le API Distinte — gestione distinte e messaggi.
+Blueprint per le API PDF E-Distribuzione — gestione distinte e moduli maxy.
 """
 import os
 import re
@@ -32,6 +32,9 @@ from moduli.shared import (
 )
 from moduli.distinte_manager import (
     parse_distinta_pdf,
+    parse_modulo_maxy_pdf,
+    parse_pdf_auto,
+    rileva_tipo_pdf,
     is_cellulare,
     classifica_contatti,
     confronta_con_filone,
@@ -634,8 +637,12 @@ def invia_singola_email():
 @login_required
 def parse_distinta_endpoint():
     """
-    Riceve file PDF DistintaBase, li elabora e restituisce i contatti.
+    Riceve file PDF (DistintaBase o Modulo Maxy), li elabora e restituisce i contatti.
     Confronta anche con i dati del filone per rilevare differenze.
+    
+    Form fields:
+        files: file PDF da elaborare
+        tipo_documento: 'auto', 'distinta' o 'modulo_maxy' (default: 'auto')
     """
     try:
         if 'files' not in request.files:
@@ -645,9 +652,15 @@ def parse_distinta_endpoint():
         if not files or all(f.filename == '' for f in files):
             return jsonify({'error': 'Nessun file selezionato'}), 400
 
+        # Tipo documento: auto, distinta, modulo_maxy
+        tipo_documento = request.form.get('tipo_documento', 'auto').strip().lower()
+        if tipo_documento not in ('auto', 'distinta', 'modulo_maxy'):
+            tipo_documento = 'auto'
+
         # Salva temporaneamente i file e elaborali
         temp_paths = []
         all_lavori = []
+        tipo_rilevato = None
 
         try:
             for file in files:
@@ -658,9 +671,11 @@ def parse_distinta_endpoint():
                     file.save(temp_path)
                     temp_paths.append(temp_path)
 
-                    # Parsa il PDF
-                    lavori = parse_distinta_pdf(temp_path)
-                    logger.info(f"[DISTINTE] Estratti {len(lavori)} lavori da {file.filename}")
+                    # Parsa il PDF con auto-detect o tipo forzato
+                    lavori, tipo_file = parse_pdf_auto(temp_path, tipo_documento)
+                    if tipo_rilevato is None:
+                        tipo_rilevato = tipo_file
+                    logger.info(f"[DISTINTE] Estratti {len(lavori)} lavori da {file.filename} (tipo: {tipo_file})")
                     all_lavori.extend(lavori)
         finally:
             # Pulisci file temporanei
@@ -809,7 +824,8 @@ def parse_distinta_endpoint():
             'totale': len(contatti),
             'cellulare': len(classificati['cellulare']),
             'fisso': len(classificati['fisso']),
-            'senza_telefono': len(classificati['senza_telefono'])
+            'senza_telefono': len(classificati['senza_telefono']),
+            'tipo_documento': tipo_rilevato or 'distinta',
         })
 
     except Exception as e:

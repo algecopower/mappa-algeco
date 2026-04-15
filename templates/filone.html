@@ -3092,6 +3092,9 @@ async function saveAll() {
     var totalRows = Object.keys(perRow).length;
     var totalCells = changes.length;
 
+    // Colonne protette sbloccate dall'utente in questa sessione
+    var unlockedArr = Array.from(unlockedCols);
+
     // Usa bulk API se ci sono molte modifiche (>3 righe), altrimenti singola per riga
     if (totalRows > 3) {
         btn.textContent = '\u23F3 Salvo ' + totalRows + ' righe...';
@@ -3099,7 +3102,7 @@ async function saveAll() {
             var r = await fetch('/api/filone/bulk', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ rows: perRow })
+                body: JSON.stringify({ rows: perRow, _unlocked_cols: unlockedArr })
             });
             var res = await r.json();
             if (r.ok && res.success) {
@@ -3137,10 +3140,11 @@ async function saveAll() {
             var fields = entries[e][1];
             btn.textContent = '\u23F3 ' + (e + 1) + '/' + totalRows;
             try {
+                var fieldsWithUnlock = Object.assign({}, fields, { _unlocked_cols: unlockedArr });
                 var r = await fetch('/api/filone/row/' + rn, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(fields)
+                    body: JSON.stringify(fieldsWithUnlock)
                 });
                 var res = await r.json();
                 if (r.ok && res.success) {

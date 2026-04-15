@@ -905,6 +905,9 @@ def update_filone_row(row_num):
         if not fields:
             return jsonify({'error': 'Nessun campo da aggiornare'}), 400
 
+        # Colonne sbloccate dall'utente (protette ma editabili per questa sessione)
+        sbloccate = set(c.lower() for c in fields.pop('_unlocked_cols', []))
+
         # Verifica àncora POD (se il client l'ha inviata)
         anchor_pod = fields.pop('_anchor_pod', None)
         if anchor_pod:
@@ -919,8 +922,9 @@ def update_filone_row(row_num):
         ws = get_worksheet()
         _header_map = get_header_map()
 
-        # Colonne protette lato server
+        # Colonne protette lato server (escluse quelle sbloccate dall'utente)
         protette = set(c.lower() for c in COLONNE_PROTETTE_FILONE.get(PROVINCIA_ATTIVA, _COLONNE_PROTETTE_BASE))
+        protette -= sbloccate
 
         # Prepara batch update
         updates = []
@@ -1043,6 +1047,9 @@ def update_filone_bulk():
         if not rows_dict:
             return jsonify({'error': 'Nessuna riga da aggiornare'}), 400
 
+        # Colonne sbloccate dall'utente (protette ma editabili per questa sessione)
+        sbloccate = set(c.lower() for c in data.get('_unlocked_cols', []))
+
         # Verifica àncora POD: se presente, controlla che le righe non siano spostate
         has_anchors = any(
             isinstance(f, dict) and '_anchor_pod' in f
@@ -1079,8 +1086,9 @@ def update_filone_bulk():
         all_updates = []
         rows_ok = 0
 
-        # Colonne protette lato server
+        # Colonne protette lato server (escluse quelle sbloccate dall'utente)
         protette = set(c.lower() for c in COLONNE_PROTETTE_FILONE.get(PROVINCIA_ATTIVA, _COLONNE_PROTETTE_BASE))
+        protette -= sbloccate
 
         for row_num_str, fields in rows_dict.items():
             # Usa riga rimappata se disponibile

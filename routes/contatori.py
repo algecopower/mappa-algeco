@@ -170,9 +170,51 @@ def update_contatore(eneltel):
         if not fields_validi:
             return jsonify({'error': 'Nessun campo valido da aggiornare'}), 400
 
+        # Leggi i valori precedenti per lo storico
+        row_num = find_row_by_eneltel(eneltel)
+        old_values = {}
+        if row_num:
+            try:
+                ws = get_worksheet()
+                row_data = ws.row_values(row_num)
+                for col_name in fields_validi:
+                    col_idx = _header_map.get(col_name)
+                    if col_idx and col_idx <= len(row_data):
+                        old_values[col_name] = row_data[col_idx - 1]
+                    else:
+                        old_values[col_name] = ''
+            except Exception as e:
+                logger.warning(f"[CellLog] Errore lettura valori precedenti: {e}")
+
         success, msg = update_row_fields(eneltel, fields_validi)
 
         if success:
+            # Registra nello storico le modifiche
+            if row_num:
+                try:
+                    ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    username = _get_username()
+                    entries = []
+                    for col_name, new_val in fields_validi.items():
+                        old_val = old_values.get(col_name, '')
+                        if str(old_val) != str(new_val):
+                            entries.append({
+                                'ts': ts,
+                                'user': username,
+                                'row': row_num,
+                                'col': col_name,
+                                'old': str(old_val)[:500],
+                                'new': str(new_val)[:500],
+                            })
+                    if entries:
+                        with _cell_log_lock:
+                            log = _load_cell_log()
+                            log.extend(entries)
+                            _save_cell_log(log)
+                        logger.info(f"[CellLog] Registrate {len(entries)} modifiche da mappa per ENELTEL {eneltel}")
+                except Exception as e:
+                    logger.warning(f"[CellLog] Errore registrazione log da mappa: {e}")
+
             # Triggera sync immediato per rigenerare i JSON
             _callbacks['trigger_sync_after_edit']()
             return jsonify({'success': True, 'message': msg, 'updated': list(fields_validi.keys())})

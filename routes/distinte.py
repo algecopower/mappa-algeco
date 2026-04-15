@@ -796,13 +796,26 @@ def parse_distinta_endpoint():
                 if not contatto.get('nome', '').strip():
                     nominativo_filone = dati_filone[pod].get('nominativo', '').strip()
                     if nominativo_filone:
-                        contatto['nome'] = nominativo_filone
-                        contatto['nome_da_filone'] = True
+                        # Rimuovi eventuali numeri di telefono dal nominativo
+                        nome_pulito = re.sub(r'\b\d{9,13}\b', '', nominativo_filone).strip()
+                        nome_pulito = re.sub(r'\s{2,}', ' ', nome_pulito).strip()
+                        if nome_pulito:
+                            contatto['nome'] = nome_pulito
+                            contatto['nome_da_filone'] = True
                 # Se il comune dalla distinta è vuoto, usa il comune dal filone
                 if not contatto.get('comune', '').strip():
                     comune_filone = dati_filone[pod].get('comune', '').strip()
                     if comune_filone:
                         contatto['comune'] = comune_filone
+                # Se l'indirizzo dalla distinta è vuoto, usa quello dal filone
+                if not contatto.get('indirizzo', '').strip():
+                    indirizzo_filone = dati_filone[pod].get('indirizzo', '').strip()
+                    if indirizzo_filone:
+                        contatto['indirizzo'] = indirizzo_filone
+                if not contatto.get('civico', '').strip():
+                    civico_filone = dati_filone[pod].get('civico', '').strip()
+                    if civico_filone:
+                        contatto['civico'] = civico_filone
                 if contatto['telefono_filone']:
                     logger.info(f"[DISTINTE] POD {pod}: telefono_filone='{contatto['telefono_filone']}'")
             else:

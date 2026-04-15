@@ -291,6 +291,96 @@ def parse_distinta_pdf(pdf_path: str) -> List[Dict]:
     return risultati
 
 
+def _extract_nome_da_chars(page, row_y, x_after_label, x_max):
+    """
+    Estrae il nome del cliente usando l'ordine del content stream PDF.
+    
+    Quando il nome è molto lungo e trabocca nella colonna Indirizzo,
+    extract_words() mescola i caratteri sovrapposti (es. "RAMONDTEOTTRII").
+    Usando page.chars (ordinati per content stream), i caratteri del nome
+    sono consecutivi e separati da quelli dell'indirizzo.
+    
+    Args:
+        page: pagina pdfplumber
+        row_y: coordinata Y della riga "Cliente:"
+        x_after_label: coordinata X fine etichetta "Cliente:" (inizio valori)
+        x_max: coordinata X massima della colonna nome (inizio etichetta "Indirizzo:")
+    """
+    all_chars = page.chars
+    if not all_chars:
+        return ''
+    
+    # Filtra caratteri sulla riga Y del "Cliente:" (±4 pixel)
+    row_items = []
+    for i, c in enumerate(all_chars):
+        if abs(c['top'] - row_y) < 4 and c['text'].strip():
+            row_items.append((i, c))
+    
+    if not row_items:
+        return ''
+    
+    # Raggruppa per indici consecutivi nel stream e discontinuità spaziali
+    groups = []
+    current = [row_items[0]]
+    for j in range(1, len(row_items)):
+        prev_idx, prev_c = current[-1]
+        curr_idx, curr_c = row_items[j]
+        
+        # Nuovo oggetto testo se:
+        # - Gap grande nell'indice del char stream (> 3)
+        # - Salto all'indietro nella posizione X (> 10px)
+        gap_idx = curr_idx - prev_idx
+        x_jump_back = prev_c['x1'] - curr_c['x0']
+        
+        if gap_idx > 3 or x_jump_back > 10:
+            groups.append(current)
+            current = [(curr_idx, curr_c)]
+        else:
+            current.append((curr_idx, curr_c))
+    groups.append(current)
+    
+    # Trova il gruppo-valore del nome cliente:
+    # - Deve iniziare dopo "Cliente:" (x >= x_after_label)
+    # - Il primo carattere deve iniziare prima di x_max (entro la colonna nome)
+    # - Non deve essere un'etichetta (no ':')
+    # - Deve avere almeno 3 caratteri (esclude "S.", "P.", "I.")
+    for g in groups:
+        first_x = g[0][1]['x0']
+        
+        # Deve iniziare dopo la fine dell'etichetta "Cliente:"
+        if first_x < x_after_label - 5:
+            continue
+        
+        # Il primo carattere deve essere entro la colonna nome (non S.P.I.)
+        if x_max and first_x >= x_max:
+            continue
+        
+        # Ricostruisci testo del gruppo
+        text_raw = ''.join(c['text'] for _, c in g)
+        
+        # Salta etichette
+        if ':' in text_raw:
+            continue
+        
+        # Salta gruppi troppo corti (S., P., I.)
+        if len(text_raw.strip()) <= 2:
+            continue
+        
+        # Ricostruisci il testo con spazi dove c'è un gap tra caratteri
+        parts = []
+        for k, (_, c) in enumerate(g):
+            if k > 0:
+                prev_c = g[k - 1][1]
+                gap = c['x0'] - prev_c['x1']
+                if gap > 1.5:
+                    parts.append(' ')
+            parts.append(c['text'])
+        
+        return ''.join(parts).strip()
+    
+    return ''
+
+
 def estrai_lavori_da_tabella(page) -> List[Dict]:
     """
     Estrae i lavori usando le coordinate delle parole nel PDF.
@@ -343,12 +433,26 @@ def estrai_lavori_da_tabella(page) -> List[Dict]:
                 row_words = [w for w in words if abs(w['top'] - row_y) < 5]
                 row_words.sort(key=lambda w: w['x0'])
                 
-                # Coordinate delle colonne (dal PDF analizzato)
-                # Cliente: x 61-240
-                # Indirizzo: x 276-420
-                # Civico: x 435-500
-                # SEPI: x > 500
+                # Trova le posizioni X delle etichette sulla riga per delimitare le colonne
+                x_cliente = cliente_label['x1']  # Fine etichetta Cliente:
+                x_indirizzo_label = None
+                x_indirizzo_val = None
+                x_civico_label = None
+                x_civico_val = None
+                x_sepi_start = None
                 
+                for w in row_words:
+                    txt = w['text'].strip()
+                    if txt == 'Indirizzo:':
+                        x_indirizzo_label = w['x0']
+                        x_indirizzo_val = w['x1']  # I valori indirizzo iniziano dopo l'etichetta
+                    elif txt == 'N°:':
+                        x_civico_label = w['x0']
+                        x_civico_val = w['x1']
+                    elif txt in ('S.', 'P.', 'I.') and x_sepi_start is None:
+                        x_sepi_start = w['x0']
+                
+                # Raccogli valori usando le posizioni reali delle etichette
                 nome_parts = []
                 indirizzo_parts = []
                 civico = ''
@@ -357,21 +461,37 @@ def estrai_lavori_da_tabella(page) -> List[Dict]:
                     txt = w['text'].strip()
                     x = w['x0']
                     
-                    # Salta etichette
-                    if txt in ['Cliente:', 'Indirizzo:', 'N°:', 'S.', 'P.', 'I.']:
+                    # Salta etichette note
+                    if txt in ('Cliente:', 'Indirizzo:', 'N°:', 'S.', 'P.', 'I.'):
                         continue
                     
-                    # Classifica in base alla posizione X
-                    if 60 < x < 275:
-                        nome_parts.append(txt)
-                    elif 275 <= x < 420:
+                    # Classifica usando le posizioni effettive delle etichette
+                    if x_sepi_start and x >= x_sepi_start:
+                        pass  # SEPI, ignorato
+                    elif x_civico_label and x >= x_civico_label:
+                        if not civico:
+                            civico = txt
+                    elif x_indirizzo_val and x >= x_indirizzo_val:
                         indirizzo_parts.append(txt)
-                    elif 430 < x < 510:
-                        civico = txt
-                    # x > 510 è SEPI, ignorato
+                    elif x_indirizzo_label and x >= x_indirizzo_label:
+                        # Tra inizio etichetta Indirizzo e fine etichetta:
+                        # potrebbe essere un nome traboccante
+                        indirizzo_parts.append(txt)
+                    else:
+                        nome_parts.append(txt)
                 
                 nome = ' '.join(nome_parts)
                 indirizzo = ' '.join(indirizzo_parts)
+                
+                # Usa page.chars (ordine content stream) per il nome:
+                # quando il nome trabocca nella colonna Indirizzo, extract_words()
+                # mescola i caratteri sovrapposti (es. RAMONDETTI+TORINO → RAMONDTEOTTRII)
+                # I chars nel stream sono invece sempre consecutivi per oggetto testo.
+                nome_clean = _extract_nome_da_chars(page, row_y, x_cliente, x_indirizzo_label)
+                if nome_clean and len(nome_clean) > 2:
+                    if nome_clean != nome:
+                        logger.info(f"[DISTINTA] Lavoro {num_lavoro}: nome corretto via chars: '{nome}' -> '{nome_clean}'")
+                    nome = nome_clean
                 
                 # Ora estrai gli altri dati (telefono, CAP, comune, POD, eneltel) dal testo
                 start_pos = match.end()
@@ -626,13 +746,12 @@ def estrai_nome_indirizzo_v3(line: str) -> Optional[Dict]:
     if not line:
         return None
     
-    # Step 2: Cerca prefissi via noti
+    # Step 2: Cerca prefissi via standard italiani
     via_prefixes = [
         'VIA', 'CORSO', 'PIAZZA', 'STRADA', 'LARGO', 'VIALE', 
         'VICOLO', 'BORGATA', 'FRAZIONE', 'LOCALITA', 'REGIONE',
         'P.ZA', 'P.ZZA', 'V.LE', 'C.SO', 'STR.', 'LOC.',
         'SANTA', 'SANTO', 'SAN', "SANT'",
-        'S.MARIA', 'S.GIOVANNI', 'S.PIETRO', 'S.PAOLO'
     ]
     
     words = line.split()
@@ -641,8 +760,8 @@ def estrai_nome_indirizzo_v3(line: str) -> Optional[Dict]:
     for i, word in enumerate(words):
         word_upper = word.upper().rstrip('.')
         
-        # Controlla prefissi esatti
-        if word_upper in via_prefixes or word_upper.rstrip('.') in ['S', 'V', 'C', 'P']:
+        # Controlla prefissi esatti o abbreviazioni S.QUALCOSA
+        if word_upper in via_prefixes or (word_upper.startswith('S.') and len(word_upper) > 2):
             # Se troviamo un prefisso via, tutto prima è il nome
             if i > 0:
                 nome = ' '.join(words[:i])
@@ -676,18 +795,12 @@ def estrai_nome_indirizzo_v3(line: str) -> Optional[Dict]:
 
 def estrai_nome_indirizzo_intelligente(line: str) -> Optional[Dict]:
     """
-    Estrae nome, indirizzo e civico da una riga usando logica migliorata.
+    Estrae nome, indirizzo e civico da una riga usando logica dinamica.
     
-    La sfida è che nel PDF abbiamo una riga come:
-    "LIUDMYLA LEONIDIVNA SHAPOVALOV CARIGNANO 54 TER TE"
-    dove:
-    - Nome: LIUDMYLA LEONIDIVNA SHAPOVALOV (3 parole)
-    - Indirizzo: CARIGNANO (nome via senza prefisso "VIA")
-    - Civico: 54 TER
-    - S.E.P.I.: TE
-    
-    Strategia: cercare il civico (numero) partendo dalla fine,
-    poi cercare pattern di nomi strade o usare euristica.
+    Non usa liste hardcoded di nomi strade/città. Si basa solo su:
+    1. Prefissi via standard italiani (VIA, CORSO, PIAZZA, S., ecc.)
+    2. La posizione del civico (numero) alla fine della riga
+    3. Fallback: prime 2 parole = nome, resto = indirizzo
     """
     if not line or len(line) < 5:
         return None
@@ -696,28 +809,10 @@ def estrai_nome_indirizzo_intelligente(line: str) -> Optional[Dict]:
     line = re.sub(r'^(Cliente:|Indirizzo:|N°:)\s*', '', line, flags=re.IGNORECASE)
     line = line.strip()
     
-    # Lista di nomi di strade comuni (senza prefisso VIA) in Piemonte/Lombardia
-    # Questi sono spesso nomi di luoghi, santi, personaggi storici
-    nomi_strade_comuni = [
-        'ROMA', 'TORINO', 'MILANO', 'ITALIA', 'GARIBALDI', 'MAZZINI', 'CAVOUR',
-        'VITTORIO EMANUELE', 'DANTE', 'LEOPARDI', 'PETRARCA', 'MARCONI',
-        'VERDI', 'CARDUCCI', 'MATTEOTTI', 'GRAMSCI', 'KENNEDY', 'EINAUDI',
-        'CARIGNANO', 'SALUZZO', 'PINEROLO', 'RIVOLI', 'ORBASSANO', 'MONCALIERI',
-        'COLLEGNO', 'GRUGLIASCO', 'CHIERI', 'SETTIMO', 'NICHELINO', 'BEINASCO',
-        # Nomi di santi (comuni nelle strade)
-        'SAN GIOVANNI', 'SANTA MARIA', 'SAN PAOLO', 'SAN PIETRO', 'SAN MARCO',
-        'SANT\'ANNA', 'SAN LORENZO', 'SAN FRANCESCO', 'SAN GIUSEPPE',
-    ]
-    
-    # Prima: estrai civico e S.E.P.I. dalla fine
-    # Pattern: numero + eventuale suffisso (TER, BIS, A, /A) + eventuale lettera S.E.P.I.
-    # Es: "54 TER TE" -> civico="54 TER", SEPI="TE"
-    # Es: "24 E" -> civico="24", SEPI="E"
-    # Es: "22" -> civico="22", SEPI=""
-    
+    # Step 1: estrai civico e S.E.P.I. dalla fine
     civico_pattern = re.search(
-        r'\s+(\d+(?:\s*(?:BIS|TER|QUATER|[A-Z]))?(?:/[A-Z0-9]+)?)'  # Civico
-        r'(?:\s+([A-Z]{1,2}))?$',  # S.E.P.I. opzionale (1-2 lettere)
+        r'\s+(\d+(?:\s*(?:BIS|TER|QUATER|[A-Z]{1,3}))?(?:/[A-Z0-9]+)?)'  # Civico
+        r'(?:\s+([A-Z]{1,2}))?$',  # S.E.P.I. opzionale
         line,
         re.IGNORECASE
     )
@@ -732,10 +827,16 @@ def estrai_nome_indirizzo_intelligente(line: str) -> Optional[Dict]:
     if not resto or len(resto) < 3:
         return None
     
-    # Cerca prefissi via espliciti
+    # Step 2: cerca prefissi via espliciti (pattern universali italiani)
+    via_prefixes_pattern = (
+        r'VIA|CORSO|PIAZZA|STRADA|LARGO|VIALE|VICOLO|BORGATA|'
+        r'FRAZIONE|FRAZ\.|LOCALITA\'?|LOC\.|REGIONE|'
+        r'P\.ZA|P\.ZZA|V\.LE|C\.SO|STR\.|'
+        r'S\.[A-Z]+'  # S.MARTINO, S.GIOVANNI, S.ROCCO, ecc.
+    )
+    
     via_pattern = re.search(
-        r'^(.+?)\s+(VIA|CORSO|PIAZZA|STRADA|LARGO|VIALE|V\.|C\.|P\.ZA|P\.ZZA|'
-        r'S\.[A-Z]+|STR\.|VICOLO|BORGATA|FRAZ\.|LOCALITA\'?|REGIONE)\s+(.+)$',
+        r'^(.+?)\s+(' + via_prefixes_pattern + r')\s+(.+)$',
         resto,
         re.IGNORECASE
     )
@@ -747,47 +848,8 @@ def estrai_nome_indirizzo_intelligente(line: str) -> Optional[Dict]:
             'civico': civico
         }
     
-    # Cerca nomi di strade comuni (senza prefisso)
+    # Step 3: Default — prime 2 parole = nome, resto = indirizzo
     words = resto.split()
-    
-    for street_name in nomi_strade_comuni:
-        street_words = street_name.split()
-        num_street_words = len(street_words)
-        
-        # Cerca la strada nelle ultime parole del resto (prima del civico)
-        for i in range(len(words) - num_street_words, 0, -1):
-            candidate = ' '.join(words[i:i+num_street_words]).upper()
-            if candidate == street_name:
-                nome = ' '.join(words[:i])
-                indirizzo = ' '.join(words[i:])
-                if nome:
-                    return {
-                        'nome': nome,
-                        'indirizzo': indirizzo,
-                        'civico': civico
-                    }
-    
-    # Euristica finale: se ci sono più di 2 parole,
-    # cerca la prima parola che potrebbe essere un nome di via
-    # (parola singola maiuscola che non sembra un nome/cognome tipico)
-    if len(words) > 2:
-        # I nomi propri italiani spesso finiscono in -O, -A, -I, -E
-        # I nomi di vie spesso sono nomi di città o terminano in -ANO, -INO, ecc.
-        for i in range(2, len(words)):
-            word = words[i].upper()
-            # Se la parola sembra un nome di luogo (finisce in -ANO, -INO, -ALE, -ETTO, -ELLO)
-            # o è TUTTO maiuscolo e non sembra un cognome comune
-            if (word.endswith(('ANO', 'INO', 'ALE', 'ETTO', 'ELLO', 'AGNA', 'ENZA', 'ANZA')) and 
-                len(word) > 4):
-                nome = ' '.join(words[:i])
-                indirizzo = ' '.join(words[i:])
-                return {
-                    'nome': nome,
-                    'indirizzo': indirizzo,
-                    'civico': civico
-                }
-    
-    # Default: prime 2 parole = nome, resto = indirizzo (comportamento originale)
     if len(words) > 2:
         return {
             'nome': ' '.join(words[:2]),
@@ -983,7 +1045,7 @@ def estrai_dati_da_blocco(blocco: str, num_lavoro: int) -> Dict:
             parti = cliente_match.group(1).strip()
             # Prova a separare nome da indirizzo cercando pattern comuni vie
             via_pattern = re.search(
-                r'^([A-Z][A-Z\s]+?)\s+(VIA|CORSO|PIAZZA|STRADA|V\.|C\.|S\.MARIA|LARGO|VIALE)\s+(.+?)(?:\s+(\d+[A-Z]?(?:/\d+)?))?$',
+                r'^([A-Z][A-Z\s]+?)\s+(VIA|CORSO|PIAZZA|STRADA|V\.|C\.|S\.[A-Z]+|LARGO|VIALE)\s+(.+?)(?:\s+(\d+[A-Z]?(?:/\d+)?))?$',
                 parti,
                 re.IGNORECASE
             )
@@ -1656,23 +1718,16 @@ def _estrai_lavoro_da_pagina_maxy(page, page_num: int) -> Optional[Dict]:
         if prep_match:
             risultato['matricola_operatore'] = prep_match.group(1)
     
-    # === IDRDA (numero lavoro) ===
+    # === IDRDA (codice interno e-distribuzione, NON è il numero lavoro sequenziale) ===
     val = _extract_field('Idrda')
+    if not val:
+        idrda_match = re.search(r'Idrda:\s*(\d+)', text)
+        if idrda_match:
+            val = idrda_match.group(1)
     if val:
         idrda_digits = re.sub(r'[^\d]', '', val)
         if idrda_digits:
-            try:
-                risultato['lavoro'] = int(idrda_digits)
-            except ValueError:
-                pass
-    # Fallback regex su testo completo
-    if risultato['lavoro'] == page_num:
-        idrda_match = re.search(r'Idrda:\s*(\d+)', text)
-        if idrda_match:
-            try:
-                risultato['lavoro'] = int(idrda_match.group(1))
-            except ValueError:
-                pass
+            risultato['idrda'] = idrda_digits
     
     # === LOG per debug ===
     logger.info(

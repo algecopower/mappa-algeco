@@ -1345,12 +1345,14 @@ def _do_sincronizza_dati():
         df = carica_dati_google_sheets(force=True)
         if df is None:
             logger.warning(f"[SYNC] ⚠️ Nessun dato caricato")
+            sse_notify_all('sync_complete', {'source': 'sync_failed'})
             return False
 
         # LIVELLO 1: Se i dati non sono cambiati affatto, salta tutto
         if not dati_sono_cambiati():
             elapsed = time_module.time() - start_loop
             logger.info(f"[SYNC] ⚡ Dati invariati, skip elaborazione ({elapsed:.1f}s)")
+            sse_notify_all('sync_complete', {'source': 'no_changes'})
             return True
 
         # LIVELLO 2: Modifiche cosmetiche — light sync
@@ -1412,6 +1414,7 @@ def _do_sincronizza_dati():
     except Exception as e:
         logger.error(f"[SYNC] ❌ Errore: {e}")
         traceback.print_exc()
+        sse_notify_all('sync_complete', {'source': 'sync_error'})
         return False
 
 

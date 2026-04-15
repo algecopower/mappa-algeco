@@ -965,8 +965,8 @@ def get_settings():
                     reverse=True
                 )
                 if backup_files:
-                    with open(os.path.join(backup_dir, backup_files[0]), 'r', encoding='utf-8') as bf:
-                        backup_data = json.load(bf)
+                    from moduli.safe_json import json_read as _jr
+                    backup_data = _jr(os.path.join(backup_dir, backup_files[0]), default={})
                     colonne_filone = backup_data.get('headers', [])
                     logger.info(f"📋 Colonne filone dal backup ({backup_files[0]}): {len(colonne_filone)}")
         except Exception as e2:
@@ -1007,12 +1007,12 @@ def update_settings():
     
     try:
         # Salva su file persistente
+        from moduli.safe_json import json_write as _jw
         settings_dir = os.path.join('data', PROVINCIA_ATTIVA.lower())
         settings_file = os.path.join(settings_dir, 'settings.json')
         os.makedirs(settings_dir, exist_ok=True)
         
-        with open(settings_file, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        _jw(settings_file, data, indent=2)
         
         # Aggiorna variabili in memoria in TUTTI i moduli che le hanno importate
         global MATRICOLE_VIP

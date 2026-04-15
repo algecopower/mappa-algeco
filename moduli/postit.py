@@ -10,10 +10,14 @@ import uuid
 import threading
 from datetime import datetime
 
+from .safe_json import json_read, json_write
+
 SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 POSTIT_FILE = os.path.join(SCRIPT_DIR, 'data', 'postit.json')
 
 _lock = threading.Lock()
+
+_POSTIT_DEFAULT = {"notes": []}
 
 # Colori post-it disponibili
 COLORI_POSTIT = {
@@ -36,27 +40,14 @@ CATEGORIE_POSTIT = {
 
 
 def _load_data() -> dict:
-    if not os.path.exists(POSTIT_FILE):
-        return {"notes": []}
-    try:
-        with open(POSTIT_FILE, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            if "notes" not in data:
-                data["notes"] = []
-            return data
-    except (json.JSONDecodeError, IOError):
-        return {"notes": []}
+    data = json_read(POSTIT_FILE, default=_POSTIT_DEFAULT)
+    if "notes" not in data:
+        data["notes"] = []
+    return data
 
 
 def _save_data(data: dict) -> bool:
-    try:
-        os.makedirs(os.path.dirname(POSTIT_FILE), exist_ok=True)
-        with open(POSTIT_FILE, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-        return True
-    except IOError as e:
-        print(f"[PostIt] Errore salvataggio: {e}")
-        return False
+    return json_write(POSTIT_FILE, data, indent=2)
 
 
 def get_postit(provincia: str = None) -> list:

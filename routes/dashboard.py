@@ -11,6 +11,7 @@ from collections import Counter, defaultdict
 
 from flask import Blueprint, jsonify, send_file
 from moduli.auth import login_required
+from moduli.safe_json import json_read
 from moduli.calendario import get_attivita
 from config import PROVINCIA_ATTIVA, MATRICOLE_VIP, COLORI_TECNICI, OPERATORI_DICT
 
@@ -34,8 +35,7 @@ def _carica_ultimo_backup() -> dict | None:
     if not files:
         return None
     try:
-        with open(os.path.join(BACKUP_DIR, files[0]), 'r', encoding='utf-8') as f:
-            return json.load(f)
+        return json_read(os.path.join(BACKUP_DIR, files[0]), default=None)
     except Exception as e:
         logger.warning(f"[Dashboard] Errore lettura backup {files[0]}: {e}")
         return None
@@ -247,11 +247,7 @@ def _calcola_statistiche_filone(backup: dict) -> dict:
     cache_distanze = {}
     cache_dist_path = os.path.join(BASE_DIR, 'cache', f'cache_distanze_{PROVINCIA_ATTIVA.lower()}.json')
     if os.path.isfile(cache_dist_path):
-        try:
-            with open(cache_dist_path, 'r', encoding='utf-8') as f:
-                cache_distanze = json.load(f)
-        except Exception:
-            pass
+        cache_distanze = json_read(cache_dist_path, default={})
 
     def _km_operatore(matricola):
         """Somma km e minuti guida dal cache distanze per il mese corrente."""

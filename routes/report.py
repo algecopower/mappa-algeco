@@ -13,6 +13,7 @@ from collections import Counter, defaultdict
 
 from flask import Blueprint, jsonify, redirect, request, send_file
 from moduli.auth import login_required
+from moduli.safe_json import json_read
 from moduli.data_loader import parse_data_flessibile
 from config import PROVINCIA_ATTIVA, MATRICOLE_VIP, COLORI_TECNICI, OPERATORI_DICT
 
@@ -67,12 +68,7 @@ def _carica_backup(data_str=None):
             return None
     else:
         path = os.path.join(BACKUP_DIR, files[-1])
-    try:
-        with open(path, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except Exception as e:
-        logger.warning(f"[Report] Errore lettura backup: {e}")
-        return None
+    return json_read(path, default=None)
 
 
 def _date_range(da, a):
@@ -89,13 +85,7 @@ def _carica_cache_distanze():
     """Carica la cache distanze percorsi per calcolo km/durata."""
     fname = f'cache_distanze_{PROVINCIA_ATTIVA.lower()}.json'
     path = os.path.join(CACHE_DIR, fname)
-    if not os.path.isfile(path):
-        return {}
-    try:
-        with open(path, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except Exception:
-        return {}
+    return json_read(path, default={})
 
 
 # ── calcolo report principale ──────────────────────────────

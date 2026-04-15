@@ -11,6 +11,8 @@ from datetime import datetime, timedelta
 from functools import wraps
 from flask import session, redirect, url_for, request, jsonify
 
+from .safe_json import json_read, json_write
+
 # Directory base per i dati
 SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 USERS_FILE = os.path.join(SCRIPT_DIR, 'users.json')
@@ -59,25 +61,12 @@ def generate_password(length: int = 16) -> str:
 
 def load_users() -> dict:
     """Carica gli utenti dal file JSON."""
-    if not os.path.exists(USERS_FILE):
-        return {}
-    
-    try:
-        with open(USERS_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except (json.JSONDecodeError, IOError):
-        return {}
+    return json_read(USERS_FILE, default={})
 
 
 def save_users(users: dict) -> bool:
-    """Salva gli utenti nel file JSON."""
-    try:
-        with open(USERS_FILE, 'w', encoding='utf-8') as f:
-            json.dump(users, f, indent=2, ensure_ascii=False)
-        return True
-    except IOError as e:
-        print(f"Errore salvataggio utenti: {e}")
-        return False
+    """Salva gli utenti nel file JSON (atomico)."""
+    return json_write(USERS_FILE, users, indent=2)
 
 
 # Province disponibili nel sistema

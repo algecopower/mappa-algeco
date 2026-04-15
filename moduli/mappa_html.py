@@ -14,8 +14,11 @@ Funzionalità:
 import json
 import logging
 import os
+import tempfile
 from datetime import datetime
 from collections import defaultdict
+
+from .safe_json import json_read, json_write
 
 logger = logging.getLogger('mappa_algeco')
 
@@ -67,10 +70,23 @@ def genera_mappa_html(df, report, risultato_zone, filename=None):
     # Genera HTML (con dati embedded per retrocompatibilità file://)
     html = genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timestamp)
 
-    # Salva (surrogates replace per evitare errori con caratteri non validi nei dati)
+    # Salva atomicamente (temp file + os.replace)
     os.makedirs(os.path.dirname(filename) or '.', exist_ok=True)
-    with open(filename, 'w', encoding='utf-8', errors='surrogatepass') as f:
-        f.write(html.encode('utf-8', errors='replace').decode('utf-8'))
+    content = html.encode('utf-8', errors='replace').decode('utf-8')
+    dirpath = os.path.dirname(filename) or '.'
+    fd, tmp_path = tempfile.mkstemp(dir=dirpath, prefix='.tmp_mappa_', suffix='.html')
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            f.write(content)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, filename)
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
 
     logger.info(f"✅ Mappa HTML salvata: {filename}")
     return filename
@@ -313,18 +329,15 @@ def calcola_ordine_percorsi(df):
     cache_file = os.path.join("cache", f"cache_ordine_percorsi_{PROVINCIA_ATTIVA.lower()}.json")
     
     # Prova a caricare dalla cache
-    try:
-        with open(cache_file, 'r', encoding='utf-8') as f:
-            cache = json.load(f)
-            if cache.get('hash') == hash_str:
-                logger.info(f"   ✅ Ordine percorsi caricato da cache (dati invariati)")
-                return cache.get('ordine_map', {})
-            else:
-                logger.info(f"   🔄 Dati modificati, ricalcolo ordine percorsi...")
-    except FileNotFoundError:
+    cache = json_read(cache_file, default=None)
+    if cache is not None:
+        if cache.get('hash') == hash_str:
+            logger.info(f"   ✅ Ordine percorsi caricato da cache (dati invariati)")
+            return cache.get('ordine_map', {})
+        else:
+            logger.info(f"   🔄 Dati modificati, ricalcolo ordine percorsi...")
+    else:
         logger.info(f"   🆕 Prima esecuzione, calcolo ordine percorsi...")
-    except Exception as e:
-        logger.warning(f"   ⚠️  Errore lettura cache: {e}, ricalcolo...")
     
     # ================================================================
     # CALCOLO: Ordina ogni combinazione data/tecnico
@@ -361,16 +374,14 @@ def calcola_ordine_percorsi(df):
     # ================================================================
     # SALVA CACHE per evitare ricalcoli futuri
     # ================================================================
-    try:
-        with open(cache_file, 'w', encoding='utf-8') as f:
-            json.dump({
-                'hash': hash_str,
-                'ordine_map': ordine_map,
-                'timestamp': datetime.now().isoformat()
-            }, f)
+    if not json_write(cache_file, {
+        'hash': hash_str,
+        'ordine_map': ordine_map,
+        'timestamp': datetime.now().isoformat()
+    }):
+        logger.warning(f"   ⚠️  Impossibile salvare cache")
+    else:
         logger.info(f"   💾 Cache ordine percorsi salvata")
-    except Exception as e:
-        logger.warning(f"   ⚠️  Impossibile salvare cache: {e}")
     
     return ordine_map
 
@@ -411,8 +422,7 @@ def salva_dati_json(zone_data, contatori_data, rotte_data, lcl_list, timestamp=N
     }
 
     filepath = os.path.join(data_dir, 'mappa_data.json')
-    with open(filepath, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, separators=(',', ':'))
+    json_write(filepath, data, separators=(',', ':'))
 
     logger.info(f"📦 Dati JSON salvati: {filepath}")
     return timestamp
@@ -443,8 +453,7 @@ def salva_config_statica():
         'refreshInterval': INTERVALLO_SYNC_SECONDI * 1000 + 5000
     }
 
-    with open(filepath, 'w', encoding='utf-8') as f:
-        json.dump(config, f, ensure_ascii=False, indent=2)
+    json_write(filepath, config, indent=2)
 
     logger.info(f"⚙️ Config statica salvata: {filepath}")
 

@@ -10,38 +10,30 @@ import uuid
 import threading
 from datetime import datetime
 
+from .safe_json import json_read, json_write, json_modify
+
 # Directory base per i dati
 SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CALENDARIO_FILE = os.path.join(SCRIPT_DIR, 'data', 'calendario.json')
 
-# Lock per accesso thread-safe
+# Lock per accesso thread-safe (usato per operazioni read-modify-write
+# che NON passano da json_modify, es. letture semplici)
 _lock = threading.Lock()
+
+_CAL_DEFAULT = {"attivita": []}
 
 
 def _load_data() -> dict:
-    """Carica i dati del calendario dal file JSON."""
-    if not os.path.exists(CALENDARIO_FILE):
-        return {"attivita": []}
-    try:
-        with open(CALENDARIO_FILE, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            if "attivita" not in data:
-                data["attivita"] = []
-            return data
-    except (json.JSONDecodeError, IOError):
-        return {"attivita": []}
+    """Carica i dati del calendario dal file JSON (thread-safe, via safe_json)."""
+    data = json_read(CALENDARIO_FILE, default=_CAL_DEFAULT)
+    if "attivita" not in data:
+        data["attivita"] = []
+    return data
 
 
 def _save_data(data: dict) -> bool:
-    """Salva i dati del calendario nel file JSON."""
-    try:
-        os.makedirs(os.path.dirname(CALENDARIO_FILE), exist_ok=True)
-        with open(CALENDARIO_FILE, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-        return True
-    except IOError as e:
-        print(f"[Calendario] Errore salvataggio: {e}")
-        return False
+    """Salva i dati del calendario nel file JSON (atomico, via safe_json)."""
+    return json_write(CALENDARIO_FILE, data, indent=2)
 
 
 def get_attivita(filtro_mese: str = None, filtro_utente: str = None,
@@ -393,25 +385,12 @@ PROMEMORIA_SETTINGS_FILE = os.path.join(SCRIPT_DIR, 'data', 'promemoria_settings
 
 def _load_promemoria_settings() -> dict:
     """Carica le impostazioni promemoria per utente."""
-    if not os.path.exists(PROMEMORIA_SETTINGS_FILE):
-        return {}
-    try:
-        with open(PROMEMORIA_SETTINGS_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except (json.JSONDecodeError, IOError):
-        return {}
+    return json_read(PROMEMORIA_SETTINGS_FILE, default={})
 
 
 def _save_promemoria_settings(data: dict) -> bool:
-    """Salva le impostazioni promemoria per utente."""
-    try:
-        os.makedirs(os.path.dirname(PROMEMORIA_SETTINGS_FILE), exist_ok=True)
-        with open(PROMEMORIA_SETTINGS_FILE, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-        return True
-    except IOError as e:
-        print(f"[Promemoria] Errore salvataggio settings: {e}")
-        return False
+    """Salva le impostazioni promemoria per utente (atomico)."""
+    return json_write(PROMEMORIA_SETTINGS_FILE, data, indent=2)
 
 
 def get_user_promemoria_settings(username: str) -> dict:
@@ -653,42 +632,26 @@ def _load_chiavi_viste() -> set:
     Carica il registro persistente dei POD/ENELTEL già visti dal sync filone.
     Questo impedisce di ri-registrare appuntamenti vecchi dopo la pulizia giornaliera.
     """
-    if not os.path.exists(CHIAVI_VISTE_FILE):
-        return set()
-    try:
-        with open(CHIAVI_VISTE_FILE, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            return set(data.get('chiavi', []))
-    except (json.JSONDecodeError, IOError):
-        return set()
+    data = json_read(CHIAVI_VISTE_FILE, default={})
+    return set(data.get('chiavi', []))
 
 
 def _save_chiavi_viste(chiavi: set):
-    """Salva il registro persistente dei POD/ENELTEL già visti."""
-    os.makedirs(os.path.dirname(CHIAVI_VISTE_FILE), exist_ok=True)
-    with open(CHIAVI_VISTE_FILE, 'w', encoding='utf-8') as f:
-        json.dump({
-            'aggiornato_il': datetime.now().isoformat(),
-            'chiavi': sorted(chiavi)
-        }, f, ensure_ascii=False, indent=2)
+    """Salva il registro persistente dei POD/ENELTEL già visti (atomico)."""
+    json_write(CHIAVI_VISTE_FILE, {
+        'aggiornato_il': datetime.now().isoformat(),
+        'chiavi': sorted(chiavi)
+    }, indent=2)
 
 
 def _load_excel_data() -> dict:
     """Carica il registro appuntamenti Excel."""
-    if not os.path.exists(BOXBEAT_EXCEL_FILE):
-        return {}
-    try:
-        with open(BOXBEAT_EXCEL_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except (json.JSONDecodeError, IOError):
-        return {}
+    return json_read(BOXBEAT_EXCEL_FILE, default={})
 
 
 def _save_excel_data(data: dict):
-    """Salva il registro appuntamenti Excel."""
-    os.makedirs(os.path.dirname(BOXBEAT_EXCEL_FILE), exist_ok=True)
-    with open(BOXBEAT_EXCEL_FILE, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    """Salva il registro appuntamenti Excel (atomico)."""
+    json_write(BOXBEAT_EXCEL_FILE, data, indent=2)
 
 
 def _cleanup_old_excel_data():

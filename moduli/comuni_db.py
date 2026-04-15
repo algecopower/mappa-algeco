@@ -19,6 +19,8 @@ import re
 import unicodedata
 import requests
 
+from .safe_json import json_read, json_write
+
 # ============================================================================
 # CONFIGURAZIONE
 # ============================================================================
@@ -79,16 +81,14 @@ def _scarica_comuni():
 
 def _salva_cache(comuni_raw):
     """Salva i dati scaricati in cache locale con timestamp."""
-    try:
-        cache_data = {
-            'timestamp': time.time(),
-            'comuni': comuni_raw
-        }
-        with open(_FILE_CACHE, 'w', encoding='utf-8') as f:
-            json.dump(cache_data, f, ensure_ascii=False)
+    cache_data = {
+        'timestamp': time.time(),
+        'comuni': comuni_raw
+    }
+    if json_write(_FILE_CACHE, cache_data):
         print(f"💾 Cache salvata: {_FILE_CACHE}")
-    except Exception as e:
-        print(f"⚠️  Errore salvataggio cache: {e}")
+    else:
+        print(f"⚠️  Errore salvataggio cache")
 
 
 def _carica_cache():
@@ -98,45 +98,32 @@ def _carica_cache():
     Returns:
         Lista di dizionari comuni, o None se cache assente/scaduta
     """
-    if not os.path.exists(_FILE_CACHE):
+    cache_data = json_read(_FILE_CACHE, default=None)
+    if cache_data is None:
         return None
-    
-    try:
-        with open(_FILE_CACHE, 'r', encoding='utf-8') as f:
-            cache_data = json.load(f)
-        
-        timestamp = cache_data.get('timestamp', 0)
-        eta_secondi = time.time() - timestamp
-        
-        if eta_secondi > _DURATA_CACHE_SECONDI:
-            giorni = int(eta_secondi / 86400)
-            print(f"🔄 Cache comuni scaduta ({giorni} giorni). Aggiornamento...")
-            return None
-        
-        comuni = cache_data.get('comuni', [])
-        if comuni:
-            giorni = int(eta_secondi / 86400)
-            print(f"📦 Cache comuni caricata ({len(comuni)} comuni, {giorni}g fa)")
-            return comuni
-    except Exception as e:
-        print(f"⚠️  Errore lettura cache: {e}")
-    
-    return None
 
+    timestamp = cache_data.get('timestamp', 0)
+    eta_secondi = time.time() - timestamp
 
+    if eta_secondi > _DURATA_CACHE_SECONDI:
+        giorni = int(eta_secondi / 86400)
+        print(f"🔄 Cache comuni scaduta ({giorni} giorni). Aggiornamento...")
+        return None
+
+    comuni = cache_data.get('comuni', [])
+    if comuni:
+        giorni = int(eta_secondi / 86400)
+        print(f"📦 Cache comuni caricata ({len(comuni)} comuni, {giorni}g fa)")
+        return comuni
 def _carica_cache_forzata():
     """Carica la cache anche se scaduta (fallback se download fallisce)."""
-    if not os.path.exists(_FILE_CACHE):
+    cache_data = json_read(_FILE_CACHE, default=None)
+    if cache_data is None:
         return None
-    try:
-        with open(_FILE_CACHE, 'r', encoding='utf-8') as f:
-            cache_data = json.load(f)
-        comuni = cache_data.get('comuni', [])
-        if comuni:
-            print(f"📦 Uso cache comuni esistente come fallback ({len(comuni)} comuni)")
-            return comuni
-    except Exception:
-        pass
+    comuni = cache_data.get('comuni', [])
+    if comuni:
+        print(f"📦 Uso cache comuni esistente come fallback ({len(comuni)} comuni)")
+        return comuni
     return None
 
 

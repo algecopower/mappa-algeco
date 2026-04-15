@@ -13,6 +13,7 @@ import gspread.utils
 from flask import Blueprint, request, jsonify, session, send_file
 
 from moduli.auth import login_required
+from moduli.safe_json import json_read, json_write, json_modify
 from moduli.shared import (
     get_worksheet,
     get_header_map,
@@ -600,14 +601,9 @@ def get_filone_formats():
         cache_file = os.path.normpath(cache_file)
 
         # Serve dalla cache se esiste
-        if os.path.exists(cache_file):
-            try:
-                import json
-                with open(cache_file, 'r') as f:
-                    cached = json.load(f)
-                return jsonify({'formats': cached.get('formats', {}), 'cached': True})
-            except Exception:
-                pass
+        cached = json_read(cache_file, default=None)
+        if cached is not None:
+            return jsonify({'formats': cached.get('formats', {}), 'cached': True})
 
         # Se non c'è cache, avvia la generazione in background e rispondi vuoto
         _trigger_format_cache_refresh()
@@ -663,8 +659,7 @@ def _refresh_format_cache_bg():
 
         import json
         os.makedirs(os.path.dirname(cache_file), exist_ok=True)
-        with open(cache_file, 'w') as f:
-            json.dump({'formats': formats, 'updated': datetime.now().isoformat()}, f)
+        json_write(cache_file, {'formats': formats, 'updated': datetime.now().isoformat()})
 
         logger.info(f"[Filone] Cache formattazione aggiornata: {len(formats)} celle formattate")
     except Exception as e:
@@ -903,10 +898,7 @@ def update_filone_formats():
         )
         cache_file = os.path.normpath(cache_file)
         try:
-            cached = {}
-            if os.path.exists(cache_file):
-                with open(cache_file, 'r') as f:
-                    cached = json.load(f)
+            cached = json_read(cache_file, default={})
             current_formats = cached.get('formats', {})
             # Applica aggiornamenti
             for key, fmt in fmt_updates.items():
@@ -921,8 +913,7 @@ def update_filone_formats():
                     del current_formats[key]
             cached['formats'] = current_formats
             cached['updated'] = datetime.now().isoformat()
-            with open(cache_file, 'w') as f:
-                json.dump(cached, f)
+            json_write(cache_file, cached)
         except Exception as ce:
             logger.warning(f"[Filone] Errore aggiornamento cache formattazione: {ce}")
 
@@ -1598,22 +1589,14 @@ def _get_cell_log_path():
 
 def _load_cell_log():
     path = _get_cell_log_path()
-    if os.path.exists(path):
-        try:
-            with open(path, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception:
-            return []
-    return []
+    return json_read(path, default=[])
 
 def _save_cell_log(log_data):
     path = _get_cell_log_path()
-    os.makedirs(os.path.dirname(path), exist_ok=True)
     # Tronca se troppo grande
     if len(log_data) > _CELL_LOG_MAX:
         log_data = log_data[-_CELL_LOG_MAX:]
-    with open(path, 'w', encoding='utf-8') as f:
-        json.dump(log_data, f, ensure_ascii=False)
+    json_write(path, log_data)
 
 
 @bp.route('/api/filone/log', methods=['POST'])

@@ -17,6 +17,8 @@ import traceback
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
+from .safe_json import json_read, json_write
+
 from config import (
     ID_FOGLIO_GOOGLE,
     GID_SCHEDA,
@@ -218,8 +220,18 @@ def lista_backup() -> list:
         percorso = os.path.join(BACKUP_DIR, filename)
         
         try:
-            with open(percorso, 'r', encoding='utf-8') as f:
-                data = json.load(f)
+            data = json_read(percorso, default=None)
+            if data is None:
+                backup_list.append({
+                    'filename': filename,
+                    'data_backup': '',
+                    'timestamp': '',
+                    'provincia': '',
+                    'totale_righe': 0,
+                    'dimensione_mb': 0,
+                    'errore': 'File non leggibile'
+                })
+                continue
             
             dimensione_mb = os.path.getsize(percorso) / (1024 * 1024)
             

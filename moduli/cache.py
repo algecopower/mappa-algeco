@@ -6,6 +6,7 @@ import json
 import hashlib
 
 from config import FILE_CACHE_DISTANZE, FILE_CACHE_HASH
+from .safe_json import json_read, json_write
 
 
 def genera_hash_dati(df_tecnico):
@@ -31,38 +32,21 @@ def genera_hash_dati(df_tecnico):
 
 def carica_cache():
     """Carica cache distanze e hash da file."""
-    cache_distanze = {}
-    cache_hash = {}
-    
-    if os.path.exists(FILE_CACHE_DISTANZE):
-        try:
-            with open(FILE_CACHE_DISTANZE, 'r', encoding='utf-8') as f:
-                cache_distanze = json.load(f)
-            print(f"📂 Cache distanze caricata ({len(cache_distanze)} voci)")
-        except Exception as e:
-            print(f"⚠️ Errore caricamento cache distanze: {e}")
-    
-    if os.path.exists(FILE_CACHE_HASH):
-        try:
-            with open(FILE_CACHE_HASH, 'r', encoding='utf-8') as f:
-                cache_hash = json.load(f)
-        except Exception as e:
-            print(f"⚠️ Errore caricamento cache hash: {e}")
+    cache_distanze = json_read(FILE_CACHE_DISTANZE, default={})
+    if cache_distanze:
+        print(f"📂 Cache distanze caricata ({len(cache_distanze)} voci)")
+
+    cache_hash = json_read(FILE_CACHE_HASH, default={})
     
     return cache_distanze, cache_hash
 
 
 def salva_cache(cache_distanze, cache_hash):
-    """Salva cache distanze e hash su file."""
-    try:
-        with open(FILE_CACHE_DISTANZE, 'w', encoding='utf-8') as f:
-            json.dump(cache_distanze, f, indent=2, ensure_ascii=False)
-        
-        with open(FILE_CACHE_HASH, 'w', encoding='utf-8') as f:
-            json.dump(cache_hash, f, indent=2)
-            
-    except Exception as e:
-        print(f"⚠️ Errore salvataggio cache: {e}")
+    """Salva cache distanze e hash su file (atomico)."""
+    ok1 = json_write(FILE_CACHE_DISTANZE, cache_distanze, indent=2)
+    ok2 = json_write(FILE_CACHE_HASH, cache_hash, indent=2)
+    if not (ok1 and ok2):
+        print(f"⚠️ Errore salvataggio cache")
 
 
 def pulisci_cache_vecchia(cache_distanze, cache_hash, giorni_da_mantenere=None):

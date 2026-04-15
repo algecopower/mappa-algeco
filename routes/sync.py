@@ -14,6 +14,8 @@ import pandas as pd
 import gspread.utils
 from flask import Blueprint, request, jsonify, session, send_file
 
+from moduli.safe_json import json_read
+
 from moduli.auth import login_required
 from moduli.shared import (
     get_worksheet, get_header_map, get_headers,
@@ -164,8 +166,9 @@ def api_backup_scarica_excel():
         if not os.path.exists(percorso):
             return jsonify({'error': 'File di backup non trovato'}), 404
 
-        with open(percorso, 'r', encoding='utf-8') as f:
-            backup_data = json.load(f)
+        backup_data = json_read(percorso, default=None)
+        if backup_data is None:
+            return jsonify({'error': 'Backup vuoto o corrotto'}), 400
 
         headers = backup_data.get('headers', [])
         righe = backup_data.get('righe', [])

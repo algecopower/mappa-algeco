@@ -20,6 +20,7 @@ import gspread.utils
 from flask import Blueprint, request, jsonify, session, send_file
 
 from moduli.auth import login_required
+from moduli.safe_json import json_read, json_write
 from moduli.shared import (
     get_worksheet, get_header_map, get_headers,
     find_row_by_eneltel, find_row_by_pod,
@@ -79,18 +80,14 @@ _ALLEGATO_SEMIDIRETTA = 'informativa_semidiretta.pdf'
 def _load_smtp_settings(prov=None):
     """Carica le impostazioni SMTP per la provincia specificata (o PROVINCIA_ATTIVA)."""
     prov = (prov or PROVINCIA_ATTIVA).lower()
-    try:
-        with open(_SMTP_SETTINGS_JSON, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        # Supporta sia il vecchio formato flat che il nuovo per-provincia
-        if prov in data:
-            return data[prov]
-        # Fallback: formato flat legacy
-        if 'host' in data:
-            return data
-        return {}
-    except (FileNotFoundError, json.JSONDecodeError):
-        return {}
+    data = json_read(_SMTP_SETTINGS_JSON, default={})
+    # Supporta sia il vecchio formato flat che il nuovo per-provincia
+    if prov in data:
+        return data[prov]
+    # Fallback: formato flat legacy
+    if 'host' in data:
+        return data
+    return {}
 
 
 def _format_data_estesa(date_str):
@@ -155,13 +152,12 @@ def _build_fields_for_contact(contatto, template_def, field_defs):
 def get_distinte_templates():
     """Restituisce i template messaggi dal file JSON centralizzato."""
     try:
-        with open(_TEMPLATES_JSON, 'r', encoding='utf-8') as f:
-            data = json.load(f)
+        data = json_read(_TEMPLATES_JSON, default=None)
+        if data is None:
+            return jsonify({'error': 'File template non trovato'}), 404
         return jsonify(data)
-    except FileNotFoundError:
-        return jsonify({'error': 'File template non trovato'}), 404
-    except json.JSONDecodeError as e:
-        return jsonify({'error': f'Errore parsing JSON: {str(e)}'}), 500
+    except Exception as e:
+        return jsonify({'error': f'Errore lettura template: {str(e)}'}), 500
 
 
 @bp.route('/api/distinte/templates', methods=['PUT'])
@@ -172,8 +168,7 @@ def save_distinte_templates():
         data = request.get_json()
         if not data:
             return jsonify({'error': 'Nessun dato ricevuto'}), 400
-        with open(_TEMPLATES_JSON, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=4)
+        json_write(_TEMPLATES_JSON, data, indent=4)
         return jsonify({'ok': True})
     except Exception as e:
         logger.error(f"Errore salvataggio template: {e}")
@@ -207,11 +202,7 @@ def save_smtp_settings():
         prov = PROVINCIA_ATTIVA.lower()
 
         # Carica file esistente (tutte le province)
-        try:
-            with open(_SMTP_SETTINGS_JSON, 'r', encoding='utf-8') as f:
-                all_settings = json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError):
-            all_settings = {}
+        all_settings = json_read(_SMTP_SETTINGS_JSON, default={})
 
         # Migra formato flat legacy se necessario
         if 'host' in all_settings and prov not in all_settings:
@@ -233,8 +224,7 @@ def save_smtp_settings():
                 return jsonify({'error': f'Campo "{field}" obbligatorio'}), 400
 
         all_settings[prov] = data
-        with open(_SMTP_SETTINGS_JSON, 'w', encoding='utf-8') as f:
-            json.dump(all_settings, f, ensure_ascii=False, indent=4)
+        json_write(_SMTP_SETTINGS_JSON, all_settings, indent=4)
         return jsonify({'ok': True})
     except Exception as e:
         logger.error(f"Errore salvataggio SMTP settings: {e}")
@@ -401,8 +391,9 @@ def invia_email_prova():
 
         # Carica template
         try:
-            with open(_TEMPLATES_JSON, 'r', encoding='utf-8') as f:
-                tmpl_data = json.load(f)
+            tmpl_data = json_read(_TEMPLATES_JSON, default=None)
+            if tmpl_data is None:
+                raise FileNotFoundError
         except Exception:
             return jsonify({'error': 'Impossibile caricare i template'}), 500
 
@@ -536,8 +527,9 @@ def invia_singola_email():
 
         # Carica template
         try:
-            with open(_TEMPLATES_JSON, 'r', encoding='utf-8') as f:
-                tmpl_data = json.load(f)
+            tmpl_data = json_read(_TEMPLATES_JSON, default=None)
+            if tmpl_data is None:
+                raise FileNotFoundError
         except Exception:
             return jsonify({'error': 'Impossibile caricare i template'}), 500
 

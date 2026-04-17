@@ -373,20 +373,7 @@
         .colmgr-foot button.d { border-color: var(--danger); color: var(--danger); }
         .colmgr-foot button.d:hover { background: var(--danger); color: #fff; }
 
-        /* Hide column button in filter popup */
-        .fpop-hide {
-            width: 100%;
-            padding: 5px;
-            border: 1px solid var(--border);
-            border-radius: 3px;
-            background: var(--bg-card);
-            color: var(--text-muted);
-            font-size: 0.76em;
-            cursor: pointer;
-            margin-bottom: 6px;
-            text-align: left;
-        }
-        .fpop-hide:hover { border-color: var(--danger); color: var(--danger); }
+
 
         /* Column drag reorder */
         .col-drag-ghost {
@@ -787,6 +774,28 @@
         .fpop-color-btn:hover { border-color: var(--primary); }
         .fpop-color-btn.fpop-color-active { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary); }
         .fpop-color-btn.fpop-color-clear { color: var(--danger); font-size: 0.9em; }
+
+        /* Date range filter */
+        .fpop-daterange {
+            display: flex; flex-direction: column; gap: 2px;
+            padding: 4px 0; margin-bottom: 4px;
+            border-bottom: 1px solid var(--border);
+        }
+        .fpop-daterange-inputs { display: flex; align-items: center; gap: 4px; }
+        .fpop-daterange-inputs label { color: var(--text-muted); font-size: 0.72em; }
+        .fpop-daterange-inputs input[type=date] {
+            flex: 1; padding: 2px 3px; border: 1px solid var(--border); border-radius: 3px;
+            background: var(--bg-input); color: var(--text); font-size: 0.78em;
+            outline: none; min-width: 0;
+        }
+        .fpop-daterange-inputs input[type=date]:focus { border-color: var(--primary); }
+        .fpop-daterange-acts { display: flex; gap: 3px; margin-top: 2px; }
+        .fpop-daterange-acts button {
+            padding: 2px 6px; border: 1px solid var(--border); border-radius: 3px;
+            background: var(--bg-card); color: var(--text); font-size: 0.72em; cursor: pointer;
+        }
+        .fpop-daterange-acts button:hover { border-color: var(--primary); }
+        .fpop-daterange-acts button.a { background: var(--primary); color: #fff; border-color: var(--primary); }
 
         /* Excel Import section in VLOOKUP */
         .vl-excel-section {
@@ -1547,6 +1556,7 @@ let sortCol = -1;
 let sortDir = 'asc';
 let pending = {};           // "row:col" -> {row, col, old, val}
 let colFilters = {};        // colName -> Set(values)
+let dateRangeFilters = {};  // colName -> {from: 'YYYY-MM-DD', to: 'YYYY-MM-DD'}
 let colorFilterCol = '';     // column name for color filter
 let colorFilterColor = '';   // textColor value to filter by ('' = no filter)
 let podFilterSet = null;    // Set di valori filtro attivi, null = nessun filtro
@@ -2114,6 +2124,29 @@ function applyFilters() {
             for (var cn in colFilters) {
                 var val = (row[cn] != null ? row[cn] : '').toString().trim();
                 if (!colFilters[cn].has(val)) { pass = false; break; }
+            }
+            if (!pass) continue;
+        }
+
+        // Date range filters (skip for rows with pending edits)
+        if (!hasPending) {
+            for (var drCn in dateRangeFilters) {
+                var drF = dateRangeFilters[drCn];
+                var drVal = (row[drCn] != null ? row[drCn] : '').toString().trim();
+                var drParsed = parseDate(drVal);
+                if (!drParsed) { pass = false; break; }
+                // Normalize to midnight for comparison
+                var drTime = new Date(drParsed.getFullYear(), drParsed.getMonth(), drParsed.getDate()).getTime();
+                if (drF.from) {
+                    var fromParts = drF.from.split('-');
+                    var fromTime = new Date(+fromParts[0], +fromParts[1] - 1, +fromParts[2]).getTime();
+                    if (drTime < fromTime) { pass = false; break; }
+                }
+                if (drF.to) {
+                    var toParts = drF.to.split('-');
+                    var toTime = new Date(+toParts[0], +toParts[1] - 1, +toParts[2]).getTime();
+                    if (drTime > toTime) { pass = false; break; }
+                }
             }
             if (!pass) continue;
         }
@@ -3362,6 +3395,24 @@ function openFilter(ci, x, y) {
             if (!cfMatch) pass = false;
         }
         if (!pass) continue;
+        // Date range filters from other columns (skip current column)
+        for (var drFcn in dateRangeFilters) {
+            if (drFcn === cn) continue;
+            var drFlt = dateRangeFilters[drFcn];
+            var drRv = (row[drFcn] != null ? row[drFcn] : '').toString().trim();
+            var drPd = parseDate(drRv);
+            if (!drPd) { pass = false; break; }
+            var drTm = new Date(drPd.getFullYear(), drPd.getMonth(), drPd.getDate()).getTime();
+            if (drFlt.from) {
+                var dfp = drFlt.from.split('-');
+                if (drTm < new Date(+dfp[0], +dfp[1] - 1, +dfp[2]).getTime()) { pass = false; break; }
+            }
+            if (drFlt.to) {
+                var dtp = drFlt.to.split('-');
+                if (drTm > new Date(+dtp[0], +dtp[1] - 1, +dtp[2]).getTime()) { pass = false; break; }
+            }
+        }
+        if (!pass) continue;
         // Global search
         if (q) {
             var found = false;
@@ -3400,7 +3451,6 @@ function openFilter(ci, x, y) {
     html += '<button' + sortDescActive + ' onclick="fpSort(' + ci + ',\'desc\')">\u25BC ' + sortDescLabel + '</button>';
     html += '<span title="Tipo: ' + ctype + '" style="max-width:36px;padding:6px 10px;font-size:13px;opacity:.55;cursor:default;user-select:none">' + typeIcon + '</span>';
     html += '</div>';
-    html += '<button class="fpop-hide" onclick="hideColumn(' + ci + ');fpClose()">&#x1F441;&#x200D;&#x1F5E8; Nascondi colonna &laquo;' + esc(cn) + '&raquo;</button>';
 
     // Color filter section — collect distinct cond format colors (solo righe visibili con altri filtri)
     var colColors = {}; // textColor -> count
@@ -3430,6 +3480,20 @@ function openFilter(ci, x, y) {
         if (activeColor) {
             html += '<button class="fpop-color-btn fpop-color-clear" onclick="fpColorClear()" title="Rimuovi filtro colore">\u2715</button>';
         }
+        html += '</div>';
+    }
+
+    // Date range filter section (only for date columns)
+    if (ctype === 'date') {
+        var drCur = dateRangeFilters[cn];
+        var drFrom = drCur ? drCur.from : '';
+        var drTo = drCur ? drCur.to : '';
+        html += '<div class="fpop-daterange">';
+        html += '<div class="fpop-daterange-inputs"><label>Da</label><input type="date" id="fpDateFrom" value="' + drFrom + '"><label>A</label><input type="date" id="fpDateTo" value="' + drTo + '"></div>';
+        html += '<div class="fpop-daterange-acts">';
+        html += '<button class="a" onclick="fpDateRangeApply(' + ci + ')">Applica</button>';
+        html += '<button onclick="fpDateRangeClear(' + ci + ')">\u2715</button>';
+        html += '</div>';
         html += '</div>';
     }
 
@@ -3523,6 +3587,27 @@ function fpClear(ci) {
     applyFilters();
 }
 
+function fpDateRangeApply(ci) {
+    var cn = headers[ci];
+    var from = qs('#fpDateFrom').value;
+    var to = qs('#fpDateTo').value;
+    if (!from && !to) {
+        delete dateRangeFilters[cn];
+    } else {
+        dateRangeFilters[cn] = { from: from, to: to };
+    }
+    fpClose();
+    buildHeader();
+    applyFilters();
+}
+
+function fpDateRangeClear(ci) {
+    delete dateRangeFilters[headers[ci]];
+    fpClose();
+    buildHeader();
+    applyFilters();
+}
+
 function fpClose() { qs('#filterPopup').classList.remove('show'); }
 
 document.addEventListener('click', function(e) {
@@ -3608,6 +3693,16 @@ function updateActiveFilterBadges() {
         html += '<span class="filter-badge">\uD83D\uDD0D ' + esc(filterLabel) + ': ' + podFilterSet.size + ' <span class="badge-x" onclick="clearVlFilterQuick()">\u2715</span></span>';
     }
 
+    // Date range filter badges
+    for (var drCn in dateRangeFilters) {
+        var dr = dateRangeFilters[drCn];
+        var drLabel = '\uD83D\uDCC5 ' + esc(drCn) + ': ';
+        if (dr.from && dr.to) drLabel += dr.from.split('-').reverse().join('/') + ' \u2192 ' + dr.to.split('-').reverse().join('/');
+        else if (dr.from) drLabel += 'dal ' + dr.from.split('-').reverse().join('/');
+        else if (dr.to) drLabel += 'fino al ' + dr.to.split('-').reverse().join('/');
+        html += '<span class="filter-badge">' + drLabel + ' <span class="badge-x" data-col="' + esc(drCn) + '" onclick="clearDateRangeQuick(this.dataset.col)">\u2715</span></span>';
+    }
+
     // Color filter badge
     if (colorFilterCol && colorFilterColor) {
         html += '<span class="filter-badge">\uD83C\uDFA8 <span style="color:' + colorFilterColor + ';font-weight:700">A</span> ' + esc(colorFilterCol) + ' <span class="badge-x" onclick="clearColorFilterQuick()">\u2715</span></span>';
@@ -3631,6 +3726,12 @@ function clearVlFilterQuick() {
 function clearColorFilterQuick() {
     colorFilterCol = '';
     colorFilterColor = '';
+    buildHeader();
+    applyFilters();
+}
+
+function clearDateRangeQuick(cn) {
+    delete dateRangeFilters[cn];
     buildHeader();
     applyFilters();
 }
@@ -5065,6 +5166,7 @@ function vlGoToRow(tr) {
     if (vi < 0) {
         // Row not visible (filtered out) — clear filters first
         colFilters = {};
+        dateRangeFilters = {};
         podFilterSet = null;
         vlFilterCol = '';
         colorFilterCol = '';

@@ -9810,6 +9810,12 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
 
         // Refresh SMART: ri-renderizza la vista corrente con animazioni per nuovi marker
         function refreshCurrentView() {{
+            // Se siamo in modalità pianificazione, aggiorna quella vista
+            if (planningMode) {{
+                applyPlanningFilters(true);
+                return;
+            }}
+
             // Salva gli eneltel attuali per rilevare nuovi marker
             const oldEneltels = new Set(markers.filter(m => m.contatore).map(m => m.contatore.eneltel));
 
@@ -13117,8 +13123,21 @@ function riordinaPerFasciaOraria() {{
             if (savedCenter && savedZoom) {{
                 map.setView(savedCenter, savedZoom);
             }} else if (markers.length > 0) {{
-                const allPoints = markers.map(m => [m.contatore.lat, m.contatore.lon]);
-                map.fitBounds(L.latLngBounds(allPoints), {{ padding: [50, 50] }});
+                // Se ci sono filtri data/operatore attivi, zoom solo sui pianificati
+                const dataFilter = document.getElementById('planFilterData').value;
+                const opFilter = document.getElementById('planFilterOperatore').value;
+                const hasPlanFilters = dataFilter || opFilter;
+                let zoomPoints;
+                if (hasPlanFilters) {{
+                    const oggiStrZ = getOggiStr();
+                    const pianificati = markers.filter(m => m.contatore.data && m.contatore.data >= oggiStrZ);
+                    zoomPoints = pianificati.length > 0
+                        ? pianificati.map(m => [m.contatore.lat, m.contatore.lon])
+                        : markers.map(m => [m.contatore.lat, m.contatore.lon]);
+                }} else {{
+                    zoomPoints = markers.map(m => [m.contatore.lat, m.contatore.lon]);
+                }}
+                map.fitBounds(L.latLngBounds(zoomPoints), {{ padding: [50, 50] }});
             }}
         }}
 

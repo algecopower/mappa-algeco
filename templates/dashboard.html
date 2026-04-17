@@ -6,6 +6,7 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2">
     <title>Dashboard - Algeco</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/static/tour.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
     <script>
         (function(){
@@ -324,6 +325,7 @@
             <div class="meta" id="h-aggiornamento"><i class="fas fa-database"></i> Caricamento...</div>
             <button class="btn-icon" onclick="exportExcelCompleto()" title="Scarica tutti i dati in un unico file Excel"><i class="fas fa-file-excel"></i> Export Excel</button>
             <button class="btn-icon" onclick="loadDashboard()" title="Ricarica i dati"><i class="fas fa-sync-alt"></i> Aggiorna</button>
+            <button class="btn-icon" onclick="AlgecoTour.start(true)" title="Guida interattiva"><i class="fas fa-question-circle"></i></button>
             <button class="btn-icon" id="theme-toggle" onclick="toggleTheme()"><i class="fas fa-moon"></i></button>
         </div>
     </header>
@@ -1316,6 +1318,64 @@ function initSSE() {
 // ═══════════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', () => { loadDashboard(); loadReport(); initSSE(); });
 window.addEventListener('beforeunload', () => { if (_sse) _sse.close(); });
+</script>
+<script src="/static/tour.js"></script>
+<script>
+(function() {
+    fetch('/api/user').then(r => r.json()).then(d => {
+        if (d.authenticated && d.user) {
+            var tag = document.createElement('div');
+            tag.style.display = 'none';
+            tag.setAttribute('data-tour-user', d.user.username);
+            document.body.appendChild(tag);
+        }
+        initDashTour();
+    }).catch(() => initDashTour());
+
+    function initDashTour() {
+        AlgecoTour.init({
+            page: 'dashboard',
+            delay: 2000,
+            steps: [
+                {
+                    target: '.nav-row',
+                    title: 'Navigazione',
+                    icon: '🧭',
+                    body: 'Da qui puoi passare rapidamente alla <b>Mappa</b>, al <b>Calendario</b> o alla vista <b>Filone</b>.',
+                    position: 'bottom'
+                },
+                {
+                    target: '#welcome-banner',
+                    title: 'Riepilogo giornaliero',
+                    icon: '📋',
+                    body: 'Ogni giorno trovi qui un <b>riassunto rapido</b> della situazione: quanti contatori sono pianificati, quanti operatori sono impegnati.',
+                    position: 'bottom'
+                },
+                {
+                    target: '#kpi-oggi',
+                    title: 'KPI del giorno',
+                    icon: '📊',
+                    body: 'Questi riquadri mostrano i <b>numeri chiave di oggi</b>: contatori da fare, appuntamenti confermati, non assegnati e pianificati per domani.',
+                    position: 'bottom'
+                },
+                {
+                    target: '#kpi-filone',
+                    title: 'Stato del filone',
+                    icon: '📦',
+                    body: 'Qui vedi lo <b>stato complessivo del filone</b>: totale installati, righe totali, con data assegnata e annullati.',
+                    position: 'bottom'
+                },
+                {
+                    target: '#report-content',
+                    title: 'Report e grafici',
+                    icon: '📈',
+                    body: 'In fondo trovi <b>grafici e statistiche</b> filtrabili per periodo: installazioni per giorno, per operatore e per sotto-lotto.',
+                    position: 'top'
+                }
+            ]
+        });
+    }
+})();
 </script>
 </body>
 </html>

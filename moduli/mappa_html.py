@@ -495,6 +495,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/tour.css">
     <style>
         :root {{
             /* Tema scuro (default) */
@@ -3787,8 +3788,8 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         .planning-header {{
             display: none;
             align-items: center;
-            gap: 8px;
-            padding: 7px 12px;
+            gap: 6px;
+            padding: 4px 10px;
             background: linear-gradient(135deg, rgba(6,182,212,0.15) 0%, rgba(6,182,212,0.05) 100%);
             border-bottom: 1px solid var(--border);
         }}
@@ -3797,7 +3798,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         }}
         .planning-header h2 {{
             margin: 0;
-            font-size: 0.92rem;
+            font-size: 0.82rem;
             color: var(--accent-secondary, #06b6d4);
             white-space: nowrap;
         }}
@@ -4221,6 +4222,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                     <button class="toggle-btn" id="searchModeToggle" onclick="toggleAdvancedSearchModal()">🔍 Ricerca Utente</button>
                     <button class="toggle-btn" id="addressSearchToggle" onclick="toggleAddressSearchModal()">📍 Cerca Indirizzo</button>
                     <button class="toggle-btn" id="refreshBtn" onclick="refreshDati()" title="Aggiorna dati">🔄</button>
+                    <button class="toggle-btn" onclick="AlgecoTour.start(true)" title="Guida interattiva">❓ Guida</button>
                     <button class="btn-planning-mode" id="btnPlanningMode" onclick="enterPlanningMode()" title="Modalità Pianificazione">📋 Pianifica</button>
                 </div>
             </div>
@@ -4228,7 +4230,8 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             <!-- Planning Mode Header -->
             <div class="planning-header" id="planningHeader">
                 <h2>📋 Pianificazione</h2>
-                <span id="planningBadge" style="font-size: 0.78rem; color: var(--text-muted);">0 schedulabili</span>
+                <span id="planningBadge" style="font-size: 0.72rem; color: var(--text-muted);">0 schedulabili</span>
+                <button class="btn-icon" onclick="AlgecoTour.start(true)" title="Guida pianificazione" style="margin-left: auto; font-size: 12px; padding: 2px 6px; background: none; border: 1px solid var(--border-color, #334155); border-radius: 5px; color: var(--text-muted); cursor: pointer;">❓</button>
                 <button class="btn-exit-planning" onclick="exitPlanningMode()">✕ Esci</button>
             </div>
             
@@ -12517,6 +12520,8 @@ function riordinaPerFasciaOraria() {{
                 }}
             }}
             applyPlanningFilters();
+            // Avvia il tour della pianificazione (se non già visto)
+            setTimeout(function() {{ initPlanningTour(); }}, 800);
         }}
 
         function exitPlanningMode() {{
@@ -13501,6 +13506,242 @@ function riordinaPerFasciaOraria() {{
     <!-- Modali Gestionale -->
     {genera_html_gestionale()}
 <script src="/static/bacheca.js"></script>
+<script src="/static/tour.js"></script>
+<script>
+(function() {{
+    // Identifica utente per chiave localStorage
+    fetch('/api/user').then(r => r.json()).then(d => {{
+        if (d.authenticated && d.user) {{
+            var tag = document.createElement('div');
+            tag.style.display = 'none';
+            tag.setAttribute('data-tour-user', d.user.username);
+            document.body.appendChild(tag);
+        }}
+        initMappaTour();
+    }}).catch(() => initMappaTour());
+
+    function initMappaTour() {{
+        AlgecoTour.init({{
+            page: 'mappa',
+            delay: 2000,
+            steps: [
+                {{
+                    target: '#sidebar',
+                    title: 'Barra laterale',
+                    icon: '📋',
+                    body: 'Qui trovi l&#39;elenco delle <b>zone</b> (o comuni) con i contatori raggruppati. Ogni scheda mostra le date pianificate con il numero di contatori. <b>Clicca su una data</b> per entrare nel dettaglio e vedere i punti dei tecnici sulla mappa.',
+                    position: 'right'
+                }},
+                {{
+                    target: '#viewToggle',
+                    title: 'Vista Zone / Comuni',
+                    icon: '🗺️',
+                    body: 'Alterna tra la <b>vista per zone geografiche</b> e la <b>vista per comuni</b>. In entrambe le viste puoi cliccare su una data per vedere il percorso dei tecnici.',
+                    position: 'bottom'
+                }},
+                {{
+                    target: '#searchInput',
+                    title: 'Ricerca zone',
+                    icon: '🔍',
+                    body: 'Filtra le <b>zone o i comuni</b> per nome nella lista laterale. Attenzione: questa barra cerca solo tra le zone/comuni, <b>non tra i singoli contatori</b>. Per cercare un utente specifico (per nome, POD, Eneltel ecc.) usa il pulsante <i>Ricerca Utente</i>.',
+                    position: 'bottom'
+                }},
+                {{
+                    target: '#searchModeToggle',
+                    title: 'Pulsante Ricerca Utente',
+                    icon: '👤',
+                    body: 'Questo pulsante apre la <b>ricerca globale</b> tra tutti i contatori. A differenza della barra di ricerca qui sopra (che filtra solo zone/comuni), questo cerca per <b>singolo utente</b>.',
+                    position: 'bottom'
+                }},
+                {{
+                    target: '#advancedSearchModal .pin-modal-content',
+                    title: 'Ricerca Utente (globale)',
+                    icon: '🔍',
+                    body: 'Ecco il pannello: puoi cercare per <b>nominativo, POD, Eneltel, comune, via o telefono</b>. I risultati mostrano fino a 10 contatori; cliccandone uno, la mappa si centra su di esso e ne apre il dettaglio.',
+                    position: 'right',
+                    onEnter: function(api) {{
+                        var m = document.getElementById('advancedSearchModal');
+                        if (m) {{ m.classList.add('visible'); api.elevate(m); }}
+                    }},
+                    onLeave: function() {{
+                        var m = document.getElementById('advancedSearchModal');
+                        if (m) m.classList.remove('visible');
+                    }}
+                }},
+                {{
+                    target: '#addressSearchToggle',
+                    title: 'Pulsante Cerca Indirizzo',
+                    icon: '📍',
+                    body: 'Questo pulsante apre la ricerca per <b>indirizzo</b>. Utile quando un contatore non ha coordinate GPS.',
+                    position: 'bottom'
+                }},
+                {{
+                    target: '#addressSearchModal .pin-modal-content',
+                    title: 'Cerca Indirizzo',
+                    icon: '📍',
+                    body: 'Inserisci un indirizzo completo (es. &quot;Via Roma 15, Torino&quot;) e la mappa si centra su quel punto, piazzando un <b>segnaposto temporaneo</b>.',
+                    position: 'right',
+                    onEnter: function(api) {{
+                        var m = document.getElementById('addressSearchModal');
+                        if (m) {{ m.classList.add('visible'); api.elevate(m); }}
+                    }},
+                    onLeave: function() {{
+                        var m = document.getElementById('addressSearchModal');
+                        if (m) m.classList.remove('visible');
+                    }}
+                }},
+                {{
+                    target: '#themeToggle',
+                    title: 'Tema chiaro / scuro',
+                    icon: '🌙',
+                    body: 'Cambia tra il <b>tema scuro</b> (predefinito) e il <b>tema chiaro</b>. La preferenza viene salvata e mantenuta su tutte le pagine.',
+                    position: 'bottom'
+                }},
+                {{
+                    target: '#lclFilter',
+                    title: 'Filtro sotto-lotto',
+                    icon: '🏷️',
+                    body: 'Filtra i contatori per <b>sotto-lotto (LCL)</b>. Utile per concentrarsi su un&#39;area specifica del filone.',
+                    position: 'bottom'
+                }},
+                {{
+                    target: '#dataFilterRow',
+                    title: 'Filtro data e operatori',
+                    icon: '📅',
+                    body: 'Seleziona una <b>data specifica</b> dal menu per vedere solo i contatori pianificati quel giorno. Una volta scelta la data, puoi filtrare per <b>uno o pi\u00f9 operatori</b> per visualizzare i loro percorsi sulla mappa.<br><br>\U0001f4a1 <b>Ordinamento percorso</b>: i contatori vengono ordinati automaticamente per ottimizzare il tragitto, minimizzando le distanze tra una tappa e l&#39;altra.',
+                    position: 'bottom',
+                    enterDelay: 600,
+                    onEnter: function() {{
+                        var sel = document.getElementById('dataFilter');
+                        if (sel && sel.options.length > 1) {{
+                            sel.value = sel.options[1].value;
+                            if (typeof onDataFilterChange === 'function') onDataFilterChange();
+                        }}
+                    }}
+                }},
+                {{
+                    target: '#map',
+                    title: 'Mappa interattiva',
+                    icon: '🗺️',
+                    body: 'I marker sono <b>colorati in base al tecnico</b> assegnato (ogni operatore ha un colore diverso, non indicano lo stato del contatore).<br><br>\U0001f449 <b>Clicca su un marker</b> per aprire il popup con tutti i dettagli: nome, indirizzo, POD, Eneltel, telefono, orari lettera, note e tempi di percorrenza dal punto precedente.',
+                    position: 'left',
+                    enterDelay: 800,
+                    onEnter: function(api) {{
+                        if (typeof markers !== 'undefined' && markers.length > 0) {{
+                            var m = markers.find(function(mk) {{ return mk.getPopup && mk.getPopup(); }});
+                            if (m) {{
+                                window._tourMarker = m;
+                                map.setView(m.getLatLng(), 15, {{ animate: true }});
+                                setTimeout(function() {{
+                                    m.openPopup();
+                                    setTimeout(function() {{ api.elevate('.leaflet-popup'); }}, 100);
+                                }}, 400);
+                            }}
+                        }}
+                    }},
+                    onLeave: function() {{
+                        if (typeof map !== 'undefined') map.closePopup();
+                    }}
+                }},
+                {{
+                    target: '#fullscreenEditModal .fullscreen-edit-container',
+                    title: 'Modifica contatore',
+                    icon: '✏️',
+                    body: 'Ecco la <b>scheda di modifica</b>: qui puoi cambiare stato, note posizione, note appuntamento, telefono e altri campi del contatore. Le modifiche vengono salvate premendo il pulsante in basso.<br><br>Per aprirla, clicca <b>✏️ Modifica</b> dal popup di un marker.',
+                    position: 'left',
+                    enterDelay: 500,
+                    onEnter: function(api) {{
+                        if (window._tourMarker && window._tourMarker.contatore) {{
+                            var en = window._tourMarker.contatore.eneltel;
+                            if (typeof apriVistaModifica === 'function') apriVistaModifica(en);
+                            var m = document.getElementById('fullscreenEditModal');
+                            if (m) api.elevate(m);
+                        }}
+                    }},
+                    onLeave: function() {{
+                        if (typeof chiudiVistaModifica === 'function') chiudiVistaModifica();
+                        delete window._tourMarker;
+                        var sel = document.getElementById('dataFilter');
+                        if (sel) {{ sel.value = ''; if (typeof onDataFilterChange === 'function') onDataFilterChange(); }}
+                    }}
+                }},
+                {{
+                    target: '#btnPlanningMode',
+                    title: 'Modalit\u00e0 pianificazione',
+                    icon: '📋',
+                    body: 'Attiva la <b>modalit\u00e0 pianificazione</b> per assegnare date e operatori a pi\u00f9 contatori contemporaneamente. Puoi selezionarli uno ad uno, con il <b>rettangolo</b> o con il <b>lazo</b>, poi assegnarli in blocco.',
+                    position: 'bottom'
+                }},
+                {{
+                    target: '#statsBar',
+                    title: 'Barra statistiche',
+                    icon: '📊',
+                    body: 'In fondo trovi il conteggio rapido di <b>zone, contatori totali e appuntamenti</b> del giorno.',
+                    position: 'top'
+                }},
+                {{
+                    target: '#gestionaleFab',
+                    title: 'Pannello strumenti',
+                    icon: '⚙️',
+                    body: 'Da questo pulsante accedi a tutti gli <b>strumenti extra</b>: orari lettere, caricamento installato, sigilli, distinte PDF, calendario, vista filone Excel e dashboard. Puoi anche gestire backup e impostazioni.',
+                    position: 'left'
+                }}
+            ]
+        }});
+    }}
+}})();
+
+    function initPlanningTour() {{
+        AlgecoTour.init({{
+            page: 'pianificazione',
+            delay: 300,
+            steps: [
+                {{
+                    target: '#planningHeader',
+                    title: 'Modalit\u00e0 Pianificazione',
+                    icon: '📋',
+                    body: 'Sei entrato nella <b>modalit\u00e0 pianificazione</b>. Da qui puoi selezionare contatori sulla mappa e assegnare loro <b>date e operatori</b> in blocco. Per uscire, premi la <b>X</b> in alto a destra.',
+                    position: 'right'
+                }},
+                {{
+                    target: '#planningFilters',
+                    title: 'Filtri di pianificazione',
+                    icon: '🔍',
+                    body: 'Usa questi filtri per restringere i contatori visibili: per <b>nome, zona, comune, tipologia, posizione, LCL</b>. Puoi anche scegliere di mostrare solo i <b>schedulabili</b> (non ancora pianificati) o i <b>pianificati</b> (gi\u00e0 con data assegnata).',
+                    position: 'right'
+                }},
+                {{
+                    target: '#planningStatsRow',
+                    title: 'Contatori filtrati e selezionati',
+                    icon: '📊',
+                    body: 'Qui vedi quanti contatori corrispondono ai filtri attivi e quanti ne hai <b>selezionati</b>. La selezione \u00e8 il primo passo per l&#39;assegnazione.',
+                    position: 'right'
+                }},
+                {{
+                    target: '#planningSelBar',
+                    title: 'Strumenti di selezione',
+                    icon: '🎯',
+                    body: 'Tre modalit\u00e0 di selezione:<br><b>☝️ Singolo</b> \u2013 clicca un marker alla volta<br><b>▭ Rettangolo</b> \u2013 trascina un&#39;area rettangolare<br><b>〰️ Lazo</b> \u2013 disegna a mano libera un&#39;area<br><br>Puoi anche usare <b>Sel. tutti</b> per selezionare tutti i contatori filtrati, o <b>Deseleziona</b> per azzerare.',
+                    position: 'right'
+                }},
+                {{
+                    target: '#btnAssignBulk',
+                    title: 'Assegnazione in blocco',
+                    icon: '📅',
+                    body: 'Dopo aver selezionato uno o pi\u00f9 contatori, premi questo pulsante per aprire il pannello di <b>assegnazione</b>: scegli <b>data</b> e <b>operatore</b>, poi conferma. Tutti i contatori selezionati verranno pianificati in un colpo solo.',
+                    position: 'right'
+                }},
+                {{
+                    target: '#map',
+                    title: 'Mappa di pianificazione',
+                    icon: '🗺️',
+                    body: 'Sulla mappa vedi i contatori come marker: quelli <b>azzurri/ciano</b> sono schedulabili (senza data), quelli <b>colorati</b> sono gi\u00e0 pianificati. Clicca su un marker o usa rettangolo/lazo per selezionarli \u2013 diventano evidenziati quando selezionati.',
+                    position: 'left'
+                }}
+            ]
+        }});
+    }}
+</script>
 </body>
 </html>'''
     

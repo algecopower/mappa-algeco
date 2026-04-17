@@ -1292,6 +1292,7 @@
             <button class="tb" onclick="openCondFormat()" title="Formattazione condizionale">&#x1F3A8; Formato</button>
             <div class="toolbar-sep"></div>
             <button class="tb" id="btnRefresh" onclick="manualRefresh()" title="Ricarica dati dal server (F5)">&#x1F504; Aggiorna</button>
+            <button class="tb" onclick="AlgecoTour.start(true)" title="Guida interattiva">&#x2753; Guida</button>
             <button class="tb primary" id="btnSave" onclick="saveAll()" disabled title="Salva modifiche (Ctrl+S)">&#x1F4BE; Salva (<span id="changeCount">0</span>)</button>
         </div>
     </div>
@@ -5938,5 +5939,202 @@ async function manualRefresh() {
 }
 </script>
 <script src="/static/bacheca.js"></script>
+<link rel="stylesheet" href="/static/tour.css">
+<script src="/static/tour.js"></script>
+<script>
+(function() {
+    fetch('/api/user').then(r => r.json()).then(d => {
+        if (d.authenticated && d.user) {
+            var tag = document.createElement('div');
+            tag.style.display = 'none';
+            tag.setAttribute('data-tour-user', d.user.username);
+            document.body.appendChild(tag);
+        }
+        initFiloneTour();
+    }).catch(() => initFiloneTour());
+
+    function initFiloneTour() {
+        AlgecoTour.init({
+            page: 'filone',
+            delay: 2500,
+            steps: [
+                {
+                    target: '.toolbar',
+                    title: 'Barra degli strumenti',
+                    icon: '🛠\uFE0F',
+                    body: 'La toolbar contiene tutti i comandi della vista Excel: ricerca, trova e sostituisci, filtri avanzati, formattazione celle, note, storico, gestione colonne, formattazione condizionale e salvataggio.',
+                    position: 'bottom'
+                },
+                {
+                    target: '#globalSearch',
+                    title: 'Ricerca rapida',
+                    icon: '\uD83D\uDD0D',
+                    body: 'Filtra le righe in <b>tempo reale</b> cercando in tutte le colonne: nome, indirizzo, POD, Eneltel, comune, ecc. Digita anche solo parte del testo.',
+                    position: 'bottom'
+                },
+                {
+                    target: '.toolbar-actions button[onclick="openFindReplace()"]',
+                    title: 'Trova e Sostituisci',
+                    icon: '\uD83D\uDD0D',
+                    body: 'Apre il pannello <b>Trova e Sostituisci</b> (Ctrl+H). Puoi cercare un valore in una colonna specifica o in tutte, con opzioni di <b>maiuscole/minuscole</b> e <b>parola esatta</b>.',
+                    position: 'bottom'
+                },
+                {
+                    target: '#fnrPanel',
+                    title: 'Pannello Trova e Sostituisci',
+                    icon: '\uD83D\uDD04',
+                    body: 'Scegli l\u2019ambito (tutte le colonne o una specifica), inserisci il termine e usa <b>Trova \u25BC / \u25B2</b> per navigare tra i risultati. Con <b>Sostituisci</b> cambi una occorrenza, con <b>Sost. tutti</b> le cambi tutte in un colpo.',
+                    position: 'left',
+                    enterDelay: 400,
+                    onEnter: function(api) {
+                        if (typeof openFindReplace === 'function') openFindReplace();
+                        api.elevate(document.getElementById('fnrPanel'));
+                    },
+                    onLeave: function() {
+                        if (typeof closeFindReplace === 'function') closeFindReplace();
+                    }
+                },
+                {
+                    target: '.toolbar-actions button[onclick="openVlookup()"]',
+                    title: 'Filtri Avanzati',
+                    icon: '\u2699',
+                    body: 'Apre il pannello <b>Filtri Avanzati</b> (Ctrl+L): un potente strumento per cercare, filtrare e importare dati.',
+                    position: 'bottom'
+                },
+                {
+                    target: '#vlPanel',
+                    title: 'Pannello Filtri Avanzati',
+                    icon: '\u2699',
+                    body: 'Due sezioni:<br>\u2022 <b>Cerca &amp; Filtra</b> \u2013 cerca un valore in una colonna e mostra le righe corrispondenti, con possibilit\u00e0 di <b>copiare, esportare CSV o filtrare</b> direttamente nella griglia.<br>\u2022 <b>Importa Excel</b> \u2013 carica un file .xlsx/.csv per <b>aggiornare</b> o <b>aggiungere</b> dati con mappatura colonne automatica.',
+                    position: 'left',
+                    enterDelay: 400,
+                    onEnter: function(api) {
+                        if (typeof openVlookup === 'function') openVlookup();
+                        api.elevate(document.getElementById('vlPanel'));
+                    },
+                    onLeave: function() {
+                        if (typeof closeVlookup === 'function') closeVlookup();
+                    }
+                },
+                {
+                    target: '.fmt-bar',
+                    title: 'Formattazione celle',
+                    icon: '\uD83C\uDFA8',
+                    body: 'Formatta le celle selezionate: <b>Grassetto</b> (Ctrl+B), <b>Corsivo</b> (Ctrl+I), <b>Sottolineato</b> (Ctrl+U), <b>Barrato</b> (Ctrl+5).<br><br>Puoi anche cambiare il <b>colore del testo</b> (A) e il <b>colore di sfondo</b> (\uD83D\uDD8D). Il pulsante \uD83D\uDEAB cancella tutta la formattazione.',
+                    position: 'bottom'
+                },
+                {
+                    target: '#btnAggiungiNota',
+                    title: 'Aggiungi Nota',
+                    icon: '\uD83D\uDCDD',
+                    body: 'Aggiunge una <b>nota con data</b> (DD/MM) in testa al contenuto della cella selezionata. Utile per annotare chiamate, appuntamenti o comunicazioni senza perdere il testo esistente.',
+                    position: 'bottom'
+                },
+                {
+                    target: '#btnCellHistory',
+                    title: 'Storico cella',
+                    icon: '\uD83D\uDCDC',
+                    body: 'Mostra lo <b>storico delle modifiche</b> della cella selezionata: chi l\u2019ha cambiata, quando, e quali erano i valori precedenti e nuovi. Utile per tracciare le modifiche.',
+                    position: 'bottom'
+                },
+                {
+                    target: '#cellLogPanel',
+                    title: 'Pannello Storico',
+                    icon: '\uD83D\uDCDC',
+                    body: 'Ecco il pannello storico: una tabella cronologica con <b>data/ora, utente, valore vecchio e nuovo</b> per ogni modifica della cella. Mostra fino a 50 voci.',
+                    position: 'left',
+                    enterDelay: 400,
+                    onEnter: function(api) {
+                        var ov = document.getElementById('cellLogOverlay');
+                        var pn = document.getElementById('cellLogPanel');
+                        var ti = document.getElementById('cellLogTitle');
+                        var bd = document.getElementById('cellLogBody');
+                        if (ov) ov.style.display = 'block';
+                        if (pn) pn.style.display = 'flex';
+                        if (ti) ti.textContent = '\uD83D\uDCDC Storico: esempio';
+                        if (bd) bd.innerHTML = '<table class="cell-log-table"><thead><tr><th>Data/Ora</th><th>Utente</th><th>Vecchio valore</th><th>Nuovo valore</th></tr></thead><tbody><tr><td>17/04/2026 10:30</td><td>demo</td><td>valore A</td><td>valore B</td></tr><tr><td>16/04/2026 14:15</td><td>admin</td><td></td><td>valore A</td></tr></tbody></table>';
+                        if (pn) api.elevate(pn);
+                    },
+                    onLeave: function() {
+                        if (typeof closeCellHistory === 'function') closeCellHistory();
+                    }
+                },
+                {
+                    target: '#btnHiddenCols',
+                    title: 'Gestione colonne',
+                    icon: '\u2630',
+                    body: 'Apre il pannello per <b>mostrare, nascondere e riordinare</b> le colonne della griglia.',
+                    position: 'bottom'
+                },
+                {
+                    target: '#colmgrPanel',
+                    title: 'Pannello Colonne',
+                    icon: '\u2630',
+                    body: 'Usa la <b>barra di ricerca</b> per trovare una colonna. Clicca l\u2019<b>occhio</b> per mostrare/nascondere. <b>Trascina</b> le righe per riordinare. Le preferenze vengono salvate automaticamente per utente.',
+                    position: 'left',
+                    enterDelay: 400,
+                    onEnter: function(api) {
+                        if (typeof openColManager === 'function') openColManager();
+                        api.elevate(document.getElementById('colmgrPanel'));
+                    },
+                    onLeave: function() {
+                        if (typeof closeColManager === 'function') closeColManager();
+                    }
+                },
+                {
+                    target: '.toolbar-actions button[onclick="openCondFormat()"]',
+                    title: 'Formattazione condizionale',
+                    icon: '\uD83C\uDFA8',
+                    body: 'Apre il pannello per creare <b>regole di formattazione condizionale</b>: colora automaticamente le celle in base al loro contenuto.',
+                    position: 'bottom'
+                },
+                {
+                    target: '#cfmPanel',
+                    title: 'Pannello Formato condizionale',
+                    icon: '\uD83C\uDFA8',
+                    body: 'Crea regole come: <i>&quot;se la colonna Stato contiene CHIUSO, colora la riga di verde&quot;</i>. Puoi scegliere <b>colonna, condizione, valore, colore testo e sfondo</b>. Le regole vengono applicate in tempo reale.',
+                    position: 'left',
+                    enterDelay: 400,
+                    onEnter: function(api) {
+                        if (typeof openCondFormat === 'function') openCondFormat();
+                        api.elevate(document.getElementById('cfmPanel'));
+                    },
+                    onLeave: function() {
+                        if (typeof closeCondFormat === 'function') closeCondFormat();
+                    }
+                },
+                {
+                    target: '#btnRefresh',
+                    title: 'Aggiorna dati',
+                    icon: '\uD83D\uDD04',
+                    body: 'Ricarica i dati dal server (F5). Utile se altri utenti hanno fatto modifiche e vuoi vedere la versione aggiornata.',
+                    position: 'bottom'
+                },
+                {
+                    target: '#btnSave',
+                    title: 'Salva modifiche',
+                    icon: '\uD83D\uDCBE',
+                    body: 'Salva tutte le modifiche pendenti (Ctrl+S). Il <b>contatore</b> a fianco mostra quante celle sono state modificate. Il pulsante si attiva solo quando ci sono modifiche non salvate.',
+                    position: 'bottom'
+                },
+                {
+                    target: '#gridHeader',
+                    title: 'Griglia dati',
+                    icon: '\uD83D\uDCCA',
+                    body: 'La griglia funziona come <b>Excel</b>: clicca sulle <b>intestazioni</b> per ordinare, clic destro per il <b>menu filtro</b>, trascina i bordi per ridimensionare. Fai <b>doppio clic</b> su una cella per modificarla.',
+                    position: 'bottom'
+                },
+                {
+                    target: '.status-bar',
+                    title: 'Barra di stato',
+                    icon: '\uD83D\uDCCF',
+                    body: 'In basso: conteggio <b>righe totali e filtrate</b>, numero di colonne visibili, filtri attivi e posizione della cella selezionata.',
+                    position: 'top'
+                }
+            ]
+        });
+    }
+})();
+</script>
 </body>
 </html>

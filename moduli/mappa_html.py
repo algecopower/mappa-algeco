@@ -11063,7 +11063,7 @@ function riordinaPerFasciaOraria() {{
             const svgLines = document.getElementById('printLabelLines');
 
             const placedBoxes = []; // Traccia tutte le etichette/liste posizionate
-            const SINGLE_LABEL_HEIGHT = 26;
+            const SINGLE_LABEL_HEIGHT = 34;
             const SINGLE_LABEL_WIDTH = 55;
             const LIST_ITEM_HEIGHT = 22;
             const LIST_WIDTH = 75;
@@ -11222,7 +11222,7 @@ function riordinaPerFasciaOraria() {{
                 {{ x: 0.7, y: -0.7 }}, {{ x: 0.7, y: 0.7 }}, {{ x: -0.7, y: -0.7 }}, {{ x: -0.7, y: 0.7 }}
             ];
 
-            for (let offset = CLOSE_OFFSET; offset <= 80; offset += 20) {{
+            for (let offset = CLOSE_OFFSET; offset <= 80; offset += 8) {{
                 for (const dir of directions) {{
                     let x = markerX + dir.x * offset - width / 2;
                     let y = markerY + dir.y * offset - height / 2;
@@ -11250,7 +11250,7 @@ function riordinaPerFasciaOraria() {{
 
         // Trova posizione per lista cluster (con freccia)
         function findListPosition(markerX, markerY, width, height, placedBoxes, markerPositions, mapRect) {{
-            const OFFSET_START = 45;
+            const OFFSET_START = 30;
             const directions = [
                 {{ x: 1, y: -0.3 }},   // destra-alto
                 {{ x: 1, y: 0.3 }},    // destra-basso
@@ -11260,7 +11260,7 @@ function riordinaPerFasciaOraria() {{
                 {{ x: 0, y: 1 }},      // sotto
             ];
 
-            for (let offset = OFFSET_START; offset <= 150; offset += 30) {{
+            for (let offset = OFFSET_START; offset <= 150; offset += 15) {{
                 for (const dir of directions) {{
                     let x, y;
 
@@ -11744,6 +11744,10 @@ function riordinaPerFasciaOraria() {{
                         <title>Stampa Mappa - ${{nomeOp}} - ${{dataForm}}</title>
                         <style>
                             * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+                            @page {{
+                                size: auto;
+                                margin: 0;
+                            }}
                             body {{
                                 display: flex;
                                 flex-direction: column;
@@ -11772,16 +11776,19 @@ function riordinaPerFasciaOraria() {{
                             @media print {{
                                 body {{
                                     margin: 0;
-                                    padding: 4mm;
+                                    padding: 0;
                                 }}
                                 .print-header {{
-                                    font-size: 12px;
-                                    margin-bottom: 4px;
+                                    font-size: 10px;
+                                    margin-bottom: 2px;
+                                    padding: 2px 0;
+                                    border-bottom: 1px solid #2c3e50;
                                 }}
                                 img {{
                                     width: 100%;
                                     height: auto;
-                                    max-height: none;
+                                    max-height: calc(100vh - 20px);
+                                    object-fit: contain;
                                 }}
                             }}
                         </style>

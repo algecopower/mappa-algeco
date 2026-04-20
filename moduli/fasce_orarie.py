@@ -18,6 +18,7 @@ Utilizzato da:
 # ============================================================================
 FASCE_ORARIE = [
     '8/11',
+    '9/12',
     '10/13',
     '11/14',
     '12/15',
@@ -123,6 +124,7 @@ def get_colore_fascia(fascia):
     """
     colori = {
         '8/11': 'E2EFDA',   # Verde chiaro
+        '9/12': 'D6E4F0',   # Celeste chiaro
         '10/13': 'DDEBF7',  # Azzurro chiaro
         '11/14': 'FCE4D6',  # Arancione chiaro
         '12/15': 'FFF2CC',  # Giallo chiaro

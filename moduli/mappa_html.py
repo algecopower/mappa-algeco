@@ -3634,6 +3634,40 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             font-family: 'Consolas', 'Monaco', monospace;
             letter-spacing: 1px;
         }}
+        .print-eneltel-label.is-appuntamento {{
+            border-style: dashed;
+        }}
+        .print-time-badge {{
+            position: absolute;
+            bottom: -7px;
+            right: -6px;
+            background: #333;
+            color: white;
+            font-size: 9px;
+            font-weight: 700;
+            font-family: Arial, sans-serif;
+            padding: 1px 4px;
+            border-radius: 3px;
+            line-height: 1.2;
+            white-space: nowrap;
+            letter-spacing: 0;
+            z-index: 1001;
+        }}
+        .print-eneltel-label.is-appuntamento .print-time-badge {{
+            background: white;
+            color: #333;
+            border: 1.5px solid #333;
+        }}
+        .print-phone-icon {{
+            color: #cc0000;
+            font-size: 11px;
+            margin-right: 2px;
+            font-style: normal;
+        }}
+        .print-cluster-list-item .print-phone-icon {{
+            font-size: 9px;
+            margin-right: 1px;
+        }}
 
         /* Lista per cluster multipli */
         .print-cluster-list {{
@@ -3656,6 +3690,21 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             letter-spacing: 1px;
             color: #333;
             border-bottom: 1px solid #eee;
+        }}
+        .print-cluster-list-item.is-appuntamento {{
+            background: #f0f0f0;
+        }}
+        .print-cluster-list-item .print-list-time {{
+            font-size: 10px;
+            font-weight: 600;
+            font-family: Arial, sans-serif;
+            margin-left: 4px;
+            color: #555;
+            letter-spacing: 0;
+        }}
+        .print-cluster-list-item.is-appuntamento .print-list-time {{
+            font-weight: 700;
+            color: #333;
         }}
 
         .print-cluster-list-item:last-child {{
@@ -3683,6 +3732,8 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             stroke-width: 2;
             fill: none;
         }}
+
+
 
         /* Print zoom slider specific */
         .print-zoom-slider {{
@@ -10486,7 +10537,15 @@ function riordinaPerFasciaOraria() {{
         if (minA !== minB) return minA - minB;
         const fineA = estraiMinutiFineOrario(orarioA);
         const fineB = estraiMinutiFineOrario(orarioB);
-        return fineA - fineB;
+        if (fineA !== fineB) return fineA - fineB;
+        // A parità di fascia oraria, ordina per indirizzo
+        const viaA = a.cells[6] ? a.cells[6].textContent.trim().toLowerCase() : '';
+        const viaB = b.cells[6] ? b.cells[6].textContent.trim().toLowerCase() : '';
+        if (viaA !== viaB) return viaA.localeCompare(viaB, 'it');
+        // A parità di indirizzo, ordina per civico (numerico)
+        const civA = a.cells[7] ? parseInt(a.cells[7].textContent.trim()) || 0 : 0;
+        const civB = b.cells[7] ? parseInt(b.cells[7].textContent.trim()) || 0 : 0;
+        return civA - civB;
     }});
 
     // Rimuovi e reinserisci righe ordinate
@@ -11007,7 +11066,7 @@ function riordinaPerFasciaOraria() {{
             const SINGLE_LABEL_HEIGHT = 26;
             const SINGLE_LABEL_WIDTH = 55;
             const LIST_ITEM_HEIGHT = 22;
-            const LIST_WIDTH = 70;
+            const LIST_WIDTH = 75;
             const PADDING = 10;
 
             // Raccoglie posizioni marker
@@ -11015,6 +11074,45 @@ function riordinaPerFasciaOraria() {{
                 const point = printMap.latLngToContainerPoint([cluster.lat, cluster.lon]);
                 return {{ x: point.x - 15, y: point.y - 15, width: 30, height: 30 }};
             }});
+
+            // Mappa fasce orarie -> forme geometriche (B&W friendly)
+            // Abbrevia orario: rimuove :00, mantiene minuti non-zero
+            // "dalle 12:00 alle 15:00" -> "12/15"
+            // Appuntamento "12:30" con fascia "dalle 12:00 alle 15:00" -> "12:30/15"
+            function abbreviateTime(orariLettere, oraAppuntamento, isAppuntamento) {{
+                if (isAppuntamento && oraAppuntamento) {{
+                    // Formatta ora appuntamento (rimuovi :00)
+                    const appMatch = oraAppuntamento.match(/(\\d{{1,2}})[:.]?(\\d{{2}})?/);
+                    if (!appMatch) return null;
+                    const appH = appMatch[1];
+                    const appM = appMatch[2] || '00';
+                    const appStr = appM === '00' ? appH : appH + ':' + appM;
+                    // Estrai fine fascia da orari_lettere
+                    if (orariLettere) {{
+                        const fasciaMatches = [...orariLettere.matchAll(/(\\d{{1,2}})[:.]?(\\d{{2}})?/g)];
+                        if (fasciaMatches.length >= 2) {{
+                            const endH = fasciaMatches[fasciaMatches.length - 1][1];
+                            const endM = fasciaMatches[fasciaMatches.length - 1][2] || '00';
+                            const endStr = endM === '00' ? endH : endH + ':' + endM;
+                            return appStr + '/' + endStr;
+                        }}
+                    }}
+                    return appStr;
+                }}
+                if (!orariLettere) return null;
+                // Fascia oraria: estrai inizio e fine
+                const matches = [...orariLettere.matchAll(/(\\d{{1,2}})[:.]?(\\d{{2}})?/g)];
+                if (matches.length >= 2) {{
+                    const h1 = matches[0][1];
+                    const m1 = matches[0][2] || '00';
+                    const h2 = matches[matches.length - 1][1];
+                    const m2 = matches[matches.length - 1][2] || '00';
+                    const t1 = m1 === '00' ? h1 : h1 + ':' + m1;
+                    const t2 = m2 === '00' ? h2 : h2 + ':' + m2;
+                    return t1 + '/' + t2;
+                }}
+                return null;
+            }}
 
             clusters.forEach((cluster, clusterIdx) => {{
                 const point = printMap.latLngToContainerPoint([cluster.lat, cluster.lon]);
@@ -11024,6 +11122,8 @@ function riordinaPerFasciaOraria() {{
                     // ========== CONTATORE SINGOLO ==========
                     const c = cluster.contatori[0];
                     const eneltelLast3 = c.eneltel.slice(-3);
+                    const isApp = c.is_appuntamento;
+                    const timeBadge = abbreviateTime(c.orari_lettere || '', c.ora_appuntamento, isApp);
 
                     // Trova posizione adiacente al marker
                     const pos = findAdjacentPosition(
@@ -11034,8 +11134,13 @@ function riordinaPerFasciaOraria() {{
 
                     // Crea etichetta singola
                     const labelEl = document.createElement('div');
-                    labelEl.className = 'print-eneltel-label';
-                    labelEl.textContent = eneltelLast3;
+                    labelEl.className = 'print-eneltel-label' + (isApp ? ' is-appuntamento' : '');
+                    let innerHtml = isApp ? '<i class="print-phone-icon">\u260E</i>' : '';
+                    innerHtml += eneltelLast3;
+                    if (timeBadge) {{
+                        innerHtml += `<span class="print-time-badge">${{timeBadge}}</span>`;
+                    }}
+                    labelEl.innerHTML = innerHtml;
                     labelEl.style.left = pos.x + 'px';
                     labelEl.style.top = pos.y + 'px';
                     labelEl.style.borderLeftColor = c.colore;
@@ -11076,8 +11181,16 @@ function riordinaPerFasciaOraria() {{
                     // Aggiungi ogni contatore come riga
                     cluster.contatori.forEach(c => {{
                         const itemEl = document.createElement('div');
-                        itemEl.className = 'print-cluster-list-item';
-                        itemEl.innerHTML = `<span class="color-dot" style="background: ${{c.colore}};"></span>${{c.eneltel.slice(-3)}}`;
+                        const isApp = c.is_appuntamento;
+                        const timeBadge = abbreviateTime(c.orari_lettere || '', c.ora_appuntamento, isApp);
+                        itemEl.className = 'print-cluster-list-item' + (isApp ? ' is-appuntamento' : '');
+                        let itemHtml = `<span class="color-dot" style="background: ${{c.colore}};"></span>`;
+                        if (isApp) itemHtml += '<i class="print-phone-icon">\u260E</i>';
+                        itemHtml += c.eneltel.slice(-3);
+                        if (timeBadge) {{
+                            itemHtml += `<span class="print-list-time">${{timeBadge}}</span>`;
+                        }}
+                        itemEl.innerHTML = itemHtml;
                         listEl.appendChild(itemEl);
                     }});
 
@@ -11563,31 +11676,107 @@ function riordinaPerFasciaOraria() {{
                 // Rimostra lo slider dopo lo screenshot
                 if (zoomSlider) zoomSlider.style.display = 'flex';
 
+                // ── Calcola bounding box di marker + etichette (in coordinate container) ──
+                const mapDiv = document.getElementById('printMap');
+                const mapRect = mapDiv.getBoundingClientRect();
+                const containerRect = mapContainer.getBoundingClientRect();
+                // Offset del mapDiv dentro il container
+                const mapOffsetX = mapRect.left - containerRect.left;
+                const mapOffsetY = mapRect.top - containerRect.top;
+
+                let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+                // Marker positions (latlng -> container point)
+                printMarkers.forEach(pm => {{
+                    const pt = printMap.latLngToContainerPoint([pm.cluster.lat, pm.cluster.lon]);
+                    const cx = pt.x + mapOffsetX;
+                    const cy = pt.y + mapOffsetY;
+                    if (cx - 15 < minX) minX = cx - 15;
+                    if (cy - 15 < minY) minY = cy - 15;
+                    if (cx + 15 > maxX) maxX = cx + 15;
+                    if (cy + 15 > maxY) maxY = cy + 15;
+                }});
+
+                // Label positions
+                printLabels.forEach(lbl => {{
+                    const el = lbl.element;
+                    if (!el) return;
+                    const r = el.getBoundingClientRect();
+                    const lx = r.left - containerRect.left;
+                    const ly = r.top - containerRect.top;
+                    if (lx < minX) minX = lx;
+                    if (ly < minY) minY = ly;
+                    if (lx + r.width > maxX) maxX = lx + r.width;
+                    if (ly + r.height > maxY) maxY = ly + r.height;
+                }});
+
+                // Aggiungi margine (in pixel del container, prima dello scale)
+                const MARGIN = 40;
+                minX = Math.max(0, minX - MARGIN);
+                minY = Math.max(0, minY - MARGIN);
+                maxX = Math.min(containerRect.width, maxX + MARGIN);
+                maxY = Math.min(containerRect.height, maxY + MARGIN);
+
+                // Converti in coordinate del canvas (scale: 2)
+                const scale = 2;
+                const sx = Math.round(minX * scale);
+                const sy = Math.round(minY * scale);
+                const sw = Math.round((maxX - minX) * scale);
+                const sh = Math.round((maxY - minY) * scale);
+
+                // Ritaglia il canvas
+                const croppedCanvas = document.createElement('canvas');
+                croppedCanvas.width = sw;
+                croppedCanvas.height = sh;
+                const ctx = croppedCanvas.getContext('2d');
+                ctx.drawImage(canvas, sx, sy, sw, sh, 0, 0, sw, sh);
+
+                // Info header per la stampa
+                const nomeOp = currentOperatore === 'TUTTI' ? 'Senza Operatore' : getDisplayName(currentOperatore);
+                const dataForm = formatDate(currentData);
+
                 // Crea una nuova finestra per la stampa
                 const printWindow = window.open('', '_blank');
                 printWindow.document.write(`
                     <!DOCTYPE html>
                     <html>
                     <head>
-                        <title>Stampa Mappa - ${{currentZona}} - ${{currentData}}</title>
+                        <title>Stampa Mappa - ${{nomeOp}} - ${{dataForm}}</title>
                         <style>
                             * {{ margin: 0; padding: 0; box-sizing: border-box; }}
                             body {{
                                 display: flex;
-                                justify-content: center;
+                                flex-direction: column;
                                 align-items: center;
+                                justify-content: flex-start;
                                 min-height: 100vh;
                                 background: white;
+                                padding: 8px;
+                            }}
+                            .print-header {{
+                                width: 100%;
+                                text-align: center;
+                                font-family: Arial, sans-serif;
+                                font-size: 14px;
+                                font-weight: 700;
+                                padding: 6px 0;
+                                border-bottom: 2px solid #2c3e50;
+                                margin-bottom: 8px;
+                                color: #2c3e50;
                             }}
                             img {{
                                 max-width: 100%;
-                                max-height: 100vh;
+                                max-height: calc(100vh - 60px);
                                 object-fit: contain;
                             }}
                             @media print {{
                                 body {{
                                     margin: 0;
-                                    padding: 0;
+                                    padding: 4mm;
+                                }}
+                                .print-header {{
+                                    font-size: 12px;
+                                    margin-bottom: 4px;
                                 }}
                                 img {{
                                     width: 100%;
@@ -11598,7 +11787,8 @@ function riordinaPerFasciaOraria() {{
                         </style>
                     </head>
                     <body>
-                        <img src="${{canvas.toDataURL('image/png')}}" />
+                        <div class="print-header">📋 ${{nomeOp}} — ${{dataForm}}</div>
+                        <img src="${{croppedCanvas.toDataURL('image/png')}}" />
                     </body>
                     </html>
                 `);

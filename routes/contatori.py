@@ -1532,7 +1532,7 @@ def genera_orari_lettere():
                 'saltati_occupati': saltati_occupati,
                 'saltati_non_trovati': saltati_non_trovati,
                 'colonna': col_dest_name,
-                'file_excel': file_excel or ''
+                'file_excel': os.path.basename(file_excel) if file_excel else ''
             }
         }
 

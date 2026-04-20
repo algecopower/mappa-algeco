@@ -477,33 +477,6 @@
       "modificato_il": "2026-03-20T15:09:14.548832"
     },
     {
-      "id": "a759b01c",
-      "titolo": "Appuntamento COND. VILLAPELLICO 335 206 916 - CHIERI ore 8:00/11:00",
-      "data": "2026-04-14",
-      "ora": "8:00/11:00",
-      "ora_fine": "",
-      "descrizione": "POD: IT001E02079522\nENELTEL: 20795221\nNominativo: COND. VILLAPELLICO 335 206 916\nIndirizzo: DEL PASSATEMPO 4\nComune: CHIERI\nNote: APP 8:00/11:00 entrata in via del viebernone n. 9 // 10/04 mandata mail\nOrigine: filone_manuale",
-      "categoria": "boxbeat",
-      "provincia": "TORINO",
-      "creato_da": "giada",
-      "creato_il": "2026-04-10T12:52:48.287240",
-      "completata": true,
-      "completata_da": "giada",
-      "completata_il": "2026-04-10T13:02:21.853609",
-      "boxbeat_data": {
-        "pod": "IT001E02079522",
-        "eneltel": "20795221",
-        "nominativo": "COND. VILLAPELLICO 335 206 916",
-        "via": "DEL PASSATEMPO",
-        "civico": "4",
-        "comune": "CHIERI",
-        "note": "APP 8:00/11:00 entrata in via del viebernone n. 9 // 10/04 mandata mail",
-        "origine": "filone_manuale",
-        "ora_appuntamento": "8:00/11:00",
-        "data_pianificata": "2026-04-14"
-      }
-    },
-    {
       "id": "412666ce",
       "titolo": "MANDARE MAIL/PEC X SETT PROX",
       "data": "2026-04-17",

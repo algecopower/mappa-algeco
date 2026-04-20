@@ -3612,7 +3612,12 @@ function fpClose() { qs('#filterPopup').classList.remove('show'); }
 
 document.addEventListener('click', function(e) {
     var pop = qs('#filterPopup');
-    if (pop.classList.contains('show') && !pop.contains(e.target) && !e.target.closest('.gh')) fpClose();
+    if (!pop.classList.contains('show')) return;
+    if (pop.contains(e.target) || e.target.closest('.gh')) return;
+    // Don't close if a date input inside the popup is focused (native date picker dropdown)
+    var ae = document.activeElement;
+    if (ae && ae.type === 'date' && pop.contains(ae)) return;
+    fpClose();
 });
 
 // ============================================================

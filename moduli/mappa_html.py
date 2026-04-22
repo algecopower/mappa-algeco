@@ -5282,6 +5282,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                         localC.telefono = fresh.telefono ?? localC.telefono;
                         localC.email = fresh.email ?? localC.email;
                         localC.note = fresh.note ?? localC.note;
+                        localC.posizione_mis = fresh.posizione_mis ?? fresh.note ?? localC.posizione_mis ?? localC.note;
                         localC.note_app = fresh.note_app ?? localC.note_app;
                         localC.tipo_ce = fresh.tipo_ce ?? localC.tipo_ce;
                         localC.orari_lettere = fresh.orari_lettere ?? localC.orari_lettere;
@@ -11081,19 +11082,28 @@ function riordinaPerFasciaOraria() {{
             // Appuntamento "12:30" con fascia "dalle 12:00 alle 15:00" -> "12:30/15"
             function abbreviateTime(orariLettere, oraAppuntamento, isAppuntamento) {{
                 if (isAppuntamento && oraAppuntamento) {{
-                    // Formatta ora appuntamento (rimuovi :00)
-                    const appMatch = oraAppuntamento.match(/(\\d{{1,2}})[:.]?(\\d{{2}})?/);
-                    if (!appMatch) return null;
-                    const appH = appMatch[1];
-                    const appM = appMatch[2] || '00';
-                    const appStr = appM === '00' ? appH : appH + ':' + appM;
+                    const formatShortTime = (hour, minute) => minute === '00' ? hour : hour + ':' + minute;
+                    const appMatches = [...oraAppuntamento.matchAll(/(\\d{{1,2}})[:.]?(\\d{{2}})?/g)];
+                    if (appMatches.length >= 2) {{
+                        const startH = appMatches[0][1];
+                        const startM = appMatches[0][2] || '00';
+                        const endH = appMatches[appMatches.length - 1][1];
+                        const endM = appMatches[appMatches.length - 1][2] || '00';
+                        return formatShortTime(startH, startM) + '/' + formatShortTime(endH, endM);
+                    }}
+                    if (appMatches.length === 0) return null;
+
+                    const appH = appMatches[0][1];
+                    const appM = appMatches[0][2] || '00';
+                    const appStr = formatShortTime(appH, appM);
+
                     // Estrai fine fascia da orari_lettere
                     if (orariLettere) {{
                         const fasciaMatches = [...orariLettere.matchAll(/(\\d{{1,2}})[:.]?(\\d{{2}})?/g)];
                         if (fasciaMatches.length >= 2) {{
                             const endH = fasciaMatches[fasciaMatches.length - 1][1];
                             const endM = fasciaMatches[fasciaMatches.length - 1][2] || '00';
-                            const endStr = endM === '00' ? endH : endH + ':' + endM;
+                            const endStr = formatShortTime(endH, endM);
                             return appStr + '/' + endStr;
                         }}
                     }}

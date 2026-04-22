@@ -101,6 +101,7 @@ def _format_row_to_contatore(data):
         'telefono': _find_value_in_row(data, 'telefono'),
         'email': _find_value_in_row(data, 'email'),
         'note': _find_value_in_row(data, 'posizione_misuratore'),
+        'posizione_mis': _find_value_in_row(data, 'posizione_misuratore'),
         'note_app': note_app_raw,
         'tipo_ce': _find_value_in_row(data, 'tipo_misuratore'),
         'orari_lettere': _find_value_in_row(data, 'orari_lettere'),
@@ -248,6 +249,7 @@ def bulk_pianifica():
         enteltels = data.get('enteltels', [])
         data_pian = data.get('data_pian', '').strip()
         operatore = data.get('operatore', '').strip()
+        data_pian_filone = ''
 
         if not enteltels:
             return jsonify({'error': 'Nessun contatore selezionato'}), 400
@@ -259,7 +261,9 @@ def bulk_pianifica():
         # Valida data se presente
         if data_pian:
             try:
-                datetime.strptime(data_pian, '%Y-%m-%d')
+                dt_pian = datetime.strptime(data_pian, '%Y-%m-%d')
+                # Sul FILONE la data di pianificazione va salvata in formato italiano.
+                data_pian_filone = dt_pian.strftime('%d/%m/%Y')
             except ValueError:
                 return jsonify({'error': 'Formato data non valido (atteso YYYY-MM-DD)'}), 400
 
@@ -272,7 +276,7 @@ def bulk_pianifica():
         if data_pian and 'data_pian' in campi_ammessi:
             col_name = campi_ammessi['data_pian']
             if col_name in _header_map:
-                fields_to_set['data_pian'] = (col_name, _header_map[col_name], data_pian)
+                fields_to_set['data_pian'] = (col_name, _header_map[col_name], data_pian_filone)
         if operatore and 'operatore' in campi_ammessi:
             col_name = campi_ammessi['operatore']
             if col_name in _header_map:

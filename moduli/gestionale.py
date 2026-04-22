@@ -2278,6 +2278,10 @@ def genera_js_gestionale():
         }}
         
         function getValoreContatore(contatore, campoKey, colonnaSheet) {{
+            if (campoKey === 'posizione_mis') {{
+                return contatore.posizione_mis || contatore.note || '';
+            }}
+
             // Mappa i campi del contatore ai nomi usati nel popup
             const mapping = {{
                 'data_pian': 'data',
@@ -2373,6 +2377,9 @@ def genera_js_gestionale():
                                     }};
                                     if (mapping[k]) {{
                                         contatori[idx][mapping[k]] = val;
+                                        if (k === 'posizione_mis') {{
+                                            contatori[idx].posizione_mis = val;
+                                        }}
                                     }}
                                     break;
                                 }}
@@ -2745,6 +2752,9 @@ def genera_js_gestionale():
                     `;
                 }} else {{
                     result.classList.add('error');
+                                        if (k === 'posizione_mis') {{
+                                            contatori[idx].posizione_mis = val;
+                                        }}
                     result.innerHTML = `<strong>❌ Errore</strong><br>${{data.error || 'Errore sconosciuto'}}`;
                 }}
             }} catch (err) {{

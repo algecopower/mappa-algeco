@@ -33,7 +33,9 @@ _SUFFISSI_AZIENDA = [
     r'\bCOOP(?:ERATIVA)?\.?\b',          # COOP, COOPERATIVA
     r'\bCONSORZIO\b',
     r'\bASSOCIAZIONE\b',
+    r'\bA\.?\s*S\.?\s*D\.?\b',           # ASD, A.S.D., A S D (Associazione Sportiva Dilettantistica)
     r'\bFONDAZIONE\b',
+    r'\bA\.?\s*Z\.?\s*A\.?\s*G\.?\s*R\.?\b',  # AZAGR, A.Z.AGR., AZ AGR, A Z A G R (Azienda Agricola)
     r'\bIMPRESA\b',
     r'\bDITTA\b',
     r'\bDI\b',                           # DI (ditta individuale: "NOME DITTA DI NOME COGNOME")

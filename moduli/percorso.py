@@ -781,8 +781,6 @@ def nearest_neighbor_matrice(n_punti, matrice, start_idx=None):
     
     return ordine
 
-
-def raggruppa_in_microzone(punti, raggio_zona_km=0.5):
     """
     Raggruppa i punti in micro-zone geografiche.
     

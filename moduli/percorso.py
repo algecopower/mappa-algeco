@@ -778,63 +778,8 @@ def nearest_neighbor_matrice(n_punti, matrice, start_idx=None):
             ordine.append(idx_min)
             disponibili.remove(idx_min)
             pos_corrente = idx_min
-    
-    return ordine
 
-    """
-    Raggruppa i punti in micro-zone geografiche.
-    
-    Questo è il primo passo per creare percorsi "logici":
-    - I contatori vicini (~500m) vengono raggruppati insieme
-    - Ogni zona verrà completata prima di passare alla successiva
-    
-    Algoritmo: clustering gerarchico semplice basato su distanza
-    
-    Args:
-        punti: lista di punti con Lat/Lon
-        raggio_zona_km: raggio massimo di una micro-zona (default 500m)
-    
-    Returns:
-        Lista di zone, ogni zona è una lista di punti
-    """
-    if not punti:
-        return []
-    
-    if len(punti) == 1:
-        return [punti]
-    
-    # Copia per non modificare originali
-    punti_rimanenti = punti.copy()
-    zone = []
-    
-    while punti_rimanenti:
-        # Prendi il primo punto come "seed" della nuova zona
-        seed = punti_rimanenti.pop(0)
-        zona_corrente = [seed]
-        
-        # Trova tutti i punti entro il raggio dalla zona
-        # (distanza dal centroide della zona)
-        i = 0
-        while i < len(punti_rimanenti):
-            punto = punti_rimanenti[i]
-            
-            # Calcola centroide della zona corrente
-            lat_centro = sum(p['Lat'] for p in zona_corrente) / len(zona_corrente)
-            lon_centro = sum(p['Lon'] for p in zona_corrente) / len(zona_corrente)
-            
-            # Distanza dal centroide
-            dist = calcola_distanza_haversine(lat_centro, lon_centro, punto['Lat'], punto['Lon'])
-            
-            if dist <= raggio_zona_km:
-                zona_corrente.append(punto)
-                punti_rimanenti.pop(i)
-                # Non incrementare i, ricontrolla dalla stessa posizione
-            else:
-                i += 1
-        
-        zone.append(zona_corrente)
-    
-    return zone
+    return ordine
 
 
 def ottimizza_percorso_per_zone(punti, deposito, usa_osrm=True, raggio_zona_km=0.5):

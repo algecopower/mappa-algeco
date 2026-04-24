@@ -36,6 +36,8 @@ _worksheet = None
 _headers = None
 _header_map = None        # {col_name: 1-based index}
 _worksheet_initialized = False
+_headers_ts = 0           # timestamp ultima rilettura di row 1 dal foglio
+_HEADERS_TTL = 30         # secondi — scaduto il TTL la row 1 viene riletta (rileva colonne aggiunte/rimosse)
 _sheets_lock = threading.Lock()
 _gsheets_write_lock = threading.Lock()  # Serializza operazioni di scrittura su Google Sheets
 
@@ -86,11 +88,12 @@ def _sheets_retry(func, *args, max_retries=3, **kwargs):
 
 def _reset_sheets_client():
     """Invalida il client GSheets per forzare re-autenticazione."""
-    global _sheets_client, _worksheet, _worksheet_initialized
+    global _sheets_client, _worksheet, _worksheet_initialized, _headers_ts
     with _sheets_lock:
         _sheets_client = None
         _worksheet = None
         _worksheet_initialized = False
+        _headers_ts = 0
     invalidate_values_cache()
 
 
@@ -152,12 +155,23 @@ def get_sheets_client():
 
 
 def get_worksheet(force_refresh=False):
-    """Ottiene il worksheet attivo (con cache thread-safe)."""
-    global _worksheet, _headers, _header_map, _worksheet_initialized
+    """Ottiene il worksheet attivo (con cache thread-safe).
+
+    Se force_refresh è True o il worksheet non è inizializzato, ricrea tutto.
+    Altrimenti delega il refresh periodico degli header a _refresh_headers_if_needed.
+    """
+    global _worksheet, _headers, _header_map, _worksheet_initialized, _headers_ts
 
     with _sheets_lock:
         if _worksheet_initialized and not force_refresh and _worksheet is not None:
-            return _worksheet
+            ws_cached = _worksheet
+
+        else:
+            ws_cached = None
+
+    if ws_cached is not None and not force_refresh:
+        _refresh_headers_if_needed()
+        return ws_cached
 
     client = get_sheets_client()
     spreadsheet = _sheets_retry(client.open_by_key, ID_FOGLIO_GOOGLE)
@@ -179,8 +193,43 @@ def get_worksheet(force_refresh=False):
         _headers = headers
         _header_map = header_map
         _worksheet_initialized = True
+        _headers_ts = time.time()
 
     return _worksheet
+
+
+def _refresh_headers_if_needed():
+    """Rilegge la row 1 del foglio se è scaduto il TTL.
+
+    Serve a intercettare colonne aggiunte/rimosse/rinominate senza
+    dover riavviare il server: senza questo refresh, _header_map
+    resterebbe congelato al primo avvio e le scritture andrebbero
+    su colonne sbagliate (spanamento del filone).
+    """
+    global _headers, _header_map, _headers_ts
+    now = time.time()
+
+    with _sheets_lock:
+        if _worksheet is None:
+            return
+        if (now - _headers_ts) < _HEADERS_TTL:
+            return
+        ws = _worksheet
+
+    try:
+        headers = _sheets_retry(ws.row_values, 1)
+    except Exception as e:
+        logger.warning(f"[GSheets] Refresh header fallito: {e}")
+        return
+
+    header_map = {h: i + 1 for i, h in enumerate(headers)}
+
+    with _sheets_lock:
+        if headers != _headers:
+            logger.info(f"[GSheets] Header foglio cambiati: {len(_headers or [])} → {len(headers)} colonne, rimappatura applicata")
+        _headers = headers
+        _header_map = header_map
+        _headers_ts = time.time()
 
 
 def get_spreadsheet():
@@ -190,16 +239,24 @@ def get_spreadsheet():
 
 
 def get_header_map():
-    """Restituisce la mappa header corrente (inizializza se necessario)."""
+    """Restituisce la mappa header corrente (inizializza se necessario).
+
+    Se il worksheet è già inizializzato applica il refresh periodico (TTL)
+    così le colonne aggiunte al foglio vengono viste senza riavviare il server.
+    """
     if not _worksheet_initialized:
         get_worksheet()
+    else:
+        _refresh_headers_if_needed()
     return _header_map
 
 
 def get_headers():
-    """Restituisce la lista header corrente."""
+    """Restituisce la lista header corrente (con refresh periodico)."""
     if not _worksheet_initialized:
         get_worksheet()
+    else:
+        _refresh_headers_if_needed()
     return _headers
 
 

@@ -24,7 +24,24 @@
       "Bash(del \"c:\\\\Users\\\\campo\\\\Desktop\\\\PROGETTI ALGECO\\\\mappa_algeco_nuova\\\\moduli\\\\sheets_writer.py\")",
       "Bash(ls:*)",
       "Bash(./venv/Scripts/python.exe:*)",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(./venv/bin/python -c \"import ast; ast.parse\\(open\\('tools/confronta_percorsi.py'\\).read\\(\\)\\); print\\('Sintassi OK'\\)\")",
+      "Bash(curl -s -m 2 http://localhost:5000/route/v1/driving/7.6,45.0)",
+      "Bash(7.7,45.1)",
+      "Bash(curl -s -m 2 http://localhost:5000/)",
+      "Bash(./venv/bin/python tools/confronta_percorsi.py --provincia torino --max-giornate 2 --output /tmp/ab_test.html)",
+      "Read(//tmp/**)",
+      "Bash(./venv/bin/python tools/confronta_percorsi.py --provincia torino --max-giornate 15 --solo-da-oggi --output /tmp/ab_step3.html)",
+      "Bash(./venv/bin/python -c \"import ast; ast.parse\\(open\\('moduli/percorso.py'\\).read\\(\\)\\); print\\('OK'\\)\")",
+      "Bash(./venv/bin/python tools/confronta_percorsi.py --provincia torino --max-giornate 15 --solo-da-oggi --output /tmp/ab_step4.html)",
+      "Bash(./venv/bin/python tools/confronta_percorsi.py --provincia torino --max-giornate 15 --solo-da-oggi --output /tmp/ab_step4b.html)",
+      "Bash(./venv/bin/python tools/confronta_percorsi.py --provincia torino --max-giornate 15 --solo-da-oggi --output /tmp/ab_step4c.html)",
+      "Bash(./venv/bin/python tools/confronta_percorsi.py --provincia torino --max-giornate 15 --solo-da-oggi --output /tmp/ab_step4d.html)",
+      "Bash(./venv/bin/python tools/confronta_percorsi.py --provincia torino --max-giornate 15 --solo-da-oggi --output /tmp/ab_step4e.html)",
+      "Bash(./venv/bin/python tools/confronta_percorsi.py --provincia torino --max-giornate 15 --solo-da-oggi --output /tmp/ab_step4f.html)",
+      "Bash(./venv/bin/python tools/confronta_percorsi.py --provincia torino --max-giornate 40 --solo-da-oggi --output /tmp/ab_step4_full.html)",
+      "Bash(./venv/bin/python tools/confronta_percorsi.py --provincia torino --max-giornate 80 --solo-da-oggi --output /tmp/ab_torino_final.html)",
+      "Bash(./venv/bin/python tools/confronta_percorsi.py --provincia pavia --max-giornate 80 --solo-da-oggi --output /tmp/ab_pavia_final.html)"
     ]
   }
 }

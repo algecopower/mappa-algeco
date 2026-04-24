@@ -119,5 +119,41 @@
       "creato_da": "giada",
       "registrato_il": "2026-04-23T12:39:51.890508"
     }
+  ],
+  "2026-04-24": [
+    {
+      "id": "4b5ac24b",
+      "data_appuntamento": "2026-04-13",
+      "orario": "14:00-17:00",
+      "pod": "IT001E02944958",
+      "eneltel": "29449589",
+      "nominativo": "VALERIA SPANDONARI",
+      "via": "DEI MAURIZI",
+      "civico": "15",
+      "comune": "POIRINO",
+      "note": "",
+      "data_pianificata": "2026-04-13",
+      "origine": "contatore",
+      "provincia": "TORINO",
+      "creato_da": "giada",
+      "registrato_il": "2026-04-24T09:27:20.619046"
+    },
+    {
+      "id": "daa45864",
+      "data_appuntamento": "2026-05-08",
+      "orario": "09:00-12:00",
+      "pod": "IT001E02935833",
+      "eneltel": "29358338",
+      "nominativo": "GIOVANNI CANTAMESSA",
+      "via": "TETTI AGOSTINO",
+      "civico": "1B // civico corretto 1A",
+      "comune": "SANTENA",
+      "note": "",
+      "data_pianificata": "2026-05-08",
+      "origine": "contatore",
+      "provincia": "TORINO",
+      "creato_da": "giada",
+      "registrato_il": "2026-04-24T09:45:16.261313"
+    }
   ]
 }

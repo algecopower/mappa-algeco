@@ -316,7 +316,7 @@ def genera_excel_lettere(df, date_da_elaborare, filename=None, tappe_per_fascia=
             
             # Calcola tappe_per_fascia: auto (bilanciato) o fisso
             if auto_mode:
-                # Distribuzione bilanciata: spalma uniformemente su tutte le 6 fasce
+                # Distribuzione bilanciata: spalma uniformemente su tutte le 7 fasce
                 tappe_con_fasce = assegna_fasce(percorso_ordinato, bilancia=True)
             else:
                 tpf = int(tappe_per_fascia)

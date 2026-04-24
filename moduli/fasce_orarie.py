@@ -32,19 +32,19 @@ TAPPE_PER_FASCIA = 4  # Ogni operatore ha 4 tappe per ogni fascia (totale 24 tap
 def assegna_fasce(percorso_ordinato, fasce=None, tappe_per_fascia=None, bilancia=False):
     """
     Assegna le fasce orarie alle tappe del percorso.
-    
+
     Modalità:
     - bilancia=False (default): ogni fascia ha esattamente tappe_per_fascia tappe.
       Se le tappe eccedono le fasce disponibili, le rimanenti vanno nell'ultima fascia.
     - bilancia=True: le tappe vengono distribuite uniformemente su tutte le fasce.
-      Es. 22 tappe su 6 fasce → 4+4+4+4+3+3 invece di 4+4+4+4+4+2.
-    
+      Es. 22 tappe su 7 fasce → 4+3+3+3+3+3+3 (le prime 'resto' fasce ricevono +1).
+
     Args:
         percorso_ordinato: lista di punti già ordinati dall'algoritmo di ottimizzazione
         fasce: lista di fasce orarie (default: FASCE_ORARIE)
         tappe_per_fascia: numero tappe per fascia (default: TAPPE_PER_FASCIA, ignorato se bilancia=True)
         bilancia: se True, distribuisce uniformemente le tappe su tutte le fasce
-    
+
     Returns:
         Lista di tuple (punto, fascia_oraria)
     """
@@ -52,19 +52,18 @@ def assegna_fasce(percorso_ordinato, fasce=None, tappe_per_fascia=None, bilancia
         fasce = FASCE_ORARIE
     if tappe_per_fascia is None:
         tappe_per_fascia = TAPPE_PER_FASCIA
-    
+
     risultato = []
-    
+
     if bilancia:
         # Distribuzione bilanciata: le tappe in più vengono spalmate sulle prime fasce
         n = len(percorso_ordinato)
         n_fasce = len(fasce)
         base = n // n_fasce
         resto = n % n_fasce
-        
+
         idx = 0
         for f_idx, fascia in enumerate(fasce):
-            # Le prime 'resto' fasce ricevono una tappa in più
             count = base + (1 if f_idx < resto else 0)
             for _ in range(count):
                 if idx < n:
@@ -72,17 +71,13 @@ def assegna_fasce(percorso_ordinato, fasce=None, tappe_per_fascia=None, bilancia
                     idx += 1
     else:
         for idx, punto in enumerate(percorso_ordinato):
-            # Calcola quale fascia assegnare
             fascia_idx = idx // tappe_per_fascia
-            
             if fascia_idx < len(fasce):
                 fascia = fasce[fascia_idx]
             else:
-                # Se ci sono più tappe delle fasce disponibili, usa l'ultima fascia
                 fascia = fasce[-1]
-            
             risultato.append((punto, fascia))
-    
+
     return risultato
 
 

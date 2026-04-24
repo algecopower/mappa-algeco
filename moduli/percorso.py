@@ -13,12 +13,6 @@ import pandas as pd
 
 from config import DEPOSITO, ORA_INIZIO_GIORNATA, PROVINCIA_ATTIVA, USA_OSRM
 
-# Raggio micro-zone per raggruppamento (evita saltelli nel percorso)
-try:
-    from config import RAGGIO_MICROZONA_KM
-except ImportError:
-    RAGGIO_MICROZONA_KM = 0.5  # Default: 500 metri
-
 # Soglia orario per appuntamenti "serali" che vanno messi per ultimi
 # Torino: dopo le 17:00 (1020 minuti)
 # Pavia: dopo le 15:00 (900 minuti)
@@ -782,60 +776,132 @@ def nearest_neighbor_matrice(n_punti, matrice, start_idx=None):
     return ordine
 
 
-def ottimizza_percorso_per_zone(punti, deposito, usa_osrm=True, raggio_zona_km=0.5):
+def _conta_inversioni_geometriche(ordine_indici, punti, deposito):
     """
-    Ottimizza il percorso usando NEAREST NEIGHBOR GEOGRAFICO PURO.
-    
-    LOGICA SEMPLICE E INTUITIVA:
-    - Parti dal deposito
-    - Vai al contatore PIÙ VICINO geograficamente
-    - Da lì, vai al successivo più vicino
-    - Continua fino a visitarli tutti
-    - Torna al deposito
-    
-    Questo crea un percorso che "ha senso" visivamente sulla mappa:
-    non salta mai da un punto a uno lontano se ce n'è uno più vicino.
-    
+    Conta cambi di direzione >90° su un percorso deposito->ordine->deposito.
+
+    Usato come penalità composita nel multi-start per favorire percorsi
+    geograficamente lineari. Un terzetto consecutivo (A, B, C) "inverte"
+    quando l'angolo tra i vettori AB e BC supera 90°.
+
     Args:
-        punti: lista di punti da visitare
-        deposito: punto di partenza E ritorno
-        usa_osrm: NON USATO (sempre geografico per ordine logico)
-        raggio_zona_km: NON USATO (nearest neighbor puro)
-    
+        ordine_indici: lista di indici 1-based
+        punti: lista di punti (0-based); ordine_indici[i]-1 indicizza punti
+        deposito: estremi deposito (inizio e fine)
+
     Returns:
-        dict con 'percorso', 'distanza_totale', 'fonte', 'n_zone'
+        Numero di inversioni >90°.
     """
-    if not punti:
-        return {'percorso': [], 'distanza_totale': 0, 'fonte': 'N/A', 'n_zone': 0}
-    
-    # NEAREST NEIGHBOR GEOGRAFICO PURO
-    # Semplice, intuitivo, crea percorsi che "hanno senso"
-    percorso = nearest_neighbor_order(punti, deposito, applica_2opt=True)
-    distanza = calcola_distanza_totale(percorso, deposito, include_ritorno=True)
-    
-    return {
-        'percorso': percorso,
-        'distanza_totale': distanza,
-        'fonte': 'Geografico (nearest neighbor)',
-        'n_zone': 1
-    }
+    if len(ordine_indici) < 2:
+        return 0
+    cord = [deposito] + [punti[i - 1] for i in ordine_indici] + [deposito]
+    n_inv = 0
+    for k in range(len(cord) - 2):
+        a, b, c = cord[k], cord[k + 1], cord[k + 2]
+        v1x = b['Lat'] - a['Lat']
+        v1y = b['Lon'] - a['Lon']
+        v2x = c['Lat'] - b['Lat']
+        v2y = c['Lon'] - b['Lon']
+        n1 = math.hypot(v1x, v1y)
+        n2 = math.hypot(v2x, v2y)
+        if n1 == 0 or n2 == 0:
+            continue
+        cos_a = (v1x * v2x + v1y * v2y) / (n1 * n2)
+        cos_a = max(-1.0, min(1.0, cos_a))
+        if math.degrees(math.acos(cos_a)) > 90.0:
+            n_inv += 1
+    return n_inv
+
+
+# Penalità equivalente in minuti per ogni cambio direzione >90° nel multi-start.
+# Bilancia costo-tempo OSRM con linearità geografica (riduce lo zigzag).
+# Valore calibrato empiricamente su backup reali (tools/confronta_percorsi.py):
+# - 0: zero penalità, il TSP puro minimizza solo il costo OSRM (zigzag frequenti).
+# - 5-10: compromesso morbido.
+# - 15-20: forte preferenza per percorsi lineari, accetta percorsi ~5% più lunghi.
+_PENALITA_INVERSIONE_MIN = 15.0
+
+
+def _seed_sweep_out_and_back(punti, deposito):
+    """
+    Costruisce un ordine "out-and-back" attorno al deposito: parte dal deposito,
+    va verso il punto più lontano ("punta" dell'andata) toccando i contatori
+    di un semipiano, poi torna al deposito toccando quelli del semipiano opposto.
+
+    Scopo: fornire al multi-start un seed geometricamente lineare che evita
+    gli zigzag tipici del nearest-neighbor greedy puro.
+
+    Args:
+        punti: lista di punti con Lat/Lon (1-based nella matrice)
+        deposito: punto di partenza E ritorno
+
+    Returns:
+        Lista di indici 1-based nell'ordine di visita.
+    """
+    n = len(punti)
+    if n == 0:
+        return []
+    if n == 1:
+        return [1]
+
+    lat_dep = deposito['Lat']
+    lon_dep = deposito['Lon']
+
+    # Punto più lontano (in linea d'aria) = "punta" dell'andata. Definisce l'asse principale.
+    idx_far = 0
+    dist_far = 0.0
+    for i, p in enumerate(punti):
+        d = calcola_distanza_haversine(lat_dep, lon_dep, p['Lat'], p['Lon'])
+        if d > dist_far:
+            dist_far = d
+            idx_far = i
+
+    far = punti[idx_far]
+    # Asse principale = deposito -> far. Proiezione e perpendicolare in coord locali.
+    ax = far['Lat'] - lat_dep  # componente "y"
+    ay = far['Lon'] - lon_dep  # componente "x"
+    norm_a = math.hypot(ax, ay)
+    if norm_a == 0:
+        # Caso degenere: tutti i punti coincidono col deposito
+        return list(range(1, n + 1))
+    ux, uy = ax / norm_a, ay / norm_a
+    # Perpendicolare (ruotata +90°): (-uy, ux)
+    px, py = -uy, ux
+
+    dati = []  # (indice_1_based, proiezione_su_asse, componente_perpendicolare)
+    for i, p in enumerate(punti):
+        dx = p['Lat'] - lat_dep
+        dy = p['Lon'] - lon_dep
+        proj = dx * ux + dy * uy            # avanzamento lungo l'asse deposito->far
+        perp = dx * px + dy * py            # quale lato (segno) dell'asse
+        dati.append((i + 1, proj, perp))
+
+    # Andata = semipiano con perp >= 0 (incluso il far stesso).
+    # Ritorno = semipiano con perp < 0.
+    andata = [(i, proj) for (i, proj, perp) in dati if perp >= 0]
+    ritorno = [(i, proj) for (i, proj, perp) in dati if perp < 0]
+    andata.sort(key=lambda t: t[1])          # proiezione crescente: dal deposito verso far
+    ritorno.sort(key=lambda t: -t[1])        # proiezione decrescente: da far verso deposito
+
+    return [i for (i, _) in andata] + [i for (i, _) in ritorno]
 
 
 def ottimizza_percorso_tsp_circolare(punti, deposito, usa_osrm=True):
     """
     Ottimizza un percorso TSP circolare usando distanze stradali reali.
-    
+
     Questa è la funzione principale per l'ottimizzazione:
     1. Calcola matrice distanze (OSRM o Haversine)
-    2. Applica multi-start nearest neighbor
+    2. Genera seeds: nearest-neighbor dal deposito + sweep out-and-back
+       geometrico + start-points multipli
     3. Ottimizza con 2-opt, Or-opt, 3-opt usando la matrice
     4. Considera sempre il ritorno al deposito
-    
+
     Args:
         punti: lista di punti da visitare
         deposito: punto di partenza E ritorno
         usa_osrm: se True, usa OSRM per distanze reali stradali
-    
+
     Returns:
         dict con:
         - 'percorso': lista di punti ordinati
@@ -879,23 +945,48 @@ def ottimizza_percorso_tsp_circolare(punti, deposito, usa_osrm=True):
         )
     
     # ================================================================
-    # MULTI-START: prova diversi punti di partenza e tieni il migliore
+    # MULTI-START: prova diversi seed iniziali e tieni il migliore
+    # Seed: (a) NN dal deposito, (b) sweep out-and-back geometrico,
+    #       (c) NN da start-points campionati
     # Per dataset grandi, limita il numero di tentativi per velocità
     # ================================================================
     migliore_ordine = None
     migliore_costo = float('inf')
-    
-    # Prova partendo dal deposito (indice 0)
-    ordine = nearest_neighbor_matrice(n, matrice, start_idx=None)
-    
-    # Ottimizza con 2-opt (usando matrice)
-    if len(ordine) >= 4:
-        ordine = two_opt_improve_matrice(ordine, matrice)
-    
-    costo = calcola_distanza_totale_matrice(ordine, matrice, include_ritorno=True)
-    if costo < migliore_costo:
-        migliore_costo = costo
-        migliore_ordine = ordine
+
+    def _valuta_candidato(ordine_cand, applica_2opt=True):
+        """Applica 2-opt matriciale (opzionale) e confronta col migliore.
+
+        Il punteggio è costo OSRM + penalità geometrica per inversioni >90°.
+        In questo modo, a parità (o quasi) di durata, preferiamo percorsi
+        lineari anti-zigzag.
+
+        applica_2opt=False per seeds geometrici (es. sweep) che si vogliono
+        valutare anche nella loro forma originaria, senza farli convergere
+        verso eventuali zigzag di costo leggermente inferiore.
+        """
+        nonlocal migliore_ordine, migliore_costo
+        if not ordine_cand:
+            return
+        if applica_2opt and len(ordine_cand) >= 4:
+            ordine_cand = two_opt_improve_matrice(ordine_cand, matrice)
+        costo_osrm = calcola_distanza_totale_matrice(ordine_cand, matrice, include_ritorno=True)
+        n_inv = _conta_inversioni_geometriche(ordine_cand, punti, deposito)
+        costo = costo_osrm + _PENALITA_INVERSIONE_MIN * n_inv
+        if costo < migliore_costo:
+            migliore_costo = costo
+            migliore_ordine = ordine_cand
+
+    # (a) Seed NN dal deposito
+    _valuta_candidato(nearest_neighbor_matrice(n, matrice, start_idx=None))
+
+    # (b) Seed sweep out-and-back: pattern "andata verso il più lontano,
+    # ritorno dall'altro lato". Forza linearità geografica.
+    # Lo valutiamo sia grezzo (senza 2-opt, conserva la forma) sia
+    # raffinato (lasciando che 2-opt potenzialmente taglia corto).
+    if n >= 3:
+        seed_sweep = _seed_sweep_out_and_back(punti, deposito)
+        _valuta_candidato(seed_sweep, applica_2opt=False)
+        _valuta_candidato(seed_sweep, applica_2opt=True)
     
     # Per dataset grandi, limita il numero di punti di partenza da provare
     # n > 200: solo 5 punti campione
@@ -912,37 +1003,33 @@ def ottimizza_percorso_tsp_circolare(punti, deposito, usa_osrm=True):
         # Tutti i punti
         start_points = list(range(1, n + 1))
     
-    # Prova i punti di partenza selezionati
+    # Prova i punti di partenza selezionati (seed (c))
     for start in start_points:
-        ordine = nearest_neighbor_matrice(n, matrice, start_idx=start)
-        
-        if len(ordine) >= 4:
-            ordine = two_opt_improve_matrice(ordine, matrice)
-        
-        costo = calcola_distanza_totale_matrice(ordine, matrice, include_ritorno=True)
-        if costo < migliore_costo:
-            migliore_costo = costo
-            migliore_ordine = ordine
+        _valuta_candidato(nearest_neighbor_matrice(n, matrice, start_idx=start))
     
     # ================================================================
     # OTTIMIZZAZIONI AVANZATE sul percorso migliore
-    # Per dataset grandi (>200 punti), salta le ottimizzazioni lente
+    # Per dataset grandi (>200 punti), salta le ottimizzazioni lente.
+    # Queste ottimizzazioni minimizzano il solo costo OSRM e possono
+    # aumentare le inversioni: confrontiamo l'esito con la metrica
+    # composita e conserviamo la scelta migliore.
     # ================================================================
     if migliore_ordine and len(migliore_ordine) >= 4:
-        # Per dataset grandi, limita le ottimizzazioni
+        candidato = list(migliore_ordine)
         if n <= 200:
-            # Or-opt
-            migliore_ordine = or_opt_improve_matrice(migliore_ordine, matrice)
-            
-            # 3-opt (se abbastanza punti e non troppi)
-            if 6 <= len(migliore_ordine) <= 100:
-                migliore_ordine = three_opt_improve_matrice(migliore_ordine, matrice)
-            
-            # Ultimo passaggio 2-opt
-            migliore_ordine = two_opt_improve_matrice(migliore_ordine, matrice, max_iterazioni=50)
+            candidato = or_opt_improve_matrice(candidato, matrice)
+            if 6 <= len(candidato) <= 100:
+                candidato = three_opt_improve_matrice(candidato, matrice)
+            candidato = two_opt_improve_matrice(candidato, matrice, max_iterazioni=50)
         else:
-            # Per n > 200: solo un rapido 2-opt finale
-            migliore_ordine = two_opt_improve_matrice(migliore_ordine, matrice, max_iterazioni=5)
+            candidato = two_opt_improve_matrice(candidato, matrice, max_iterazioni=5)
+
+        costo_osrm_cand = calcola_distanza_totale_matrice(candidato, matrice, include_ritorno=True)
+        n_inv_cand = _conta_inversioni_geometriche(candidato, punti, deposito)
+        costo_cand = costo_osrm_cand + _PENALITA_INVERSIONE_MIN * n_inv_cand
+        if costo_cand < migliore_costo:
+            migliore_costo = costo_cand
+            migliore_ordine = candidato
     
     # Ricostruisci percorso con i punti originali
     percorso_finale = [punti[i - 1] for i in migliore_ordine]  # -1 perché indici sono 1-based
@@ -964,24 +1051,64 @@ def ottimizza_percorso_tsp_circolare(punti, deposito, usa_osrm=True):
     }
 
 
+def _stima_tempi_cumulativi_osrm(percorso, deposito, ora_inizio_min, tempo_intervento_min=20):
+    """
+    Attacca ORARIO_ARRIVO_STIMATO (minuti dall'alba) a ogni punto del percorso
+    usando durate OSRM reali invece di Haversine + VELOCITA_MEDIA.
+
+    Il tempo cumulativo parte da deposito (ora_inizio_min) e somma per ogni hop
+    il tempo di viaggio OSRM + tempo_intervento_min dopo ogni tappa.
+    """
+    if not percorso:
+        return
+
+    from .distanze import ottieni_matrice_distanze
+
+    try:
+        ris = ottieni_matrice_distanze(percorso, deposito, usa_osrm=True)
+        durate = ris.get('durate') if ris.get('successo') else None
+    except Exception:
+        durate = None
+
+    orario = ora_inizio_min
+    idx_prec = 0  # deposito
+    for i, p in enumerate(percorso, start=1):
+        if durate is not None and durate[idx_prec][i] is not None:
+            viaggio = durate[idx_prec][i]  # minuti
+        else:
+            # Fallback: Haversine a 35 km/h
+            lat_prec = deposito['Lat'] if idx_prec == 0 else percorso[idx_prec - 1]['Lat']
+            lon_prec = deposito['Lon'] if idx_prec == 0 else percorso[idx_prec - 1]['Lon']
+            d = calcola_distanza_haversine(lat_prec, lon_prec, p['Lat'], p['Lon'])
+            viaggio = (d / 35) * 60
+        orario += viaggio
+        p['ORARIO_ARRIVO_STIMATO'] = int(round(orario))
+        orario += tempo_intervento_min
+        idx_prec = i
+
+
 def ordina_percorso(punti, deposito, usa_osrm_ottimizzazione=True):
     """
     Ordina i punti per creare un percorso ottimizzato (TSP circolare).
-    
-    NUOVA LOGICA con distanze stradali reali:
+
+    LOGICA UNIFICATA con matrice OSRM reale:
     1. Se non ci sono appuntamenti: usa ottimizzazione TSP con matrice OSRM
-    2. Se ci sono appuntamenti: usa ancore temporali + nearest neighbor ottimizzato
-    3. Considera SEMPRE il ritorno al deposito nel calcolo
-    
+       (ottimizza_percorso_tsp_circolare: multi-start + 2-opt + or-opt + 3-opt).
+    2. Se ci sono appuntamenti: ancore temporali + nearest neighbor greedy,
+       ma basato su DURATE OSRM (non Haversine) per rispettare strade reali.
+    3. Considera SEMPRE il ritorno al deposito nel calcolo.
+    4. Attacca ORARIO_ARRIVO_STIMATO (minuti) a ogni punto usando OSRM,
+       per permettere alla logica fasce orarie di allinearsi col tempo reale.
+
     Parametri:
     - Inizio giornata: da config (Torino: 9:00, Pavia: 8:00)
     - Tempo per intervento: 20 minuti
-    - Velocità media: 35 km/h
-    
+
     Args:
         punti: lista di punti da visitare
         deposito: punto di partenza E RITORNO
-        usa_osrm_ottimizzazione: se True, usa OSRM per distanze reali (default: True)
+        usa_osrm_ottimizzazione: mantenuto per retrocompatibilità (OSRM ora
+            è sempre usato se USA_OSRM=True in config).
     """
     if not punti:
         return []
@@ -1052,32 +1179,83 @@ def ordina_percorso(punti, deposito, usa_osrm_ottimizzazione=True):
     # LOGICA PRINCIPALE: con o senza appuntamenti
     # ================================================================
     
+    if not USA_OSRM:
+        raise RuntimeError(
+            "❌ ERRORE: OSRM è obbligatorio ma USA_OSRM è False in config.py!\n"
+            "   Imposta USA_OSRM = True e avvia Docker con OSRM."
+        )
+
+    # ================================================================
+    # MATRICE OSRM UNICA su tutti i punti (deposito + app + base).
+    # Usata sia dal ramo "con app" per gap-filling su durate reali, sia
+    # dalla stima orari cumulativi finale. Calcolata una volta sola.
+    # ================================================================
+    from .distanze import ottieni_matrice_distanze
+
+    _tutti_punti_ordine = list(app_con_orario) + list(app_serali) + list(punti_base)
+    _idx_map = {id(p): i + 1 for i, p in enumerate(_tutti_punti_ordine)}
+    _matrice_durate = None
+    if _tutti_punti_ordine:
+        try:
+            _ris_matrice = ottieni_matrice_distanze(_tutti_punti_ordine, deposito, usa_osrm=True)
+            if _ris_matrice.get('successo'):
+                _matrice_durate = _ris_matrice.get('durate')
+        except RuntimeError:
+            # Matrice non disponibile: il gap-filling cadrà su Haversine
+            # (e ottimizza_percorso_tsp_circolare solleverà se OSRM è davvero down).
+            _matrice_durate = None
+
+    def _durata_min(p1, p2):
+        """Durata OSRM in minuti tra due punti o deposito (fallback Haversine/35km/h)."""
+        if _matrice_durate is not None:
+            i1 = 0 if p1 is deposito else _idx_map.get(id(p1))
+            i2 = 0 if p2 is deposito else _idx_map.get(id(p2))
+            if i1 is not None and i2 is not None:
+                val = _matrice_durate[i1][i2]
+                if val is not None:
+                    return val
+        d = calcola_distanza_haversine(p1['Lat'], p1['Lon'], p2['Lat'], p2['Lon'])
+        return (d / VELOCITA_MEDIA) * 60
+
+    def _two_opt_segmento_aperto(middle, start_punto, end_punto, max_it=50):
+        """2-opt lineare su 'middle' con start/end fissi. Riduce zigzag interni
+        a un segmento fra due ancore temporali senza alterare le ancore stesse."""
+        if len(middle) < 2:
+            return list(middle)
+        middle = list(middle)
+        migliorato = True
+        it = 0
+        while migliorato and it < max_it:
+            migliorato = False
+            it += 1
+            nm = len(middle)
+            for i in range(nm):
+                for j in range(i + 1, nm):
+                    prev_p = middle[i - 1] if i > 0 else start_punto
+                    next_p = middle[j + 1] if j + 1 < nm else end_punto
+                    c_old = _durata_min(prev_p, middle[i]) + _durata_min(middle[j], next_p)
+                    c_new = _durata_min(prev_p, middle[j]) + _durata_min(middle[i], next_p)
+                    if c_new < c_old - 0.01:
+                        middle[i:j + 1] = middle[i:j + 1][::-1]
+                        migliorato = True
+        return middle
+
     if not app_con_orario:
         # ==============================================================
         # CASO 1: Nessun appuntamento con orario
-        # Usa ottimizzazione PER ZONE: raggruppa contatori vicini e completa
-        # ogni zona prima di passare alla successiva (evita saltelli)
+        # TSP circolare completo con matrice OSRM (multi-start + 2-opt
+        # + or-opt + 3-opt + 2-opt finale). Preferisce autostrade quando
+        # più veloci (OTTIMIZZA_PER_TEMPO=True).
         # ==============================================================
-        if not USA_OSRM:
-            raise RuntimeError(
-                "❌ ERRORE: OSRM è obbligatorio ma USA_OSRM è False in config.py!\n"
-                "   Imposta USA_OSRM = True e avvia Docker con OSRM."
-            )
-
         if len(punti_base) >= 3:
-            # NUOVA LOGICA: ottimizzazione per micro-zone geografiche
-            # - Raggruppa contatori entro RAGGIO_MICROZONA_KM (default 500m)
-            # - Ordina le zone usando OSRM (autostrade tra zone)
-            # - Completa ogni zona prima di passare alla successiva
-            risultato = ottimizza_percorso_per_zone(punti_base, deposito, usa_osrm=True, raggio_zona_km=RAGGIO_MICROZONA_KM)
+            risultato = ottimizza_percorso_tsp_circolare(punti_base, deposito, usa_osrm=True)
             percorso_finale = risultato['percorso']
         else:
-            # Con meno di 3 punti, nearest neighbor è sufficiente (non serve matrice)
             percorso_finale = nearest_neighbor_order(punti_base, deposito, applica_2opt=False)
     else:
         # ==============================================================
         # CASO 2: Ci sono appuntamenti con orario
-        # Usa ancore temporali + nearest neighbor negli spazi
+        # Ancore temporali + nearest neighbor greedy su durate OSRM reali.
         # ==============================================================
         percorso_finale = []
         contatori_rimanenti = punti_base.copy()
@@ -1091,68 +1269,50 @@ def ordina_percorso(punti, deposito, usa_osrm_ottimizzazione=True):
             ora_max_tolleranza = app.get('_ORA_MAX_TOLLERANZA', orario_target + 15)
 
             # Se c'è un prossimo appuntamento, la tolleranza non può superare
-            # l'orario necessario per arrivarci in tempo
+            # l'orario necessario per arrivarci in tempo (durata OSRM reale)
             if idx_app + 1 < len(app_con_orario):
                 next_app = app_con_orario[idx_app + 1]
-                dist_to_next = calcola_distanza_haversine(
-                    app['Lat'], app['Lon'],
-                    next_app['Lat'], next_app['Lon']
-                )
-                tempo_to_next = (dist_to_next / VELOCITA_MEDIA) * 60
-                # Devo finire questo app in tempo per arrivare al prossimo
+                tempo_to_next = _durata_min(app, next_app)
                 ora_limite_per_next = next_app['_ORA_TARGET'] - tempo_to_next - TEMPO_INTERVENTO
                 ora_max_tolleranza = min(ora_max_tolleranza, ora_limite_per_next)
 
-            # Calcola quanto tempo ci vuole per raggiungere l'appuntamento
-            dist_app = calcola_distanza_haversine(
-                posizione_corrente['Lat'], posizione_corrente['Lon'],
-                app['Lat'], app['Lon']
-            )
-            tempo_viaggio_app = (dist_app / VELOCITA_MEDIA) * 60  # minuti
-
-            # Orario limite: devo partire per l'appuntamento
-            orario_partenza_per_app = orario_target - tempo_viaggio_app
-
-            # Riempi il tempo disponibile con contatori usando nearest neighbor
+            # Riempi il tempo disponibile con contatori usando nearest neighbor:
+            # la SCELTA del candidato avviene su distanza geografica (Haversine)
+            # per favorire percorsi lineari (evitare che OSRM "tiri" verso l'autostrada
+            # anche se il punto è geograficamente dietro); il CONTROLLO di budget
+            # temporale usa invece la DURATA OSRM reale per rispettare gli appuntamenti.
+            # Un passo di 2-opt aperto fra ancore viene applicato DOPO su tutto il
+            # percorso costruito.
             while contatori_rimanenti:
-                # Trova il contatore più vicino
-                min_dist = float('inf')
+                min_hav = float('inf')
                 idx_min = -1
                 for i, c in enumerate(contatori_rimanenti):
-                    dist = calcola_distanza_haversine(
+                    d = calcola_distanza_haversine(
                         posizione_corrente['Lat'], posizione_corrente['Lon'],
                         c['Lat'], c['Lon']
                     )
-                    if dist < min_dist:
-                        min_dist = dist
+                    if d < min_hav:
+                        min_hav = d
                         idx_min = i
 
                 if idx_min < 0:
                     break
 
-                # Calcola se c'è tempo per questo contatore prima dell'appuntamento
-                tempo_viaggio = (min_dist / VELOCITA_MEDIA) * 60
-                orario_arrivo_contatore = orario_corrente + tempo_viaggio
+                # Budget temporale: durate OSRM reali per pos->contatore e contatore->app
+                contatore = contatori_rimanenti[idx_min]
+                tempo_pos_c = _durata_min(posizione_corrente, contatore)
+                orario_arrivo_contatore = orario_corrente + tempo_pos_c
                 orario_fine_contatore = orario_arrivo_contatore + TEMPO_INTERVENTO
 
-                # Calcola tempo per andare dal contatore all'appuntamento
-                contatore = contatori_rimanenti[idx_min]
-                dist_cont_app = calcola_distanza_haversine(
-                    contatore['Lat'], contatore['Lon'],
-                    app['Lat'], app['Lon']
-                )
-                tempo_cont_app = (dist_cont_app / VELOCITA_MEDIA) * 60
+                tempo_cont_app = _durata_min(contatore, app)
 
-                # Posso fare questo contatore e arrivare in tempo all'appuntamento?
                 orario_arrivo_app = orario_fine_contatore + tempo_cont_app
 
                 if orario_arrivo_app <= ora_max_tolleranza:
-                    # Sì, aggiungi il contatore
                     percorso_finale.append(contatori_rimanenti.pop(idx_min))
                     posizione_corrente = contatore
                     orario_corrente = orario_fine_contatore
                 else:
-                    # No, è ora di andare all'appuntamento
                     break
 
             # Aggiungi l'appuntamento
@@ -1182,7 +1342,35 @@ def ordina_percorso(punti, deposito, usa_osrm_ottimizzazione=True):
             percorso_finale.extend(rimanenti_ordinati)
             if rimanenti_ordinati:
                 posizione_corrente = rimanenti_ordinati[-1]
-    
+
+        # ==============================================================
+        # RIORDINO per segmenti fra ancore temporali: il gap-filling greedy
+        # può creare zigzag all'interno di ciascun sotto-percorso. Qui,
+        # tenendo fisse le posizioni degli appuntamenti (ancore), riordiniamo
+        # i contatori di ciascun segmento con 2-opt aperto su durate OSRM.
+        # Anche deposito (inizio) e ritorno al deposito fungono da ancore.
+        # ==============================================================
+        ids_ancore = {id(a) for a in app_con_orario}
+        posizioni_ancore = [i for i, p in enumerate(percorso_finale) if id(p) in ids_ancore]
+        # Confini dei segmenti: -1 (deposito inizio), ancore, len() (deposito fine)
+        confini = [-1] + posizioni_ancore + [len(percorso_finale)]
+        nuovo_percorso = []
+        for k in range(len(confini) - 1):
+            start_pos = confini[k]
+            end_pos = confini[k + 1]
+            start_punto = deposito if start_pos < 0 else percorso_finale[start_pos]
+            end_punto = deposito if end_pos >= len(percorso_finale) else percorso_finale[end_pos]
+            middle = percorso_finale[start_pos + 1:end_pos]
+            if len(middle) >= 2:
+                middle = _two_opt_segmento_aperto(middle, start_punto, end_punto)
+            # Aggiungi il punto di start (ancora o deposito) e il middle riordinato.
+            # L'ancora di confine viene aggiunta qui; l'ultima ancora (deposito finale)
+            # non viene ri-aggiunta (il deposito non è in percorso_finale).
+            if start_pos >= 0:
+                nuovo_percorso.append(percorso_finale[start_pos])
+            nuovo_percorso.extend(middle)
+        percorso_finale = nuovo_percorso
+
     # ================================================================
     # APPUNTAMENTI SERALI: aggiungi alla fine del percorso
     # (Torino: dopo le 17:00, Pavia: dopo le 15:00)
@@ -1200,13 +1388,17 @@ def ordina_percorso(punti, deposito, usa_osrm_ottimizzazione=True):
         # Aggiungi gli appuntamenti serali in ordine di orario
         percorso_finale.extend(app_serali)
     
+    # Attacca ORARIO_ARRIVO_STIMATO a ogni tappa (tempi OSRM cumulativi).
+    # Serve alla logica fasce orarie per allinearsi al tempo reale di passaggio.
+    _stima_tempi_cumulativi_osrm(percorso_finale, deposito, ORA_INIZIO, TEMPO_INTERVENTO)
+
     # Pulisci campi temporanei
     for p in percorso_finale:
         p.pop('_ORA_MIN', None)
         p.pop('_ORA_MAX', None)
         p.pop('_ORA_TARGET', None)
         p.pop('_ORA_MAX_TOLLERANZA', None)
-    
+
     return percorso_finale
 
 

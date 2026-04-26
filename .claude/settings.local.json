@@ -41,7 +41,12 @@
       "Bash(./venv/bin/python tools/confronta_percorsi.py --provincia torino --max-giornate 15 --solo-da-oggi --output /tmp/ab_step4f.html)",
       "Bash(./venv/bin/python tools/confronta_percorsi.py --provincia torino --max-giornate 40 --solo-da-oggi --output /tmp/ab_step4_full.html)",
       "Bash(./venv/bin/python tools/confronta_percorsi.py --provincia torino --max-giornate 80 --solo-da-oggi --output /tmp/ab_torino_final.html)",
-      "Bash(./venv/bin/python tools/confronta_percorsi.py --provincia pavia --max-giornate 80 --solo-da-oggi --output /tmp/ab_pavia_final.html)"
+      "Bash(./venv/bin/python tools/confronta_percorsi.py --provincia pavia --max-giornate 80 --solo-da-oggi --output /tmp/ab_pavia_final.html)",
+      "Bash(ps -eo pid,etime,cmd)",
+      "Bash(./venv/bin/python)",
+      "Bash(/opt/mappa-algeco/venv/bin/python --version)",
+      "Bash(./venv/bin/python -c ' *)",
+      "Bash(PROVINCIA=TORINO ./venv/bin/python)"
     ]
   }
 }

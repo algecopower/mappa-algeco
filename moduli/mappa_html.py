@@ -315,7 +315,7 @@ def calcola_ordine_percorsi(df):
     # ================================================================
     # VERSIONE ALGORITMO: incrementare quando cambia la logica di ordinamento
     # Questo invalida la cache e forza il ricalcolo con il nuovo algoritmo
-    ALGORITMO_VERSIONE = "3.0_nearest_geo"  # v3.0: nearest neighbor geografico PURO
+    ALGORITMO_VERSIONE = "4.0_clustering_ibrida"  # v4.0: matrice OSRM ibrida + clustering 100m + or-opt Haversine + sweep out-and-back
     
     # Crea hash basato su: versione algoritmo, date, tecnici, coordinate contatori
     hash_data = [f"ALGO_VERSION:{ALGORITMO_VERSIONE}"]

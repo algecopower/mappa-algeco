@@ -776,6 +776,209 @@ def nearest_neighbor_matrice(n_punti, matrice, start_idx=None):
     return ordine
 
 
+def _clusterizza_punti(punti, raggio_km=0.1):
+    """
+    Raggruppa punti molto vicini (entro raggio_km in linea d'aria) in cluster.
+    Ogni cluster viene poi trattato dal TSP come un super-punto da visitare
+    in blocco, così contatori praticamente attaccati (es. stesso isolato) non
+    possono finire separati nel percorso anche se OSRM consiglierebbe un giro
+    intermedio per sensi unici o svincoli.
+
+    Algoritmo: greedy gerarchico. Per ogni punto non ancora assegnato, si
+    attira tutti gli altri entro raggio_km (ricalcolando il centroide ad ogni
+    aggiunta). Il rappresentante del cluster è il primo punto estratto, con
+    campo '_CLUSTER' = lista dei punti originali (il primo compreso) nell'
+    ordine in cui il tecnico li visiterà internamente (nearest-neighbor
+    Haversine).
+
+    Args:
+        punti: lista di dict con Lat/Lon.
+        raggio_km: soglia di aggregazione in km (default 100 m).
+
+    Returns:
+        Lista di rappresentanti. Ogni rappresentante ha l'attributo '_CLUSTER'
+        con la lista interna già ordinata.
+    """
+    if not punti:
+        return []
+    restanti = list(punti)
+    rappresentanti = []
+    while restanti:
+        seed = restanti.pop(0)
+        cluster = [seed]
+        lat_c, lon_c = seed['Lat'], seed['Lon']
+        i = 0
+        while i < len(restanti):
+            p = restanti[i]
+            d = calcola_distanza_haversine(lat_c, lon_c, p['Lat'], p['Lon'])
+            if d <= raggio_km:
+                cluster.append(p)
+                restanti.pop(i)
+                # Ricalcola centroide
+                lat_c = sum(x['Lat'] for x in cluster) / len(cluster)
+                lon_c = sum(x['Lon'] for x in cluster) / len(cluster)
+            else:
+                i += 1
+        # Ordina internamente il cluster con nearest-neighbor Haversine
+        if len(cluster) > 2:
+            cluster = nearest_neighbor_order(cluster, seed, applica_2opt=False)
+        rappresentante = dict(seed)
+        rappresentante['_CLUSTER'] = cluster
+        rappresentanti.append(rappresentante)
+    return rappresentanti
+
+
+def _espandi_cluster(percorso, deposito=None):
+    """
+    Espande i rappresentanti cluster nei punti interni.
+
+    Ogni cluster viene ordinato in modo da minimizzare il percorso
+    Haversine (linea d'aria) entry → ... → exit, dove entry è il punto
+    precedente nel percorso (o deposito) e exit il successivo (o deposito).
+
+    Per cluster di ≤4 elementi: brute-force sulle permutazioni (≤24).
+    Per cluster più grandi: nearest-neighbor a partire dal punto più vicino
+    a entry, seguito da 2-opt aperto.
+    """
+    import itertools
+
+    def _hav(p1, p2):
+        return calcola_distanza_haversine(p1['Lat'], p1['Lon'], p2['Lat'], p2['Lon'])
+
+    def _costo_seq(entry, seq, exit_p):
+        tot = _hav(entry, seq[0])
+        for k in range(len(seq) - 1):
+            tot += _hav(seq[k], seq[k + 1])
+        tot += _hav(seq[-1], exit_p)
+        return tot
+
+    def _ordina_cluster(membri, entry, exit_p):
+        if len(membri) <= 1:
+            return list(membri)
+        if len(membri) <= 4:
+            # Brute-force: cerca la permutazione a costo minimo
+            best = None
+            best_cost = float('inf')
+            for perm in itertools.permutations(membri):
+                c = _costo_seq(entry, perm, exit_p)
+                if c < best_cost:
+                    best_cost = c
+                    best = list(perm)
+            return best
+        # Per cluster grandi (raro a 100m): NN dal punto più vicino a entry,
+        # poi 2-opt aperto interno.
+        rimanenti = list(membri)
+        ordinato = []
+        pos = entry
+        while rimanenti:
+            idx_min = min(range(len(rimanenti)), key=lambda i: _hav(pos, rimanenti[i]))
+            ordinato.append(rimanenti.pop(idx_min))
+            pos = ordinato[-1]
+        # 2-opt aperto interno
+        migliorato = True
+        it = 0
+        while migliorato and it < 20:
+            migliorato = False
+            it += 1
+            n = len(ordinato)
+            for i in range(n):
+                for j in range(i + 1, n):
+                    prev_p = ordinato[i - 1] if i > 0 else entry
+                    next_p = ordinato[j + 1] if j + 1 < n else exit_p
+                    c_old = _hav(prev_p, ordinato[i]) + _hav(ordinato[j], next_p)
+                    c_new = _hav(prev_p, ordinato[j]) + _hav(ordinato[i], next_p)
+                    if c_new < c_old - 0.001:
+                        ordinato[i:j + 1] = ordinato[i:j + 1][::-1]
+                        migliorato = True
+        return ordinato
+
+    risultato = []
+    n = len(percorso)
+    for i, p in enumerate(percorso):
+        cluster = p.get('_CLUSTER')
+        if cluster and len(cluster) > 1:
+            entry = risultato[-1] if risultato else (deposito if deposito else cluster[0])
+            exit_p = percorso[i + 1] if i + 1 < n else (deposito if deposito else cluster[-1])
+            risultato.extend(_ordina_cluster(cluster, entry, exit_p))
+        elif cluster:
+            risultato.extend(cluster)
+        else:
+            risultato.append(p)
+    return risultato
+
+
+def _or_opt_haversine_finale(percorso, deposito, ancore_id=None, soglia_km=0.05, max_iter=30):
+    """
+    Or-opt geografico (linea d'aria) come post-processing finale.
+
+    Per ogni tappa (o segmento di 2-3 tappe), prova a spostarla in ogni altra
+    posizione del percorso e accetta lo spostamento se riduce la somma delle
+    distanze Haversine deposito->...->deposito di almeno `soglia_km` km.
+
+    Cattura i casi "passo davanti a un contatore mentre vado da X a Y" che la
+    matrice OSRM (km stradali) non vede per via di sensi unici / svincoli che
+    gonfiano il costo stradale tra contatori vicini in linea d'aria.
+
+    Tappe il cui id() è in `ancore_id` non vengono spostate (preservare
+    appuntamenti con orario).
+
+    Args:
+        percorso: lista di punti (dict con Lat/Lon).
+        deposito: punto di partenza/ritorno.
+        ancore_id: insieme di id() di tappe da non spostare (es. appuntamenti).
+        soglia_km: miglioramento minimo per accettare uno spostamento.
+        max_iter: cicli completi massimi.
+
+    Returns:
+        Percorso (stessa lista di dict) eventualmente riordinata.
+    """
+    if len(percorso) < 4:
+        return percorso
+    if ancore_id is None:
+        ancore_id = set()
+
+    def hav(p1, p2):
+        return calcola_distanza_haversine(p1['Lat'], p1['Lon'], p2['Lat'], p2['Lon'])
+
+    p = list(percorso)
+    migliorato = True
+    it = 0
+    while migliorato and it < max_iter:
+        migliorato = False
+        it += 1
+        n = len(p)
+        # Prova segmenti di 1, 2, 3 tappe
+        for seg_len in (1, 2, 3):
+            if migliorato:
+                break
+            for i in range(n - seg_len + 1):
+                if migliorato:
+                    break
+                segmento = p[i:i + seg_len]
+                # Non muovere se contiene un'ancora
+                if any(id(s) in ancore_id for s in segmento):
+                    continue
+                prev_p = p[i - 1] if i > 0 else deposito
+                next_p = p[i + seg_len] if i + seg_len < n else deposito
+                # Costo rimozione: prev->seg_start + seg_end->next - prev->next
+                guadagno = hav(prev_p, segmento[0]) + hav(segmento[-1], next_p) - hav(prev_p, next_p)
+                # Prova a inserire in ogni altra posizione
+                for j in range(n - seg_len + 2):
+                    if i <= j <= i + seg_len:
+                        continue
+                    temp = p[:i] + p[i + seg_len:]
+                    new_j = j - seg_len if j > i else j
+                    ins_prev = temp[new_j - 1] if new_j > 0 else deposito
+                    ins_next = temp[new_j] if new_j < len(temp) else deposito
+                    # Costo inserimento: ins_prev->seg_start + seg_end->ins_next - ins_prev->ins_next
+                    costo_ins = hav(ins_prev, segmento[0]) + hav(segmento[-1], ins_next) - hav(ins_prev, ins_next)
+                    if costo_ins < guadagno - soglia_km:
+                        p = temp[:new_j] + segmento + temp[new_j:]
+                        migliorato = True
+                        break
+    return p
+
+
 def _conta_inversioni_geometriche(ordine_indici, punti, deposito):
     """
     Conta cambi di direzione >90° su un percorso deposito->ordine->deposito.
@@ -923,26 +1126,45 @@ def ottimizza_percorso_tsp_circolare(punti, deposito, usa_osrm=True):
     try:
         from config import OTTIMIZZA_PER_TEMPO
     except ImportError:
-        OTTIMIZZA_PER_TEMPO = True  # Default: ottimizza per tempo (preferisce autostrade)
-    
-    # Scegli la metrica di ottimizzazione:
-    # - DURATE (tempo): preferisce percorsi più veloci (autostrade)
-    # - DISTANZE (km): preferisce percorsi più corti
-    # Per Torino: i tecnici usano l'autostrada, quindi preferiamo TEMPO
-    if OTTIMIZZA_PER_TEMPO:
-        matrice = risultato_matrice.get('durate') or risultato_matrice.get('distanze')
-        metrica_usata = 'tempo (preferisce autostrade)'
-    else:
-        matrice = risultato_matrice.get('distanze') or risultato_matrice.get('durate')
-        metrica_usata = 'distanza km'
-    
-    if not matrice or not risultato_matrice['successo']:
-        # OSRM è obbligatorio - propaga l'errore
+        OTTIMIZZA_PER_TEMPO = True  # Default: metrica ibrida (autostrada solo deposito)
+
+    # Metrica di costo usata dal TSP:
+    # - OTTIMIZZA_PER_TEMPO=True (default, metrica IBRIDA):
+    #     * archi verso/dal DEPOSITO (indice 0): durate OSRM reali → preferisce
+    #       autostrada per coprire rapidamente la distanza fino all'area di lavoro;
+    #     * archi INTERNI tra contatori: km OSRM convertiti in minuti a 35 km/h →
+    #       penalizza giri in tangenziale/autostrada per spostamenti locali, quindi
+    #       favorisce contatori geograficamente adiacenti (anti-zigzag).
+    # - OTTIMIZZA_PER_TEMPO=False: solo distanze km ovunque (legacy).
+    durate = risultato_matrice.get('durate')
+    distanze = risultato_matrice.get('distanze')
+    if not risultato_matrice.get('successo') or (durate is None and distanze is None):
         raise RuntimeError(
             f"❌ ERRORE: Impossibile ottenere matrice distanze OSRM!\n"
             f"   Fonte: {risultato_matrice.get('fonte', 'N/A')}\n"
             "   Verifica che Docker con OSRM sia attivo."
         )
+
+    if OTTIMIZZA_PER_TEMPO and durate is not None and distanze is not None:
+        # Matrice ibrida: durate OSRM per il deposito, km→min35 per gli archi interni.
+        m_size = len(durate)
+        matrice = []
+        for i in range(m_size):
+            riga = []
+            for j in range(m_size):
+                if i == 0 or j == 0:
+                    riga.append(durate[i][j])
+                else:
+                    km = distanze[i][j]
+                    riga.append((km / 35.0) * 60.0 if km is not None else None)
+            matrice.append(riga)
+        metrica_usata = 'ibrida (autostrada solo per deposito)'
+    elif OTTIMIZZA_PER_TEMPO and durate is not None:
+        matrice = durate
+        metrica_usata = 'tempo (durate OSRM)'
+    else:
+        matrice = distanze if distanze is not None else durate
+        metrica_usata = 'distanza km'
     
     # ================================================================
     # MULTI-START: prova diversi seed iniziali e tieni il migliore
@@ -1178,7 +1400,7 @@ def ordina_percorso(punti, deposito, usa_osrm_ottimizzazione=True):
     # ================================================================
     # LOGICA PRINCIPALE: con o senza appuntamenti
     # ================================================================
-    
+
     if not USA_OSRM:
         raise RuntimeError(
             "❌ ERRORE: OSRM è obbligatorio ma USA_OSRM è False in config.py!\n"
@@ -1186,13 +1408,29 @@ def ordina_percorso(punti, deposito, usa_osrm_ottimizzazione=True):
         )
 
     # ================================================================
+    # CLUSTERING GEOGRAFICO PRELIMINARE sui contatori (non appuntamenti):
+    # contatori entro 100 m in linea d'aria sono raggruppati in un super-punto
+    # visitato come blocco dal TSP. Così due contatori praticamente attaccati
+    # (es. stesso isolato, civici diversi) non possono finire separati nel
+    # percorso anche se OSRM suggerisce un giro per senso unico. Gli
+    # appuntamenti restano come punti singoli (non clusterizzati) per
+    # preservare le ancore temporali.
+    # ================================================================
+    RAGGIO_CLUSTER_KM = 0.1  # 100 m
+    if len(punti_base) > 1:
+        punti_base_cluster = _clusterizza_punti(punti_base, raggio_km=RAGGIO_CLUSTER_KM)
+    else:
+        punti_base_cluster = list(punti_base)
+
+    # ================================================================
     # MATRICE OSRM UNICA su tutti i punti (deposito + app + base).
     # Usata sia dal ramo "con app" per gap-filling su durate reali, sia
     # dalla stima orari cumulativi finale. Calcolata una volta sola.
+    # Nota: usiamo i rappresentanti dei cluster per la matrice.
     # ================================================================
     from .distanze import ottieni_matrice_distanze
 
-    _tutti_punti_ordine = list(app_con_orario) + list(app_serali) + list(punti_base)
+    _tutti_punti_ordine = list(app_con_orario) + list(app_serali) + list(punti_base_cluster)
     _idx_map = {id(p): i + 1 for i, p in enumerate(_tutti_punti_ordine)}
     _matrice_durate = None
     if _tutti_punti_ordine:
@@ -1243,22 +1481,23 @@ def ordina_percorso(punti, deposito, usa_osrm_ottimizzazione=True):
     if not app_con_orario:
         # ==============================================================
         # CASO 1: Nessun appuntamento con orario
-        # TSP circolare completo con matrice OSRM (multi-start + 2-opt
-        # + or-opt + 3-opt + 2-opt finale). Preferisce autostrade quando
-        # più veloci (OTTIMIZZA_PER_TEMPO=True).
+        # TSP circolare completo sui rappresentanti cluster con matrice
+        # ibrida OSRM (multi-start + 2-opt + or-opt + 3-opt + 2-opt finale).
+        # I cluster vengono poi espansi nei punti originali.
         # ==============================================================
-        if len(punti_base) >= 3:
-            risultato = ottimizza_percorso_tsp_circolare(punti_base, deposito, usa_osrm=True)
+        if len(punti_base_cluster) >= 3:
+            risultato = ottimizza_percorso_tsp_circolare(punti_base_cluster, deposito, usa_osrm=True)
             percorso_finale = risultato['percorso']
         else:
-            percorso_finale = nearest_neighbor_order(punti_base, deposito, applica_2opt=False)
+            percorso_finale = nearest_neighbor_order(punti_base_cluster, deposito, applica_2opt=False)
     else:
         # ==============================================================
         # CASO 2: Ci sono appuntamenti con orario
-        # Ancore temporali + nearest neighbor greedy su durate OSRM reali.
+        # Ancore temporali + nearest neighbor greedy (Haversine per scelta,
+        # OSRM per budget). I contatori base sono rappresentanti di cluster.
         # ==============================================================
         percorso_finale = []
-        contatori_rimanenti = punti_base.copy()
+        contatori_rimanenti = punti_base_cluster.copy()
         posizione_corrente = deposito
         orario_corrente = ORA_INIZIO
 
@@ -1387,7 +1626,21 @@ def ordina_percorso(punti, deposito, usa_osrm_ottimizzazione=True):
         
         # Aggiungi gli appuntamenti serali in ordine di orario
         percorso_finale.extend(app_serali)
-    
+
+    # Post-processing geografico: or-opt in linea d'aria sui rappresentanti.
+    # Cattura "passo davanti a una tappa, ma la salto" che la metrica OSRM
+    # non vede per via di sensi unici / svincoli che gonfiano i km stradali.
+    # Le ancore (appuntamenti con orario) restano fisse.
+    _ancore_id = {id(a) for a in (app_con_orario + app_serali)}
+    percorso_finale = _or_opt_haversine_finale(percorso_finale, deposito,
+                                               ancore_id=_ancore_id)
+
+    # Espandi i cluster: ogni rappresentante viene sostituito dai punti
+    # interni ordinati in funzione del punto di ingresso e di uscita
+    # (minimizza Haversine entry→...→exit). I cluster sono visitati come
+    # blocchi e l'ordine interno è ottimo rispetto al contesto del percorso.
+    percorso_finale = _espandi_cluster(percorso_finale, deposito)
+
     # Attacca ORARIO_ARRIVO_STIMATO a ogni tappa (tempi OSRM cumulativi).
     # Serve alla logica fasce orarie per allinearsi al tempo reale di passaggio.
     _stima_tempi_cumulativi_osrm(percorso_finale, deposito, ORA_INIZIO, TEMPO_INTERVENTO)
@@ -1398,6 +1651,7 @@ def ordina_percorso(punti, deposito, usa_osrm_ottimizzazione=True):
         p.pop('_ORA_MAX', None)
         p.pop('_ORA_TARGET', None)
         p.pop('_ORA_MAX_TOLLERANZA', None)
+        p.pop('_CLUSTER', None)
 
     return percorso_finale
 

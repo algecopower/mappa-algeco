@@ -22,6 +22,39 @@ from .percorso import ordina_per_fasce_e_vicinanza
 
 
 # ============================================================================
+# HELPER: coordinate per il routing (UPS-style access points)
+# ============================================================================
+
+def _coord_routing(p):
+    """
+    Ritorna (lat, lon) da usare per OSRM:
+      Lat_access/Lon_access > lat_access/lon_access > Lat/Lon > lat/lon.
+    """
+    candidates = (
+        ('Lat_access', 'Lon_access'),
+        ('lat_access', 'lon_access'),
+        ('Lat', 'Lon'),
+        ('lat', 'lon'),
+    )
+    for klat, klon in candidates:
+        lat = p.get(klat)
+        lon = p.get(klon)
+        if lat is None or lon is None:
+            continue
+        try:
+            lat_f = float(lat)
+            lon_f = float(lon)
+        except (TypeError, ValueError):
+            continue
+        if math.isnan(lat_f) or math.isnan(lon_f):
+            continue
+        return lat_f, lon_f
+    raise ValueError(
+        f"Punto senza coordinate valide (eneltel={p.get('Eneltel_Key') or p.get('eneltel') or '?'})"
+    )
+
+
+# ============================================================================
 # MATRICE DISTANZE OSRM - Per ottimizzazione percorsi con distanze reali
 # ============================================================================
 
@@ -66,11 +99,13 @@ def calcola_matrice_distanze_osrm(punti, deposito, profile='car'):
         risultato['errore'] = "Nessun punto fornito"
         return risultato
     
-    # Costruisci lista coordinate: deposito + tutti i punti
-    # Formato OSRM: lon,lat
-    coords = [(deposito['Lon'], deposito['Lat'])]
+    # Costruisci lista coordinate: deposito + tutti i punti.
+    # Formato OSRM: lon,lat. Usa Lat_access/Lon_access se presenti.
+    dep_lat, dep_lon = _coord_routing(deposito)
+    coords = [(dep_lon, dep_lat)]
     for p in punti:
-        coords.append((p['Lon'], p['Lat']))
+        plat, plon = _coord_routing(p)
+        coords.append((plon, plat))
     
     n_coords = len(coords)
     
@@ -153,8 +188,10 @@ def _calcola_matrice_osrm_a_blocchi(punti, deposito, profile='driving'):
         'errore': None
     }
     
-    # Lista completa: deposito (indice 0) + punti
-    tutti_punti = [{'Lat': deposito['Lat'], 'Lon': deposito['Lon']}] + list(punti)
+    # Lista completa: deposito (indice 0) + punti.
+    # Manteniamo il riferimento ai dict originali cosi' _coord_routing
+    # sceglie correttamente Lat_access/Lon_access quando disponibili.
+    tutti_punti = [deposito] + list(punti)
     n = len(tutti_punti)
     
     # Inizializza matrici con None
@@ -188,8 +225,11 @@ def _calcola_matrice_osrm_a_blocchi(punti, deposito, profile='driving'):
             if len(all_idx) <= 1:
                 continue
             
-            # Costruisci stringa coordinate
-            coords = [(tutti_punti[i]['Lon'], tutti_punti[i]['Lat']) for i in all_idx]
+            # Costruisci stringa coordinate (con access point se disponibile)
+            coords = []
+            for i in all_idx:
+                plat, plon = _coord_routing(tutti_punti[i])
+                coords.append((plon, plat))
             coords_str = ";".join([f"{lon},{lat}" for lon, lat in coords])
             
             # Mappa indici locali
@@ -231,10 +271,9 @@ def _calcola_matrice_osrm_a_blocchi(punti, deposito, profile='driving'):
                 for src_global in sources_idx:
                     for dst_global in destinations_idx:
                         if distanze[src_global][dst_global] is None and src_global != dst_global:
-                            dist = calcola_distanza_haversine(
-                                tutti_punti[src_global]['Lat'], tutti_punti[src_global]['Lon'],
-                                tutti_punti[dst_global]['Lat'], tutti_punti[dst_global]['Lon']
-                            ) * FATTORE_CORREZIONE_HAVERSINE
+                            slat, slon = _coord_routing(tutti_punti[src_global])
+                            dlat, dlon = _coord_routing(tutti_punti[dst_global])
+                            dist = calcola_distanza_haversine(slat, slon, dlat, dlon) * FATTORE_CORREZIONE_HAVERSINE
                             distanze[src_global][dst_global] = round(dist, 2)
                             durate[src_global][dst_global] = round(dist / VELOCITA_MEDIA_KMH * 60, 1)
     
@@ -242,10 +281,9 @@ def _calcola_matrice_osrm_a_blocchi(punti, deposito, profile='driving'):
     for i in range(n):
         for j in range(n):
             if distanze[i][j] is None and i != j:
-                dist = calcola_distanza_haversine(
-                    tutti_punti[i]['Lat'], tutti_punti[i]['Lon'],
-                    tutti_punti[j]['Lat'], tutti_punti[j]['Lon']
-                ) * FATTORE_CORREZIONE_HAVERSINE
+                ilat, ilon = _coord_routing(tutti_punti[i])
+                jlat, jlon = _coord_routing(tutti_punti[j])
+                dist = calcola_distanza_haversine(ilat, ilon, jlat, jlon) * FATTORE_CORREZIONE_HAVERSINE
                 distanze[i][j] = round(dist, 2)
                 durate[i][j] = round(dist / VELOCITA_MEDIA_KMH * 60, 1)
     
@@ -404,10 +442,13 @@ def calcola_distanze_percorso(percorso_ordinato, deposito, usa_osrm=True):
     if not percorso_ordinato:
         return stats
     
-    coords = [(deposito['Lon'], deposito['Lat'])]
+    # Usa Lat_access/Lon_access se disponibili (UPS-style), altrimenti Lat/Lon
+    dep_lat, dep_lon = _coord_routing(deposito)
+    coords = [(dep_lon, dep_lat)]
     for punto in percorso_ordinato:
-        coords.append((punto['Lon'], punto['Lat']))
-    coords.append((deposito['Lon'], deposito['Lat']))
+        plat, plon = _coord_routing(punto)
+        coords.append((plon, plat))
+    coords.append((dep_lon, dep_lat))
     
     osrm_ok = False
     if usa_osrm and USA_OSRM:
@@ -437,10 +478,9 @@ def calcola_distanze_percorso(percorso_ordinato, deposito, usa_osrm=True):
         punto_prec = deposito
         
         for idx, punto in enumerate(percorso_ordinato):
-            dist = calcola_distanza_haversine(
-                punto_prec['Lat'], punto_prec['Lon'],
-                punto['Lat'], punto['Lon']
-            )
+            plat_prec, plon_prec = _coord_routing(punto_prec)
+            plat_curr, plon_curr = _coord_routing(punto)
+            dist = calcola_distanza_haversine(plat_prec, plon_prec, plat_curr, plon_curr)
             distanza_linea += dist
             
             stats['dettaglio_tappe'].append({
@@ -451,10 +491,8 @@ def calcola_distanze_percorso(percorso_ordinato, deposito, usa_osrm=True):
             })
             punto_prec = punto
         
-        dist_ritorno = calcola_distanza_haversine(
-            punto_prec['Lat'], punto_prec['Lon'],
-            deposito['Lat'], deposito['Lon']
-        )
+        plat_prec, plon_prec = _coord_routing(punto_prec)
+        dist_ritorno = calcola_distanza_haversine(plat_prec, plon_prec, dep_lat, dep_lon)
         distanza_linea += dist_ritorno
         
         stats['dettaglio_tappe'].append({

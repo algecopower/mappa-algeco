@@ -1494,6 +1494,137 @@ def genera_css_gestionale():
             color: var(--text-secondary);
             font-size: 0.9em;
         }
+
+        /* ========================================
+           ACCESS POINT (UPS-style) — sezione Modifica
+           ======================================== */
+        .access-point-section {
+            border-left: 3px solid #3498db;
+        }
+        .access-point-status-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+        .access-point-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            font-weight: 600;
+            color: white;
+            background: #95a5a6;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .access-point-badge.osrm {
+            background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+        }
+        .access-point-badge.override {
+            background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+        }
+        .access-point-badge.fallback {
+            background: linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%);
+        }
+        .access-point-badge.no_civico {
+            background: linear-gradient(135deg, #34495e 0%, #2c3e50 100%);
+        }
+        .access-point-road {
+            color: var(--text-secondary);
+            font-size: 0.9em;
+            font-style: italic;
+        }
+        .access-point-map {
+            width: 100%;
+            height: 280px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: var(--bg-tertiary);
+            margin-bottom: 12px;
+            cursor: crosshair;
+        }
+        .access-point-map .leaflet-container {
+            border-radius: 10px;
+            background: var(--bg-tertiary);
+        }
+        .access-point-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .btn-access-save,
+        .btn-access-snap,
+        .btn-access-undo,
+        .btn-access-reset {
+            padding: 8px 14px;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.85em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: white;
+        }
+        .btn-access-save {
+            background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+        }
+        .btn-access-save:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 3px 10px rgba(39, 174, 96, 0.3);
+        }
+        .btn-access-snap {
+            background: linear-gradient(135deg, #2980b9 0%, #3498db 100%);
+        }
+        .btn-access-snap:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 3px 10px rgba(41, 128, 185, 0.3);
+        }
+        .btn-access-undo {
+            background: linear-gradient(135deg, #e67e22 0%, #f39c12 100%);
+        }
+        .btn-access-undo:hover:not([disabled]) {
+            transform: translateY(-1px);
+            box-shadow: 0 3px 10px rgba(230, 126, 34, 0.3);
+        }
+        .btn-access-undo[disabled] {
+            background: linear-gradient(135deg, #bdc3c7 0%, #95a5a6 100%);
+            cursor: not-allowed;
+            opacity: 0.65;
+        }
+        .btn-access-reset {
+            background: linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%);
+        }
+        .btn-access-reset:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 3px 10px rgba(127, 140, 141, 0.3);
+        }
+        .access-point-status {
+            margin-top: 10px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 0.85em;
+            display: none;
+        }
+        .access-point-status.visible {
+            display: block;
+        }
+        .access-point-status.success {
+            background: rgba(39, 174, 96, 0.15);
+            color: #27ae60;
+            border: 1px solid rgba(39, 174, 96, 0.3);
+        }
+        .access-point-status.error {
+            background: rgba(231, 76, 60, 0.15);
+            color: #e74c3c;
+            border: 1px solid rgba(231, 76, 60, 0.3);
+        }
+        .access-point-status.loading {
+            background: rgba(52, 152, 219, 0.15);
+            color: #3498db;
+            border: 1px solid rgba(52, 152, 219, 0.3);
+        }
     '''
 
 
@@ -1623,7 +1754,14 @@ def genera_js_gestionale():
             if (btnRimuoviApp) {{
                 btnRimuoviApp.style.display = contatore.is_appuntamento ? 'inline-flex' : 'none';
             }}
-            
+
+            // Inizializza mini-mappa Access Point UPS-style
+            try {{
+                inizializzaAccessPointMap(contatore);
+            }} catch (e) {{
+                console.warn('AccessPoint init error:', e);
+            }}
+
             // Chiudi il popup se aperto
             map.closePopup();
         }}
@@ -1796,6 +1934,329 @@ def genera_js_gestionale():
                 textarea.value = buildNotaConData(testoNota, textarea.value);
             }}
         }}
+
+        // ===========================================================
+        // ACCESS POINT (UPS-style) — mini-mappa nella vista Modifica
+        // ===========================================================
+        let _apMap = null;
+        let _apRawMarker = null;
+        let _apAccessMarker = null;
+        let _apTileLayer = null;
+        let _apCurrent = null;  // {{lat, lon, source, road, eneltel, raw:{{lat,lon}}}}
+
+        function _setAccessPointStatus(msg, kind) {{
+            const el = document.getElementById('accessPointStatusMsg');
+            if (!el) return;
+            el.className = 'access-point-status';
+            if (msg) {{
+                el.classList.add('visible');
+                if (kind) el.classList.add(kind);
+                el.textContent = msg;
+            }} else {{
+                el.textContent = '';
+            }}
+        }}
+
+        function _aggiornaAccessPointBadge(source, road) {{
+            const badge = document.getElementById('accessPointSourceBadge');
+            const roadLbl = document.getElementById('accessPointRoadLabel');
+            if (!badge) return;
+            const s = (source || 'fallback').toLowerCase();
+            const labels = {{
+                'override': '🔒 Manuale',
+                'osrm': '🛣️ Auto (OSRM)',
+                'fallback': '⚠️ Fallback',
+                'no_civico': '📍 Senza civico'
+            }};
+            badge.className = 'access-point-badge ' + s;
+            badge.textContent = labels[s] || s;
+            if (roadLbl) {{
+                roadLbl.textContent = road ? ('su ' + road) : '';
+            }}
+        }}
+
+        function _aggiornaUndoButton(canUndo) {{
+            const btn = document.getElementById('btnAccessPointUndo');
+            if (!btn) return;
+            if (canUndo) {{
+                btn.removeAttribute('disabled');
+                btn.title = "Ripristina lo stato precedente dell'access point";
+            }} else {{
+                btn.setAttribute('disabled', 'disabled');
+                btn.title = "Nessuna modifica da annullare";
+            }}
+            if (_apCurrent) {{
+                _apCurrent.canUndo = !!canUndo;
+            }}
+        }}
+
+        async function _caricaStatoAccessPoint(eneltel) {{
+            // Recupera lo stato persistito (incluso can_undo) dal backend
+            try {{
+                const resp = await fetch(`${{API_BASE}}/api/access-point/${{encodeURIComponent(eneltel)}}`);
+                if (!resp.ok) return;
+                const data = await resp.json();
+                if (!data || !data.ok) return;
+                _aggiornaUndoButton(!!data.can_undo);
+            }} catch (e) {{
+                // silenzioso: il bottone resta disabilitato di default
+            }}
+        }}
+
+        function inizializzaAccessPointMap(contatore) {{
+            distruggiAccessPointMap();
+            if (!contatore || typeof L === 'undefined') return;
+
+            const rawLat = parseFloat(contatore.lat);
+            const rawLon = parseFloat(contatore.lon);
+            const accLat = parseFloat(contatore.lat_access != null ? contatore.lat_access : contatore.lat);
+            const accLon = parseFloat(contatore.lon_access != null ? contatore.lon_access : contatore.lon);
+            if (!isFinite(rawLat) || !isFinite(rawLon)) return;
+
+            _apCurrent = {{
+                eneltel: contatore.eneltel || contatore.id || '',
+                raw: {{ lat: rawLat, lon: rawLon }},
+                lat: accLat,
+                lon: accLon,
+                source: contatore.access_source || 'fallback',
+                road: contatore.access_road || null
+            }};
+
+            _aggiornaAccessPointBadge(_apCurrent.source, _apCurrent.road);
+            _setAccessPointStatus('', null);
+            _aggiornaUndoButton(false);
+            // Carica can_undo dal backend (asincrono, non blocca il render)
+            if (_apCurrent.eneltel) {{
+                _caricaStatoAccessPoint(_apCurrent.eneltel);
+            }}
+
+            const container = document.getElementById('accessPointMap');
+            if (!container) return;
+            // Reset eventuale stato Leaflet residuo
+            if (container._leaflet_id) {{
+                container._leaflet_id = null;
+            }}
+
+            _apMap = L.map(container, {{
+                zoomControl: true,
+                attributionControl: false,
+                scrollWheelZoom: true
+            }}).setView([accLat, accLon], 18);
+
+            _apTileLayer = L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
+                maxZoom: 19,
+                minZoom: 14
+            }}).addTo(_apMap);
+
+            const blueIcon = L.divIcon({{
+                className: 'ap-marker-raw',
+                html: '<div style="background:#3498db;border:2px solid #fff;border-radius:50%;width:18px;height:18px;box-shadow:0 0 0 2px rgba(52,152,219,0.4);"></div>',
+                iconSize: [18, 18],
+                iconAnchor: [9, 9]
+            }});
+            const redIcon = L.divIcon({{
+                className: 'ap-marker-access',
+                html: '<div style="background:#e74c3c;border:2px solid #fff;border-radius:50%;width:22px;height:22px;box-shadow:0 0 0 3px rgba(231,76,60,0.45);"></div>',
+                iconSize: [22, 22],
+                iconAnchor: [11, 11]
+            }});
+
+            _apRawMarker = L.marker([rawLat, rawLon], {{
+                icon: blueIcon, interactive: true, keyboard: false, title: 'Fabbricato (dato grezzo)'
+            }}).addTo(_apMap);
+            _apRawMarker.bindTooltip('🏠 Fabbricato (lat/lon dal filone)', {{direction: 'top'}});
+
+            _apAccessMarker = L.marker([accLat, accLon], {{
+                icon: redIcon, draggable: true, autoPan: true, title: 'Access point (per il navigatore)'
+            }}).addTo(_apMap);
+            _apAccessMarker.bindTooltip('📍 Access point — trascinami', {{direction: 'top'}});
+
+            _apAccessMarker.on('dragend', () => {{
+                const p = _apAccessMarker.getLatLng();
+                _apCurrent.lat = p.lat;
+                _apCurrent.lon = p.lng;
+                _apCurrent.source = 'override';
+                _apCurrent.road = null;
+                _aggiornaAccessPointBadge('override', null);
+                _setAccessPointStatus('Marker spostato. Premi 💾 Salva per renderlo permanente.', null);
+            }});
+
+            _apMap.on('click', (e) => {{
+                _apAccessMarker.setLatLng(e.latlng);
+                _apCurrent.lat = e.latlng.lat;
+                _apCurrent.lon = e.latlng.lng;
+                _apCurrent.source = 'override';
+                _apCurrent.road = null;
+                _aggiornaAccessPointBadge('override', null);
+                _setAccessPointStatus('Marker spostato. Premi 💾 Salva per renderlo permanente.', null);
+            }});
+
+            // Forza il rendering quando il modale diventa visibile
+            setTimeout(() => {{ if (_apMap) _apMap.invalidateSize(); }}, 60);
+        }}
+
+        function distruggiAccessPointMap() {{
+            try {{
+                if (_apMap) {{ _apMap.remove(); }}
+            }} catch (e) {{}}
+            _apMap = null;
+            _apRawMarker = null;
+            _apAccessMarker = null;
+            _apTileLayer = null;
+            _apCurrent = null;
+            _setAccessPointStatus('', null);
+        }}
+
+        async function snapAccessPointAStrada() {{
+            if (!_apCurrent || !_apAccessMarker) return;
+            _setAccessPointStatus('Snap in corso...', 'loading');
+            try {{
+                const ll = _apAccessMarker.getLatLng();
+                const resp = await fetch(`${{API_BASE}}/api/access-point/${{encodeURIComponent(_apCurrent.eneltel)}}/snap`, {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify({{ lat: ll.lat, lon: ll.lng }})
+                }});
+                const data = await resp.json();
+                if (!resp.ok || !data.ok) {{
+                    _setAccessPointStatus('Snap fallito: ' + (data.error || resp.status), 'error');
+                    return;
+                }}
+                _apAccessMarker.setLatLng([data.lat, data.lon]);
+                _apMap.panTo([data.lat, data.lon]);
+                _apCurrent.lat = data.lat;
+                _apCurrent.lon = data.lon;
+                _apCurrent.source = 'override';
+                _apCurrent.road = data.road || null;
+                _aggiornaAccessPointBadge('override', data.road);
+                _setAccessPointStatus(
+                    data.road ? `Snappato su ${{data.road}} (Δ ${{data.distance_m || 0}} m). Premi 💾 per salvare.` : 'Snappato. Premi 💾 per salvare.',
+                    null
+                );
+            }} catch (e) {{
+                _setAccessPointStatus('Errore snap: ' + e.message, 'error');
+            }}
+        }}
+
+        async function salvaAccessPoint() {{
+            if (!_apCurrent || !_apCurrent.eneltel) return;
+            _setAccessPointStatus('Salvataggio in corso...', 'loading');
+            try {{
+                const ll = _apAccessMarker ? _apAccessMarker.getLatLng() : {{lat: _apCurrent.lat, lng: _apCurrent.lon}};
+                const resp = await fetch(`${{API_BASE}}/api/access-point/${{encodeURIComponent(_apCurrent.eneltel)}}`, {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify({{ lat: ll.lat, lon: ll.lng }})
+                }});
+                const data = await resp.json();
+                if (!resp.ok || !data.ok) {{
+                    _setAccessPointStatus('Salvataggio fallito: ' + (data.error || resp.status), 'error');
+                    return;
+                }}
+                _apCurrent.lat = data.lat;
+                _apCurrent.lon = data.lon;
+                _apCurrent.source = 'override';
+                _aggiornaAccessPointBadge('override', null);
+                _aggiornaUndoButton(!!data.can_undo);
+                _setAccessPointStatus('✅ Access point salvato. La rotta verrà aggiornata al prossimo ricalcolo.', 'success');
+                if (typeof contatori !== 'undefined' && Array.isArray(contatori)) {{
+                    const c = contatori.find(x => (x.eneltel || x.id) === _apCurrent.eneltel);
+                    if (c) {{
+                        c.lat_access = data.lat;
+                        c.lon_access = data.lon;
+                        c.access_source = 'override';
+                        c.access_override = true;
+                    }}
+                }}
+            }} catch (e) {{
+                _setAccessPointStatus('Errore salvataggio: ' + e.message, 'error');
+            }}
+        }}
+
+        async function undoAccessPoint() {{
+            if (!_apCurrent || !_apCurrent.eneltel) return;
+            const btn = document.getElementById('btnAccessPointUndo');
+            if (btn && btn.hasAttribute('disabled')) return;
+            _setAccessPointStatus('Annullamento ultima modifica...', 'loading');
+            try {{
+                const resp = await fetch(`${{API_BASE}}/api/access-point/${{encodeURIComponent(_apCurrent.eneltel)}}/undo`, {{
+                    method: 'POST'
+                }});
+                const data = await resp.json();
+                if (resp.status === 409) {{
+                    _setAccessPointStatus('Niente da annullare.', 'error');
+                    _aggiornaUndoButton(false);
+                    return;
+                }}
+                if (!resp.ok || !data.ok) {{
+                    _setAccessPointStatus('Undo fallito: ' + (data.error || resp.status), 'error');
+                    _aggiornaUndoButton(!!(data && data.can_undo));
+                    return;
+                }}
+                if (_apAccessMarker && _apMap) {{
+                    _apAccessMarker.setLatLng([data.lat, data.lon]);
+                    _apMap.panTo([data.lat, data.lon]);
+                }}
+                _apCurrent.lat = data.lat;
+                _apCurrent.lon = data.lon;
+                _apCurrent.source = 'override';
+                _apCurrent.road = null;
+                _aggiornaAccessPointBadge('override', null);
+                _aggiornaUndoButton(!!data.can_undo);
+                _setAccessPointStatus('↩️ Ripristinato lo stato precedente.', 'success');
+                if (typeof contatori !== 'undefined' && Array.isArray(contatori)) {{
+                    const c = contatori.find(x => (x.eneltel || x.id) === _apCurrent.eneltel);
+                    if (c) {{
+                        c.lat_access = data.lat;
+                        c.lon_access = data.lon;
+                        c.access_source = 'override';
+                        c.access_override = true;
+                    }}
+                }}
+            }} catch (e) {{
+                _setAccessPointStatus('Errore undo: ' + e.message, 'error');
+            }}
+        }}
+
+        async function resetAccessPointAuto() {{
+            if (!_apCurrent || !_apCurrent.eneltel) return;
+            if (!confirm('Rimuovere l\\'override manuale e tornare allo snap automatico?')) return;
+            _setAccessPointStatus('Ripristino automatico...', 'loading');
+            try {{
+                const resp = await fetch(`${{API_BASE}}/api/access-point/${{encodeURIComponent(_apCurrent.eneltel)}}`, {{
+                    method: 'DELETE'
+                }});
+                const data = await resp.json();
+                if (!resp.ok || !data.ok) {{
+                    _setAccessPointStatus('Reset fallito: ' + (data.error || resp.status), 'error');
+                    return;
+                }}
+                if (data.lat != null && data.lon != null && _apAccessMarker && _apMap) {{
+                    _apAccessMarker.setLatLng([data.lat, data.lon]);
+                    _apMap.panTo([data.lat, data.lon]);
+                    _apCurrent.lat = data.lat;
+                    _apCurrent.lon = data.lon;
+                    _apCurrent.source = data.source || 'osrm';
+                    _apCurrent.road = data.road || null;
+                    _aggiornaAccessPointBadge(_apCurrent.source, _apCurrent.road);
+                }} else {{
+                    _aggiornaAccessPointBadge('osrm', null);
+                }}
+                _aggiornaUndoButton(!!data.can_undo);
+                _setAccessPointStatus('✅ Override rimosso, ripristinato lo snap automatico.', 'success');
+                if (typeof contatori !== 'undefined' && Array.isArray(contatori)) {{
+                    const c = contatori.find(x => (x.eneltel || x.id) === _apCurrent.eneltel);
+                    if (c) {{
+                        c.lat_access = _apCurrent.lat;
+                        c.lon_access = _apCurrent.lon;
+                        c.access_source = _apCurrent.source;
+                        c.access_override = false;
+                    }}
+                }}
+            }} catch (e) {{
+                _setAccessPointStatus('Errore reset: ' + e.message, 'error');
+            }}
+        }}
         
         function chiudiVistaModifica() {{
             document.getElementById('fullscreenEditModal').classList.remove('visible');
@@ -1806,6 +2267,8 @@ def genera_js_gestionale():
             const appStatus = document.getElementById('appuntamentoInlineStatus');
             appStatus.className = 'appuntamento-status';
             appStatus.textContent = '';
+            // Cleanup mini-mappa access point
+            try {{ distruggiAccessPointMap(); }} catch (e) {{}}
         }}
         
         async function fissaAppuntamentoInline() {{
@@ -3554,7 +4017,7 @@ def genera_html_gestionale():
                 
                 <!-- Status messaggi -->
                 <div id="fullscreenStatus" class="fullscreen-status"></div>
-                
+
                 <!-- Form modifica -->
                 <div class="fullscreen-edit-section">
                     <div class="fullscreen-section-title">📝 Dati modificabili</div>
@@ -3582,7 +4045,36 @@ def genera_html_gestionale():
                     </div>
                     <div id="appuntamentoInlineStatus" class="appuntamento-status"></div>
                 </div>
-                
+
+                <!-- Sezione Access Point (UPS-style) -->
+                <div class="fullscreen-edit-section access-point-section" id="accessPointSection">
+                    <div class="fullscreen-section-title">📍 Punto di accesso (per il navigatore)</div>
+                    <p style="color: var(--text-secondary); margin-bottom: 12px; font-size: 0.9em;">
+                        Indica dove il tecnico deve fermarsi (es. lato strada corretto). Il marker blu è il fabbricato (dato grezzo), il marker rosso è l'<b>access point</b> usato dall'algoritmo del percorso.
+                        Trascina il rosso o clicca sulla strada per cambiarlo.
+                    </p>
+                    <div id="accessPointStatusRow" class="access-point-status-row">
+                        <span id="accessPointSourceBadge" class="access-point-badge"></span>
+                        <span id="accessPointRoadLabel" class="access-point-road"></span>
+                    </div>
+                    <div id="accessPointMap" class="access-point-map"></div>
+                    <div class="access-point-actions">
+                        <button type="button" class="btn-access-save" onclick="salvaAccessPoint()">
+                            💾 Salva access point
+                        </button>
+                        <button type="button" class="btn-access-snap" onclick="snapAccessPointAStrada()" title="Aggancia il marker rosso alla strada più vicina">
+                            🛣️ Snap a strada
+                        </button>
+                        <button type="button" class="btn-access-undo" id="btnAccessPointUndo" onclick="undoAccessPoint()" disabled title="Annulla l'ultima modifica all'access point">
+                            ↩️ Annulla ultima modifica
+                        </button>
+                        <button type="button" class="btn-access-reset" onclick="resetAccessPointAuto()" title="Rimuove l'override e torna allo snap automatico">
+                            🔄 Auto (rimuovi override)
+                        </button>
+                    </div>
+                    <div id="accessPointStatusMsg" class="access-point-status"></div>
+                </div>
+
                 <!-- Footer azioni -->
                 <div class="fullscreen-edit-footer">
                     <button class="btn-fullscreen-save" onclick="salvaModificheFullscreen()">

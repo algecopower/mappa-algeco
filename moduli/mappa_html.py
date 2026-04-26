@@ -215,6 +215,20 @@ def prepara_dati_contatori(df, report):
         chiave_ordine = f"{data_str}_{tecnico}_{eneltel_key}"
         ordine_tappa = ordine_precalcolato.get(chiave_ordine, 999)
 
+        # Access points UPS-style (lat/lon di routing) - fallback a lat/lon raw
+        lat_access = row.get('Lat_access')
+        lon_access = row.get('Lon_access')
+        access_source = row.get('access_source')
+        access_road = row.get('access_road')
+        try:
+            lat_access_f = float(lat_access) if lat_access is not None else float(lat)
+        except (TypeError, ValueError):
+            lat_access_f = float(lat)
+        try:
+            lon_access_f = float(lon_access) if lon_access is not None else float(lon)
+        except (TypeError, ValueError):
+            lon_access_f = float(lon)
+
         contatore = {
             'id': str(row.get('Eneltel_Key', '')),
             'eneltel': str(row.get('ENEL_K', row.get('Eneltel_Key', ''))),
@@ -236,6 +250,12 @@ def prepara_dati_contatori(df, report):
             'tecnico': str(row.get('TEC_K', 'TUTTI')),
             'lat': float(lat),
             'lon': float(lon),
+            # Access point UPS-style usato per il routing
+            'lat_access': lat_access_f,
+            'lon_access': lon_access_f,
+            'access_source': str(access_source) if access_source else None,
+            'access_road': str(access_road) if access_road else None,
+            'access_override': access_source == 'override',
             'lcl': str(row.get('LCL', '')),
             'is_appuntamento': bool(row.get('IS_APPUNTAMENTO', False)),
             'ora_appuntamento': str(row.get('ORA_APPUNTAMENTO', '')) if row.get('ORA_APPUNTAMENTO') else None,
@@ -315,7 +335,7 @@ def calcola_ordine_percorsi(df):
     # ================================================================
     # VERSIONE ALGORITMO: incrementare quando cambia la logica di ordinamento
     # Questo invalida la cache e forza il ricalcolo con il nuovo algoritmo
-    ALGORITMO_VERSIONE = "4.0_clustering_ibrida"  # v4.0: matrice OSRM ibrida + clustering 100m + or-opt Haversine + sweep out-and-back
+    ALGORITMO_VERSIONE = "4.1_access_points"  # v4.1: UPS-style access point per civico (snap-by-name OSRM) + override manuale
     
     # Crea hash basato su: versione algoritmo, date, tecnici, coordinate contatori
     hash_data = [f"ALGO_VERSION:{ALGORITMO_VERSIONE}"]

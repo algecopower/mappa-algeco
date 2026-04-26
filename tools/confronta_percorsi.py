@@ -260,6 +260,84 @@ def esegui_confronto(gruppo, deposito, ordina_legacy, ordina_nuovo, ottieni_matr
     }
 
 
+def esegui_confronto_access(gruppo, deposito, ordina_nuovo, ottieni_matrice):
+    """
+    A/B "diff-access": stesso algoritmo (NUOVO) confrontato con e senza
+    access point UPS-style. Usa una matrice OSRM separata per ciascun caso
+    (raw vs access) cosi' i km/minuti riflettono il routing reale.
+
+    L'ordine "RAW" simula il comportamento pre-fix (snap geometricamente alla
+    strada piu' vicina, anche se sbagliata).
+    L'ordine "ACCESS" usa Lat_access/Lon_access (snap-by-name) per il routing.
+    """
+    data, operatore, punti = gruppo
+
+    # Calcola access points (popola Lat_access/Lon_access)
+    from moduli.access_points import arricchisci_punti
+    punti_access = [dict(p) for p in punti]
+    arricchisci_punti(punti_access, max_workers=8, persisti_cache=True)
+
+    # ----- RAW: ordina usando solo Lat/Lon originali -----
+    punti_raw = [dict(p) for p in punti]
+    for p in punti_raw:
+        p.pop('Lat_access', None)
+        p.pop('Lon_access', None)
+
+    ris_matrice_raw = ottieni_matrice(punti_raw, deposito, usa_osrm=True)
+    if not ris_matrice_raw.get('successo'):
+        return None
+    idx_raw = _costruisci_idx_map(punti_raw)
+
+    t0 = time.time()
+    ord_raw = ordina_nuovo([dict(p) for p in punti_raw], deposito, usa_osrm_ottimizzazione=True)
+    t_raw = time.time() - t0
+
+    # ----- ACCESS: ordina usando Lat_access/Lon_access -----
+    ris_matrice_acc = ottieni_matrice(punti_access, deposito, usa_osrm=True)
+    if not ris_matrice_acc.get('successo'):
+        return None
+    idx_acc = _costruisci_idx_map(punti_access)
+
+    t0 = time.time()
+    ord_acc = ordina_nuovo([dict(p) for p in punti_access], deposito, usa_osrm_ottimizzazione=True)
+    t_acc = time.time() - t0
+
+    met_raw = calcola_metriche(ord_raw, deposito, ris_matrice_raw['distanze'], ris_matrice_raw['durate'], idx_raw)
+    met_acc = calcola_metriche(ord_acc, deposito, ris_matrice_acc['distanze'], ris_matrice_acc['durate'], idx_acc)
+
+    # Conta differenze d'ordine (per Eneltel)
+    seq_raw = [p.get('Eneltel') or f"{p['Lat']:.6f},{p['Lon']:.6f}" for p in ord_raw]
+    seq_acc = [p.get('Eneltel') or f"{p['Lat']:.6f},{p['Lon']:.6f}" for p in ord_acc]
+    diff_pos = sum(1 for a, b in zip(seq_raw, seq_acc) if a != b)
+
+    # Distribuzione access_source per i punti
+    src_count = {}
+    for p in punti_access:
+        s = p.get('access_source') or 'unknown'
+        src_count[s] = src_count.get(s, 0) + 1
+
+    # Casi specifici: tappe con access_source == 'osrm' (snap-by-name riuscito)
+    n_snap = src_count.get('osrm', 0)
+
+    return {
+        'data': data,
+        'operatore': operatore,
+        'n_punti': len(punti),
+        'punti_orig': punti_access,
+        'ord_legacy': ord_raw,        # campo riusato per HTML
+        'ord_nuovo': ord_acc,         # idem
+        'metriche_legacy': met_raw,
+        'metriche_nuovo': met_acc,
+        'tempo_legacy_s': round(t_raw, 2),
+        'tempo_nuovo_s': round(t_acc, 2),
+        'fonte_matrice': 'OSRM (access vs raw)',
+        # Specifici per diff-access
+        'access_diff_pos': diff_pos,
+        'access_sources': src_count,
+        'n_snap_osrm': n_snap,
+    }
+
+
 def _mini_mappa_leaflet(percorso_leg, percorso_new, deposito, titolo_id):
     """Genera un div HTML con due mini-mappe Leaflet (legacy vs nuovo) affiancate."""
     def _coords_js(percorso):
@@ -308,8 +386,13 @@ def _mini_mappa_leaflet(percorso_leg, percorso_new, deposito, titolo_id):
 """
 
 
-def genera_report_html(risultati, path_output, provincia, deposito):
-    """Genera un report HTML con tabella + mini-mappe affiancate."""
+def genera_report_html(risultati, path_output, provincia, deposito, diff_access=False):
+    """Genera un report HTML con tabella + mini-mappe affiancate.
+
+    Se ``diff_access=True``, ``ord_legacy``/``metriche_legacy`` rappresentano
+    il risultato con coords RAW (pre-fix), e ``ord_nuovo``/``metriche_nuovo``
+    quello con access points UPS-style.
+    """
     n = len(risultati)
     if n == 0:
         with open(path_output, 'w', encoding='utf-8') as f:
@@ -394,11 +477,36 @@ def genera_report_html(risultati, path_output, provincia, deposito):
             blocchi_mappe.append(_mini_mappa_leaflet(r['ord_legacy'], r['ord_nuovo'], deposito,
                                                     f"{tipo[:3]}_{i}"))
 
+    title_main = ("A/B Percorsi — Access Points" if diff_access else "A/B Percorsi")
+    label_a = "RAW" if diff_access else "Legacy"
+    label_b = "ACCESS" if diff_access else "Nuovo"
+
+    # Sezione extra in modalita' diff-access: distribuzione fonti
+    extra_html = ""
+    if diff_access:
+        agg_src = {}
+        tot_diff_pos = 0
+        for r in risultati:
+            for k, v in r.get('access_sources', {}).items():
+                agg_src[k] = agg_src.get(k, 0) + v
+            tot_diff_pos += r.get('access_diff_pos', 0)
+        if agg_src:
+            righe_src = ''.join(
+                f"<tr><td>{html.escape(k)}</td><td>{v}</td></tr>"
+                for k, v in sorted(agg_src.items(), key=lambda kv: -kv[1])
+            )
+            extra_html = (
+                f"<h2>Distribuzione access_source</h2>"
+                f"<table class='riepilogo'>"
+                f"<tr><th>Fonte</th><th>Contatori</th></tr>{righe_src}</table>"
+                f"<p><b>Posizioni cambiate (RAW→ACCESS):</b> {tot_diff_pos}</p>"
+            )
+
     html_doc = f"""<!DOCTYPE html>
 <html lang="it">
 <head>
 <meta charset="utf-8">
-<title>A/B Percorsi — {provincia}</title>
+<title>{title_main} — {provincia}</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
@@ -417,21 +525,23 @@ td.eq {{ background: #fff3cd; color: #856404; }}
 </style>
 </head>
 <body>
-<h1>A/B Percorsi — {provincia}</h1>
+<h1>{title_main} — {provincia}</h1>
 <p><b>Giornate-tecnico analizzate:</b> {n} | <b>Generato:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
 
 <h2>Riepilogo aggregato</h2>
 <table class="riepilogo">
-<tr>{_th('Metrica', 'Legacy', 'Nuovo', 'Δ', 'Δ %')}</tr>
+<tr>{_th('Metrica', label_a, label_b, 'Δ', 'Δ %')}</tr>
 <tr><td>km totali (somma)</td><td>{agg_leg['km']:.1f}</td><td>{agg_new['km']:.1f}</td><td>{agg_new['km']-agg_leg['km']:+.1f}</td><td>{_pct(agg_leg['km'], agg_new['km']):+.1f}%</td></tr>
 <tr><td>minuti totali (somma)</td><td>{agg_leg['min']:.0f}</td><td>{agg_new['min']:.0f}</td><td>{agg_new['min']-agg_leg['min']:+.0f}</td><td>{_pct(agg_leg['min'], agg_new['min']):+.1f}%</td></tr>
 <tr><td>inversioni &gt;90° (somma)</td><td>{agg_leg['inv']}</td><td>{agg_new['inv']}</td><td>{agg_new['inv']-agg_leg['inv']:+d}</td><td>{_pct(agg_leg['inv'], agg_new['inv']):+.1f}%</td></tr>
 <tr><td>max hop km (globale)</td><td>{agg_leg['maxhop']:.1f}</td><td>{agg_new['maxhop']:.1f}</td><td>{agg_new['maxhop']-agg_leg['maxhop']:+.1f}</td><td>—</td></tr>
 </table>
 
+{extra_html}
+
 <h2>Dettaglio per giornata-tecnico</h2>
 <table class="dett">
-<tr>{_th('Data', 'Operatore', 'N', 'km L', 'km N', 'min L', 'min N', 'inv L', 'inv N', 'maxhop L', 'maxhop N', 'tempo L/N')}</tr>
+<tr>{_th('Data', 'Operatore', 'N', f'km {label_a[0]}', f'km {label_b[0]}', f'min {label_a[0]}', f'min {label_b[0]}', f'inv {label_a[0]}', f'inv {label_b[0]}', f'maxhop {label_a[0]}', f'maxhop {label_b[0]}', f'tempo {label_a[0]}/{label_b[0]}')}</tr>
 {''.join(rows_html)}
 </table>
 
@@ -464,6 +574,11 @@ def main():
                         help="Limita il numero di (data, tecnico) da processare (utile per test rapidi)")
     parser.add_argument('--solo-da-oggi', action='store_true',
                         help="Analizza solo date future o di oggi")
+    parser.add_argument('--diff-access', action='store_true',
+                        help=("Modalita' alternativa: confronta lo stesso algoritmo NUOVO "
+                              "con e senza access point UPS-style (Lat_access/Lon_access). "
+                              "Mostra il delta di ordine, km e inversioni introdotti dallo "
+                              "snap-by-name OSRM."))
     args = parser.parse_args()
 
     prov = _provincia_da_arg(args.provincia)
@@ -474,7 +589,10 @@ def main():
     from config import DEPOSITO
     from moduli.distanze import ottieni_matrice_distanze
     from moduli.percorso import ordina_percorso as ordina_nuovo
-    from moduli.percorso_legacy import ordina_percorso_legacy
+    if not args.diff_access:
+        from moduli.percorso_legacy import ordina_percorso_legacy
+    else:
+        ordina_percorso_legacy = None  # non usato in modalita' diff-access
 
     # Determina glob
     if args.backup_glob:
@@ -515,22 +633,47 @@ def main():
         data, op, punti = g
         print(f"   [{i}/{len(gruppi_finali)}] {data} / {op} ({len(punti)} punti)...", end=' ', flush=True)
         try:
-            r = esegui_confronto(g, DEPOSITO, ordina_percorso_legacy, ordina_nuovo, ottieni_matrice_distanze)
+            if args.diff_access:
+                r = esegui_confronto_access(g, DEPOSITO, ordina_nuovo, ottieni_matrice_distanze)
+            else:
+                r = esegui_confronto(g, DEPOSITO, ordina_percorso_legacy, ordina_nuovo, ottieni_matrice_distanze)
             if r is None:
                 print("skip (matrice non disponibile)")
                 continue
             dk = r['metriche_nuovo']['km_totali'] - r['metriche_legacy']['km_totali']
-            print(f"Δkm={dk:+.1f}  Δinv={r['metriche_nuovo']['inversioni_gt_90']-r['metriche_legacy']['inversioni_gt_90']:+d}")
+            if args.diff_access:
+                print(
+                    f"Δkm={dk:+.1f}  Δinv={r['metriche_nuovo']['inversioni_gt_90']-r['metriche_legacy']['inversioni_gt_90']:+d}  "
+                    f"diffPos={r.get('access_diff_pos', 0)}  snap={r.get('n_snap_osrm', 0)}/{r['n_punti']}"
+                )
+            else:
+                print(f"Δkm={dk:+.1f}  Δinv={r['metriche_nuovo']['inversioni_gt_90']-r['metriche_legacy']['inversioni_gt_90']:+d}")
             risultati.append(r)
         except RuntimeError as e:
             # OSRM down o simili
             print(f"ERRORE: {e}")
             return 3
 
-    output = args.output or f"/tmp/ab_{prov.lower()}.html"
-    html_path, csv_path = genera_report_html(risultati, output, prov, DEPOSITO)
+    suffix = '_access' if args.diff_access else ''
+    output = args.output or f"/tmp/ab_{prov.lower()}{suffix}.html"
+    html_path, csv_path = genera_report_html(risultati, output, prov, DEPOSITO,
+                                             diff_access=args.diff_access)
     print(f"\n✅ Report HTML: {html_path}")
     print(f"✅ Report CSV:  {csv_path}")
+
+    if args.diff_access and risultati:
+        # Riepilogo su terminale: distribuzione access_source aggregata
+        agg_src = {}
+        tot_diff = 0
+        tot_pts = 0
+        for r in risultati:
+            for k, v in r.get('access_sources', {}).items():
+                agg_src[k] = agg_src.get(k, 0) + v
+            tot_diff += r.get('access_diff_pos', 0)
+            tot_pts += r['n_punti']
+        print(f"\n📍 Access points distribuzione: {agg_src}")
+        print(f"   Posizioni cambiate (RAW vs ACCESS): {tot_diff}/{tot_pts} "
+              f"({100*tot_diff/tot_pts if tot_pts else 0:.1f}%)")
     return 0
 
 

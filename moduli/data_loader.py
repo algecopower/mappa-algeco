@@ -586,6 +586,25 @@ def carica_dati_google_sheets(force=False):
         logger.warning(f"   ⚠️ {righe_senza_coord} righe escluse (senza coordinate)")
 
     # ================================================================
+    # ACCESS POINTS (UPS-style snap-by-name OSRM)
+    # ================================================================
+    # Per ogni contatore con civico valido, calcoliamo l'access point
+    # sulla strada CORRETTA (matching del nome via tramite OSRM /nearest).
+    # Le coords originali Lat/Lon restano per il marker visivo;
+    # Lat_access/Lon_access vengono usate solo per il routing.
+    try:
+        from .access_points import arricchisci_dataframe as _arricchisci_df
+        logger.info("   📍 Calcolo access points (UPS-style)...")
+        _arricchisci_df(df, max_workers=8, persisti_cache=True)
+    except Exception as e:
+        logger.warning(f"   ⚠️ Errore access points: {e} (uso Lat/Lon raw)")
+        # Fallback: usa Lat/Lon originali come access point
+        df['Lat_access'] = df['Lat']
+        df['Lon_access'] = df['Lon']
+        df['access_source'] = 'fallback'
+        df['access_road'] = None
+
+    # ================================================================
     # RIEPILOGO
     # ================================================================
     logger.info("")

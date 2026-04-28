@@ -22,8 +22,10 @@ from moduli.shared import (
     invalidate_values_cache,
     find_row_by_eneltel, find_row_by_pod,
     build_pod_row_map, verify_row_pod,
+    safe_batch_update_by_name,
     _api_error, _get_username, _callbacks,
     _trova_indice_colonna, _trova_indice_multi,
+    _resolve_anchor_col_name,
 )
 from config import PROVINCIA_ATTIVA, CAMPI_BOXBEAT
 
@@ -255,9 +257,11 @@ def upload_BOXBEAT():
         col_dest_data = cfg.get('colonna_dest_data_inst', 'Data Installazione')
         col_dest_esito = cfg.get('colonna_dest_esito', 'Esito')
 
-        # Raccogli aggiornamenti per POD (rimappati prima della scrittura)
-        pod_updates = {}  # {POD: [(col_idx, valore), ...]}
-        all_updates = []
+        # Raccogli aggiornamenti per POD usando i NOMI delle colonne (non gli indici!)
+        # Gli indici verranno risolti DENTRO safe_batch_update_by_name con header
+        # FRESCHI, così non importa se la collega aggiunge/sposta colonne durante
+        # l'elaborazione (che può durare minuti per file grandi).
+        pod_updates = {}  # {POD: [(col_name, valore), ...]}
         totale_righe = 0
         totale_esito_ok = 0
         totale_esito_ko = 0
@@ -385,7 +389,7 @@ def upload_BOXBEAT():
                 if col_matricola_bb and col_dest_op in _header_map:
                     operatore = str(row_bb[col_matricola_bb]).strip()
                     if operatore and operatore != 'nan':
-                        pod_updates[pod].append((_header_map[col_dest_op], operatore))
+                        pod_updates[pod].append((col_dest_op, operatore))
 
                 # Data installazione
                 if col_data_bb and col_dest_data in _header_map:
@@ -401,11 +405,11 @@ def upload_BOXBEAT():
                                 parts = data_str.split('-')
                                 if len(parts) == 3 and len(parts[0]) == 4:
                                     data_str = f"{parts[2]}/{parts[1]}/{parts[0]}"
-                        pod_updates[pod].append((_header_map[col_dest_data], data_str))
+                        pod_updates[pod].append((col_dest_data, data_str))
 
                 # Esito
                 if col_dest_esito in _header_map:
-                    pod_updates[pod].append((_header_map[col_dest_esito], 'ESITO OK'))
+                    pod_updates[pod].append((col_dest_esito, 'ESITO OK'))
 
                 # Cancella eventuale testo nella colonna SIGILLO
                 # MA preserva i codici sigillo reali (es. 20198337Z)
@@ -415,46 +419,69 @@ def upload_BOXBEAT():
                         sigillo_attuale = str(all_data[row_num - 1][_header_map['SIGILLO'] - 1]).strip()
                     # Preserva se contiene un codice sigillo reale (cifre + lettera)
                     if not re.search(r'\d+[A-Za-z]', sigillo_attuale):
-                        pod_updates[pod].append((_header_map['SIGILLO'], ''))
+                        pod_updates[pod].append(('SIGILLO', ''))
 
                 file_aggiornati += 1
 
             aggiornati += file_aggiornati
             file_elaborati.append({'nome': file.filename, 'righe': len(df), 'esito_ok': len(df_ok), 'esito_ko': len(df_ko), 'aggiornati': file_aggiornati})
 
-        # RIMAPPA: ri-leggi POD dal foglio fresco per avere righe aggiornate
-        if pod_updates:
-            fresh_pod_map = build_pod_row_map()
-            all_updates = []
-            pods_spostati = 0
+        # SCRITTURA SAFE: passa al safe_batch_update_by_name con ancora POD.
+        # Nota bene: NON capturiamo gli indici colonna prima della scrittura
+        # (altrimenti se la collega aggiunge/sposta colonne durante
+        # l'elaborazione del file, scriveremmo nelle colonne sbagliate ⇒
+        # spanamento). safe_batch_update_by_name rilegge gli header freschi
+        # DENTRO il write-lock e usa il POD come ancora per re-mappare le
+        # righe spostate.
+        items = []
+        for pod, updates_list in pod_updates.items():
+            row_num = pod_to_row.get(pod)
+            if row_num is None:
+                continue
+            for col_name, value in updates_list:
+                items.append({
+                    'row': row_num,
+                    'col': col_name,
+                    'value': value,
+                    'anchor': pod,
+                })
 
-            for pod, updates_list in pod_updates.items():
-                fresh_row = fresh_pod_map.get(pod)
-                if fresh_row is None:
-                    logger.warning(f"[BOXBEAT] POD {pod} non trovato nella rimappatura, saltato")
-                    continue
-                old_row = pod_to_row.get(pod)
-                if old_row != fresh_row:
-                    pods_spostati += 1
-                for col_idx, value in updates_list:
-                    all_updates.append({
-                        'range': gspread.utils.rowcol_to_a1(fresh_row, col_idx),
-                        'values': [[value]]
-                    })
-
-            if pods_spostati:
-                logger.warning(f"[BOXBEAT] ⚠️ {pods_spostati} POD avevano righe spostate, rimappati correttamente")
-
-        # ESEGUI UN SOLO BATCH UPDATE per tutti i file
-        if all_updates:
-            logger.info(f"[BOXBEAT] Eseguo batch update con {len(all_updates)} celle...")
-            ws.batch_update(all_updates)
-            invalidate_values_cache()
+        write_result = {'written': 0, 'remapped': 0, 'lost_anchors': [], 'invalid_cols': []}
+        if items:
+            pod_anchor_col = _resolve_anchor_col_name('pod') or 'POD'
+            logger.info(f"[BOXBEAT] Eseguo safe batch update con {len(items)} celle...")
+            write_result = safe_batch_update_by_name(
+                items, anchor_col=pod_anchor_col, anchor_normalize='upper',
+            )
+            if write_result.get('error'):
+                errori.append(f"Scrittura BOXBEAT fallita: {write_result['error']}")
+            if write_result.get('invalid_cols'):
+                logger.error(
+                    f"[BOXBEAT] ⚠️ Colonne mancanti sul foglio (rinominate?): "
+                    f"{write_result['invalid_cols']} — relative scritture saltate."
+                )
+                errori.append(
+                    f"Colonne non trovate sul foglio: {write_result['invalid_cols']}"
+                )
+            if write_result['lost_anchors']:
+                logger.warning(
+                    f"[BOXBEAT] ⚠️ {len(write_result['lost_anchors'])} POD non più "
+                    f"presenti nel foglio: relative scritture saltate."
+                )
+            if write_result['remapped']:
+                logger.warning(
+                    f"[BOXBEAT] ⚠️ {write_result['remapped']} celle scritte su righe "
+                    f"rimappate (foglio riordinato)."
+                )
 
         return jsonify({
             'success': True,
             'message': f'Aggiornati {aggiornati} contatori da {len(file_elaborati)} file',
             'aggiornati': aggiornati,
+            'celle_scritte': write_result['written'],
+            'remapped': write_result['remapped'],
+            'invalid_cols': write_result['invalid_cols'],
+            'pod_persi': len(write_result['lost_anchors']),
             'totale_file': totale_righe,
             'con_esito_ok': totale_esito_ok,
             'con_esito_ko': totale_esito_ko,

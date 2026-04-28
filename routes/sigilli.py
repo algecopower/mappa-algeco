@@ -14,7 +14,8 @@ from moduli.auth import login_required
 from moduli.shared import (
     get_worksheet, get_header_map, find_row_by_eneltel,
     invalidate_values_cache,
-    _trova_indice_multi, _api_error,
+    safe_batch_update_by_name,
+    _trova_indice_multi, _api_error, _resolve_anchor_col_name,
 )
 from config import PROVINCIA_ATTIVA, COLONNE_SIGILLI
 
@@ -148,7 +149,7 @@ def get_sigilli_pending():
 @login_required
 def salva_sigillo(eneltel):
     """
-    Salva il sigillo per un contatore e evidenzia la cella in giallo.
+    Salva il sigillo per un contatore (anti-spanamento: header fresco + ancora ENELTEL).
     """
     try:
         data = request.json
@@ -157,35 +158,58 @@ def salva_sigillo(eneltel):
         if not sigillo:
             return jsonify({'error': 'Sigillo vuoto'}), 400
 
-        # Usa helper cached: cerca riga per ENELTEL (scarica solo 1 colonna)
+        # Cerca riga per ENELTEL (find_row_by_eneltel rilegge ora gli header freschi)
         row_num = find_row_by_eneltel(eneltel)
         if row_num is None:
             return jsonify({'error': f'Contatore {eneltel} non trovato'}), 404
 
-        # Usa header map cached per trovare colonna SIGILLO
+        # Trova nome canonico colonna SIGILLO presente sul foglio
         _header_map = get_header_map()
-        col_sigillo = None
+        col_name_sigillo = None
         for col_name in ['SIGILLO', 'Sigillo', 'sigillo']:
             if col_name in _header_map:
-                col_sigillo = _header_map[col_name]
+                col_name_sigillo = col_name
                 break
-
-        if col_sigillo is None:
+        if col_name_sigillo is None:
             return jsonify({'error': 'Colonna SIGILLO non trovata'}), 400
 
-        # Scrivi direttamente la cella
-        cell_ref = gspread.utils.rowcol_to_a1(row_num, col_sigillo)
-        ws = get_worksheet()
-        ws.update_acell(cell_ref, sigillo)
-        invalidate_values_cache()
+        # Scrittura SAFE: refresh atomico header + verifica ancora ENELTEL.
+        # Se la collega ha appena spostato/aggiunto colonne, il safe writer
+        # legge l'header attuale e scrive nella colonna giusta. Se la riga è
+        # stata spostata, viene re-cercata via ENELTEL.
+        eneltel_anchor_col = _resolve_anchor_col_name('eneltel') or 'Eneltel'
+        res = safe_batch_update_by_name(
+            [{
+                'row': row_num,
+                'col': col_name_sigillo,
+                'value': sigillo,
+                'anchor': str(eneltel),
+            }],
+            anchor_col=eneltel_anchor_col,
+            anchor_normalize='lstrip0',
+        )
 
-        logger.info(f"[SIGILLI] ✅ Sigillo '{sigillo}' salvato per {eneltel} (cella {cell_ref})")
+        if not res['success']:
+            if res.get('invalid_cols'):
+                return jsonify({'error': f"Colonna SIGILLO non trovata sul foglio (rinominata?)"}), 400
+            if res.get('lost_anchors'):
+                return jsonify({'error': f'ENELTEL {eneltel} non più presente nel foglio'}), 404
+            return jsonify({'error': 'Scrittura non completata'}), 500
+
+        cell_ref = gspread.utils.rowcol_to_a1(
+            row_num, get_header_map().get(col_name_sigillo, 0)
+        )
+        logger.info(
+            f"[SIGILLI] ✅ Sigillo '{sigillo}' salvato per {eneltel} "
+            f"(written={res['written']}, remapped={res['remapped']})"
+        )
 
         return jsonify({
             'success': True,
             'message': f'Sigillo salvato per {eneltel}',
             'sigillo': sigillo,
-            'cell': cell_ref
+            'cell': cell_ref,
+            'remapped': res['remapped'] > 0,
         })
 
     except Exception as e:
@@ -300,7 +324,7 @@ def get_matricole_pending():
 @login_required
 def salva_matricola(eneltel):
     """
-    Salva la matricola per un contatore e evidenzia la cella in verde.
+    Salva la matricola per un contatore (anti-spanamento: header fresco + ancora ENELTEL).
     """
     try:
         data = request.json
@@ -309,35 +333,53 @@ def salva_matricola(eneltel):
         if not matricola:
             return jsonify({'error': 'Matricola vuota'}), 400
 
-        # Usa helper cached: cerca riga per ENELTEL (scarica solo 1 colonna)
         row_num = find_row_by_eneltel(eneltel)
         if row_num is None:
             return jsonify({'error': f'Contatore {eneltel} non trovato'}), 404
 
-        # Usa header map cached per trovare colonna Matricola
+        # Trova nome canonico colonna Matricola installata
         _header_map = get_header_map()
-        col_matricola = None
+        col_name_mat = None
         for col_name in ['Matricola CE inst', 'Matricola misuratore installato', 'MATRICOLA CE INST']:
             if col_name in _header_map:
-                col_matricola = _header_map[col_name]
+                col_name_mat = col_name
                 break
-
-        if col_matricola is None:
+        if col_name_mat is None:
             return jsonify({'error': 'Colonna Matricola non trovata'}), 400
 
-        # Scrivi direttamente la cella
-        cell_ref = gspread.utils.rowcol_to_a1(row_num, col_matricola)
-        ws = get_worksheet()
-        ws.update_acell(cell_ref, matricola)
-        invalidate_values_cache()
+        eneltel_anchor_col = _resolve_anchor_col_name('eneltel') or 'Eneltel'
+        res = safe_batch_update_by_name(
+            [{
+                'row': row_num,
+                'col': col_name_mat,
+                'value': matricola,
+                'anchor': str(eneltel),
+            }],
+            anchor_col=eneltel_anchor_col,
+            anchor_normalize='lstrip0',
+        )
 
-        logger.info(f"[MATRICOLE] ✅ Matricola '{matricola}' salvata per {eneltel} (cella {cell_ref})")
+        if not res['success']:
+            if res.get('invalid_cols'):
+                return jsonify({'error': 'Colonna Matricola non trovata sul foglio'}), 400
+            if res.get('lost_anchors'):
+                return jsonify({'error': f'ENELTEL {eneltel} non più presente nel foglio'}), 404
+            return jsonify({'error': 'Scrittura non completata'}), 500
+
+        cell_ref = gspread.utils.rowcol_to_a1(
+            row_num, get_header_map().get(col_name_mat, 0)
+        )
+        logger.info(
+            f"[MATRICOLE] ✅ Matricola '{matricola}' salvata per {eneltel} "
+            f"(written={res['written']}, remapped={res['remapped']})"
+        )
 
         return jsonify({
             'success': True,
             'message': f'Matricola salvata per {eneltel}',
             'matricola': matricola,
-            'cell': cell_ref
+            'cell': cell_ref,
+            'remapped': res['remapped'] > 0,
         })
 
     except Exception as e:

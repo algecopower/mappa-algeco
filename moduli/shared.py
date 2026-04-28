@@ -37,9 +37,14 @@ _headers = None
 _header_map = None        # {col_name: 1-based index}
 _worksheet_initialized = False
 _headers_ts = 0           # timestamp ultima rilettura di row 1 dal foglio
-_HEADERS_TTL = 30         # secondi — scaduto il TTL la row 1 viene riletta (rileva colonne aggiunte/rimosse)
+# TTL CORTO per i path di sola lettura (UI). Per le SCRITTURE non ci affidiamo
+# mai a questo cache: leggiamo sempre la row 1 fresca dentro al lock di scrittura.
+# Senza questa precauzione, se la collega aggiunge/rimuove/sposta una colonna,
+# le scritture finiscono nelle colonne sbagliate finché il TTL non scade
+# (era 30s = finestra in cui i dati venivano "spanati").
+_HEADERS_TTL = 5
 _sheets_lock = threading.Lock()
-_gsheets_write_lock = threading.Lock()  # Serializza operazioni di scrittura su Google Sheets
+_gsheets_write_lock = threading.RLock()  # Serializza operazioni di scrittura su Google Sheets (rientrante)
 
 # ============================================================================
 # CACHE VALORI FOGLIO (evita ri-download su ogni richiesta)
@@ -260,6 +265,271 @@ def get_headers():
     return _headers
 
 
+def force_refresh_headers():
+    """Legge SEMPRE la row 1 dal foglio (no caching) e aggiorna la mappa globale.
+
+    DEVE essere chiamata da TUTTI i path di scrittura, dentro il
+    `_gsheets_write_lock`, così la mappa nome-colonna -> indice è garantita
+    fresca al momento della scrittura. Se la collega ha aggiunto/rimosso/spostato
+    colonne sul foglio, questa funzione lo rileva e rigenera la mappa, evitando
+    che le scritture finiscano nelle colonne sbagliate ("spanamento").
+
+    Restituisce la nuova `header_map` (dict {nome_colonna: indice_1based}).
+    """
+    global _headers, _header_map, _headers_ts
+    ws = get_worksheet()  # assicura inizializzazione
+    headers = _sheets_retry(ws.row_values, 1)
+    header_map = {h: i + 1 for i, h in enumerate(headers)}
+
+    with _sheets_lock:
+        if _headers and headers != _headers:
+            # Diagnostica: log il delta per facilitare il debugging.
+            old_set = set(_headers)
+            new_set = set(headers)
+            aggiunte = new_set - old_set
+            rimosse = old_set - new_set
+            riordinate = old_set & new_set
+            riordinate_diff = [
+                h for h in riordinate
+                if (_header_map or {}).get(h) != header_map.get(h)
+            ]
+            logger.warning(
+                f"[GSheets] ⚠️ Header foglio modificati subito prima di una scrittura "
+                f"({len(_headers)} → {len(headers)} col). "
+                f"Aggiunte: {sorted(aggiunte)} | Rimosse: {sorted(rimosse)} | "
+                f"Riordinate: {sorted(riordinate_diff)}. Mappa rigenerata."
+            )
+        _headers = headers
+        _header_map = header_map
+        _headers_ts = time.time()
+
+    return header_map
+
+
+# ============================================================================
+# SAFE BATCH UPDATE — l'API canonica per OGNI scrittura sul filone
+# ============================================================================
+#
+# Tutti i path di scrittura DEVONO passare da safe_batch_update_by_name (o
+# safe_update_cell). Questa è l'unica protezione robusta contro lo
+# "spanamento" del filone, perché:
+#
+#   1. Acquisisce _gsheets_write_lock (serializza tutte le scritture nel
+#      processo Flask, evitando interleaving).
+#   2. RILEGGE row 1 dentro al lock (force_refresh_headers): l'indice di
+#      ogni colonna è quello CORRENTE sul foglio, non quello cached.
+#   3. (Opzionale) verifica via "ancora" POD/Eneltel che la riga su cui sta
+#      per scrivere contenga davvero il record atteso. Se la riga è stata
+#      spostata (sort/inserimento/cancellazione), la rimappa al volo.
+#   4. Skip-with-log delle scritture verso colonne che non esistono più
+#      (es. la collega ha rinominato/cancellato la colonna): meglio non
+#      scrivere che scrivere nella colonna sbagliata.
+#   5. Esegue le scritture in chunk via batch_update con retry.
+# ============================================================================
+
+def _resolve_anchor_col_name(anchor_type='pod'):
+    """Ritorna il primo nome colonna ancora disponibile in `_header_map`."""
+    candidates = {
+        'pod': ['POD', 'Pod', 'pod', 'Codice POD'],
+        'eneltel': ['Eneltel', 'ENELTEL', 'eneltel'],
+    }.get(anchor_type, [])
+    if not _header_map:
+        return None
+    for name in candidates:
+        if name in _header_map:
+            return name
+    return None
+
+
+def safe_batch_update_by_name(items, *, anchor_col=None, anchor_normalize='upper'):
+    """Esegue un batch_update VERIFICANDO atomicamente la mappa colonne e
+    (opzionalmente) l'identità di ogni riga via "ancora" POD/Eneltel.
+
+    Args:
+        items: lista di dict, ciascuno con:
+            - 'row': int riga 1-based sul foglio
+            - 'col': str nome colonna (case-sensitive — deve corrispondere
+              esattamente all'header attuale del foglio)
+            - 'value': valore da scrivere (verrà convertito in str se non lo è)
+            - 'anchor' (opzionale): valore atteso nella colonna `anchor_col`
+              alla riga `row`. Se diverso, la riga viene re-cercata; se non
+              trovata, la cella viene saltata (NON sovrascritta).
+        anchor_col: str | None — nome colonna ancora ('POD' o 'Eneltel').
+            Se fornita E almeno un item ha `anchor`, viene letta la colonna
+            fresca dal foglio per verificare le righe.
+        anchor_normalize: 'upper' (POD-like) o 'lstrip0' (Eneltel-like).
+
+    Returns:
+        dict con:
+            'success': bool — True se nessuna colonna mancante e nessuna
+                ancora persa
+            'written': int — celle effettivamente scritte
+            'skipped': int — celle saltate (col mancante o ancora persa)
+            'remapped': int — righe rimappate (sheet riordinato)
+            'invalid_cols': list[str] — colonne richieste ma non presenti
+                nei header freschi (i loro write sono stati saltati)
+            'lost_anchors': list[dict] — ancore non più nel foglio
+    """
+    if not items:
+        return {
+            'success': True, 'written': 0, 'skipped': 0, 'remapped': 0,
+            'invalid_cols': [], 'lost_anchors': [],
+        }
+
+    invalid_cols = set()
+    lost_anchors = []
+    n_remapped = 0
+    n_skipped = 0
+    n_written = 0
+
+    def _normalize(v):
+        s = str(v if v is not None else '').strip()
+        if anchor_normalize == 'upper':
+            return s.upper()
+        if anchor_normalize == 'lstrip0':
+            return s.lstrip('0')
+        return s
+
+    with _gsheets_write_lock:
+        # 1. Refresh atomico degli header DENTRO il lock di scrittura.
+        header_map = force_refresh_headers()
+        ws = get_worksheet()
+
+        # 2. Costruisci la mappa ancore (col_values fresco) se richiesto.
+        anchor_pos_to_value = {}
+        anchor_value_to_pos = {}
+        any_anchor_request = any(it.get('anchor') for it in items)
+        if anchor_col and any_anchor_request:
+            if anchor_col not in header_map:
+                logger.error(
+                    f"[SafeWrite] Colonna ancora '{anchor_col}' non trovata "
+                    f"negli header attuali. Tutte le scritture richiedenti "
+                    f"verifica sono saltate."
+                )
+                return {
+                    'success': False, 'written': 0, 'skipped': len(items),
+                    'remapped': 0, 'invalid_cols': [], 'lost_anchors': [],
+                    'error': f"Anchor column '{anchor_col}' missing",
+                }
+            col_idx_anchor = header_map[anchor_col]
+            anchor_values = _sheets_retry(ws.col_values, col_idx_anchor)
+            for i, v in enumerate(anchor_values):
+                pos = i + 1
+                if pos == 1:
+                    continue
+                key = _normalize(v)
+                anchor_pos_to_value[pos] = key
+                if key:
+                    anchor_value_to_pos[key] = pos
+
+        # 3. Costruisci updates A1 con indici FRESCHI.
+        gspread_updates = []
+        for u in items:
+            row = u.get('row')
+            col_name = u.get('col')
+            value = u.get('value')
+            expected_anchor = u.get('anchor')
+            if row is None or row < 2 or not col_name:
+                n_skipped += 1
+                continue
+
+            col_idx = header_map.get(col_name)
+            if col_idx is None:
+                invalid_cols.add(col_name)
+                n_skipped += 1
+                continue
+
+            # Verifica/rimappa via ancora
+            if anchor_col and expected_anchor:
+                expected = _normalize(expected_anchor)
+                actual = anchor_pos_to_value.get(row, '')
+                if actual != expected:
+                    new_row = anchor_value_to_pos.get(expected)
+                    if new_row is None:
+                        lost_anchors.append({
+                            'row': row, 'col': col_name,
+                            'anchor': expected_anchor,
+                        })
+                        n_skipped += 1
+                        continue
+                    if new_row != row:
+                        n_remapped += 1
+                        row = new_row
+
+            gspread_updates.append({
+                'range': gspread.utils.rowcol_to_a1(row, col_idx),
+                'values': [[value if value is not None else '']],
+            })
+
+        if invalid_cols:
+            logger.error(
+                f"[SafeWrite] ⚠️ Colonne mancanti negli header freschi: "
+                f"{sorted(invalid_cols)}. Le relative scritture sono state "
+                f"SALTATE per non corrompere il filone."
+            )
+        if lost_anchors:
+            logger.error(
+                f"[SafeWrite] ⚠️ {len(lost_anchors)} ancore non più "
+                f"presenti nel foglio: scritture saltate."
+            )
+        if n_remapped:
+            logger.warning(
+                f"[SafeWrite] {n_remapped} righe rimappate "
+                f"(foglio riordinato dalla collega)."
+            )
+
+        # 4. Esegui in chunk con retry.
+        if gspread_updates:
+            CHUNK = 500
+            for i in range(0, len(gspread_updates), CHUNK):
+                chunk = gspread_updates[i:i + CHUNK]
+                _sheets_retry(ws.batch_update, chunk)
+                n_written += len(chunk)
+
+    invalidate_values_cache()
+
+    success = (not invalid_cols) and (not lost_anchors)
+    return {
+        'success': success,
+        'written': n_written,
+        'skipped': n_skipped,
+        'remapped': n_remapped,
+        'invalid_cols': sorted(invalid_cols),
+        'lost_anchors': lost_anchors,
+    }
+
+
+def safe_update_cell(row, col_name, value, *, anchor_col=None, anchor_value=None):
+    """Versione "single-cell" di safe_batch_update_by_name.
+
+    Args:
+        row: int riga 1-based
+        col_name: str nome colonna (deve esistere nei header attuali del foglio)
+        value: valore da scrivere
+        anchor_col: opzionale, nome colonna ancora ('POD' o 'Eneltel')
+        anchor_value: opzionale, valore atteso nella colonna ancora alla riga row
+
+    Returns:
+        (success: bool, message: str)
+    """
+    item = {'row': row, 'col': col_name, 'value': value}
+    if anchor_col and anchor_value:
+        item['anchor'] = anchor_value
+    norm = 'lstrip0' if (anchor_col or '').lower() in ('eneltel',) else 'upper'
+    res = safe_batch_update_by_name(
+        [item], anchor_col=anchor_col, anchor_normalize=norm,
+    )
+    if res.get('error'):
+        return False, res['error']
+    if not res['success']:
+        if res['invalid_cols']:
+            return False, f"Colonna '{col_name}' non trovata sul foglio"
+        if res['lost_anchors']:
+            return False, f"Riga non più trovata via ancora {anchor_col}={anchor_value}"
+        return False, "Scrittura non completata"
+    return True, "OK"
+
+
 # ============================================================================
 # HELPER COLONNE
 # ============================================================================
@@ -316,8 +586,19 @@ def _get_username():
 # RICERCA RIGHE
 # ============================================================================
 
-def _get_col_index(col_type='pod'):
-    """Restituisce l'indice 1-based della colonna POD o ENELTEL dalla header_map."""
+def _get_col_index(col_type='pod', *, fresh=False):
+    """Restituisce l'indice 1-based della colonna POD o ENELTEL.
+
+    Args:
+        fresh: se True, ricarica gli header dal foglio prima di restituire
+            l'indice. DA USARE in tutti i path di scrittura (e nelle ricerche
+            riga subito prima di una scrittura) per evitare di leggere/scrivere
+            la colonna sbagliata se la collega ha modificato il foglio.
+    """
+    if fresh:
+        force_refresh_headers()
+    if not _header_map:
+        return None
     if col_type == 'pod':
         for name in ['POD', 'Pod', 'pod', 'Codice POD']:
             if name in _header_map:
@@ -329,17 +610,25 @@ def _get_col_index(col_type='pod'):
     return None
 
 
-def build_pod_row_map():
+def build_pod_row_map(*, fresh=True):
     """Costruisce una mappa fresca POD→riga (1-based) leggendo dal foglio.
+
+    Args:
+        fresh: se True (default), ricarica gli header per essere certi che
+            l'indice della colonna POD sia quello attuale sul foglio. È
+            VITALE per le scritture: se la collega ha aggiunto colonne, il
+            POD potrebbe essere su un indice diverso da quello cached.
 
     Utile per batch update: costruisci la mappa subito prima di scrivere
     per evitare problemi di righe spostate.
     """
+    if fresh:
+        force_refresh_headers()
     ws = get_worksheet()
     col = _get_col_index('pod')
     if col is None:
         return {}
-    values = ws.col_values(col)
+    values = _sheets_retry(ws.col_values, col)
     result = {}
     for i, val in enumerate(values[1:], start=2):
         v = str(val).strip().upper()
@@ -351,36 +640,41 @@ def build_pod_row_map():
 def verify_row_pod(row_num, expected_pod):
     """Verifica che alla riga row_num ci sia il POD atteso.
 
-    Legge la cella POD dalla riga indicata e confronta.
-    Restituisce True se corrispondono, False se la riga è stata spostata.
+    Legge la cella POD dalla riga indicata e confronta. La colonna POD viene
+    risolta con header FRESCHI (così la verifica è valida anche se la collega
+    ha appena modificato la struttura del foglio).
     """
     ws = get_worksheet()
-    col = _get_col_index('pod')
+    col = _get_col_index('pod', fresh=True)
     if col is None:
         return False
-    actual = str(ws.cell(row_num, col).value or '').strip().upper()
+    actual = str(_sheets_retry(ws.cell, row_num, col).value or '').strip().upper()
     return actual == str(expected_pod).strip().upper()
 
 
 def verify_row_eneltel(row_num, expected_eneltel):
-    """Verifica che alla riga row_num ci sia l'ENELTEL atteso."""
+    """Verifica che alla riga row_num ci sia l'ENELTEL atteso (con header freschi)."""
     ws = get_worksheet()
-    col = _get_col_index('eneltel')
+    col = _get_col_index('eneltel', fresh=True)
     if col is None:
         return False
-    actual = str(ws.cell(row_num, col).value or '').lstrip('0')
+    actual = str(_sheets_retry(ws.cell, row_num, col).value or '').lstrip('0')
     return actual == str(expected_eneltel).lstrip('0')
 
 
 def find_row_by_eneltel(eneltel):
-    """Trova la riga corrispondente a un ENELTEL (1-based) o None."""
+    """Trova la riga corrispondente a un ENELTEL (1-based) o None.
+
+    Risolve la colonna ENELTEL con header FRESCHI (così la ricerca avviene
+    sempre nella colonna giusta anche se il foglio è stato ristrutturato).
+    """
     ws = get_worksheet()
-    col_eneltel = _get_col_index('eneltel')
+    col_eneltel = _get_col_index('eneltel', fresh=True)
     if col_eneltel is None:
         return None
 
     eneltel_norm = str(eneltel).lstrip('0')
-    col_values = ws.col_values(col_eneltel)
+    col_values = _sheets_retry(ws.col_values, col_eneltel)
     for i, val in enumerate(col_values[1:], start=2):
         if str(val).lstrip('0') == eneltel_norm:
             return i
@@ -388,14 +682,14 @@ def find_row_by_eneltel(eneltel):
 
 
 def find_row_by_pod(pod):
-    """Trova la riga corrispondente a un POD (1-based) o None."""
+    """Trova la riga corrispondente a un POD (1-based) o None (con header freschi)."""
     ws = get_worksheet()
-    col_pod = _get_col_index('pod')
+    col_pod = _get_col_index('pod', fresh=True)
     if col_pod is None:
         return None
 
     pod_norm = str(pod).strip().upper()
-    col_values = ws.col_values(col_pod)
+    col_values = _sheets_retry(ws.col_values, col_pod)
     for i, val in enumerate(col_values[1:], start=2):
         if str(val).strip().upper() == pod_norm:
             return i
@@ -407,19 +701,23 @@ def find_row_by_pod(pod):
 # ============================================================================
 
 def update_cell(row, col_name, value):
-    """Aggiorna una singola cella (thread-safe)."""
-    with _gsheets_write_lock:
-        ws = get_worksheet()
-        if col_name not in _header_map:
-            return False, f"Colonna '{col_name}' non trovata"
-        col = _header_map[col_name]
-        ws.update_cell(row, col, value)
-    invalidate_values_cache()
-    return True, "OK"
+    """Aggiorna una singola cella (thread-safe, con header refresh atomico).
+
+    Usa internamente safe_batch_update_by_name per garantire che la colonna
+    target sia quella attuale sul foglio (no staleness).
+    """
+    return safe_update_cell(row, col_name, value)
 
 
 def update_row_fields(eneltel, fields):
-    """Aggiorna più campi di una riga identificata da ENELTEL (thread-safe)."""
+    """Aggiorna più campi di una riga identificata da ENELTEL.
+
+    Usa safe_batch_update_by_name con verifica via ancora ENELTEL: se la
+    riga è stata spostata (sort, inserimento, cancellazione), viene
+    rimappata al volo. Se la colonna ENELTEL non esiste più o l'ENELTEL
+    cercato non è più presente, la scrittura viene saltata invece di
+    finire nella riga sbagliata.
+    """
     logger.info(f"🔧 update_row_fields: ENELTEL={eneltel}, campi={fields}")
 
     row = find_row_by_eneltel(eneltel)
@@ -428,31 +726,38 @@ def update_row_fields(eneltel, fields):
 
     logger.info(f"   Trovata riga: {row}")
 
-    updates = []
-    errors = []
-
+    eneltel_col_name = _resolve_anchor_col_name('eneltel') or 'Eneltel'
+    items = []
     for col_name, value in fields.items():
-        if col_name not in _header_map:
-            errors.append(f"Colonna '{col_name}' non trovata")
-            logger.error(f"   ❌ Colonna '{col_name}' NON trovata in header_map")
-            continue
-        col = _header_map[col_name]
-        logger.info(f"   ✅ Colonna '{col_name}' alla posizione {col}")
-        updates.append({
-            'range': gspread.utils.rowcol_to_a1(row, col),
-            'values': [[value]]
+        items.append({
+            'row': row,
+            'col': col_name,
+            'value': value,
+            'anchor': str(eneltel),
         })
 
-    if updates:
-        with _gsheets_write_lock:
-            ws = get_worksheet()
-            logger.info(f"   📝 batch_update con {len(updates)} celle...")
-            ws.batch_update(updates)
-            logger.info(f"   ✅ batch_update completato!")
-        invalidate_values_cache()
+    if not items:
+        return True, "OK"
 
-    if errors:
-        return True, f"Aggiornato con warning: {', '.join(errors)}"
+    res = safe_batch_update_by_name(
+        items, anchor_col=eneltel_col_name, anchor_normalize='lstrip0',
+    )
+    logger.info(
+        f"   📝 safe write: written={res['written']} skipped={res['skipped']} "
+        f"remapped={res['remapped']} invalid_cols={res['invalid_cols']}"
+    )
+
+    if res.get('error'):
+        return False, res['error']
+
+    warnings = []
+    if res['invalid_cols']:
+        warnings.append(f"colonne non trovate: {res['invalid_cols']}")
+    if res['lost_anchors']:
+        warnings.append(f"ENELTEL non più presente: {len(res['lost_anchors'])} celle")
+
+    if warnings:
+        return True, "Aggiornato con warning: " + "; ".join(warnings)
     return True, "OK"
 
 
@@ -480,19 +785,25 @@ def register_callbacks(**kw):
 def _imposta_appuntamento_su_filone(row, orario, data_app='', note_extra='',
                                      origine='contatore', pod_override=None,
                                      eneltel_override=None, nota_corrente=None):
-    """Logica condivisa per impostare appuntamento su una riga del filone (thread-safe)."""
-    col_note = _get_colonna_note()
-    if col_note not in _header_map:
-        raise ValueError(f'Colonna {col_note} non trovata')
+    """Logica condivisa per impostare appuntamento su una riga del filone.
 
-    col = _header_map[col_note]
-
-    # Sezione critica: lettura-modifica-scrittura della cella nota
+    Sezione critica con header refresh ATOMICO: leggiamo nota corrente e
+    scriviamo la nuova nota usando lo stesso indice colonna (fresco) per
+    entrambe le operazioni, dentro lo stesso lock.
+    """
+    nuova_nota = ''
+    nota_app = f"APP {orario}"
     with _gsheets_write_lock:
+        # Refresh atomico — il nome colonna note può anche non essere cambiato,
+        # ma vogliamo essere certi della sua POSIZIONE attuale.
+        force_refresh_headers()
+        col_note = _get_colonna_note()
+        if col_note not in _header_map:
+            raise ValueError(f'Colonna {col_note} non trovata')
+        col = _header_map[col_note]
+
         ws = get_worksheet()
         nota_attuale = nota_corrente if nota_corrente is not None else (ws.cell(row, col).value or '')
-
-        nota_app = f"APP {orario}"
 
         if 'APP' in nota_attuale.upper():
             nota_attuale = re.sub(
@@ -542,16 +853,19 @@ def _imposta_appuntamento_su_filone(row, orario, data_app='', note_extra='',
 
 
 def _rimuovi_appuntamento_da_filone(row, nota_corrente=None):
-    """Logica condivisa per rimuovere appuntamento da una riga del filone (thread-safe)."""
-    col_note = _get_colonna_note()
+    """Logica condivisa per rimuovere appuntamento da una riga del filone.
 
-    if col_note not in _header_map:
-        raise ValueError(f'Colonna {col_note} non trovata')
-
-    col = _header_map[col_note]
-
-    # Sezione critica: lettura-modifica-scrittura della cella nota
+    Sezione critica con header refresh ATOMICO (vedi
+    `_imposta_appuntamento_su_filone` per la motivazione).
+    """
+    nuova_nota = ''
     with _gsheets_write_lock:
+        force_refresh_headers()
+        col_note = _get_colonna_note()
+        if col_note not in _header_map:
+            raise ValueError(f'Colonna {col_note} non trovata')
+        col = _header_map[col_note]
+
         ws = get_worksheet()
         nota_attuale = nota_corrente if nota_corrente is not None else (ws.cell(row, col).value or '')
 

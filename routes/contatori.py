@@ -25,13 +25,17 @@ from moduli.shared import (
     verify_row_pod,
     build_pod_row_map,
     update_row_fields,
+    safe_batch_update_by_name,
+    force_refresh_headers,
     _imposta_appuntamento_su_filone,
     _rimuovi_appuntamento_da_filone,
     _get_username,
     _api_error,
     _trova_indice_multi,
+    _resolve_anchor_col_name,
     _callbacks,
     _sheets_retry,
+    _gsheets_write_lock,
 )
 from config import (
     PROVINCIA_ATTIVA,
@@ -268,77 +272,82 @@ def bulk_pianifica():
                 return jsonify({'error': 'Formato data non valido (atteso YYYY-MM-DD)'}), 400
 
         campi_ammessi = CAMPI_MODIFICABILI.get(PROVINCIA_ATTIVA, {})
-        ws = get_worksheet()
-        _header_map = get_header_map()
 
-        # Prepara i campi da aggiornare
-        fields_to_set = {}
+        # Prepara la lista (col_name, value) — gli indici li risolve safe_batch_update
+        # con header FRESCHI al momento della scrittura.
+        fields_to_set = []  # list of (col_name, value)
         if data_pian and 'data_pian' in campi_ammessi:
-            col_name = campi_ammessi['data_pian']
-            if col_name in _header_map:
-                fields_to_set['data_pian'] = (col_name, _header_map[col_name], data_pian_filone)
+            fields_to_set.append((campi_ammessi['data_pian'], data_pian_filone))
         if operatore and 'operatore' in campi_ammessi:
-            col_name = campi_ammessi['operatore']
-            if col_name in _header_map:
-                fields_to_set['operatore'] = (col_name, _header_map[col_name], operatore)
+            fields_to_set.append((campi_ammessi['operatore'], operatore))
 
         if not fields_to_set:
             return jsonify({'error': 'Nessun campo valido da aggiornare'}), 400
 
-        # Trova tutte le righe corrispondenti agli eneltel
-        eneltel_updates = {}  # {eneltel: [(col_idx, value), ...]}
-        trovati = 0
+        # Trova le righe via ENELTEL una sola volta (find_row_by_eneltel ora usa
+        # header freschi internamente). Tieni anche l'ENELTEL come ancora.
+        eneltel_to_row = {}
         non_trovati = []
-
         for eneltel in enteltels:
             eneltel_str = str(eneltel).strip()
             row = find_row_by_eneltel(eneltel_str)
             if row is None:
                 non_trovati.append(eneltel_str)
                 continue
-            trovati += 1
-            eneltel_updates[eneltel_str] = [
-                (col_idx, value)
-                for campo, (col_name, col_idx, value) in fields_to_set.items()
-            ]
+            eneltel_to_row[eneltel_str] = row
 
-        if not eneltel_updates:
+        if not eneltel_to_row:
             return jsonify({'error': 'Nessun contatore trovato nel filone'}), 404
 
-        # Rimappa righe con lookup fresco subito prima della scrittura
-        all_updates = []
-        for eneltel_str, updates_list in eneltel_updates.items():
-            fresh_row = find_row_by_eneltel(eneltel_str)
-            if fresh_row is None:
-                continue
-            for col_idx, value in updates_list:
-                all_updates.append({
-                    'range': gspread.utils.rowcol_to_a1(fresh_row, col_idx),
-                    'values': [[value]]
+        # Costruisci la lista di item per safe_batch_update_by_name.
+        # `anchor` = ENELTEL → se la riga è stata spostata medio tempore
+        # (sort/inserimento/cancellazione) viene rimappata; se l'ENELTEL non
+        # è più nel foglio, la cella viene saltata invece di sovrascrivere
+        # un altro contatore.
+        items = []
+        for eneltel_str, row in eneltel_to_row.items():
+            for col_name, value in fields_to_set:
+                items.append({
+                    'row': row,
+                    'col': col_name,
+                    'value': value,
+                    'anchor': eneltel_str,
                 })
 
-        # Esecuzione in chunk
-        CHUNK_SIZE = 500
-        for i in range(0, len(all_updates), CHUNK_SIZE):
-            chunk = all_updates[i:i + CHUNK_SIZE]
-            ws.batch_update(chunk)
-        invalidate_values_cache()
+        eneltel_anchor_col = _resolve_anchor_col_name('eneltel') or 'Eneltel'
+        res = safe_batch_update_by_name(
+            items, anchor_col=eneltel_anchor_col, anchor_normalize='lstrip0',
+        )
 
-        # Triggera sync per rigenerare JSON
+        if res.get('error'):
+            return jsonify({'error': res['error']}), 400
+        if res.get('invalid_cols'):
+            return jsonify({
+                'error': f"Colonne non trovate sul foglio: {res['invalid_cols']}"
+            }), 400
+
+        invalidate_values_cache()
         _callbacks['trigger_sync_after_edit']()
 
         username = _get_username()
-        logger.info(f"[Pianificazione] ✅ {username}: bulk update {trovati} contatori"
-                     f" (data={data_pian or '-'}, op={operatore or '-'})")
+        logger.info(
+            f"[Pianificazione] ✅ {username}: bulk update {len(eneltel_to_row)} contatori "
+            f"(data={data_pian or '-'}, op={operatore or '-'}) "
+            f"written={res['written']} remapped={res['remapped']} "
+            f"lost_anchors={len(res['lost_anchors'])}"
+        )
 
         result = {
             'success': True,
-            'aggiornati': trovati,
-            'celle': len(all_updates),
+            'aggiornati': len(eneltel_to_row),
+            'celle': res['written'],
+            'remapped': res['remapped'],
         }
         if non_trovati:
-            result['non_trovati'] = non_trovati[:20]  # Limita per non appesantire la risposta
+            result['non_trovati'] = non_trovati[:20]
             result['non_trovati_count'] = len(non_trovati)
+        if res['lost_anchors']:
+            result['ancore_perse'] = len(res['lost_anchors'])
         return jsonify(result)
 
     except Exception as e:
@@ -815,86 +824,99 @@ def update_filone_formats():
         fmt_updates = body.get('formats', {})
         fmt_cleared = body.get('cleared', [])
 
-        ws = get_worksheet()
-        _header_map = get_header_map()
-        batch = []
+        unknown_cols = set()
+        batch_len = 0
 
-        # Formattazioni da applicare
-        for key, fmt in fmt_updates.items():
-            parts = key.split(':', 1)
-            if len(parts) != 2:
-                continue
-            try:
-                row_num = int(parts[0])
-            except ValueError:
-                continue
-            if row_num < 2:
-                continue
-            col_name = parts[1]
-            col_idx = _header_map.get(col_name)
-            if col_idx is None:
-                continue
+        # Anti-spanamento: risolviamo gli indici colonna e mandiamo le format
+        # nello stesso write-lock con header FRESCHI, così se la collega ha
+        # appena inserito/spostato/cancellato una colonna sul foglio, la
+        # formattazione non finisce sulla colonna sbagliata.
+        with _gsheets_write_lock:
+            header_map = force_refresh_headers()
+            ws = get_worksheet()
+            batch = []
 
-            cell_a1 = gspread.utils.rowcol_to_a1(row_num, col_idx)
-            sheets_fmt = {}
+            for key, fmt in fmt_updates.items():
+                parts = key.split(':', 1)
+                if len(parts) != 2:
+                    continue
+                try:
+                    row_num = int(parts[0])
+                except ValueError:
+                    continue
+                if row_num < 2:
+                    continue
+                col_name = parts[1]
+                col_idx = header_map.get(col_name)
+                if col_idx is None:
+                    unknown_cols.add(col_name)
+                    continue
 
-            text_fmt = {}
-            if 'bold' in fmt:
-                text_fmt['bold'] = bool(fmt['bold'])
-            if 'italic' in fmt:
-                text_fmt['italic'] = bool(fmt['italic'])
-            if 'underline' in fmt:
-                text_fmt['underline'] = bool(fmt['underline'])
-            if 'strikethrough' in fmt:
-                text_fmt['strikethrough'] = bool(fmt['strikethrough'])
-            if fmt.get('textColor'):
-                text_fmt['foregroundColorStyle'] = {'rgbColor': _hex_to_sheets_color(fmt['textColor'])}
-            if text_fmt:
-                sheets_fmt['textFormat'] = text_fmt
+                cell_a1 = gspread.utils.rowcol_to_a1(row_num, col_idx)
+                sheets_fmt = {}
 
-            if fmt.get('bgColor'):
-                sheets_fmt['backgroundColorStyle'] = {'rgbColor': _hex_to_sheets_color(fmt['bgColor'])}
+                text_fmt = {}
+                if 'bold' in fmt:
+                    text_fmt['bold'] = bool(fmt['bold'])
+                if 'italic' in fmt:
+                    text_fmt['italic'] = bool(fmt['italic'])
+                if 'underline' in fmt:
+                    text_fmt['underline'] = bool(fmt['underline'])
+                if 'strikethrough' in fmt:
+                    text_fmt['strikethrough'] = bool(fmt['strikethrough'])
+                if fmt.get('textColor'):
+                    text_fmt['foregroundColorStyle'] = {'rgbColor': _hex_to_sheets_color(fmt['textColor'])}
+                if text_fmt:
+                    sheets_fmt['textFormat'] = text_fmt
 
-            if sheets_fmt:
-                batch.append({'range': cell_a1, 'format': sheets_fmt})
+                if fmt.get('bgColor'):
+                    sheets_fmt['backgroundColorStyle'] = {'rgbColor': _hex_to_sheets_color(fmt['bgColor'])}
 
-        # Formattazioni da resettare (cleared)
-        for key in fmt_cleared:
-            parts = key.split(':', 1)
-            if len(parts) != 2:
-                continue
-            try:
-                row_num = int(parts[0])
-            except ValueError:
-                continue
-            if row_num < 2:
-                continue
-            col_name = parts[1]
-            col_idx = _header_map.get(col_name)
-            if col_idx is None:
-                continue
+                if sheets_fmt:
+                    batch.append({'range': cell_a1, 'format': sheets_fmt})
 
-            cell_a1 = gspread.utils.rowcol_to_a1(row_num, col_idx)
-            # Reset: imposta tutti gli stili a default
-            batch.append({
-                'range': cell_a1,
-                'format': {
-                    'textFormat': {
-                        'bold': False,
-                        'italic': False,
-                        'underline': False,
-                        'strikethrough': False,
-                        'foregroundColorStyle': {'rgbColor': {'red': 0, 'green': 0, 'blue': 0}},
-                    },
-                    'backgroundColorStyle': {'rgbColor': {'red': 1, 'green': 1, 'blue': 1}},
-                }
-            })
+            for key in fmt_cleared:
+                parts = key.split(':', 1)
+                if len(parts) != 2:
+                    continue
+                try:
+                    row_num = int(parts[0])
+                except ValueError:
+                    continue
+                if row_num < 2:
+                    continue
+                col_name = parts[1]
+                col_idx = header_map.get(col_name)
+                if col_idx is None:
+                    unknown_cols.add(col_name)
+                    continue
 
-        if batch:
-            # batch_format gestisce fino a ~1000 range per chiamata
-            CHUNK = 500
-            for i in range(0, len(batch), CHUNK):
-                _sheets_retry(ws.batch_format, batch[i:i + CHUNK])
+                cell_a1 = gspread.utils.rowcol_to_a1(row_num, col_idx)
+                batch.append({
+                    'range': cell_a1,
+                    'format': {
+                        'textFormat': {
+                            'bold': False,
+                            'italic': False,
+                            'underline': False,
+                            'strikethrough': False,
+                            'foregroundColorStyle': {'rgbColor': {'red': 0, 'green': 0, 'blue': 0}},
+                        },
+                        'backgroundColorStyle': {'rgbColor': {'red': 1, 'green': 1, 'blue': 1}},
+                    }
+                })
+
+            if unknown_cols:
+                logger.warning(
+                    f"[Filone Formats] Colonne non trovate sul foglio "
+                    f"(formattazioni saltate): {sorted(unknown_cols)}"
+                )
+
+            if batch:
+                batch_len = len(batch)
+                CHUNK = 500
+                for i in range(0, len(batch), CHUNK):
+                    _sheets_retry(ws.batch_format, batch[i:i + CHUNK])
 
         # Aggiorna la cache locale con le modifiche
         cache_file = os.path.join(
@@ -923,9 +945,13 @@ def update_filone_formats():
             logger.warning(f"[Filone] Errore aggiornamento cache formattazione: {ce}")
 
         username = _get_username()
-        logger.info(f"[Filone] Formattazione aggiornata da {username}: {len(batch)} celle")
+        logger.info(f"[Filone] Formattazione aggiornata da {username}: {batch_len} celle")
 
-        return jsonify({'ok': True, 'updated': len(batch)})
+        return jsonify({
+            'ok': True,
+            'updated': batch_len,
+            'colonne_ignorate': sorted(unknown_cols),
+        })
 
     except Exception as e:
         return _api_error(e, 'aggiornamento formattazione')
@@ -934,7 +960,14 @@ def update_filone_formats():
 @bp.route('/api/filone/row/<int:row_num>', methods=['PUT'])
 @login_required
 def update_filone_row(row_num):
-    """Aggiorna una riga del FILONE (per vista Excel)."""
+    """Aggiorna una riga del FILONE (per vista Excel) usando safe_batch_update.
+
+    Anti-spanamento:
+    - rilegge gli header freschi (sotto write-lock) → indice colonna sempre attuale
+    - usa POD come ancora di riga: se la riga è stata spostata viene rimappata,
+      se il POD non è più presente la scrittura viene saltata invece che andare
+      su un altro contatore.
+    """
     try:
         if row_num < 2:
             return jsonify({'error': 'Riga non valida'}), 400
@@ -946,40 +979,51 @@ def update_filone_row(row_num):
         # Colonne sbloccate dall'utente (protette ma editabili per questa sessione)
         sbloccate = set(c.lower() for c in fields.pop('_unlocked_cols', []))
 
-        # Verifica àncora POD (se il client l'ha inviata)
+        # Estrae l'ancora POD (se il client l'ha inviata).
         anchor_pod = fields.pop('_anchor_pod', None)
-        if anchor_pod:
-            if not verify_row_pod(row_num, anchor_pod):
-                # Riga spostata! Cerca la riga corretta
-                new_row = find_row_by_pod(anchor_pod)
-                if new_row is None:
-                    return jsonify({'error': f'POD {anchor_pod} non trovato nel filone (righe spostate)'}), 409
-                logger.warning(f"[Filone] ⚠️ Riga spostata: {row_num} → {new_row} per POD {anchor_pod}")
-                row_num = new_row
-
-        ws = get_worksheet()
-        _header_map = get_header_map()
 
         # Colonne protette lato server (escluse quelle sbloccate dall'utente)
         protette = set(c.lower() for c in COLONNE_PROTETTE_FILONE.get(PROVINCIA_ATTIVA, _COLONNE_PROTETTE_BASE))
         protette -= sbloccate
 
-        # Prepara batch update
-        updates = []
+        # Costruisci items per safe_batch_update.
+        items = []
         for col_name, value in fields.items():
-            if col_name.startswith('_'):  # Salta campi interni
+            if col_name.startswith('_'):
                 continue
             if col_name.lower() in protette:
                 continue
-            if col_name in _header_map:
-                updates.append({
-                    'range': gspread.utils.rowcol_to_a1(row_num, _header_map[col_name]),
-                    'values': [[value]]
-                })
+            item = {'row': row_num, 'col': col_name, 'value': value}
+            if anchor_pod:
+                item['anchor'] = anchor_pod
+            items.append(item)
 
-        if updates:
-            ws.batch_update(updates)
-            invalidate_values_cache()
+        if not items:
+            return jsonify({'success': True, 'updated': 0})
+
+        pod_anchor_col = _resolve_anchor_col_name('pod') or 'POD'
+        res = safe_batch_update_by_name(
+            items,
+            anchor_col=pod_anchor_col if anchor_pod else None,
+            anchor_normalize='upper',
+        )
+
+        if anchor_pod and res.get('lost_anchors'):
+            return jsonify({
+                'error': f'POD {anchor_pod} non trovato nel filone (rimosso o cambiato)'
+            }), 409
+        if res.get('error'):
+            return jsonify({'error': res['error']}), 400
+        if res.get('invalid_cols'):
+            logger.warning(
+                f"[Filone] update_filone_row: colonne non trovate sul foglio "
+                f"({res['invalid_cols']}) — relative scritture saltate."
+            )
+
+        if res.get('remapped'):
+            logger.warning(
+                f"[Filone] ⚠️ Riga {row_num} rimappata via POD={anchor_pod}"
+            )
 
         # === RILEVAMENTO APPUNTAMENTI MANUALI ===
         # "APP HH:MM" nella colonna NOTE APP (logica unificata)
@@ -1063,7 +1107,12 @@ def update_filone_row(row_num):
         except Exception as e_app:
             logger.warning(f"[Appuntamento] ⚠️ Errore rilevamento APP da filone: {e_app}")
 
-        return jsonify({'success': True, 'updated': len(updates)})
+        return jsonify({
+            'success': True,
+            'updated': res['written'],
+            'remapped': res['remapped'] > 0,
+            'invalid_cols': res['invalid_cols'],
+        })
 
     except Exception as e:
         return _api_error(e, 'aggiornamento riga filone')
@@ -1072,10 +1121,14 @@ def update_filone_row(row_num):
 @bp.route('/api/filone/bulk', methods=['PUT'])
 @login_required
 def update_filone_bulk():
-    """Aggiorna più righe del FILONE in un'unica chiamata batch (per vista Excel).
-    
+    """Aggiorna più righe del FILONE in un'unica chiamata batch (vista Excel).
+
     Body JSON: { "rows": { "row_num": { "col_name": "value", ... }, ... } }
-    Tutte le celle vengono scritte in un unico batch_update su Google Sheets.
+
+    Anti-spanamento: tutte le scritture passano da safe_batch_update_by_name
+    che (1) rilegge gli header freschi sotto write-lock e (2) usa POD come
+    ancora di riga per re-mappare le righe spostate o saltare i record
+    spariti, invece di sovrascrivere i contatori sbagliati.
     """
     try:
         data = request.json
@@ -1089,91 +1142,58 @@ def update_filone_bulk():
         # Colonne sbloccate dall'utente (protette ma editabili per questa sessione)
         sbloccate = set(c.lower() for c in data.get('_unlocked_cols', []))
 
-        # Verifica àncora POD: se presente, controlla che le righe non siano spostate
-        has_anchors = any(
-            isinstance(f, dict) and '_anchor_pod' in f
-            for f in rows_dict.values()
-        )
-        row_remap = {}  # {old_row_str: new_row_num}
-        if has_anchors:
-            fresh_pod_map = build_pod_row_map()
-            righe_spostate = 0
-            for row_num_str, fields in rows_dict.items():
-                anchor = fields.get('_anchor_pod')
-                if anchor:
-                    try:
-                        old_row = int(row_num_str)
-                    except (ValueError, TypeError):
-                        continue
-                    anchor_upper = str(anchor).strip().upper()
-                    fresh_row = fresh_pod_map.get(anchor_upper)
-                    if fresh_row is None:
-                        logger.warning(f"[Filone Bulk] POD {anchor} non trovato, riga {row_num_str} saltata")
-                        row_remap[row_num_str] = None  # Segna come da saltare
-                    elif fresh_row != old_row:
-                        righe_spostate += 1
-                        row_remap[row_num_str] = fresh_row
-                    else:
-                        row_remap[row_num_str] = old_row
-            if righe_spostate:
-                logger.warning(f"[Filone Bulk] ⚠️ {righe_spostate} righe spostate, rimappate")
-
-        ws = get_worksheet()
-        _header_map = get_header_map()
-
-        # Accumula tutti gli update in un unico batch
-        all_updates = []
-        rows_ok = 0
-
         # Colonne protette lato server (escluse quelle sbloccate dall'utente)
         protette = set(c.lower() for c in COLONNE_PROTETTE_FILONE.get(PROVINCIA_ATTIVA, _COLONNE_PROTETTE_BASE))
         protette -= sbloccate
 
+        # Costruisci la lista di item per safe_batch_update_by_name.
+        items = []
+        rows_ok = set()
+        any_anchor = False
         for row_num_str, fields in rows_dict.items():
-            # Usa riga rimappata se disponibile
-            if row_num_str in row_remap:
-                row_num = row_remap[row_num_str]
-                if row_num is None:
-                    continue  # POD non trovato, salta
-            else:
-                try:
-                    row_num = int(row_num_str)
-                except (ValueError, TypeError):
-                    continue
+            try:
+                row_num = int(row_num_str)
+            except (ValueError, TypeError):
+                continue
             if row_num < 2:
                 continue
+            anchor_pod = fields.get('_anchor_pod') if isinstance(fields, dict) else None
+            if anchor_pod:
+                any_anchor = True
 
             for col_name, value in fields.items():
                 if col_name.startswith('_'):
                     continue
                 if col_name.lower() in protette:
                     continue
-                if col_name in _header_map:
-                    all_updates.append({
-                        'range': gspread.utils.rowcol_to_a1(row_num, _header_map[col_name]),
-                        'values': [[value]]
-                    })
-            rows_ok += 1
+                item = {'row': row_num, 'col': col_name, 'value': value}
+                if anchor_pod:
+                    item['anchor'] = anchor_pod
+                items.append(item)
+            rows_ok.add(row_num_str)
 
-        if not all_updates:
+        if not items:
             return jsonify({'error': 'Nessun campo valido da aggiornare'}), 400
 
-        # Esecuzione in chunk: Google Sheets ha un limite di ~60.000 celle per batch
-        CHUNK_SIZE = 500  # celle per batch
-        for i in range(0, len(all_updates), CHUNK_SIZE):
-            chunk = all_updates[i:i + CHUNK_SIZE]
-            ws.batch_update(chunk)
-        invalidate_values_cache()
+        pod_anchor_col = _resolve_anchor_col_name('pod') or 'POD'
+        res = safe_batch_update_by_name(
+            items,
+            anchor_col=pod_anchor_col if any_anchor else None,
+            anchor_normalize='upper',
+        )
 
-        # Aggiorna rows_dict con righe rimappate per il rilevamento appuntamenti
-        if row_remap:
-            remapped_dict = {}
-            for row_num_str, fields in rows_dict.items():
-                if row_num_str in row_remap and row_remap[row_num_str] is not None:
-                    remapped_dict[str(row_remap[row_num_str])] = fields
-                else:
-                    remapped_dict[row_num_str] = fields
-            rows_dict = remapped_dict
+        if res.get('error'):
+            return jsonify({'error': res['error']}), 400
+
+        if res['lost_anchors']:
+            logger.warning(
+                f"[Filone Bulk] ⚠️ {len(res['lost_anchors'])} POD non trovati: "
+                f"relative scritture saltate."
+            )
+        if res['invalid_cols']:
+            logger.warning(
+                f"[Filone Bulk] ⚠️ Colonne non trovate sul foglio: {res['invalid_cols']}"
+            )
 
         # Rilevamento appuntamenti (per tutte le righe modificate)
         try:
@@ -1252,8 +1272,19 @@ def update_filone_bulk():
         except Exception as e_app:
             logger.warning(f"[Appuntamento] ⚠️ Errore rilevamento APP da filone bulk: {e_app}")
 
-        logger.info(f"[Filone] ✅ Bulk update: {rows_ok} righe, {len(all_updates)} celle aggiornate")
-        return jsonify({'success': True, 'rows': rows_ok, 'cells': len(all_updates)})
+        logger.info(
+            f"[Filone] ✅ Bulk update: {len(rows_ok)} righe, {res['written']} celle "
+            f"(remapped={res['remapped']}, lost={len(res['lost_anchors'])}, "
+            f"invalid_cols={res['invalid_cols']})"
+        )
+        return jsonify({
+            'success': True,
+            'rows': len(rows_ok),
+            'cells': res['written'],
+            'remapped': res['remapped'],
+            'invalid_cols': res['invalid_cols'],
+            'lost_anchors': len(res['lost_anchors']),
+        })
 
     except Exception as e:
         return _api_error(e, 'aggiornamento bulk filone')
@@ -1266,6 +1297,10 @@ def append_filone_rows():
 
     Body JSON: { "rows": [ { "col_name": "value", ... }, ... ] }
     Ogni dizionario rappresenta una nuova riga; le chiavi sono i nomi delle colonne del filone.
+
+    Anti-spanamento: legge gli header FRESCHI dentro il write-lock per
+    posizionare i valori nelle colonne giuste anche se la collega ha appena
+    modificato la struttura del foglio.
     """
     try:
         data = request.json
@@ -1279,31 +1314,46 @@ def append_filone_rows():
         if len(new_rows) > 5000:
             return jsonify({'error': 'Troppo righe (max 5000)'}), 400
 
-        ws = get_worksheet()
-        _header_map = get_header_map()
-        ordered_headers = get_headers()
+        with _gsheets_write_lock:
+            # Refresh atomico header dentro al lock di scrittura.
+            header_map = force_refresh_headers()
+            ordered_headers = get_headers()
+            ws = get_worksheet()
 
-        # Costruisci righe come liste ordinate secondo le colonne del foglio
-        rows_to_append = []
-        for row_data in new_rows:
-            row_values = [''] * len(ordered_headers)
-            for col_name, value in row_data.items():
-                if col_name.startswith('_'):
-                    continue
-                if col_name in _header_map:
-                    col_idx = _header_map[col_name] - 1  # _header_map è 1-based
-                    row_values[col_idx] = str(value) if value is not None else ''
-            rows_to_append.append(row_values)
+            unknown_cols = set()
+            rows_to_append = []
+            for row_data in new_rows:
+                row_values = [''] * len(ordered_headers)
+                for col_name, value in row_data.items():
+                    if col_name.startswith('_'):
+                        continue
+                    col_idx = header_map.get(col_name)
+                    if col_idx is None:
+                        unknown_cols.add(col_name)
+                        continue
+                    row_values[col_idx - 1] = str(value) if value is not None else ''
+                rows_to_append.append(row_values)
 
-        if not rows_to_append:
-            return jsonify({'error': 'Nessun campo valido da aggiungere'}), 400
+            if not rows_to_append:
+                return jsonify({'error': 'Nessun campo valido da aggiungere'}), 400
 
-        # Append in batch
-        ws.append_rows(rows_to_append, value_input_option='USER_ENTERED')
+            if unknown_cols:
+                logger.warning(
+                    f"[Filone Append] Colonne ignorate (non presenti sul foglio): "
+                    f"{sorted(unknown_cols)}"
+                )
+
+            _sheets_retry(
+                ws.append_rows, rows_to_append, value_input_option='USER_ENTERED',
+            )
         invalidate_values_cache()
 
         logger.info(f"[Filone] ✅ Append: {len(rows_to_append)} nuove righe aggiunte")
-        return jsonify({'success': True, 'rows_added': len(rows_to_append)})
+        return jsonify({
+            'success': True,
+            'rows_added': len(rows_to_append),
+            'colonne_ignorate': sorted(unknown_cols),
+        })
 
     except Exception as e:
         return _api_error(e, 'aggiunta righe filone')
@@ -1432,88 +1482,82 @@ def genera_orari_lettere():
         if not fasce_per_pod:
             return jsonify({'error': 'Nessuna fascia oraria calcolata'}), 500
 
-        # Ora scrivi nel FILONE - prima leggi i valori correnti per non sovrascrivere
-        ws = get_worksheet(force_refresh=True)
-        _header_map = get_header_map()
-
-        # Determina colonna destinazione (unificata: Orari, con fallback a Ora pian)
-        col_dest_name = None
-        for nome in ['Orari', 'ORARI']:
-            if nome in _header_map:
-                col_dest_name = nome
-                break
-
-        if col_dest_name is None:
-            return jsonify({'error': "Colonna 'Orari' non trovata nel FILONE. Crea prima la colonna."}), 400
-
-        col_dest_idx = _header_map[col_dest_name]
-
-        # Trova colonna POD
-        col_pod_idx = None
-        for pod_name in ['POD', 'Pod', 'pod', 'Codice POD']:
-            if pod_name in _header_map:
-                col_pod_idx = _header_map[pod_name]
-                break
-
-        if col_pod_idx is None:
-            return jsonify({'error': 'Colonna POD non trovata nel FILONE'}), 400
-
-        # Leggi tutte le righe (POD + colonna destinazione)
-        all_values = ws.get_all_values()
-
-        # Prepara batch update (solo celle vuote)
-        updates = []
+        # Ora scrivi nel FILONE — TUTTE le letture/scritture avvengono dentro
+        # il write-lock con header rigenerati per evitare di scrivere in
+        # colonne sbagliate se la collega modifica il foglio in parallelo.
         scritti = 0
         saltati_occupati = 0
         saltati_non_trovati = 0
+        col_dest_name = None
+        with _gsheets_write_lock:
+            header_map = force_refresh_headers()
 
-        for row_idx, row_values in enumerate(all_values[1:], start=2):  # Salta header
-            # Leggi POD dalla riga
-            pod_val = ''
-            if col_pod_idx - 1 < len(row_values):
-                pod_val = str(row_values[col_pod_idx - 1]).strip().upper()
-
-            if not pod_val:
-                continue
-
-            # Cerca il POD nelle fasce calcolate
-            fascia_trovata = None
-            for pod_calc, fascia in fasce_per_pod.items():
-                if str(pod_calc).strip().upper() == pod_val:
-                    fascia_trovata = fascia
+            for nome in ['Orari', 'ORARI']:
+                if nome in header_map:
+                    col_dest_name = nome
                     break
+            if col_dest_name is None:
+                return jsonify({'error': "Colonna 'Orari' non trovata nel FILONE. Crea prima la colonna."}), 400
 
-            if fascia_trovata is None:
-                saltati_non_trovati += 1
-                continue
+            pod_anchor_col = _resolve_anchor_col_name('pod')
+            if pod_anchor_col is None:
+                return jsonify({'error': 'Colonna POD non trovata nel FILONE'}), 400
 
-            # Leggi il valore attuale nella colonna destinazione
-            current_val = ''
-            if col_dest_idx - 1 < len(row_values):
-                current_val = str(row_values[col_dest_idx - 1]).strip()
+            col_pod_idx = header_map[pod_anchor_col]
+            col_dest_idx = header_map[col_dest_name]
 
-            # Scrivi SOLO se la cella è vuota
-            if current_val and current_val.upper() not in ('', 'NAN', 'NONE', 'NULL'):
-                saltati_occupati += 1
-                continue
+            ws = get_worksheet()
+            # Leggi tutte le righe FRESCHE (sotto lock) per non sovrascrivere
+            # celle Orari già compilate e per posizioni POD attuali.
+            all_values = _sheets_retry(ws.get_all_values)
 
-            # Aggiungi al batch
-            cell_ref = gspread.utils.rowcol_to_a1(row_idx, col_dest_idx)
-            updates.append({
-                'range': cell_ref,
-                'values': [[fascia_trovata]]
-            })
-            scritti += 1
+            items = []
+            for row_idx, row_values in enumerate(all_values[1:], start=2):
+                pod_val = ''
+                if col_pod_idx - 1 < len(row_values):
+                    pod_val = str(row_values[col_pod_idx - 1]).strip().upper()
+                if not pod_val:
+                    continue
 
-        # Esegui batch update
-        if updates:
-            # gspread ha un limite di batch, facciamo a blocchi di 500
-            batch_size = 500
-            for i in range(0, len(updates), batch_size):
-                batch = updates[i:i + batch_size]
-                ws.batch_update(batch)
-                logger.info(f"   ✍️ Batch {i//batch_size + 1}: {len(batch)} celle aggiornate")
-            invalidate_values_cache()
+                fascia_trovata = None
+                for pod_calc, fascia in fasce_per_pod.items():
+                    if str(pod_calc).strip().upper() == pod_val:
+                        fascia_trovata = fascia
+                        break
+                if fascia_trovata is None:
+                    saltati_non_trovati += 1
+                    continue
+
+                current_val = ''
+                if col_dest_idx - 1 < len(row_values):
+                    current_val = str(row_values[col_dest_idx - 1]).strip()
+                if current_val and current_val.upper() not in ('', 'NAN', 'NONE', 'NULL'):
+                    saltati_occupati += 1
+                    continue
+
+                items.append({
+                    'row': row_idx,
+                    'col': col_dest_name,
+                    'value': fascia_trovata,
+                    'anchor': pod_val,
+                })
+                scritti += 1
+
+        # safe_batch_update_by_name acquisirà di nuovo il write-lock
+        # (è una RLock, quindi rientrante sicura) e ricontrollerà gli header.
+        if items:
+            res = safe_batch_update_by_name(
+                items, anchor_col=pod_anchor_col, anchor_normalize='upper',
+            )
+            scritti = res['written']
+            if res['lost_anchors']:
+                logger.warning(
+                    f"[Orari Lettere] {len(res['lost_anchors'])} righe POD non più presenti, saltate."
+                )
+            if res['remapped']:
+                logger.warning(
+                    f"[Orari Lettere] {res['remapped']} righe rimappate (foglio riordinato)."
+                )
 
         # Genera anche il file Excel lettere
         file_excel = None

@@ -25,9 +25,10 @@ from moduli.shared import (
     get_worksheet, get_header_map, get_headers,
     find_row_by_eneltel, find_row_by_pod,
     build_pod_row_map, invalidate_values_cache,
+    safe_batch_update_by_name, force_refresh_headers,
     _imposta_appuntamento_su_filone, _rimuovi_appuntamento_da_filone,
     _api_error, _get_colonna_note, _get_username,
-    _trova_indice_multi,
+    _trova_indice_multi, _resolve_anchor_col_name,
     _callbacks, _sheets_retry, _gsheets_write_lock,
 )
 from moduli.distinte_manager import (
@@ -874,28 +875,29 @@ def sovrascrivi_valore_filone():
         if not col_name:
             return jsonify({'error': f'Campo "{campo}" non mappabile'}), 400
 
-        # Trova riga per POD
         row = find_row_by_pod(pod)
         if row is None:
             return jsonify({'error': f'POD {pod} non trovato'}), 404
 
-        # Aggiorna
-        ws = get_worksheet()
-        header_map = get_header_map()
-        if col_name in header_map:
-            col = header_map[col_name]
-            ws.update_cell(row, col, valore)
-            invalidate_values_cache()
+        # Scrittura SAFE: header refresh atomico + ancora POD per remap riga
+        pod_anchor_col = _resolve_anchor_col_name('pod') or 'POD'
+        res = safe_batch_update_by_name(
+            [{'row': row, 'col': col_name, 'value': valore, 'anchor': pod}],
+            anchor_col=pod_anchor_col, anchor_normalize='upper',
+        )
+        if not res['success']:
+            if res.get('invalid_cols'):
+                return jsonify({'error': f'Colonna {col_name} non trovata sul foglio'}), 400
+            if res.get('lost_anchors'):
+                return jsonify({'error': f'POD {pod} non più presente nel foglio'}), 404
+            return jsonify({'error': 'Scrittura non completata'}), 500
 
-            # Triggera sync
-            _callbacks['trigger_sync_after_edit']()
-
-            return jsonify({
-                'success': True,
-                'message': f'{campo} aggiornato per POD {pod}'
-            })
-        else:
-            return jsonify({'error': f'Colonna {col_name} non trovata nel filone'}), 400
+        _callbacks['trigger_sync_after_edit']()
+        return jsonify({
+            'success': True,
+            'message': f'{campo} aggiornato per POD {pod}',
+            'remapped': res['remapped'] > 0,
+        })
 
     except Exception as e:
         return _api_error(e, 'sovrascrittura valore filone')
@@ -908,6 +910,10 @@ def aggiorna_operatori_filone():
     Aggiorna in blocco la colonna Operatore sul filone usando la matricola
     operatore estratta dalle distinte.
     Body: {"contatori": [{"pod": "IT...", "matricola_operatore": "AG18966"}, ...]}
+
+    Anti-spanamento: usa safe_batch_update_by_name con ancora POD; se la
+    collega ha modificato struttura del foglio, la scrittura va comunque
+    nelle colonne corrette.
     """
     try:
         data = request.json
@@ -916,54 +922,53 @@ def aggiorna_operatori_filone():
         if not contatori:
             return jsonify({'error': 'Nessun contatore da aggiornare'}), 400
 
-        ws = get_worksheet()
+        # Trova nome colonna Operatore
         header_map = get_header_map()
-
-        # Trova la colonna Operatore
-        col_operatore = None
+        col_operatore_name = None
         for col_name in ['Operatore', 'OPERATORE', 'operatore']:
             if col_name in header_map:
-                col_operatore = header_map[col_name]
+                col_operatore_name = col_name
                 break
-
-        if col_operatore is None:
+        if col_operatore_name is None:
             return jsonify({'error': 'Colonna Operatore non trovata nel filone'}), 400
 
-        aggiornati = 0
-        errori = []
-        updates = []
-
-        # Leggi la mappa POD→riga una sola volta (1 chiamata API)
+        # Mappa POD→riga (build_pod_row_map ora rilegge gli header freschi)
         pod_map = build_pod_row_map()
 
+        items = []
+        errori = []
         for item in contatori:
             pod = (item.get('pod') or '').strip().upper()
             matricola = (item.get('matricola_operatore') or '').strip()
-
             if not pod or not matricola:
                 continue
-
             row = pod_map.get(pod)
             if row is None:
                 errori.append(f'POD {pod} non trovato')
                 continue
-
-            updates.append({
-                'range': gspread.utils.rowcol_to_a1(row, col_operatore),
-                'values': [[matricola]]
+            items.append({
+                'row': row,
+                'col': col_operatore_name,
+                'value': matricola,
+                'anchor': pod,
             })
-            aggiornati += 1
 
-        if updates:
-            _sheets_retry(ws.batch_update, updates)
-            invalidate_values_cache()
+        res = {'written': 0, 'remapped': 0, 'lost_anchors': [], 'invalid_cols': []}
+        if items:
+            pod_anchor_col = _resolve_anchor_col_name('pod') or 'POD'
+            res = safe_batch_update_by_name(
+                items, anchor_col=pod_anchor_col, anchor_normalize='upper',
+            )
+            for la in res['lost_anchors']:
+                errori.append(f"POD {la['anchor']} non più nel foglio")
             _callbacks['trigger_sync_after_edit']()
 
         return jsonify({
             'success': True,
-            'aggiornati': aggiornati,
+            'aggiornati': res['written'],
+            'remapped': res['remapped'],
             'errori': errori,
-            'message': f'Operatore aggiornato per {aggiornati} contatori'
+            'message': f"Operatore aggiornato per {res['written']} contatori"
                        + (f' ({len(errori)} errori)' if errori else '')
         })
 
@@ -977,6 +982,11 @@ def salva_nota_distinte():
     """
     Salva una nota nel campo note del filone.
     Concatena con // se c'è già qualcosa.
+
+    Anti-spanamento: la lettura della nota corrente E la scrittura della
+    nuova avvengono nello stesso blocco lockato con header FRESCHI, così
+    indice colonna è sempre quello attuale e (via ancora POD) la riga è
+    quella giusta.
     """
     try:
         data = request.json
@@ -987,32 +997,34 @@ def salva_nota_distinte():
         if not pod:
             return jsonify({'error': 'POD mancante'}), 400
 
-        # Trova riga per POD
-        row = find_row_by_pod(pod)
-        if row is None:
-            return jsonify({'error': f'POD {pod} non trovato'}), 404
-
-        ws = get_worksheet()
-        header_map = get_header_map()
-
-        # Colonna note (cerca dinamicamente)
-        col_note = _get_colonna_note()
-
-        if col_note not in header_map:
-            return jsonify({'error': f'Colonna {col_note} non trovata'}), 400
-
-        col = header_map[col_note]
-
-        # Sezione critica: lettura-modifica-scrittura
+        nuova_nota = ''
         with _gsheets_write_lock:
-            # Leggi nota esistente
-            nota_attuale = ws.cell(row, col).value or ''
+            header_map = force_refresh_headers()
+            col_note = _get_colonna_note()
+            if col_note not in header_map:
+                return jsonify({'error': f'Colonna {col_note} non trovata'}), 400
+
+            # Risolvi POD anchor su header freschi e trova la riga.
+            pod_anchor_col = _resolve_anchor_col_name('pod')
+            if pod_anchor_col is None:
+                return jsonify({'error': 'Colonna POD non trovata'}), 400
+            ws = get_worksheet()
+            pod_col_idx = header_map[pod_anchor_col]
+            pod_values = _sheets_retry(ws.col_values, pod_col_idx)
+            row = None
+            for i, v in enumerate(pod_values[1:], start=2):
+                if str(v).strip().upper() == pod:
+                    row = i
+                    break
+            if row is None:
+                return jsonify({'error': f'POD {pod} non trovato'}), 404
+
+            col = header_map[col_note]
+            nota_attuale = _sheets_retry(ws.cell, row, col).value or ''
 
             if sovrascrivere:
-                # Sovrascrive completamente (il client gestisce già la concatenazione)
                 nuova_nota = nota
             else:
-                # Logica legacy: concatena
                 if not nota:
                     nuova_nota = nota_attuale
                 elif not nota_attuale:
@@ -1023,8 +1035,7 @@ def salva_nota_distinte():
                     else:
                         nuova_nota = nota_attuale
 
-            # Aggiorna
-            ws.update_cell(row, col, nuova_nota)
+            _sheets_retry(ws.update_cell, row, col, nuova_nota)
             invalidate_values_cache()
 
         return jsonify({
@@ -1042,6 +1053,9 @@ def strikethrough_telefono():
     """
     Applica o rimuove il barrato (strikethrough) sulla cella telefono nel filone.
     Body: {"pod": "IT...", "strikethrough": true/false}
+
+    Anti-spanamento: risolve sia la colonna TELEFONO sia la riga (via ancora
+    POD) con header freschi sotto write-lock.
     """
     try:
         data = request.json
@@ -1051,41 +1065,44 @@ def strikethrough_telefono():
         if not pod:
             return jsonify({'error': 'POD mancante'}), 400
 
-        row = find_row_by_pod(pod)
-        if row is None:
-            return jsonify({'error': f'POD {pod} non trovato'}), 404
+        cell_ref = ''
+        with _gsheets_write_lock:
+            header_map = force_refresh_headers()
 
-        ws = get_worksheet()
-        header_map = get_header_map()
-
-        # Trova colonna TELEFONO
-        col_tel = None
-        for col_name in ['TELEFONO', 'Telefono', 'telefono', 'TEL', 'Tel', 'tel', 'PHONE', 'Phone']:
-            if col_name in header_map:
-                col_tel = header_map[col_name]
-                break
-
-        if col_tel is None:
-            # Cerca in modo case-insensitive
-            for h, idx in header_map.items():
-                if h.strip().lower() in ['telefono', 'tel', 'phone']:
-                    col_tel = idx
+            col_tel = None
+            for col_name in ['TELEFONO', 'Telefono', 'telefono', 'TEL', 'Tel', 'tel', 'PHONE', 'Phone']:
+                if col_name in header_map:
+                    col_tel = header_map[col_name]
                     break
+            if col_tel is None:
+                for h, idx in header_map.items():
+                    if h.strip().lower() in ['telefono', 'tel', 'phone']:
+                        col_tel = idx
+                        break
+            if col_tel is None:
+                logger.warning(f"[DISTINTE] Colonna TELEFONO non trovata. Headers disponibili: {list(header_map.keys())}")
+                return jsonify({'error': 'Colonna TELEFONO non trovata'}), 400
 
-        if col_tel is None:
-            logger.warning(f"[DISTINTE] Colonna TELEFONO non trovata. Headers disponibili: {list(header_map.keys())}")
-            return jsonify({'error': 'Colonna TELEFONO non trovata'}), 400
+            pod_anchor_col = _resolve_anchor_col_name('pod')
+            if pod_anchor_col is None:
+                return jsonify({'error': 'Colonna POD non trovata'}), 400
+            ws = get_worksheet()
+            pod_col_idx = header_map[pod_anchor_col]
+            pod_values = _sheets_retry(ws.col_values, pod_col_idx)
+            row = None
+            for i, v in enumerate(pod_values[1:], start=2):
+                if str(v).strip().upper() == pod:
+                    row = i
+                    break
+            if row is None:
+                return jsonify({'error': f'POD {pod} non trovato'}), 404
 
-        # Calcola riferimento cella A1
-        col_letter = gspread.utils.rowcol_to_a1(1, col_tel)[:-1]
-        cell_ref = f"{col_letter}{row}"
+            col_letter = gspread.utils.rowcol_to_a1(1, col_tel)[:-1]
+            cell_ref = f"{col_letter}{row}"
 
-        # Applica formattazione strikethrough (con retry per evitare fallimenti da rate-limit)
-        _sheets_retry(ws.format, cell_ref, {
-            'textFormat': {
-                'strikethrough': barrato
-            }
-        })
+            _sheets_retry(ws.format, cell_ref, {
+                'textFormat': {'strikethrough': barrato}
+            })
 
         logger.info(f"[DISTINTE] {'Barrato' if barrato else 'Rimosso barrato'} telefono per POD {pod} (cella {cell_ref})")
 
@@ -1106,6 +1123,10 @@ def segna_numero_errato():
     - Aggiunge " ERRATO" al valore esistente
     - Applica formattazione barrata (strikethrough)
     Body: {"pod": "IT..."}
+
+    Anti-spanamento: lettura+scrittura della cella telefono dentro lo stesso
+    write-lock con header freschi e ancora POD, così non scrive in colonne
+    sbagliate se la collega ha modificato il foglio.
     """
     try:
         data = request.json
@@ -1114,46 +1135,53 @@ def segna_numero_errato():
         if not pod:
             return jsonify({'error': 'POD mancante'}), 400
 
-        row = find_row_by_pod(pod)
-        if row is None:
-            return jsonify({'error': f'POD {pod} non trovato'}), 404
+        cell_ref = ''
+        with _gsheets_write_lock:
+            header_map = force_refresh_headers()
 
-        ws = get_worksheet()
-        header_map = get_header_map()
-
-        # Trova colonna TELEFONO
-        col_tel = None
-        for col_name in ['TELEFONO', 'Telefono', 'telefono', 'TEL', 'Tel', 'tel']:
-            if col_name in header_map:
-                col_tel = header_map[col_name]
-                break
-        if col_tel is None:
-            for h, idx in header_map.items():
-                if h.strip().lower() in ['telefono', 'tel']:
-                    col_tel = idx
+            # Trova nome colonna TELEFONO
+            col_tel_name = None
+            for col_name in ['TELEFONO', 'Telefono', 'telefono', 'TEL', 'Tel', 'tel']:
+                if col_name in header_map:
+                    col_tel_name = col_name
                     break
+            if col_tel_name is None:
+                for h in header_map:
+                    if h.strip().lower() in ['telefono', 'tel']:
+                        col_tel_name = h
+                        break
+            if col_tel_name is None:
+                logger.warning(f"[DISTINTE] Colonna TELEFONO non trovata. Headers: {list(header_map.keys())}")
+                return jsonify({'error': 'Colonna TELEFONO non trovata'}), 400
 
-        if col_tel is None:
-            logger.warning(f"[DISTINTE] Colonna TELEFONO non trovata. Headers: {list(header_map.keys())}")
-            return jsonify({'error': 'Colonna TELEFONO non trovata'}), 400
+            # Trova riga via POD con header freschi
+            pod_anchor_col = _resolve_anchor_col_name('pod')
+            if pod_anchor_col is None:
+                return jsonify({'error': 'Colonna POD non trovata'}), 400
+            ws = get_worksheet()
+            pod_col_idx = header_map[pod_anchor_col]
+            pod_values = _sheets_retry(ws.col_values, pod_col_idx)
+            row = None
+            for i, v in enumerate(pod_values[1:], start=2):
+                if str(v).strip().upper() == pod:
+                    row = i
+                    break
+            if row is None:
+                return jsonify({'error': f'POD {pod} non trovato'}), 404
 
-        # Leggi valore attuale
-        col_letter = gspread.utils.rowcol_to_a1(1, col_tel)[:-1]
-        cell_ref = f"{col_letter}{row}"
-        valore_attuale = str(ws.acell(cell_ref).value or '').strip()
+            col_tel = header_map[col_tel_name]
+            col_letter = gspread.utils.rowcol_to_a1(1, col_tel)[:-1]
+            cell_ref = f"{col_letter}{row}"
 
-        # Aggiungi " ERRATO" se non già presente
-        if 'ERRATO' not in valore_attuale.upper():
-            nuovo_valore = f"{valore_attuale} ERRATO" if valore_attuale else "ERRATO"
-            _sheets_retry(ws.update_acell, cell_ref, nuovo_valore)
-            invalidate_values_cache()
+            valore_attuale = str(_sheets_retry(ws.acell, cell_ref).value or '').strip()
+            if 'ERRATO' not in valore_attuale.upper():
+                nuovo_valore = f"{valore_attuale} ERRATO" if valore_attuale else "ERRATO"
+                _sheets_retry(ws.update_acell, cell_ref, nuovo_valore)
+                invalidate_values_cache()
 
-        # Applica formattazione strikethrough (con retry per evitare fallimenti da rate-limit)
-        _sheets_retry(ws.format, cell_ref, {
-            'textFormat': {
-                'strikethrough': True
-            }
-        })
+            _sheets_retry(ws.format, cell_ref, {
+                'textFormat': {'strikethrough': True}
+            })
 
         logger.info(f"[DISTINTE] Numero segnato come ERRATO per POD {pod} (cella {cell_ref})")
 
@@ -1247,33 +1275,32 @@ def aggiorna_data_distinte():
 
         if not pod:
             return jsonify({'error': 'POD mancante'}), 400
-
         if not nuova_data:
             return jsonify({'error': 'Data richiesta'}), 400
 
-        # Determina colonna data in base alla provincia
         col_data = 'DATA PIAN' if PROVINCIA_ATTIVA == 'TORINO' else 'Data_pianificata'
 
         row = find_row_by_pod(pod)
         if row is None:
             return jsonify({'error': f'POD {pod} non trovato'}), 404
 
-        ws = get_worksheet()
-        header_map = get_header_map()
+        pod_anchor_col = _resolve_anchor_col_name('pod') or 'POD'
+        res = safe_batch_update_by_name(
+            [{'row': row, 'col': col_data, 'value': nuova_data, 'anchor': pod}],
+            anchor_col=pod_anchor_col, anchor_normalize='upper',
+        )
+        if not res['success']:
+            if res.get('invalid_cols'):
+                return jsonify({'error': f'Colonna {col_data} non trovata sul foglio'}), 400
+            if res.get('lost_anchors'):
+                return jsonify({'error': f'POD {pod} non più presente nel foglio'}), 404
+            return jsonify({'error': 'Scrittura non completata'}), 500
 
-        if col_data not in header_map:
-            return jsonify({'error': f'Colonna {col_data} non trovata'}), 400
-
-        col = header_map[col_data]
-        ws.update_cell(row, col, nuova_data)
-        invalidate_values_cache()
-
-        # Triggera sync immediato per rigenerare i JSON
         _callbacks['trigger_sync_after_edit']()
-
         return jsonify({
             'success': True,
-            'message': f'Data aggiornata: {nuova_data}'
+            'message': f'Data aggiornata: {nuova_data}',
+            'remapped': res['remapped'] > 0,
         })
 
     except Exception as e:
@@ -1292,7 +1319,6 @@ def salva_telefono_filone():
         data = request.json
         pod = data.get('pod', '').strip().upper()
         telefono = data.get('telefono', '').strip()
-        fonte = data.get('fonte', '').strip()
 
         if not pod:
             return jsonify({'error': 'POD mancante'}), 400
@@ -1301,32 +1327,31 @@ def salva_telefono_filone():
         if row is None:
             return jsonify({'error': f'POD {pod} non trovato'}), 404
 
-        ws = get_worksheet()
+        # Trova nome canonico colonna TELEFONO sul foglio attuale
         header_map = get_header_map()
-
-        # Trova colonna TELEFONO
-        col_tel = None
+        col_tel_name = None
         for col_name in ['TELEFONO', 'Telefono', 'telefono', 'TEL', 'Tel']:
             if col_name in header_map:
-                col_tel = header_map[col_name]
+                col_tel_name = col_name
                 break
-
-        if col_tel is None:
+        if col_tel_name is None:
             return jsonify({'error': 'Colonna TELEFONO non trovata nel filone'}), 400
 
-        # Prepara valore da salvare
-        if not telefono or telefono.lower() == 'non trovato':
-            valore = 'non trovato'
-        else:
-            valore = telefono
+        valore = 'non trovato' if (not telefono or telefono.lower() == 'non trovato') else telefono
 
-        # Salva nel filone
-        ws.update_cell(row, col_tel, valore)
-        invalidate_values_cache()
+        pod_anchor_col = _resolve_anchor_col_name('pod') or 'POD'
+        res = safe_batch_update_by_name(
+            [{'row': row, 'col': col_tel_name, 'value': valore, 'anchor': pod}],
+            anchor_col=pod_anchor_col, anchor_normalize='upper',
+        )
+        if not res['success']:
+            if res.get('invalid_cols'):
+                return jsonify({'error': 'Colonna TELEFONO non trovata sul foglio'}), 400
+            if res.get('lost_anchors'):
+                return jsonify({'error': f'POD {pod} non più presente nel foglio'}), 404
+            return jsonify({'error': 'Scrittura non completata'}), 500
 
-        # Triggera sync per aggiornare i JSON
         _callbacks['trigger_sync_after_edit']()
-
         return jsonify({
             'success': True,
             'telefono': valore,
@@ -1356,26 +1381,28 @@ def salva_email_filone():
         if row is None:
             return jsonify({'error': f'POD {pod} non trovato'}), 404
 
-        ws = get_worksheet()
         header_map = get_header_map()
-
-        # Trova colonna EMAIL
-        col_email = None
+        col_email_name = None
         for col_name in ['email', 'EMAIL', 'Email', 'E-mail', 'e-mail', 'Mail', 'MAIL']:
             if col_name in header_map:
-                col_email = header_map[col_name]
+                col_email_name = col_name
                 break
-
-        if col_email is None:
+        if col_email_name is None:
             return jsonify({'error': 'Colonna EMAIL non trovata nel filone'}), 400
 
-        # Salva nel filone
-        ws.update_cell(row, col_email, email)
-        invalidate_values_cache()
+        pod_anchor_col = _resolve_anchor_col_name('pod') or 'POD'
+        res = safe_batch_update_by_name(
+            [{'row': row, 'col': col_email_name, 'value': email, 'anchor': pod}],
+            anchor_col=pod_anchor_col, anchor_normalize='upper',
+        )
+        if not res['success']:
+            if res.get('invalid_cols'):
+                return jsonify({'error': 'Colonna EMAIL non trovata sul foglio'}), 400
+            if res.get('lost_anchors'):
+                return jsonify({'error': f'POD {pod} non più presente nel foglio'}), 404
+            return jsonify({'error': 'Scrittura non completata'}), 500
 
-        # Triggera sync per aggiornare i JSON
         _callbacks['trigger_sync_after_edit']()
-
         return jsonify({
             'success': True,
             'email': email,

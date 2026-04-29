@@ -486,6 +486,26 @@ def safe_batch_update_by_name(items, *, anchor_col=None, anchor_normalize='upper
                 _sheets_retry(ws.batch_update, chunk)
                 n_written += len(chunk)
 
+        # 5. Shadow-mirror sul DB locale (Fase 1): registra in audit + filone
+        # le scritture appena andate a buon fine. Errori assorbiti.
+        if gspread_updates:
+            try:
+                from . import db as _db  # late import: evita cicli
+                anchor_keys_lost = {(la.get('row'), la.get('col')) for la in lost_anchors}
+                effective_items = [
+                    it for it in items
+                    if it.get('col') not in invalid_cols
+                    and (it.get('row'), it.get('col')) not in anchor_keys_lost
+                ]
+                _db.shadow_record_batch(
+                    effective_items,
+                    anchor_col=anchor_col,
+                    user=_safe_username(),
+                    origin='safe_batch_update_by_name',
+                )
+            except Exception as _e:
+                logger.warning(f"[shadow] hook safe_batch_update_by_name fallito (assorbito): {_e}")
+
     invalidate_values_cache()
 
     success = (not invalid_cols) and (not lost_anchors)
@@ -580,6 +600,15 @@ def _get_username():
     if isinstance(user, dict):
         return user.get('username', 'sconosciuto')
     return user or 'sconosciuto'
+
+
+def _safe_username():
+    """Variante che non lancia eccezioni se chiamata fuori dal contesto Flask
+    (es. dai worker daemon, dai test, dai tools CLI)."""
+    try:
+        return _get_username()
+    except Exception:
+        return None
 
 
 # ============================================================================
@@ -814,6 +843,26 @@ def _imposta_appuntamento_su_filone(row, orario, data_app='', note_extra='',
 
         nuova_nota = f"{nota_app} // {nota_attuale}" if nota_attuale else nota_app
         ws.update_cell(row, col, nuova_nota)
+
+        # Shadow-mirror sul DB locale (Fase 1)
+        try:
+            from . import db as _db
+            ek = eneltel_override
+            if not ek:
+                cd = _callbacks['extract_contatore_data'](row)
+                ek = cd.get('eneltel') or cd.get('Eneltel') or ''
+            if not ek and pod_override:
+                ek = _db.find_eneltel_by_pod(pod_override)
+            if not ek:
+                ek = _db.find_eneltel_by_sheets_row(row)
+            if ek:
+                _db.shadow_record_single(
+                    ek, {col_note: nuova_nota},
+                    user=_safe_username(),
+                    origin='_imposta_appuntamento_su_filone',
+                )
+        except Exception as _e:
+            logger.warning(f"[shadow] hook _imposta_appuntamento fallito: {_e}")
     invalidate_values_cache()
 
     # Auto-crea promemoria Appuntamento
@@ -876,6 +925,22 @@ def _rimuovi_appuntamento_da_filone(row, nota_corrente=None):
         nuova_nota = re.sub(r'\s*//\s*', ' // ', nuova_nota).strip(' /|-')
         nuova_nota = re.sub(r'^//\s*|\s*//\s*$', '', nuova_nota).strip()
         ws.update_cell(row, col, nuova_nota)
+
+        # Shadow-mirror sul DB locale (Fase 1)
+        try:
+            from . import db as _db
+            cd = _callbacks['extract_contatore_data'](row)
+            ek = cd.get('eneltel') or cd.get('Eneltel') or ''
+            if not ek:
+                ek = _db.find_eneltel_by_sheets_row(row)
+            if ek:
+                _db.shadow_record_single(
+                    ek, {col_note: nuova_nota},
+                    user=_safe_username(),
+                    origin='_rimuovi_appuntamento_da_filone',
+                )
+        except Exception as _e:
+            logger.warning(f"[shadow] hook _rimuovi_appuntamento fallito: {_e}")
     invalidate_values_cache()
 
     _callbacks['trigger_sync_after_edit']()

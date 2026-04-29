@@ -1226,6 +1226,47 @@ def api_admin_set_role(username):
     return jsonify({'success': False, 'message': msg}), 400
 
 
+@app.route('/api/admin/db-stats', methods=['GET'])
+@admin_required
+def api_admin_db_stats():
+    """Statistiche del DB locale SQLite (Fase 1+ refactor sync Sheets)."""
+    try:
+        from moduli import db as _db
+        return jsonify({
+            'success': True,
+            'use_db_backend': USE_DB_BACKEND,
+            'stats': _db.stats(),
+            'integrity': _db.integrity_check(),
+        })
+    except Exception as e:
+        logger.exception('[admin] errore /api/admin/db-stats')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/admin/db-pending', methods=['GET'])
+@admin_required
+def api_admin_db_pending():
+    """Lista pending_writes (in volo o quarantined) per ispezione."""
+    try:
+        from moduli import db as _db
+        conn = _db.get_conn()
+        state_filter = request.args.get('state', 'pending')
+        limit = min(int(request.args.get('limit', 100)), 1000)
+        rows = conn.execute(
+            'SELECT * FROM pending_writes WHERE state=? ORDER BY id DESC LIMIT ?',
+            (state_filter, limit),
+        ).fetchall()
+        return jsonify({
+            'success': True,
+            'state': state_filter,
+            'count': len(rows),
+            'pending': [dict(r) for r in rows],
+        })
+    except Exception as e:
+        logger.exception('[admin] errore /api/admin/db-pending')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 # File statici dalla cartella data/
 @app.route('/data/<path:filename>')
 @login_required
@@ -1311,7 +1352,8 @@ from config import (
     FILE_CACHE_DISTANZE,
     FILE_CACHE_HASH,
     FILE_MAPPA,
-    INTERVALLO_SYNC_SECONDI
+    INTERVALLO_SYNC_SECONDI,
+    USE_DB_BACKEND,
 )
 
 _sync_running = False
@@ -1322,6 +1364,23 @@ _sync_needed = threading.Event()   # Segnala che serve un sync ASAP (dopo modifi
 # Cache risultati ultimo sync riuscito (per light sync su modifiche cosmetiche)
 _last_report = None
 _last_risultato_zone = None
+
+
+def _shadow_db_pull():
+    """Aggiorna il DB locale leggendo da Sheets (Fase 1 shadow).
+
+    Idempotente, non bloccante: errori qui non devono mai bloccare il sync
+    principale o sse_notify. In modalità 'off' è un no-op.
+    """
+    if USE_DB_BACKEND == 'off':
+        return
+    try:
+        from moduli import sync_engine as _se
+        res = _se.pull_once()
+        if res.get('changed') or res.get('new') or res.get('conflicts') or res.get('orphans'):
+            logger.info(f"[DB-{USE_DB_BACKEND}] pull: {res}")
+    except Exception as e:
+        logger.warning(f"[DB-{USE_DB_BACKEND}] pull fallito (non bloccante): {e}")
 
 
 def _do_sincronizza_dati():
@@ -1354,6 +1413,9 @@ def _do_sincronizza_dati():
         if not dati_sono_cambiati():
             elapsed = time_module.time() - start_loop
             logger.info(f"[SYNC] ⚡ Dati invariati, skip elaborazione ({elapsed:.1f}s)")
+            # Anche su no-change: pull_once aggiorna last_remote_pull_ts e
+            # riconcilia eventuali cambi locali pending arrivati nel frattempo.
+            _shadow_db_pull()
             sse_notify_all('sync_complete', {'source': 'no_changes'})
             return True
 
@@ -1367,6 +1429,7 @@ def _do_sincronizza_dati():
             elapsed = time_module.time() - start_loop
             logger.info(f"✅ Light sync completato in {elapsed:.1f}s")
 
+            _shadow_db_pull()
             sse_notify_all('sync_complete', {'source': 'light_sync'})
             return True
 
@@ -1400,17 +1463,21 @@ def _do_sincronizza_dati():
 
         elapsed = time_module.time() - start_loop
         logger.info(f"✅ Full sync completato in {elapsed:.1f}s")
-        
+
         # Backup periodico automatico (giornaliero, con pulizia mensile)
         try:
             from moduli.backup import backup_periodico_auto
             backup_periodico_auto()
         except Exception as e_backup:
             logger.warning(f"[BACKUP] ⚠️ Errore nel backup periodico: {e_backup}")
-        
+
+        # Sync DB locale (Fase 1 shadow): popola/aggiorna SQLite in parallelo
+        # al flusso principale. Errori qui NON devono bloccare il sync.
+        _shadow_db_pull()
+
         # Notifica tutti i client SSE che ci sono nuovi dati
         sse_notify_all('sync_complete', {'source': 'full_sync'})
-        
+
         return True
         
     except Exception as e:
@@ -1469,16 +1536,26 @@ def background_sync_loop():
 
 
 def avvia_sync_background():
-    """Avvia il thread di sincronizzazione in background."""
+    """Avvia il thread di sincronizzazione in background + worker DB locale."""
     global _sync_running, _sync_thread
-    
+
     if _sync_running:
         return
-    
+
     _sync_running = True
     _sync_thread = threading.Thread(target=background_sync_loop, daemon=True)
     _sync_thread.start()
     logger.info("[SYNC] ✅ Sync in background avviato")
+
+    # Avvia worker DB locale (drainer pending_writes → Sheets).
+    # In Fase 1 shadow è idle ma utile averlo già running per testing /
+    # eventuali pending_writes inseriti manualmente.
+    if USE_DB_BACKEND != 'off':
+        try:
+            from moduli import sync_engine as _se
+            _se.start_workers()
+        except Exception as e:
+            logger.warning(f"[DB] start_workers fallito (non bloccante): {e}")
 
 
 def trigger_sync_after_edit():

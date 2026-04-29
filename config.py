@@ -353,6 +353,34 @@ FILE_CACHE_HASH = os.path.join('cache', f'cache_hash_{PROVINCIA_ATTIVA.lower()}.
 # --- CONFIGURAZIONE LOOP ---
 INTERVALLO_SYNC_SECONDI = 180  # 3 minuti - check periodico per modifiche sul foglio
 
+# --- CONFIGURAZIONE DB LOCALE (SQLite) ---
+# Vedi /root/.claude/plans/bisognerebbe-ripensare-il-sistema-warm-moonbeam.md
+# Il DB locale è la fonte di verità lavorativa: le route scrivono qui e un
+# worker asincrono propaga le modifiche su Google Sheets.
+DB_PATH = os.path.join('data', PROVINCIA_ATTIVA.lower(), 'state.db')
+
+# Modalità di funzionamento del DB:
+#   'shadow'  → DB popolato in parallelo, ma scritture e letture passano dal flusso attuale
+#               (Fase 1 della migrazione - validazione)
+#   'primary' → DB è la fonte di verità: route → DB → drainer → Sheets
+#               (Fase 2 - swap)
+#   'off'     → DB disabilitato (rollback di emergenza)
+USE_DB_BACKEND = os.environ.get('USE_DB_BACKEND', 'shadow').lower()
+if USE_DB_BACKEND not in ('shadow', 'primary', 'off'):
+    print(f"⚠️  USE_DB_BACKEND='{USE_DB_BACKEND}' non valido, fallback a 'shadow'")
+    USE_DB_BACKEND = 'shadow'
+
+# Worker asincrono che drena pending_writes verso Sheets
+DRAIN_INTERVAL_SECONDI = 10
+DRAIN_BATCH_SIZE = 400  # max celle per chiamata batch_update (limite Sheets ~500)
+DRAIN_THROTTLE_SECONDI = 2  # min interval tra due batch_update (rate-limit Sheets)
+
+# Policy per conflitti rilevati durante il pull
+# 'local_wins' → la modifica locale pending sovrascriverà il valore remoto (default)
+# 'remote_wins'→ il valore remoto viene applicato e il pending viene scartato (audit)
+# 'manual'    → blocca la riga finché un admin non risolve via UI
+CONFLICT_POLICY = 'local_wins'
+
 
 
 # ============================================================================

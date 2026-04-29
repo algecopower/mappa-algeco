@@ -1036,6 +1036,19 @@ def salva_nota_distinte():
                         nuova_nota = nota_attuale
 
             _sheets_retry(ws.update_cell, row, col, nuova_nota)
+
+            # Shadow-mirror sul DB locale (Fase 1)
+            try:
+                from moduli import db as _db
+                ek = _db.find_eneltel_by_pod(pod)
+                if ek:
+                    _db.shadow_record_single(
+                        ek, {col_note: nuova_nota},
+                        origin='distinte_salva_nota',
+                    )
+            except Exception as _shadow_err:
+                logger.warning(f"[shadow] hook distinte/salva-nota fallito: {_shadow_err}")
+
             invalidate_values_cache()
 
         return jsonify({

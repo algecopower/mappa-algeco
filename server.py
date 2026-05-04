@@ -1560,12 +1560,29 @@ def avvia_sync_background():
 
 def trigger_sync_after_edit():
     """Triggera un sync il prima possibile dopo una modifica utente.
-    
-    Non blocca: segnala al background loop di risvegliarsi e fare sync.
-    Se un sync è già in corso, verrà eseguito un nuovo sync subito dopo.
-    Più modifiche ravvicinate vengono coalizzate in un singolo sync.
+
+    In primary mode (Fase 2), prima di risvegliare il sync_loop completo
+    proviamo una "patch in-place" di mappa_data.json: se la modifica utente
+    riguarda SOLO campi cosmetici (email, telefono, nominativo, indirizzo,
+    posizione_mis, ecc.) non c'è motivo di ricalcolare percorsi/zone/HTML.
+    Aggiorniamo direttamente il JSON sul disco (~50ms) e inviamo subito SSE
+    'sync_complete' al frontend.
+
+    Per cambi STRUTTURALI (data, operatore, lat/lon, comune, note APP, esito)
+    si va sul flusso classico: SSE 'data_changing' + wake del background loop.
     """
-    # Notifica immediata ai client: aggiornamento in arrivo
+    if USE_DB_BACKEND == 'primary':
+        try:
+            from moduli.mappa_data_patcher import try_patch_inplace
+            if try_patch_inplace():
+                # Patch riuscita: niente full sync, niente flicker UI
+                sse_notify_all('sync_complete', {'source': 'inplace_patch'})
+                logger.info("[SYNC] ⚡ Patch in-place applicata (no full sync)")
+                return
+        except Exception as e:
+            logger.warning(f"[SYNC] patch in-place fallita ({e}), fallback al sync_loop")
+
+    # Path classico: notifica e wake del background loop
     sse_notify_all('data_changing', {'status': 'sync_started'})
     _sync_needed.set()
     logger.info("[SYNC] ⚡ Sync richiesto dopo modifica")

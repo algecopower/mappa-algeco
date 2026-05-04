@@ -61,8 +61,9 @@ def pull_once(values=None):
     t0 = time.time()
 
     if values is None:
-        ws = shared.get_worksheet()
-        values = shared._sheets_retry(ws.get_all_values)
+        # Usa la cache condivisa con data_loader (TTL 30s) per evitare il
+        # doppio download ad ogni sync che faceva esaurire la quota 429.
+        values = shared.get_all_values_cached(force=False)
 
     if not values or len(values) < 2:
         logger.warning("[pull] Foglio vuoto o senza header")
@@ -317,8 +318,8 @@ def drain_once(*, batch_size=None):
     ids = [p['id'] for p in pending]
     db.mark_pending_in_flight(ids)
 
-    # Risolvi nome ANCORA (Eneltel) sul foglio attuale
-    shared.force_refresh_headers()
+    # Risolvi nome ANCORA (Eneltel). safe_batch_update_by_name farà
+    # force_refresh_headers internamente; qui basta un nome standard.
     eneltel_col_name = shared._resolve_anchor_col_name('eneltel') or 'Eneltel'
 
     # Costruisci items per safe_batch_update_by_name. Una pending = un item.
@@ -359,10 +360,13 @@ def drain_once(*, batch_size=None):
     if not items:
         return {'drained': 0, 'quarantined': len(pending_without_row)}
 
-    # Esegui la scrittura tramite l'API canonica (riusa lock + anchor remap)
+    # Esegui la scrittura tramite l'API canonica (riusa lock + anchor remap).
+    # _force_sheets=True bypassa il branch primary: il drainer DEVE pushare
+    # su Sheets, non re-instradare al DB (sarebbe un loop infinito).
     try:
         res = shared.safe_batch_update_by_name(
             items, anchor_col=eneltel_col_name, anchor_normalize='lstrip0',
+            _force_sheets=True,
         )
     except Exception as e:
         logger.exception("[drain] safe_batch_update_by_name ha sollevato eccezione")

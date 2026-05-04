@@ -87,6 +87,80 @@ def _hash_raw_values(values):
     return hashlib.md5(data_str.encode()).hexdigest()
 
 
+def _apply_pending_to_values(values):
+    """Sovrascrive i valori grezzi del foglio con le pending del DB locale.
+
+    Solo in modalità 'primary' (Fase 2). Il drainer pusherà su Sheets entro
+    pochi secondi, ma intanto la UI deve vedere lo stato corretto.
+
+    Restituisce una nuova lista (non modifica `values` in-place).
+    """
+    try:
+        from . import db as _db
+    except ImportError:
+        return values
+    if not values or len(values) < 2:
+        return values
+
+    headers = values[0]
+    # Trova colonna eneltel + indice colonne CASE-INSENSITIVE
+    # (le pending possono essere state create con un case diverso da quello
+    # del foglio, vedi 'email' vs 'EMAIL').
+    internal_lookup = _db._build_internal_lookup()
+    eneltel_col_idx = None
+    col_name_to_idx = {}
+    for i, name in enumerate(headers):
+        if not name:
+            continue
+        col_name_to_idx[name.strip().lower()] = i
+        if internal_lookup.get(name.strip().lower()) == 'eneltel':
+            eneltel_col_idx = i
+    if eneltel_col_idx is None:
+        return values
+
+    # Carica tutte le pending in volo (stato pending o in_flight)
+    conn = _db.get_conn()
+    rows = conn.execute(
+        "SELECT eneltel_key, column_name, new_value FROM pending_writes "
+        "WHERE state IN ('pending','in_flight')"
+    ).fetchall()
+    if not rows:
+        return values
+
+    # Indicizza pending per eneltel_key
+    pending_by_ek = {}
+    for r in rows:
+        pending_by_ek.setdefault(r['eneltel_key'], {})[r['column_name']] = r['new_value']
+
+    # Costruisci una lista mutabile dei body rows
+    new_values = [list(headers)]
+    n_overrides = 0
+    for body_row in values[1:]:
+        body_row = list(body_row)
+        if eneltel_col_idx >= len(body_row):
+            new_values.append(body_row)
+            continue
+        ek = _db.normalize_eneltel(body_row[eneltel_col_idx])
+        overrides = pending_by_ek.get(ek)
+        if not overrides:
+            new_values.append(body_row)
+            continue
+        # Estendi la riga se più corta degli header
+        while len(body_row) < len(headers):
+            body_row.append('')
+        for col_name, new_val in overrides.items():
+            idx = col_name_to_idx.get(col_name.strip().lower())
+            if idx is None:
+                continue
+            body_row[idx] = '' if new_val is None else str(new_val)
+            n_overrides += 1
+        new_values.append(body_row)
+
+    if n_overrides:
+        logger.info(f"[primary-merge] applicati {n_overrides} valori da pending_writes al DataFrame")
+    return new_values
+
+
 def dati_sono_cambiati():
     """Ritorna True se l'ultimo caricamento ha trovato dati modificati."""
     return _dl_data_changed
@@ -108,20 +182,26 @@ def _rileva_cambiamento_strutturale(df_old, df_new):
     (nuovo contatore, data spostata, operatore cambiato, coordinate mosse, ecc.).
     """
     if df_old is None or df_new is None:
+        logger.info(f"   🔧 Strutturale: df_old={df_old is not None} df_new={df_new is not None} (primo sync dopo restart o errore)")
         return True
 
     # Numero righe diverso = contatori aggiunti o rimossi
     if len(df_old) != len(df_new):
+        logger.info(f"   🔧 Strutturale: numero righe cambiato {len(df_old)} → {len(df_new)}")
         return True
 
     cols = [c for c in _COLONNE_STRUTTURALI if c in df_old.columns and c in df_new.columns]
     if not cols:
+        old_missing = [c for c in _COLONNE_STRUTTURALI if c not in df_old.columns]
+        new_missing = [c for c in _COLONNE_STRUTTURALI if c not in df_new.columns]
+        logger.info(f"   🔧 Strutturale: nessuna colonna strutturale comune. df_old manca {old_missing}, df_new manca {new_missing}")
         return True
 
     try:
         # Ordina per Eneltel_Key per confronto deterministico
         key = 'Eneltel_Key'
         if key not in cols:
+            logger.info(f"   🔧 Strutturale: 'Eneltel_Key' non presente in entrambi i df (cols={cols})")
             return True
 
         old_sorted = df_old[cols].sort_values(key).reset_index(drop=True)
@@ -131,7 +211,17 @@ def _rileva_cambiamento_strutturale(df_old, df_new):
         for col in cols:
             if not old_sorted[col].equals(new_sorted[col]):
                 diff_count = (old_sorted[col] != new_sorted[col]).sum()
-                logger.info(f"   🔧 Cambiamento strutturale: colonna '{col}' ({diff_count} righe diverse)")
+                # Log esempi di righe diverse per capire il pattern
+                try:
+                    diffs = old_sorted[col] != new_sorted[col]
+                    sample_idx = diffs[diffs].index[:3]
+                    sample = [
+                        f"key={old_sorted.loc[i, key]} old={old_sorted.loc[i, col]!r} new={new_sorted.loc[i, col]!r}"
+                        for i in sample_idx
+                    ]
+                except Exception:
+                    sample = []
+                logger.info(f"   🔧 Cambiamento strutturale: colonna '{col}' ({diff_count} righe diverse). Esempi: {sample}")
                 return True
 
         return False
@@ -147,6 +237,24 @@ def invalidate_data_cache():
         _dl_cached_df = None
         _dl_cached_raw_hash = None
         _dl_cache_timestamp = 0
+
+
+def mark_data_changed():
+    """Forza il prossimo `carica_dati_google_sheets` a riprocessare il DataFrame.
+
+    A differenza di `invalidate_data_cache()`, NON azzera `_dl_cached_df`:
+    serve a quel confronto che produce 'COSMETICO' vs 'STRUTTURALE'. Azzera
+    solo l'hash dei raw values, così il check `if raw_hash == _dl_cached_raw_hash`
+    fallisce e si va al processing → mappa_data.json viene rigenerato.
+
+    Usato in primary mode dopo ogni POST utente: anche se il drainer drena
+    velocemente e Sheets/raw_values "sembrano invariati" rispetto al
+    precedente snapshot (perché entrambi includono già il valore modificato),
+    vogliamo comunque rigenerare mappa_data.json.
+    """
+    global _dl_cached_raw_hash
+    with _dl_cache_lock:
+        _dl_cached_raw_hash = None
 
 
 def trova_colonna(df, nomi_possibili, default=None, chiave_mapping=None):
@@ -252,11 +360,46 @@ def carica_dati_google_sheets(force=False):
     # ================================================================
     # CONNESSIONE GOOGLE SHEETS
     # ================================================================
-    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    creds = ServiceAccountCredentials.from_json_keyfile_name(CREDENZIALI_JSON, scope)
-    client = gspread.authorize(creds)
-    sheet = client.open_by_key(ID_FOGLIO_GOOGLE).get_worksheet_by_id(GID_SCHEDA)
-    values = sheet.get_all_values()
+    # Usa la cache centralizzata di shared.get_all_values_cached (TTL 30s):
+    # così sync_engine.pull_once() riusa lo stesso dump invece di scaricare
+    # il foglio una seconda volta (doppia letture = quota 429).
+    #
+    # In primary mode (Fase 2) ignoriamo `force=True`: i valori utente vivono
+    # nel DB locale e vengono applicati in-memory da _apply_pending_to_values,
+    # quindi non c'è bisogno di forzare un download Sheets ad ogni POST utente.
+    # La cache TTL 30s scade da sola al sync periodico (180s).
+    effective_force = force
+    try:
+        from config import USE_DB_BACKEND as _USE_DB_PRE
+        if _USE_DB_PRE == 'primary':
+            effective_force = False
+    except ImportError:
+        pass
+
+    try:
+        from . import shared as _shared
+        values = _shared.get_all_values_cached(force=effective_force)
+    except Exception:
+        # Fallback al path legacy se shared non è disponibile
+        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+        creds = ServiceAccountCredentials.from_json_keyfile_name(CREDENZIALI_JSON, scope)
+        client = gspread.authorize(creds)
+        sheet = client.open_by_key(ID_FOGLIO_GOOGLE).get_worksheet_by_id(GID_SCHEDA)
+        values = sheet.get_all_values()
+
+    # ================================================================
+    # FASE 2: applica le pending_writes del DB locale al raw values.
+    # Le scritture utente vivono nel DB ma potrebbero NON essere ancora
+    # state pushate su Sheets dal drainer (~10-30s di ritardo). Per non
+    # mostrare uno stato vecchio in UI, sovrascriviamo i valori cella
+    # con quelli del DB prima del processing.
+    # ================================================================
+    try:
+        from config import USE_DB_BACKEND as _USE_DB
+    except ImportError:
+        _USE_DB = 'shadow'
+    if _USE_DB == 'primary':
+        values = _apply_pending_to_values(values)
 
     # ================================================================
     # HASH-BASED CHANGE DETECTION

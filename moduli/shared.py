@@ -104,12 +104,39 @@ def _reset_sheets_client():
 
 def invalidate_values_cache():
     """Invalida la cache dei valori del foglio (dopo scritture).
-    Invalida anche la cache del DataFrame processato in data_loader."""
+
+    In modalità 'primary' (Fase 2):
+      - Cache shared INVALIDATA → il prossimo `get_all_values_cached`
+        scaricherà Sheets fresh (dove il drainer ha appena pushato).
+      - `_dl_cached_df` NON invalidato → evita falso positivo "primo sync"
+        in `_rileva_cambiamento_strutturale` → resta light sync.
+      - `_dl_cached_raw_hash` azzerato → forza il sync a riprocessare il
+        DataFrame e rigenerare `mappa_data.json` anche se i raw values
+        risultassero "uguali" al precedente snapshot.
+
+    In modalità 'shadow'/'off' invalida tutto come da comportamento legacy.
+    """
+    try:
+        from config import USE_DB_BACKEND as _USE_DB
+    except ImportError:
+        _USE_DB = 'shadow'
+
     global _cached_all_values, _cached_all_values_ts
     with _values_cache_lock:
         _cached_all_values = None
         _cached_all_values_ts = 0
-    # Invalida anche la cache del DataFrame processato
+
+    if _USE_DB == 'primary':
+        # Forza riprocessing al prossimo sync senza invalidare il DataFrame
+        # (così il confronto strutturale resta affidabile).
+        try:
+            from .data_loader import mark_data_changed
+            mark_data_changed()
+        except ImportError:
+            pass
+        return
+
+    # Path SHADOW/OFF: invalidazione completa
     try:
         from .data_loader import invalidate_data_cache
         invalidate_data_cache()
@@ -341,9 +368,16 @@ def _resolve_anchor_col_name(anchor_type='pod'):
     return None
 
 
-def safe_batch_update_by_name(items, *, anchor_col=None, anchor_normalize='upper'):
+def safe_batch_update_by_name(items, *, anchor_col=None, anchor_normalize='upper',
+                              _force_sheets=False):
     """Esegue un batch_update VERIFICANDO atomicamente la mappa colonne e
     (opzionalmente) l'identità di ogni riga via "ancora" POD/Eneltel.
+
+    Note:
+        _force_sheets=True salta il branch primary (Fase 2) e scrive
+        direttamente su Sheets. È riservato al drainer del DB locale, che
+        DEVE pushare le pending su Sheets — se passasse dal branch primary
+        creerebbe un loop infinito (DB → drain → DB).
 
     Args:
         items: lista di dict, ciascuno con:
@@ -375,6 +409,23 @@ def safe_batch_update_by_name(items, *, anchor_col=None, anchor_normalize='upper
             'success': True, 'written': 0, 'skipped': 0, 'remapped': 0,
             'invalid_cols': [], 'lost_anchors': [],
         }
+
+    # ────────────────────────────────────────────────────────────────────────
+    # FASE 2: branch "primary" — DB-only.
+    # Non si scrive direttamente su Sheets: si registra la modifica nel DB
+    # locale (state='pending') e il drainer la pusherà su Sheets in background.
+    # Ritorna immediatamente alla route con success=True, latenza ~10ms.
+    # _force_sheets=True (drainer) bypassa il branch primary.
+    # ────────────────────────────────────────────────────────────────────────
+    if not _force_sheets:
+        try:
+            from config import USE_DB_BACKEND as _USE_DB
+        except ImportError:
+            _USE_DB = 'shadow'
+
+        if _USE_DB == 'primary':
+            return _route_to_db_primary(items, anchor_col=anchor_col,
+                                        anchor_normalize=anchor_normalize)
 
     invalid_cols = set()
     lost_anchors = []
@@ -516,6 +567,168 @@ def safe_batch_update_by_name(items, *, anchor_col=None, anchor_normalize='upper
         'remapped': n_remapped,
         'invalid_cols': sorted(invalid_cols),
         'lost_anchors': lost_anchors,
+    }
+
+
+def _route_to_db_primary(items, *, anchor_col=None, anchor_normalize='upper'):
+    """Branch FASE 2 di safe_batch_update_by_name.
+
+    Scrive solo nel DB locale. Risposta in ~10-50ms; il drainer asincrono
+    pusherà su Sheets entro pochi secondi.
+
+    DEDUP: il client invia spesso TUTTO il form (es. 9 campi) anche se
+    l'utente ne ha modificato 1 solo. Filtriamo qui le scritture cui valore
+    coincide con lo stato corrente (filone + pending in volo): evita scrivere
+    9 celle quando ne basta 1, riduce il carico sul drainer e impedisce
+    false detection di "cambio strutturale" lato data_loader.
+
+    Mantiene la stessa interfaccia di ritorno di safe_batch_update_by_name
+    così le route NON devono cambiare nulla. Le invalid_cols e lost_anchors
+    vengono rilevate al drain (non qui), e i pending corrispondenti finiranno
+    in stato 'quarantined' visibile via /api/admin/db-pending.
+    """
+    from . import db as _db
+
+    n_written = 0
+    n_skipped = 0
+    n_unchanged = 0  # dedup: stessi valori, niente da scrivere
+    by_eneltel = {}  # eneltel_key -> {col: value}
+    unresolved = 0
+
+    anchor_col_low = (anchor_col or '').lower()
+
+    # Mappa eneltel_key → stato corrente (filone + pending in volo). Lazy.
+    state_cache = {}
+
+    def _current_value(ek, col_name):
+        """Ritorna il valore "visibile" della cella: pending in volo se
+        esiste, altrimenti valore in filone (tipizzato o extra)."""
+        if ek not in state_cache:
+            state_cache[ek] = _build_current_state(ek)
+        return state_cache[ek].get(col_name, '')
+
+    def _build_current_state(ek):
+        """Carica filone + filone_extra + pending in volo per un eneltel."""
+        out = {}
+        conn = _db.get_conn()
+        # Filone tipizzato → mappa ad ogni column_name del foglio
+        local = conn.execute(
+            'SELECT * FROM filone WHERE eneltel_key=?', (ek,)
+        ).fetchone()
+        if local:
+            # Per ogni colonna nota, trova il nome foglio corrispondente
+            for cr in conn.execute(
+                'SELECT column_name, chiave_interna FROM column_registry'
+            ).fetchall():
+                chiave = cr['chiave_interna']
+                if chiave and chiave in _db.COLONNE_NOTE:
+                    out[cr['column_name']] = local[chiave] if chiave in local.keys() else None
+        # Filone extra
+        for r in conn.execute(
+            'SELECT column_name, value FROM filone_extra WHERE eneltel_key=?', (ek,)
+        ).fetchall():
+            out[r['column_name']] = r['value']
+        # Pending in volo (overlay) — quello che il client effettivamente vede
+        for r in conn.execute(
+            "SELECT column_name, new_value FROM pending_writes "
+            "WHERE eneltel_key=? AND state IN ('pending','in_flight')",
+            (ek,),
+        ).fetchall():
+            out[r['column_name']] = r['new_value']
+        return out
+
+    for it in items:
+        row = it.get('row')
+        col = it.get('col')
+        value = it.get('value')
+        if not col or row is None or row < 2:
+            n_skipped += 1
+            continue
+        anchor_val = it.get('anchor')
+
+        # Risolvi eneltel_key (PK del DB)
+        if anchor_col_low == 'eneltel' and anchor_val:
+            ek = _db.normalize_eneltel(anchor_val)
+        elif anchor_col_low == 'pod' and anchor_val:
+            ek = _db.find_eneltel_by_pod(anchor_val)
+        else:
+            ek = _db.find_eneltel_by_sheets_row(row)
+
+        if not ek:
+            unresolved += 1
+            n_skipped += 1
+            continue
+
+        # DEDUP: confronta col valore corrente "visibile". Nota: per
+        # confronto robusto trattiamo None come ''.
+        col_canonical = col
+        try:
+            col_canonical = _db.canonical_column_name(_db.get_conn(), col)
+        except Exception:
+            pass
+        new_str = '' if value is None else str(value)
+        cur_val = _current_value(ek, col_canonical)
+        cur_str = '' if cur_val is None else str(cur_val)
+        if new_str == cur_str:
+            n_unchanged += 1
+            continue
+
+        by_eneltel.setdefault(ek, {})[col] = value
+        n_written += 1
+
+    # Una record_local_change per riga (state='pending', drainer pusherà)
+    user = _safe_username()
+    for ek, fields in by_eneltel.items():
+        try:
+            _db.record_local_change(
+                ek, fields, user=user, origin='primary_route',
+                initial_state='pending',
+            )
+        except Exception as e:
+            logger.warning(f"[primary] record_local_change fallito per {ek}: {e}")
+            n_written -= len(fields)
+            n_skipped += len(fields)
+
+    # Risveglia il drainer per scrivere su Sheets ~ASAP
+    try:
+        from . import sync_engine as _se
+        _se.trigger_drain_now()
+    except Exception:
+        pass
+
+    # Forza il prossimo sync_loop a riprocessare il DataFrame e rigenerare
+    # mappa_data.json. Necessario perché c'è una race fra drainer e sync_loop:
+    # se il drainer drena prima del sync, le pending sono già 'done' e il
+    # raw_hash dei values fresh può coincidere con quello del sync precedente
+    # (entrambi con valore 'modificato'), causando uno skip e mappa_data.json
+    # rimasto al snapshot precedente.
+    if n_written > 0:
+        try:
+            from . import data_loader as _dl
+            _dl.mark_data_changed()
+        except Exception:
+            pass
+
+    if unresolved:
+        logger.warning(
+            f"[primary] {unresolved} item(s) con eneltel non risolto "
+            f"(anchor_col={anchor_col}). Saltati."
+        )
+    if n_unchanged:
+        logger.info(
+            f"[primary] dedup: {n_unchanged} item(s) già al valore "
+            f"corrente, no pending creata"
+        )
+
+    return {
+        'success': unresolved == 0,
+        'written': n_written,
+        'skipped': n_skipped,
+        'unchanged': n_unchanged,
+        'remapped': 0,  # n/a in primary mode (rimappatura avviene al drain)
+        'invalid_cols': [],
+        'lost_anchors': [],
+        'primary_routed': True,
     }
 
 
@@ -694,9 +907,18 @@ def verify_row_eneltel(row_num, expected_eneltel):
 def find_row_by_eneltel(eneltel):
     """Trova la riga corrispondente a un ENELTEL (1-based) o None.
 
-    Risolve la colonna ENELTEL con header FRESCHI (così la ricerca avviene
-    sempre nella colonna giusta anche se il foglio è stato ristrutturato).
+    In modalità 'primary' (Fase 2) legge il sheets_row dal DB locale → 0
+    chiamate Sheets. In modalità 'shadow'/'off' usa il path originale.
     """
+    try:
+        from config import USE_DB_BACKEND as _USE_DB
+    except ImportError:
+        _USE_DB = 'shadow'
+    if _USE_DB == 'primary':
+        from . import db as _db
+        local = _db.get_filone_row(eneltel)
+        return local.get('sheets_row') if local else None
+
     ws = get_worksheet()
     col_eneltel = _get_col_index('eneltel', fresh=True)
     if col_eneltel is None:
@@ -711,7 +933,23 @@ def find_row_by_eneltel(eneltel):
 
 
 def find_row_by_pod(pod):
-    """Trova la riga corrispondente a un POD (1-based) o None (con header freschi)."""
+    """Trova la riga corrispondente a un POD (1-based) o None.
+
+    In modalità 'primary' (Fase 2) legge il sheets_row dal DB locale → 0
+    chiamate Sheets.
+    """
+    try:
+        from config import USE_DB_BACKEND as _USE_DB
+    except ImportError:
+        _USE_DB = 'shadow'
+    if _USE_DB == 'primary':
+        from . import db as _db
+        ek = _db.find_eneltel_by_pod(pod)
+        if not ek:
+            return None
+        local = _db.get_filone_row(ek)
+        return local.get('sheets_row') if local else None
+
     ws = get_worksheet()
     col_pod = _get_col_index('pod', fresh=True)
     if col_pod is None:
@@ -811,17 +1049,190 @@ def register_callbacks(**kw):
     _callbacks.update(kw)
 
 
+def _resolve_eneltel_for_appuntamento(row, *, pod_override=None, eneltel_override=None):
+    """Risolve l'eneltel_key per una riga (usato dalle helper primary)."""
+    from . import db as _db
+    if eneltel_override:
+        return _db.normalize_eneltel(eneltel_override)
+    try:
+        cd = _callbacks['extract_contatore_data'](row)
+        ek = cd.get('eneltel') or cd.get('Eneltel') or ''
+        if ek:
+            return _db.normalize_eneltel(ek)
+    except Exception:
+        pass
+    if pod_override:
+        ek = _db.find_eneltel_by_pod(pod_override)
+        if ek:
+            return ek
+    return _db.find_eneltel_by_sheets_row(row)
+
+
+def _calcola_nuova_nota_app(nota_attuale, orario_app):
+    """Inserisce 'APP HH:MM' nella nota, rimuovendo eventuali APP precedenti.
+
+    Logica identica a quella di _imposta_appuntamento_su_filone (path Fase 1).
+    """
+    nota_app = f"APP {orario_app}"
+    if 'APP' in (nota_attuale or '').upper():
+        nota_attuale = re.sub(
+            r'APP\s*\d{1,2}[:.]\d{2}(?:\s*[-/]\s*\d{1,2}[:.]\d{2})?',
+            '', nota_attuale, flags=re.IGNORECASE
+        ).strip(' /|-')
+    return f"{nota_app} // {nota_attuale}" if nota_attuale else nota_app
+
+
+def _calcola_rimozione_app(nota_attuale):
+    """Rimuove 'APP HH:MM' dalla nota. Logica identica al path Fase 1."""
+    nuova = re.sub(
+        r'APP\s*\d{1,2}[:.]\d{2}(?:\s*[-/]\s*\d{1,2}[:.]\d{2})?',
+        '', nota_attuale or '', flags=re.IGNORECASE,
+    )
+    nuova = re.sub(r'\s*//\s*', ' // ', nuova).strip(' /|-')
+    nuova = re.sub(r'^//\s*|\s*//\s*$', '', nuova).strip()
+    return nuova
+
+
+def _imposta_appuntamento_db_primary(row, orario, nota_app, *, data_app='',
+                                     note_extra='', origine='contatore',
+                                     pod_override=None, eneltel_override=None,
+                                     nota_corrente=None):
+    """Variante FASE 2 di _imposta_appuntamento_su_filone — solo DB."""
+    from . import db as _db
+
+    ek = _resolve_eneltel_for_appuntamento(
+        row, pod_override=pod_override, eneltel_override=eneltel_override,
+    )
+    if not ek:
+        raise ValueError(f'Eneltel non risolto per riga {row}')
+
+    # Nota corrente: priorità a quella passata, altrimenti dal DB.
+    if nota_corrente is None:
+        local = _db.get_filone_row(ek) or {}
+        nota_corrente = local.get('note_appuntamento') or ''
+
+    # Risolvi nome colonna note dal column_registry / fallback
+    col_note = _get_colonna_note()  # questa accede a _header_map; in Fase 2
+    # potremmo voler bypassare get_worksheet, ma per ora lo lasciamo: header è
+    # cached e già affidabile.
+
+    nuova_nota = _calcola_nuova_nota_app(nota_corrente, orario)
+
+    _db.record_local_change(
+        ek, {col_note: nuova_nota},
+        user=_safe_username(),
+        origin=f'imposta_app_primary_{origine}',
+        initial_state='pending',
+    )
+
+    # Risveglia drainer
+    try:
+        from . import sync_engine as _se
+        _se.trigger_drain_now()
+    except Exception:
+        pass
+
+    # Auto-crea promemoria boxbeat (riusa logica esistente)
+    try:
+        contatore_data = _callbacks['extract_contatore_data'](row)
+        username = _safe_username() or 'sconosciuto'
+        from datetime import datetime
+        data_bb = data_app if data_app else (
+            contatore_data.get('data_pianificata', '')
+            or datetime.now().strftime('%Y-%m-%d')
+        )
+        pod_val = pod_override or contatore_data.get('pod', '')
+        eneltel_val = eneltel_override or ek
+
+        _callbacks['crea_promemoria_boxbeat'](
+            data_appuntamento=data_bb, ora_appuntamento=orario,
+            pod=pod_val, eneltel=eneltel_val,
+            nominativo=contatore_data.get('nominativo', ''),
+            via=contatore_data.get('via', ''),
+            civico=contatore_data.get('civico', ''),
+            comune=contatore_data.get('comune', ''),
+            note=note_extra,
+            provincia=PROVINCIA_ATTIVA,
+            creato_da=username, origine=origine,
+            data_pianificata=contatore_data.get('data_pianificata', ''),
+        )
+        _callbacks['registra_appuntamento_excel'](
+            data_appuntamento=data_bb, orario=orario,
+            pod=pod_val, eneltel=eneltel_val,
+            nominativo=contatore_data.get('nominativo', ''),
+            via=contatore_data.get('via', ''),
+            civico=contatore_data.get('civico', ''),
+            comune=contatore_data.get('comune', ''),
+            note=note_extra,
+            origine=origine,
+            data_pianificata=contatore_data.get('data_pianificata', ''),
+            creato_da=username, provincia=PROVINCIA_ATTIVA,
+        )
+        _callbacks['sse_notify_all']('calendario_update', {'azione': 'boxbeat_creato'})
+    except Exception as bb_err:
+        logger.error(f"[primary] auto-creazione promemoria fallita: {bb_err}")
+
+    _callbacks['trigger_sync_after_edit']()
+    return {'nota_app': nota_app, 'nuova_nota': nuova_nota}
+
+
+def _rimuovi_appuntamento_db_primary(row, *, nota_corrente=None):
+    """Variante FASE 2 di _rimuovi_appuntamento_da_filone — solo DB."""
+    from . import db as _db
+
+    ek = _resolve_eneltel_for_appuntamento(row)
+    if not ek:
+        raise ValueError(f'Eneltel non risolto per riga {row}')
+
+    if nota_corrente is None:
+        local = _db.get_filone_row(ek) or {}
+        nota_corrente = local.get('note_appuntamento') or ''
+
+    col_note = _get_colonna_note()
+    nuova_nota = _calcola_rimozione_app(nota_corrente)
+
+    _db.record_local_change(
+        ek, {col_note: nuova_nota},
+        user=_safe_username(),
+        origin='rimuovi_app_primary',
+        initial_state='pending',
+    )
+
+    try:
+        from . import sync_engine as _se
+        _se.trigger_drain_now()
+    except Exception:
+        pass
+
+    _callbacks['trigger_sync_after_edit']()
+    return {'nuova_nota': nuova_nota}
+
+
 def _imposta_appuntamento_su_filone(row, orario, data_app='', note_extra='',
                                      origine='contatore', pod_override=None,
                                      eneltel_override=None, nota_corrente=None):
     """Logica condivisa per impostare appuntamento su una riga del filone.
 
-    Sezione critica con header refresh ATOMICO: leggiamo nota corrente e
-    scriviamo la nuova nota usando lo stesso indice colonna (fresco) per
-    entrambe le operazioni, dentro lo stesso lock.
+    In modalità 'primary' (Fase 2): legge nota corrente dal DB locale,
+    calcola la nuova nota, scrive via record_local_change. Drainer pusha.
+    In modalità 'shadow' (Fase 1): path originale via ws.update_cell + hook
+    shadow al DB.
     """
     nuova_nota = ''
     nota_app = f"APP {orario}"
+
+    # Branch FASE 2: DB-only
+    try:
+        from config import USE_DB_BACKEND as _USE_DB
+    except ImportError:
+        _USE_DB = 'shadow'
+    if _USE_DB == 'primary':
+        return _imposta_appuntamento_db_primary(
+            row, orario, nota_app, data_app=data_app, note_extra=note_extra,
+            origine=origine, pod_override=pod_override,
+            eneltel_override=eneltel_override, nota_corrente=nota_corrente,
+        )
+
     with _gsheets_write_lock:
         # Refresh atomico — il nome colonna note può anche non essere cambiato,
         # ma vogliamo essere certi della sua POSIZIONE attuale.
@@ -902,12 +1313,17 @@ def _imposta_appuntamento_su_filone(row, orario, data_app='', note_extra='',
 
 
 def _rimuovi_appuntamento_da_filone(row, nota_corrente=None):
-    """Logica condivisa per rimuovere appuntamento da una riga del filone.
-
-    Sezione critica con header refresh ATOMICO (vedi
-    `_imposta_appuntamento_su_filone` per la motivazione).
-    """
+    """Logica condivisa per rimuovere appuntamento da una riga del filone."""
     nuova_nota = ''
+
+    # Branch FASE 2: DB-only
+    try:
+        from config import USE_DB_BACKEND as _USE_DB
+    except ImportError:
+        _USE_DB = 'shadow'
+    if _USE_DB == 'primary':
+        return _rimuovi_appuntamento_db_primary(row, nota_corrente=nota_corrente)
+
     with _gsheets_write_lock:
         force_refresh_headers()
         col_note = _get_colonna_note()

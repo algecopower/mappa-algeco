@@ -9978,8 +9978,13 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             const addedEneltels = new Set([...newEneltels].filter(e => !oldEneltels.has(e)));
             const removedCount = [...oldEneltels].filter(e => !newEneltels.has(e)).length;
 
-            // Mostra toast se ci sono cambiamenti
-            if (addedEneltels.size > 0 || removedCount > 0) {{
+            // Mostra toast solo per cambi macroscopici. Un soft-edit dell'utente
+            // (es. modifica email/note) può causare un delta minimo (1±1) come
+            // side-effect del re-render dei marker filtrati: in quel caso non
+            // mostriamo il toast per evitare falsi positivi.
+            const totalDelta = addedEneltels.size + removedCount;
+            const isSignificant = totalDelta >= 3 || addedEneltels.size >= 2 || removedCount >= 2;
+            if (isSignificant) {{
                 const parts = [];
                 if (addedEneltels.size > 0) parts.push(`+${{addedEneltels.size}} nuov${{addedEneltels.size === 1 ? 'o' : 'i'}}`);
                 if (removedCount > 0) parts.push(`-${{removedCount}} rimoss${{removedCount === 1 ? 'o' : 'i'}}`);

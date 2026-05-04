@@ -318,14 +318,31 @@ def update_column_registry(conn, headers):
 def column_to_internal_key(conn, column_name):
     """Ritorna la chiave interna per un nome colonna del foglio (o None)."""
     cur = conn.execute(
-        'SELECT chiave_interna FROM column_registry WHERE column_name=?',
-        (column_name,),
+        'SELECT chiave_interna FROM column_registry WHERE LOWER(column_name)=?',
+        (column_name.strip().lower(),),
     )
     row = cur.fetchone()
     if row and row['chiave_interna']:
         return row['chiave_interna']
     # Fallback: lookup live (registry non ancora popolato in fase di bootstrap)
     return _build_internal_lookup().get(column_name.strip().lower())
+
+
+def canonical_column_name(conn, column_name):
+    """Normalizza un nome colonna al case esatto presente sul foglio.
+
+    Es: client invia 'email', foglio ha 'EMAIL' → ritorna 'EMAIL'.
+    Se la colonna non esiste in column_registry, ritorna il nome originale
+    (sarà il drainer a quarantinare la pending).
+    """
+    if not column_name:
+        return column_name
+    cur = conn.execute(
+        'SELECT column_name FROM column_registry WHERE LOWER(column_name)=? LIMIT 1',
+        (column_name.strip().lower(),),
+    )
+    row = cur.fetchone()
+    return row['column_name'] if row else column_name
 
 
 # ============================================================================
@@ -415,9 +432,12 @@ def record_local_change(eneltel, fields, *, base_values=None, user=None,
         local_updates_typed = {}  # {col_sql: nuovo_valore}
         local_updates_extra = {}  # {nome_colonna_foglio: nuovo_valore}
 
-        for col_name, new_val in fields.items():
-            if not col_name:
+        for col_name_raw, new_val in fields.items():
+            if not col_name_raw:
                 continue
+            # Normalizza al case esatto del foglio (es. 'email' → 'EMAIL')
+            # così pending e merge_to_values trovano la colonna corretta.
+            col_name = canonical_column_name(conn, col_name_raw)
             chiave = column_to_internal_key(conn, col_name)
 
             # base_value: priorità a quello fornito; fallback al DB

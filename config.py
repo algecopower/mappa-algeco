@@ -363,15 +363,18 @@ DB_PATH = os.path.join('data', PROVINCIA_ATTIVA.lower(), 'state.db')
 #   'shadow'  → DB popolato in parallelo, ma scritture e letture passano dal flusso attuale
 #               (Fase 1 della migrazione - validazione)
 #   'primary' → DB è la fonte di verità: route → DB → drainer → Sheets
-#               (Fase 2 - swap)
+#               (Fase 2 - swap, default attuale)
 #   'off'     → DB disabilitato (rollback di emergenza)
-USE_DB_BACKEND = os.environ.get('USE_DB_BACKEND', 'shadow').lower()
+USE_DB_BACKEND = os.environ.get('USE_DB_BACKEND', 'primary').lower()
 if USE_DB_BACKEND not in ('shadow', 'primary', 'off'):
     print(f"⚠️  USE_DB_BACKEND='{USE_DB_BACKEND}' non valido, fallback a 'shadow'")
     USE_DB_BACKEND = 'shadow'
 
 # Worker asincrono che drena pending_writes verso Sheets
-DRAIN_INTERVAL_SECONDI = 10
+# 30s = compromesso tra latenza per chi guarda Sheets direttamente e quota 429.
+# Le scritture in raffica vengono coalesce per (eneltel,col) → la quota
+# Read/min (60) e Write/min (60) sono protette anche con bursti utente.
+DRAIN_INTERVAL_SECONDI = 30
 DRAIN_BATCH_SIZE = 400  # max celle per chiamata batch_update (limite Sheets ~500)
 DRAIN_THROTTLE_SECONDI = 2  # min interval tra due batch_update (rate-limit Sheets)
 

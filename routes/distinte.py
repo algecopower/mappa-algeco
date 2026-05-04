@@ -997,6 +997,40 @@ def salva_nota_distinte():
         if not pod:
             return jsonify({'error': 'POD mancante'}), 400
 
+        # Branch FASE 2: DB-only (no chiamate Sheets nel path di scrittura)
+        from config import USE_DB_BACKEND as _USE_DB
+        if _USE_DB == 'primary':
+            from moduli import db as _db
+            ek = _db.find_eneltel_by_pod(pod)
+            if not ek:
+                return jsonify({'error': f'POD {pod} non trovato'}), 404
+            local = _db.get_filone_row(ek) or {}
+            nota_attuale = local.get('note_appuntamento') or ''
+            if sovrascrivere:
+                nuova_nota = nota
+            elif not nota:
+                nuova_nota = nota_attuale
+            elif not nota_attuale:
+                nuova_nota = nota
+            elif nota not in nota_attuale:
+                nuova_nota = f"{nota_attuale} // {nota}"
+            else:
+                nuova_nota = nota_attuale
+
+            col_note_name = _get_colonna_note()  # nome colonna sul foglio
+            _db.record_local_change(
+                ek, {col_note_name: nuova_nota},
+                origin='distinte_salva_nota',
+                initial_state='pending',
+            )
+            try:
+                from moduli import sync_engine as _se
+                _se.trigger_drain_now()
+            except Exception:
+                pass
+            return jsonify({'success': True, 'nota': nuova_nota})
+
+        # Path SHADOW (Fase 1) — invariato
         nuova_nota = ''
         with _gsheets_write_lock:
             header_map = force_refresh_headers()

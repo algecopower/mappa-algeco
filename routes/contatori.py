@@ -119,7 +119,66 @@ def _format_row_to_contatore(data):
 @bp.route('/api/contatore/<eneltel>')
 @login_required
 def get_contatore(eneltel):
-    """Ottiene i dati di un contatore."""
+    """Ottiene i dati di un contatore.
+
+    In primary mode (Fase 2) legge dal DB locale + applica pending in volo,
+    così la UI vede subito i valori che l'utente ha appena salvato senza
+    aspettare il drainer (~10-30s).
+    """
+    from config import USE_DB_BACKEND as _USE_DB
+    if _USE_DB == 'primary':
+        from moduli import db as _db
+        ek = _db.normalize_eneltel(eneltel)
+        local = _db.get_filone_row(ek)
+        if not local:
+            return jsonify({'error': f'ENELTEL {eneltel} non trovato'}), 404
+
+        # Costruisci `data` (dict header→valore) usando column_registry +
+        # filone_extra per le colonne non tipizzate.
+        conn = _db.get_conn()
+        # Carica l'ordine delle colonne dal registry (mantiene il layout del foglio)
+        col_rows = conn.execute(
+            'SELECT column_name, chiave_interna FROM column_registry '
+            'ORDER BY last_index'
+        ).fetchall()
+        # Mappa: chiave_interna → colonna SQL (uguali per le note in COLONNE_NOTE)
+        data = {}
+        for cr in col_rows:
+            col_sheet = cr['column_name']
+            chiave = cr['chiave_interna']
+            if chiave in _db.COLONNE_NOTE:
+                val = local.get(chiave, '') or ''
+            elif chiave == 'eneltel':
+                # Eneltel: ricostruisco dal Eneltel_Key (lstrip '0' inverso non
+                # è possibile esattamente, ma per la UI basta il valore normalizzato)
+                val = local.get('eneltel_key', '') or ''
+            else:
+                # Colonna extra: leggi da filone_extra
+                ev = conn.execute(
+                    'SELECT value FROM filone_extra WHERE eneltel_key=? AND column_name=?',
+                    (ek, col_sheet),
+                ).fetchone()
+                val = (ev['value'] if ev else '') or ''
+            data[col_sheet] = val
+
+        # Applica pending in volo (state pending/in_flight) → sovrascrive con
+        # i valori che l'utente ha appena modificato ma non ancora drenati.
+        pending_rows = conn.execute(
+            "SELECT column_name, new_value FROM pending_writes "
+            "WHERE eneltel_key=? AND state IN ('pending','in_flight')",
+            (ek,),
+        ).fetchall()
+        for pr in pending_rows:
+            data[pr['column_name']] = pr['new_value'] or ''
+
+        return jsonify({
+            'eneltel': eneltel,
+            'row': local.get('sheets_row'),
+            'data': data,
+            'contatore': _format_row_to_contatore(data),
+        })
+
+    # Path SHADOW/OFF: legge da Sheets (originale)
     row = find_row_by_eneltel(eneltel)
     if row is None:
         return jsonify({'error': f'ENELTEL {eneltel} non trovato'}), 404
@@ -157,9 +216,19 @@ def update_contatore(eneltel):
         campi_ammessi = CAMPI_MODIFICABILI.get(PROVINCIA_ATTIVA, {})
         col_names = list(campi_ammessi.values())
 
-        # Debug: mostra headers disponibili
-        get_worksheet()  # Assicura che _header_map sia popolato
-        _header_map = get_header_map()
+        # Debug: mostra headers disponibili. In primary mode usiamo il
+        # column_registry del DB per evitare una read Sheets inutile.
+        from config import USE_DB_BACKEND as _USE_DB
+        if _USE_DB == 'primary':
+            from moduli import db as _db
+            conn = _db.get_conn()
+            registry_rows = conn.execute(
+                'SELECT column_name FROM column_registry ORDER BY last_index'
+            ).fetchall()
+            _header_map = {r['column_name']: i + 1 for i, r in enumerate(registry_rows)}
+        else:
+            get_worksheet()  # Assicura che _header_map sia popolato
+            _header_map = get_header_map()
         logger.info(f"📋 Headers disponibili: {list(_header_map.keys())}")
         logger.info(f"📝 Campi ricevuti dal client: {fields}")
         logger.info(f"📝 Colonne ammesse dalla config: {col_names}")
@@ -182,17 +251,49 @@ def update_contatore(eneltel):
         row_num = find_row_by_eneltel(eneltel)
         old_values = {}
         if row_num:
-            try:
-                ws = get_worksheet()
-                row_data = ws.row_values(row_num)
-                for col_name in fields_validi:
-                    col_idx = _header_map.get(col_name)
-                    if col_idx and col_idx <= len(row_data):
-                        old_values[col_name] = row_data[col_idx - 1]
-                    else:
-                        old_values[col_name] = ''
-            except Exception as e:
-                logger.warning(f"[CellLog] Errore lettura valori precedenti: {e}")
+            if _USE_DB == 'primary':
+                # Read dal DB locale: nessuna chiamata Sheets, già consistent
+                # con quello che il client vedeva (filone + pending overlay).
+                try:
+                    from moduli import db as _db
+                    ek = _db.normalize_eneltel(eneltel)
+                    local = _db.get_filone_row(ek) or {}
+                    conn = _db.get_conn()
+                    pending_overlay = {
+                        r['column_name']: r['new_value']
+                        for r in conn.execute(
+                            "SELECT column_name, new_value FROM pending_writes "
+                            "WHERE eneltel_key=? AND state IN ('pending','in_flight')",
+                            (ek,),
+                        ).fetchall()
+                    }
+                    for col_name in fields_validi:
+                        if col_name in pending_overlay:
+                            old_values[col_name] = pending_overlay[col_name] or ''
+                        else:
+                            chiave = _db.column_to_internal_key(conn, col_name)
+                            if chiave and chiave in _db.COLONNE_NOTE:
+                                old_values[col_name] = local.get(chiave, '') or ''
+                            else:
+                                ev = conn.execute(
+                                    'SELECT value FROM filone_extra WHERE eneltel_key=? AND column_name=?',
+                                    (ek, col_name),
+                                ).fetchone()
+                                old_values[col_name] = (ev['value'] if ev else '') or ''
+                except Exception as e:
+                    logger.warning(f"[CellLog] Errore lettura old_values da DB: {e}")
+            else:
+                try:
+                    ws = get_worksheet()
+                    row_data = ws.row_values(row_num)
+                    for col_name in fields_validi:
+                        col_idx = _header_map.get(col_name)
+                        if col_idx and col_idx <= len(row_data):
+                            old_values[col_name] = row_data[col_idx - 1]
+                        else:
+                            old_values[col_name] = ''
+                except Exception as e:
+                    logger.warning(f"[CellLog] Errore lettura valori precedenti: {e}")
 
         success, msg = update_row_fields(eneltel, fields_validi)
 
@@ -574,10 +675,24 @@ def get_filone():
     """
     Restituisce tutti i dati del FILONE per la vista Excel.
     Usa cache in memoria per evitare download ripetuti da Google Sheets.
+
+    In primary mode (Fase 2) applica le pending_writes in volo: la vista
+    Excel mostra subito i valori che l'utente ha appena salvato anche se
+    il drainer non ha ancora pushato su Sheets.
     """
     try:
         # Usa cache in memoria (non ri-scarica se dati freschi)
         all_data = get_all_values_cached()
+
+        # Applica overlay pending (primary mode) per coerenza con la UI mappa
+        from config import USE_DB_BACKEND as _USE_DB
+        if _USE_DB == 'primary' and all_data:
+            try:
+                from moduli.data_loader import _apply_pending_to_values
+                all_data = _apply_pending_to_values(all_data)
+            except Exception as _e:
+                logger.warning(f"[primary] overlay pending fallito su /api/filone: {_e}")
+
         headers = all_data[0] if all_data else []
         rows = all_data[1:] if len(all_data) > 1 else []
 

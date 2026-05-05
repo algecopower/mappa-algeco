@@ -715,26 +715,63 @@ def get_filone():
         return _api_error(e, 'caricamento filone')
 
 
+# Cache formattazione: TTL stale-while-revalidate. Sotto questa soglia
+# (in secondi) la cache è considerata fresca e servita senza refresh; oltre,
+# viene servita comunque al client ma viene rilanciato un refresh in
+# background, così la prossima GET vedrà i dati aggiornati. La PUT scrive
+# sempre nel cache file con i delta locali, ma quel file viene marcato come
+# parziale (`partial=True`) finché non lo riscrive il refresh completo: in
+# stato parziale il TTL viene ignorato e il refresh parte sempre.
+_FORMAT_CACHE_TTL_SECONDS = 300
+
+
+def _format_cache_path():
+    p = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), '..',
+        'cache', f'cache_formati_{PROVINCIA_ATTIVA.lower()}.json'
+    )
+    return os.path.normpath(p)
+
+
+def _format_cache_age(cached):
+    """Età in secondi del payload cache (None se manca timestamp valido)."""
+    if not cached:
+        return None
+    upd = cached.get('updated')
+    if not upd:
+        return None
+    try:
+        ts = datetime.fromisoformat(upd)
+    except (TypeError, ValueError):
+        return None
+    return (datetime.now() - ts).total_seconds()
+
+
 @bp.route('/api/filone/formats')
 @login_required
 def get_filone_formats():
     """
-    Restituisce la formattazione delle celle, servita da cache locale.
-    La cache viene generata in background alla prima richiesta.
+    Restituisce la formattazione delle celle, servita da cache locale con
+    stale-while-revalidate: se la cache è vecchia o parziale, viene servita
+    comunque al client ma viene rilanciato un refresh in background.
     """
     try:
-        cache_file = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), '..',
-            'cache', f'cache_formati_{PROVINCIA_ATTIVA.lower()}.json'
-        )
-        cache_file = os.path.normpath(cache_file)
-
-        # Serve dalla cache se esiste
+        cache_file = _format_cache_path()
         cached = json_read(cache_file, default=None)
-        if cached is not None:
-            return jsonify({'formats': cached.get('formats', {}), 'cached': True})
 
-        # Se non c'è cache, avvia la generazione in background e rispondi vuoto
+        if cached is not None:
+            age = _format_cache_age(cached)
+            is_partial = bool(cached.get('partial'))
+            if is_partial or age is None or age > _FORMAT_CACHE_TTL_SECONDS:
+                _trigger_format_cache_refresh()
+            return jsonify({
+                'formats': cached.get('formats', {}),
+                'cached': True,
+                'partial': is_partial,
+                'age_seconds': age,
+            })
+
+        # Niente cache: refresh in background, rispondi vuoto.
         _trigger_format_cache_refresh()
         return jsonify({'formats': {}, 'cached': False, 'loading': True})
 
@@ -771,7 +808,8 @@ def _trigger_format_cache_refresh():
 
 
 def _refresh_format_cache_bg():
-    """Background: legge formattazione da Sheets e salva in cache."""
+    """Background: legge formattazione da Sheets e salva in cache (completa,
+    `partial=False`) sovrascrivendo eventuale cache parziale lasciata dalla PUT."""
     global _format_cache_running
     try:
         ws = get_worksheet()
@@ -780,15 +818,13 @@ def _refresh_format_cache_bg():
         total_cols = len(all_data[0]) if all_data else 0
         formats = _read_sheet_formats(ws, total_rows, total_cols)
 
-        cache_file = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), '..',
-            'cache', f'cache_formati_{PROVINCIA_ATTIVA.lower()}.json'
-        )
-        cache_file = os.path.normpath(cache_file)
-
-        import json
+        cache_file = _format_cache_path()
         os.makedirs(os.path.dirname(cache_file), exist_ok=True)
-        json_write(cache_file, {'formats': formats, 'updated': datetime.now().isoformat()})
+        json_write(cache_file, {
+            'formats': formats,
+            'updated': datetime.now().isoformat(),
+            'partial': False,
+        })
 
         logger.info(f"[Filone] Cache formattazione aggiornata: {len(formats)} celle formattate")
     except Exception as e:
@@ -796,6 +832,19 @@ def _refresh_format_cache_bg():
     finally:
         with _format_cache_lock:
             _format_cache_running = False
+
+
+def warmup_format_cache():
+    """Hook chiamato all'avvio del server: pre-popola la cache formattazione
+    se mancante o stale. Non blocca: il refresh gira in background."""
+    try:
+        cache_file = _format_cache_path()
+        cached = json_read(cache_file, default=None)
+        age = _format_cache_age(cached) if cached is not None else None
+        if cached is None or cached.get('partial') or age is None or age > _FORMAT_CACHE_TTL_SECONDS:
+            _trigger_format_cache_refresh()
+    except Exception as e:
+        logger.warning(f"[Filone] warmup_format_cache fallito: {e}")
 
 
 def _sheets_color_to_hex(color_obj):
@@ -1033,12 +1082,12 @@ def update_filone_formats():
                 for i in range(0, len(batch), CHUNK):
                     _sheets_retry(ws.batch_format, batch[i:i + CHUNK])
 
-        # Aggiorna la cache locale con le modifiche
-        cache_file = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), '..',
-            'cache', f'cache_formati_{PROVINCIA_ATTIVA.lower()}.json'
-        )
-        cache_file = os.path.normpath(cache_file)
+        # Aggiorna la cache locale con le modifiche. Se il file non esisteva,
+        # lo creiamo come `partial=True` così la prossima GET sa che deve
+        # forzare un refresh completo dal foglio (la cache contiene solo i
+        # delta locali e mancano tutte le altre formattazioni del foglio).
+        cache_file = _format_cache_path()
+        cache_existed = os.path.exists(cache_file)
         try:
             cached = json_read(cache_file, default={})
             current_formats = cached.get('formats', {})
@@ -1055,9 +1104,20 @@ def update_filone_formats():
                     del current_formats[key]
             cached['formats'] = current_formats
             cached['updated'] = datetime.now().isoformat()
+            # Mantieni partial=True se già parziale o se file appena creato.
+            if not cache_existed or cached.get('partial'):
+                cached['partial'] = True
             json_write(cache_file, cached)
         except Exception as ce:
             logger.warning(f"[Filone] Errore aggiornamento cache formattazione: {ce}")
+
+        # Se la cache è (o è appena diventata) parziale, lancia subito un
+        # refresh completo in background per riallinearla al foglio.
+        try:
+            if not cache_existed:
+                _trigger_format_cache_refresh()
+        except Exception:
+            pass
 
         username = _get_username()
         logger.info(f"[Filone] Formattazione aggiornata da {username}: {batch_len} celle")

@@ -454,8 +454,11 @@
             font-size: 0.78em;
             border-right: 2px solid var(--border-light) !important;
             box-shadow: var(--frozen-shadow);
-            cursor: default;
+            cursor: pointer;
+            user-select: none;
         }
+        .vc.rn:hover { background: var(--bg-cell-hover) !important; color: var(--primary); }
+        .vc.rn.row-selected { background: var(--primary) !important; color: #fff; font-weight: 600; }
         .vrow-even .vc { background: var(--bg-cell-alt); }
         .vrow-even .vc.rn { background: var(--bg-cell-alt); }
         .vrow-odd .vc { background: var(--bg-cell); }
@@ -1579,6 +1582,7 @@ let isDragging = false;
 let _clickEditPending = false;
 let _clickEditTarget = null;
 let _dragExtended = false;
+let _rowDragging = false;
 
 // Undo/Redo
 let undoStack = [];
@@ -2373,6 +2377,9 @@ function fillRow(node, row, visIdx) {
     var cells = node.children;
 
     cells[0].textContent = row._row;
+    // Row index visual: evidenzia se la riga è interamente selezionata
+    if (isFullRowSelected(visIdx)) cells[0].classList.add('row-selected');
+    else cells[0].classList.remove('row-selected');
 
     for (var i = 0; i < headers.length; i++) {
         var cell = cells[i + 1];
@@ -2469,6 +2476,26 @@ qs('#gridBody').addEventListener('mousedown', function(e) {
         return;
     }
 
+    // Click on row index → seleziona l'intera riga (per dati e formattazione)
+    var rnCell = e.target.closest('.vc.rn');
+    if (rnCell) {
+        var vrowR = rnCell.parentElement;
+        var rnR = +vrowR.dataset.rn;
+        if (e.shiftKey && selAnchorRow >= 0) {
+            extendRowRangeSelection(rnR);
+        } else {
+            selectEntireRow(rnR);
+        }
+        // Abilita drag verticale per estendere la selezione a più righe
+        isDragging = true;
+        _rowDragging = true;
+        _clickEditPending = false;
+        _clickEditTarget = null;
+        if (!document.body.classList.contains('nosel')) document.body.classList.add('nosel');
+        e.preventDefault();
+        return;
+    }
+
     var vc = e.target.closest('.vc[data-ci]');
     if (!vc) return;
     var vrow = vc.parentElement;
@@ -2492,6 +2519,16 @@ qs('#gridBody').addEventListener('mousedown', function(e) {
 
 qs('#gridBody').addEventListener('mousemove', function(e) {
     if (!isDragging) return;
+    if (_rowDragging) {
+        var vrowR = e.target.closest('.vrow');
+        if (!vrowR) return;
+        var rnR = +vrowR.dataset.rn;
+        if (rnR !== selRow) {
+            extendRowRangeSelection(rnR);
+            _dragExtended = true;
+        }
+        return;
+    }
     var vc = e.target.closest('.vc[data-ci]');
     if (!vc) return;
     var vrow = vc.parentElement;
@@ -2512,6 +2549,7 @@ qs('#gridBody').addEventListener('mousemove', function(e) {
 document.addEventListener('mouseup', function() {
     if (isDragging) {
         isDragging = false;
+        _rowDragging = false;
         document.body.classList.remove('nosel');
         if (_clickEditPending && !_dragExtended && _clickEditTarget) {
             var t = _clickEditTarget;
@@ -2614,6 +2652,40 @@ function selectEntireColumn(ci) {
     updateSelectionStatus();
 }
 
+function extendRowRangeSelection(rn) {
+    if (editing) commitEdit();
+    // Estendi selezione corrente fino a includere l'intera riga rn (range
+    // di righe da selAnchorRow a rn, su tutte le colonne visibili).
+    var firstCi = -1, lastCi = -1;
+    for (var i = 0; i < colOrder.length; i++) {
+        var ci = colOrder[i];
+        if (hiddenCols.has(ci)) continue;
+        if (firstCi < 0) firstCi = ci;
+        lastCi = ci;
+    }
+    if (firstCi < 0) return;
+    if (selAnchorRow < 0) {
+        selectEntireRow(rn);
+        return;
+    }
+    selAnchorCol = firstCi;
+    selRow = rn;
+    selCol = lastCi;
+    computeSelRange();
+    if (!selRange) {
+        var vi = -1;
+        for (var i = 0; i < filtered.length; i++) {
+            if (rawData[filtered[i]]._row === rn) { vi = i; break; }
+        }
+        if (vi < 0) return;
+        var vpMin = colOrderMap[firstCi] !== undefined ? colOrderMap[firstCi] : firstCi;
+        var vpMax = colOrderMap[lastCi] !== undefined ? colOrderMap[lastCi] : lastCi;
+        selRange = { viMin: vi, viMax: vi, vpMin: Math.min(vpMin, vpMax), vpMax: Math.max(vpMin, vpMax) };
+    }
+    renderVisible(true);
+    updateSelectionStatus();
+}
+
 function selectEntireRow(rn) {
     if (editing) commitEdit();
     // Find visible columns (first and last non-hidden)
@@ -2645,6 +2717,22 @@ function selectEntireRow(rn) {
     updateSelectionStatus();
     var visibleCols = 0;
     for (var i = 0; i < colOrder.length; i++) { if (!hiddenCols.has(colOrder[i])) visibleCols++; }
+}
+
+function isFullRowSelected(visIdx) {
+    if (!selRange) return false;
+    if (visIdx < selRange.viMin || visIdx > selRange.viMax) return false;
+    // Trova la prima/ultima posizione visibile (in coordinate vp = colOrderMap)
+    var firstVp = Infinity, lastVp = -1;
+    for (var i = 0; i < colOrder.length; i++) {
+        var ci2 = colOrder[i];
+        if (hiddenCols.has(ci2)) continue;
+        var vp2 = colOrderMap[ci2] !== undefined ? colOrderMap[ci2] : ci2;
+        if (vp2 < firstVp) firstVp = vp2;
+        if (vp2 > lastVp) lastVp = vp2;
+    }
+    if (lastVp < 0) return false;
+    return selRange.vpMin <= firstVp && selRange.vpMax >= lastVp;
 }
 
 function isInSelRange(visIdx, ci) {

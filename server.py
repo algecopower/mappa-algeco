@@ -1721,6 +1721,13 @@ if __name__ == '__main__':
     
     # Avvia sync in background (farà subito la prima sincronizzazione)
     avvia_sync_background()
+
+    # Warmup cache formattazione filone (lettura non-bloccante da Sheets)
+    try:
+        from routes.contatori import warmup_format_cache
+        warmup_format_cache()
+    except Exception as e:
+        logger.warning(f"⚠️ Warmup cache formattazione fallito: {e}")
     
     # Pulizia boxbeat completati vecchi (> 7 giorni) per evitare accumulo
     try:

@@ -1673,14 +1673,17 @@ async function _loadFormatsFromServer() {
             loadCellFormatsFromServer(d.formats);
             renderVisible(true);
         }
-        // Se il server ci ha appena dato cache vecchia (>30s, sotto il TTL
-        // di 60s) o parziale, ha contestualmente triggerato un refresh in
-        // background. Avviamo il polling per applicare i dati freschi
-        // appena disponibili, così l'utente non deve ricaricare la pagina.
-        var staleAge = (typeof d.age_seconds === 'number' && d.age_seconds > 30);
-        if (d.partial || staleAge) {
-            _startFormatPolling(d);
-        }
+        // SEMPRE forziamo un refresh in background all'apertura della
+        // vista Excel (POST sicuro, già esistente: spawna un thread daemon
+        // gated da `_format_cache_running` quindi non si moltiplica). Così
+        // il polling cattura SEMPRE le modifiche fatte su Sheets nei
+        // secondi precedenti, anche se la cache appare "fresca".
+        try { fetch('/api/filone/formats/refresh', { method: 'POST' }); } catch(_) {}
+        _startFormatPolling(d);
+        // Avvia il timer che continua a triggerare refresh ogni 8s
+        // (gated → niente flooding, ma garantisce che le modifiche fatte
+        // su Sheets dopo il page load vengano effettivamente catturate).
+        _startRefreshTrigger();
     } catch(e) {
         // Formattazione non disponibile, usa cache locale
     }
@@ -1692,35 +1695,93 @@ async function _loadFormatsFromServer() {
 // cache è di nuovo "fresca" o dopo timeout (~30s).
 var _formatPollTimer = null;
 var _formatPollStart = 0;
-var _formatPollInitialAge = null;
+var _formatPollInitialUpdated = null;
 function _startFormatPolling(initialResp) {
     if (_formatPollTimer) return;
     _formatPollStart = Date.now();
-    _formatPollInitialAge = (initialResp && typeof initialResp.age_seconds === 'number') ? initialResp.age_seconds : null;
-    _formatPollTimer = setInterval(_pollFormatRefresh, 3000);
+    // Snapshot del timestamp `updated` della cache iniziale: il polling si
+    // ferma SOLO quando il server espone una cache con `updated` diverso
+    // (= un nuovo refresh è stato completato e committato dal bg thread).
+    _formatPollInitialUpdated = initialResp && initialResp.updated ? initialResp.updated : null;
+    // Polling ogni 1s: ora usiamo l'endpoint /version (~100 byte) invece
+    // del payload completo (~5MB), quindi è cheap pollare frequentemente.
+    _formatPollTimer = setInterval(_pollFormatRefresh, 1000);
 }
 async function _pollFormatRefresh() {
-    if (Date.now() - _formatPollStart > 30000) {
-        clearInterval(_formatPollTimer); _formatPollTimer = null; return;
+    if (Date.now() - _formatPollStart > 45000) {
+        // Boot polling è scaduto: passo al polling continuo (più lento)
+        // che resta attivo mentre la pagina è aperta, così le modifiche
+        // future fatte su Sheets si applicano automaticamente senza che
+        // l'utente debba ricaricare.
+        clearInterval(_formatPollTimer); _formatPollTimer = null;
+        _startContinuousFormatPolling();
+        return;
     }
-    try {
-        var r = await fetch('/api/filone/formats?_=' + Date.now());
-        if (!r.ok) return;
-        var d = await r.json();
-        if (!d) return;
-        var fresh = !d.partial && (typeof d.age_seconds === 'number') && d.age_seconds < 15;
-        // È stato fatto un refresh: l'età ora è bassa O comunque inferiore
-        // di parecchio rispetto a quella iniziale (cache aggiornata).
-        var dropped = (typeof d.age_seconds === 'number') && (_formatPollInitialAge !== null) && d.age_seconds < (_formatPollInitialAge - 10);
-        if (fresh || dropped) {
-            if (d.formats) {
-                loadCellFormatsFromServer(d.formats);
-                renderVisible(true);
-            }
-            clearInterval(_formatPollTimer); _formatPollTimer = null;
-        }
-    } catch(_) {}
+    await _checkAndApplyFormatRefresh();
 }
+
+// Effettua un check leggero (version endpoint) e se la cache è cambiata
+// scarica il payload completo e lo applica. Ritorna true se ha applicato
+// nuovi dati. Usata sia dal boot-polling (1s) che dal polling continuo (10s).
+async function _checkAndApplyFormatRefresh() {
+    try {
+        var rv = await fetch('/api/filone/formats/version?_=' + Date.now());
+        if (!rv.ok) return false;
+        var v = await rv.json();
+        if (!v) return false;
+        var changed = v.updated && _formatPollInitialUpdated && v.updated !== _formatPollInitialUpdated;
+        var freshFallback = !v.updated && !v.partial && (typeof v.age_seconds === 'number') && v.age_seconds < 5;
+        if (!(changed || freshFallback)) return false;
+        var rf = await fetch('/api/filone/formats?_=' + Date.now());
+        if (!rf.ok) return false;
+        var d = await rf.json();
+        if (d && d.formats) {
+            loadCellFormatsFromServer(d.formats);
+            renderVisible(true);
+            if (v.updated) _formatPollInitialUpdated = v.updated;
+            return true;
+        }
+        return false;
+    } catch(_) { return false; }
+}
+
+// Polling continuo (forever): ogni 5s controlla `version` (cheap),
+// se cambiato applica il payload. Pausa quando il tab è nascosto;
+// check immediato quando torna visibile.
+var _continuousFormatPollTimer = null;
+function _startContinuousFormatPolling() {
+    if (_continuousFormatPollTimer) return;
+    _continuousFormatPollTimer = setInterval(_continuousFormatPollTick, 5000);
+}
+async function _continuousFormatPollTick() {
+    if (document.hidden) return;
+    await _checkAndApplyFormatRefresh();
+}
+
+// Timer SEPARATO che fa scattare il bg refresh server-side periodicamente,
+// indipendentemente dal polling. Senza questo, il polling controllerebbe
+// sempre la stessa cache (nessuno triggera nuovi refresh). Il refresh è
+// gated da `_format_cache_running` quindi POSTs ravvicinati non si
+// moltiplicano: se uno è già in corso, gli altri sono no-op. Pausato
+// quando il tab è nascosto per non sprecare API quando nessuno guarda.
+var _refreshTriggerTimer = null;
+function _startRefreshTrigger() {
+    if (_refreshTriggerTimer) return;
+    _refreshTriggerTimer = setInterval(function() {
+        if (document.hidden) return;
+        try { fetch('/api/filone/formats/refresh', { method: 'POST' }); } catch(_) {}
+    }, 8000);
+}
+
+// Quando l'utente torna sul tab dopo averlo lasciato aperto in background,
+// fa subito un trigger di refresh + check, così applica eventuali
+// modifiche arrivate intanto senza dover aspettare il prossimo tick.
+document.addEventListener('visibilitychange', function() {
+    if (!document.hidden && (_continuousFormatPollTimer || _formatPollTimer)) {
+        try { fetch('/api/filone/formats/refresh', { method: 'POST' }); } catch(_) {}
+        setTimeout(_checkAndApplyFormatRefresh, 1500);
+    }
+});
 
 function buildRowIndex() {
     rowIndex = {};

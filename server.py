@@ -1288,8 +1288,16 @@ def serve_data_files(filename):
 @app.route('/filone')
 @login_required
 def serve_filone_page():
-    """Serve la pagina vista Excel del filone."""
-    return send_file(os.path.join('templates', 'filone.html'))
+    """Serve la pagina vista Excel del filone.
+
+    Cache disabilitata: il template contiene tutto il JS della vista, e
+    quando viene aggiornato vogliamo che i client ne ricarichino sempre
+    la versione fresca (senza dover fare Ctrl+Shift+R)."""
+    resp = send_file(os.path.join('templates', 'filone.html'))
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    resp.headers['Pragma'] = 'no-cache'
+    resp.headers['Expires'] = '0'
+    return resp
 
 
 # File/cartelle sensibili: MAI servire questi

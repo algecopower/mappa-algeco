@@ -899,6 +899,7 @@ def get_filone_formats():
                 'cached': True,
                 'partial': is_partial,
                 'age_seconds': age,
+                'updated': cached.get('updated'),
             })
 
         # Niente cache: refresh in background, rispondi vuoto.
@@ -907,6 +908,26 @@ def get_filone_formats():
 
     except Exception as e:
         return _api_error(e, 'caricamento formattazione')
+
+
+@bp.route('/api/filone/formats/version')
+@login_required
+def get_filone_formats_version():
+    """Restituisce SOLO i metadati della cache formattazione (timestamp,
+    age, partial). Endpoint leggerissimo (~100 byte) usato dal client per
+    pollare se la cache è cambiata, senza scaricare l'intero payload da
+    ~5MB ogni volta."""
+    try:
+        cached = json_read(_format_cache_path(), default=None)
+        if cached is None:
+            return jsonify({'updated': None, 'partial': True, 'age_seconds': None})
+        return jsonify({
+            'updated': cached.get('updated'),
+            'partial': bool(cached.get('partial')),
+            'age_seconds': _format_cache_age(cached),
+        })
+    except Exception as e:
+        return _api_error(e, 'lettura version formattazione')
 
 
 @bp.route('/api/filone/formats/refresh', methods=['POST'])
@@ -943,10 +964,12 @@ def _refresh_format_cache_bg():
     global _format_cache_running
     try:
         ws = get_worksheet()
-        all_data = ws.get_all_values()
-        total_rows = len(all_data)
-        total_cols = len(all_data[0]) if all_data else 0
-        formats = _read_sheet_formats(ws, total_rows, total_cols)
+        # NB: una vecchia versione di questo codice chiamava `ws.get_all_values()`
+        # qui per ricavare total_rows/total_cols, ma quei valori non vengono
+        # mai usati da `_read_sheet_formats` (che itera sul rowData restituito
+        # dalla metadata fetch). La chiamata ridondante costava ~1-2s di API
+        # inutile, ed è stata rimossa.
+        formats = _read_sheet_formats(ws)
 
         cache_file = _format_cache_path()
         os.makedirs(os.path.dirname(cache_file), exist_ok=True)
@@ -996,7 +1019,7 @@ def _is_default_color(hex_color, is_bg=False):
     return hex_color in ('#000000', '#000', None)
 
 
-def _read_sheet_formats(ws, total_rows, total_cols):
+def _read_sheet_formats(ws):
     """
     Legge la formattazione delle celle dal Google Sheets API.
     Restituisce un dict: {"row:colName": {bold, italic, underline, strikethrough, textColor, bgColor}}

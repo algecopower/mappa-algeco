@@ -1356,6 +1356,10 @@
             <h3>&#x1F3A8; Formattazione Condizionale</h3>
             <button class="cfm-close" onclick="closeCondFormat()">&times;</button>
         </div>
+        <div style="padding:8px 14px;font-size:0.8em;color:var(--text-muted);border-bottom:1px solid var(--border)">
+            <span id="cfmSheetsInfo">Regole importate da Sheets: <b id="cfmSheetsCount">0</b></span>
+            <button onclick="refreshCondFormatsFromSheets()" style="margin-left:8px;font-size:0.9em;padding:2px 8px;cursor:pointer" title="Rileggi le regole condizionali da Google Sheets">&#x1F504; Aggiorna da Sheets</button>
+        </div>
         <div class="cfm-body" id="cfmBody"></div>
         <div class="cfm-foot">
             <button class="d" onclick="cfmClearAll()">&#x1F5D1; Elimina tutte</button>
@@ -1635,6 +1639,8 @@ async function loadData() {
         qs('#infoRighe').innerHTML = '<strong>' + rawData.length + '</strong> righe &times; <strong>' + headers.length + '</strong> colonne';
         // Carica formattazione da Sheets in background (non blocca il rendering)
         _loadFormatsFromServer();
+        // Carica anche le regole condizionali da Sheets (silent: niente toast).
+        _loadCondFormatsFromSheets(true);
     } catch (e) {
         qs('.loading-overlay div').innerHTML = '&#x274C; ' + esc(e.message) + '<br><button onclick="loadData()" style="margin-top:10px;padding:6px 16px;cursor:pointer">Riprova</button>';
     }
@@ -2410,30 +2416,22 @@ function fillRow(node, row, visIdx) {
         if (isInSelRange(visIdx, i)) cls += ' sel-range';
         if (editing && row._row === selRow && i === selCol) cls += ' editing';
 
-        // 1) Cell-level formatting (direct, manual — ha priorità visiva base)
-        var cfmt = getCellFormat(row._row, cn);
-        if (cfmt) {
-            if (cfmt.bold) cell.style.fontWeight = '700';
-            if (cfmt.italic) cell.style.fontStyle = 'italic';
-            var td = [];
-            if (cfmt.underline) td.push('underline');
-            if (cfmt.strikethrough) td.push('line-through');
-            if (td.length) cell.style.textDecoration = td.join(' ');
-            if (cfmt.textColor) cell.style.color = cfmt.textColor;
-            if (cfmt.bgColor) cell.style.backgroundColor = cfmt.bgColor;
-        }
-
-        // 2) Conditional formatting (sovrascrive i colori/stili se match)
+        // Formattazione: la regola condizionale, se fa match, ha PRIORITÀ
+        // ASSOLUTA e sostituisce completamente quella cell-level (per non
+        // essere "diluita" dai colori che arrivano dal foglio Sheets).
+        // Senza match cond, applichiamo la cell-level come al solito.
         var condRule = getCondStyle(i, val);
-        if (condRule) {
-            if (condRule.textColor) cell.style.color = condRule.textColor;
-            if (condRule.bgColor) cell.style.backgroundColor = condRule.bgColor;
-            if (condRule.bold) cell.style.fontWeight = '700';
-            if (condRule.italic) cell.style.fontStyle = 'italic';
-            var ctd = [];
-            if (condRule.underline) ctd.push('underline');
-            if (condRule.strikethrough) ctd.push('line-through');
-            if (ctd.length) cell.style.textDecoration = ctd.join(' ');
+        var cfmt = getCellFormat(row._row, cn);
+        var fmtSrc = condRule || cfmt;
+        if (fmtSrc) {
+            if (fmtSrc.bold) cell.style.fontWeight = '700';
+            if (fmtSrc.italic) cell.style.fontStyle = 'italic';
+            var td = [];
+            if (fmtSrc.underline) td.push('underline');
+            if (fmtSrc.strikethrough) td.push('line-through');
+            if (td.length) cell.style.textDecoration = td.join(' ');
+            if (fmtSrc.textColor) cell.style.color = fmtSrc.textColor;
+            if (fmtSrc.bgColor) cell.style.backgroundColor = fmtSrc.bgColor;
         }
 
         // Find & Replace highlight
@@ -4408,8 +4406,12 @@ function saveCellFormatsLocal() {
 }
 
 function _scheduleFmtSync() {
+    // Debounce minimo: il flag _fmtSyncing già serializza le PUT (al massimo
+    // 1 in volo, le altre vengono accodate), quindi anche con click rapidi
+    // non c'è flooding di richieste verso Sheets. La latenza percepita
+    // è ~100ms + tempo API (~0.5-1s).
     clearTimeout(_fmtSyncTimer);
-    _fmtSyncTimer = setTimeout(_syncFormatsToServer, 2000);
+    _fmtSyncTimer = setTimeout(_syncFormatsToServer, 100);
 }
 
 async function _syncFormatsToServer() {
@@ -4643,19 +4645,28 @@ function getCellFormat(rn, cn) {
 
 // ============================================================
 // CONDITIONAL FORMATTING (custom rules, localStorage)
+// Due fonti: regole locali (utente, editabili) + regole importate da Sheets
+// (read-only, sincronizzate via /api/filone/cond_formats_sheets).
+// Entrambe vengono unite in `condRulesByCol` e applicate via getCondStyle.
 // ============================================================
-var condRules = []; // [{col, op, value, textColor, bgColor, bold, italic, underline, strikethrough}]
-var condRulesByCol = {}; // colName -> [rules]
+var condRules = []; // locale: [{col, op, value, textColor, bgColor, bold, italic, underline, strikethrough}]
+var condRulesFromSheets = []; // sincronizzate da Sheets (read-only)
+var condRulesByCol = {}; // colName -> [rules merged]
 
 function initCondFormat() {
     loadCondRules();
+    loadCondRulesSheetsCache();
     rebuildCondRulesByCol();
 }
 
 function rebuildCondRulesByCol() {
     condRulesByCol = {};
-    for (var i = 0; i < condRules.length; i++) {
-        var r = condRules[i];
+    // Prima le regole Sheets, poi quelle locali (locali hanno priorità in
+    // caso di match multiplo, perché getCondStyle ritorna la prima che fa hit).
+    var all = condRulesFromSheets.concat(condRules);
+    for (var i = 0; i < all.length; i++) {
+        var r = all[i];
+        if (!r || !r.col) continue;
         if (!condRulesByCol[r.col]) condRulesByCol[r.col] = [];
         condRulesByCol[r.col].push(r);
     }
@@ -4670,6 +4681,52 @@ function loadCondRules() {
         var s = localStorage.getItem('filone_cond_rules');
         if (s) condRules = JSON.parse(s);
     } catch(e) { condRules = []; }
+}
+
+function loadCondRulesSheetsCache() {
+    // Cache locale delle regole Sheets per partire subito anche se la rete
+    // è lenta; verranno comunque rinfrescate dalla fetch in background.
+    try {
+        var s = localStorage.getItem('filone_cond_rules_sheets');
+        if (s) condRulesFromSheets = JSON.parse(s);
+    } catch(e) { condRulesFromSheets = []; }
+}
+
+async function _loadCondFormatsFromSheets(silent) {
+    try {
+        var r = await fetch('/api/filone/cond_formats_sheets');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        var d = await r.json();
+        if (d && Array.isArray(d.rules)) {
+            condRulesFromSheets = d.rules;
+            try { localStorage.setItem('filone_cond_rules_sheets', JSON.stringify(condRulesFromSheets)); } catch(_) {}
+            rebuildCondRulesByCol();
+            renderVisible(true);
+            updateCfmSheetsInfo();
+            if (!silent) {
+                var msg = 'Regole condizionali Sheets aggiornate: ' + (d.count || 0);
+                if (d.skipped) msg += ' (' + d.skipped + ' non mappabili saltate)';
+                toast('✅ ' + msg, 'success');
+            }
+        }
+    } catch(e) {
+        if (!silent) toast('❌ Errore lettura regole Sheets: ' + e.message, 'error');
+    }
+}
+
+async function refreshCondFormatsFromSheets() {
+    var btn = event && event.currentTarget;
+    if (btn) { btn.disabled = true; btn.style.opacity = '0.5'; }
+    try {
+        await _loadCondFormatsFromSheets(false);
+    } finally {
+        if (btn) { btn.disabled = false; btn.style.opacity = ''; }
+    }
+}
+
+function updateCfmSheetsInfo() {
+    var el = qs('#cfmSheetsCount');
+    if (el) el.textContent = condRulesFromSheets.length;
 }
 
 function evalCondRule(rule, cellVal) {
@@ -4727,6 +4784,7 @@ function openCondFormat() {
     qs('#cfmOverlay').classList.add('show');
     qs('#cfmPanel').classList.add('show');
     cfmRender();
+    updateCfmSheetsInfo();
 }
 
 function closeCondFormat() {

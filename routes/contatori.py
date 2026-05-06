@@ -747,6 +747,136 @@ def _format_cache_age(cached):
     return (datetime.now() - ts).total_seconds()
 
 
+# Mappa tipi condizione Sheets → operatori usati dal client.
+# Non mappabili (CUSTOM_FORMULA, *_BETWEEN, DATE_*, ONE_OF_*, BOOLEAN) vengono
+# silenziosamente saltati: il client del filone non sa eseguirli.
+_SHEETS_COND_OP_MAP = {
+    'TEXT_EQ': 'eq',
+    'NUMBER_EQ': 'eq',
+    'NUMBER_NOT_EQ': 'neq',
+    'TEXT_CONTAINS': 'contains',
+    'TEXT_NOT_CONTAINS': 'notcontains',
+    'TEXT_STARTS_WITH': 'startswith',
+    'TEXT_ENDS_WITH': 'endswith',
+    'BLANK': 'empty',
+    'NOT_BLANK': 'notempty',
+    'NUMBER_GREATER': 'gt',
+    'NUMBER_LESS': 'lt',
+    'NUMBER_GREATER_THAN_EQ': 'gte',
+    'NUMBER_LESS_THAN_EQ': 'lte',
+}
+_SHEETS_COND_NO_VALUE_OPS = {'empty', 'notempty'}
+
+
+def _convert_sheets_cond_formats(cond_formats, headers):
+    """Converte la lista di `conditionalFormats` Sheets in regole nel formato
+    che il client si aspetta (stesso schema di `condRules` in JS):
+        {col, op, value, textColor?, bgColor?, bold?, italic?, underline?, strikethrough?}
+    Una regola Sheets che copre più colonne genera N regole locali (una per col).
+    Tipi non mappabili (gradient, formule custom, date, etc.) vengono saltati.
+    """
+    out = []
+    skipped = 0
+    for cf in cond_formats or []:
+        boolean = cf.get('booleanRule')
+        if not boolean:
+            skipped += 1  # gradient o altro
+            continue
+        condition = boolean.get('condition', {})
+        op = _SHEETS_COND_OP_MAP.get(condition.get('type'))
+        if not op:
+            skipped += 1
+            continue
+
+        cond_value = ''
+        if op not in _SHEETS_COND_NO_VALUE_OPS:
+            values = condition.get('values', [])
+            if not values:
+                continue
+            cond_value = values[0].get('userEnteredValue', '') or ''
+
+        fmt = boolean.get('format', {}) or {}
+        tf = fmt.get('textFormat', {}) or {}
+        rule_template = {'op': op, 'value': cond_value}
+        fg = (tf.get('foregroundColorStyle', {}) or {}).get('rgbColor') or tf.get('foregroundColor')
+        if fg:
+            hex_fg = _sheets_color_to_hex(fg)
+            if not _is_default_color(hex_fg, is_bg=False):
+                rule_template['textColor'] = hex_fg
+        bg = (fmt.get('backgroundColorStyle', {}) or {}).get('rgbColor') or fmt.get('backgroundColor')
+        if bg:
+            hex_bg = _sheets_color_to_hex(bg)
+            if not _is_default_color(hex_bg, is_bg=True):
+                rule_template['bgColor'] = hex_bg
+        if tf.get('bold'):
+            rule_template['bold'] = True
+        if tf.get('italic'):
+            rule_template['italic'] = True
+        if tf.get('underline'):
+            rule_template['underline'] = True
+        if tf.get('strikethrough'):
+            rule_template['strikethrough'] = True
+
+        # Espandi la rule per ogni colonna coperta dai range.
+        for r in cf.get('ranges', []) or []:
+            start_col = r.get('startColumnIndex', 0) or 0
+            end_col = r.get('endColumnIndex')
+            if end_col is None:
+                end_col = len(headers)
+            for ci in range(start_col, min(end_col, len(headers))):
+                col_name = headers[ci]
+                if not col_name:
+                    continue
+                rule = dict(rule_template)
+                rule['col'] = col_name
+                out.append(rule)
+
+    return out, skipped
+
+
+@bp.route('/api/filone/cond_formats_sheets')
+@login_required
+def get_filone_cond_formats_sheets():
+    """Legge le regole di formattazione condizionale dal foglio Sheets e
+    restituisce la versione mappabile lato client. Singola chiamata API a
+    Sheets — solo `conditionalFormats` per il foglio attivo, NO grid data —
+    quindi response leggera e tempo di risposta breve."""
+    try:
+        ws = get_worksheet()
+        spreadsheet = ws.spreadsheet
+        sheet_data = _sheets_retry(
+            spreadsheet.fetch_sheet_metadata,
+            params={
+                'fields': (
+                    'sheets.properties.sheetId,'
+                    'sheets.properties.title,'
+                    'sheets.conditionalFormats'
+                )
+            }
+        )
+
+        target = None
+        for s in sheet_data.get('sheets', []) or []:
+            props = s.get('properties', {}) or {}
+            if props.get('sheetId') == ws.id:
+                target = s
+                break
+
+        if target is None:
+            return jsonify({'rules': [], 'count': 0, 'skipped': 0})
+
+        cond_formats = target.get('conditionalFormats', []) or []
+        headers = get_headers()
+        rules, skipped = _convert_sheets_cond_formats(cond_formats, headers)
+        return jsonify({
+            'rules': rules,
+            'count': len(rules),
+            'skipped': skipped,
+        })
+    except Exception as e:
+        return _api_error(e, 'lettura regole condizionali Sheets')
+
+
 @bp.route('/api/filone/formats')
 @login_required
 def get_filone_formats():

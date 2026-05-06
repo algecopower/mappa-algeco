@@ -722,7 +722,7 @@ def get_filone():
 # sempre nel cache file con i delta locali, ma quel file viene marcato come
 # parziale (`partial=True`) finché non lo riscrive il refresh completo: in
 # stato parziale il TTL viene ignorato e il refresh parte sempre.
-_FORMAT_CACHE_TTL_SECONDS = 300
+_FORMAT_CACHE_TTL_SECONDS = 60
 
 
 def _format_cache_path():
@@ -1125,10 +1125,22 @@ def update_filone_formats():
         # nello stesso write-lock con header FRESCHI, così se la collega ha
         # appena inserito/spostato/cancellato una colonna sul foglio, la
         # formattazione non finisce sulla colonna sbagliata.
+        #
+        # NB: usiamo `updateCells` (Sheets API v4 batchUpdate) invece di
+        # `worksheet.batch_format` di gspread. Quest'ultimo costruisce
+        # internamente richieste `repeatCell` che — su QUESTO foglio — la
+        # Sheets API accetta restituendo HTTP 200 ma silenziosamente NON
+        # applica i flag booleani (bold/italic/underline/strikethrough).
+        # Bug riprodotto via test diretto: stesso payload via `updateCells`
+        # funziona, via `repeatCell` no. Causa probabile: limitazione/edge
+        # case API quando il range è singola cella e fields mask copre
+        # textFormat boolean. `updateCells` è il request type più diretto
+        # per scrivere singole celle.
         with _gsheets_write_lock:
             header_map = force_refresh_headers()
             ws = get_worksheet()
-            batch = []
+            sheet_id = ws.id
+            requests_list = []
 
             for key, fmt in fmt_updates.items():
                 parts = key.split(':', 1)
@@ -1146,8 +1158,8 @@ def update_filone_formats():
                     unknown_cols.add(col_name)
                     continue
 
-                cell_a1 = gspread.utils.rowcol_to_a1(row_num, col_idx)
-                sheets_fmt = {}
+                user_fmt = {}
+                fields_parts = []
 
                 text_fmt = {}
                 if 'bold' in fmt:
@@ -1161,14 +1173,31 @@ def update_filone_formats():
                 if fmt.get('textColor'):
                     text_fmt['foregroundColorStyle'] = {'rgbColor': _hex_to_sheets_color(fmt['textColor'])}
                 if text_fmt:
-                    sheets_fmt['textFormat'] = text_fmt
+                    user_fmt['textFormat'] = text_fmt
+                    fields_parts.append('userEnteredFormat.textFormat')
 
                 if fmt.get('bgColor'):
-                    sheets_fmt['backgroundColorStyle'] = {'rgbColor': _hex_to_sheets_color(fmt['bgColor'])}
+                    user_fmt['backgroundColorStyle'] = {'rgbColor': _hex_to_sheets_color(fmt['bgColor'])}
+                    fields_parts.append('userEnteredFormat.backgroundColorStyle')
 
-                if sheets_fmt:
-                    batch.append({'range': cell_a1, 'format': sheets_fmt})
+                if not user_fmt:
+                    continue
 
+                requests_list.append({
+                    'updateCells': {
+                        'range': {
+                            'sheetId': sheet_id,
+                            'startRowIndex': row_num - 1,
+                            'endRowIndex': row_num,
+                            'startColumnIndex': col_idx - 1,
+                            'endColumnIndex': col_idx,
+                        },
+                        'rows': [{'values': [{'userEnteredFormat': user_fmt}]}],
+                        'fields': ','.join(fields_parts),
+                    }
+                })
+
+            # Reset cells: textFormat tutti false + colore testo nero + bg bianco
             for key in fmt_cleared:
                 parts = key.split(':', 1)
                 if len(parts) != 2:
@@ -1185,18 +1214,28 @@ def update_filone_formats():
                     unknown_cols.add(col_name)
                     continue
 
-                cell_a1 = gspread.utils.rowcol_to_a1(row_num, col_idx)
-                batch.append({
-                    'range': cell_a1,
-                    'format': {
-                        'textFormat': {
-                            'bold': False,
-                            'italic': False,
-                            'underline': False,
-                            'strikethrough': False,
-                            'foregroundColorStyle': {'rgbColor': {'red': 0, 'green': 0, 'blue': 0}},
+                requests_list.append({
+                    'updateCells': {
+                        'range': {
+                            'sheetId': sheet_id,
+                            'startRowIndex': row_num - 1,
+                            'endRowIndex': row_num,
+                            'startColumnIndex': col_idx - 1,
+                            'endColumnIndex': col_idx,
                         },
-                        'backgroundColorStyle': {'rgbColor': {'red': 1, 'green': 1, 'blue': 1}},
+                        'rows': [{'values': [{
+                            'userEnteredFormat': {
+                                'textFormat': {
+                                    'bold': False,
+                                    'italic': False,
+                                    'underline': False,
+                                    'strikethrough': False,
+                                    'foregroundColorStyle': {'rgbColor': {'red': 0, 'green': 0, 'blue': 0}},
+                                },
+                                'backgroundColorStyle': {'rgbColor': {'red': 1, 'green': 1, 'blue': 1}},
+                            }
+                        }]}],
+                        'fields': 'userEnteredFormat.textFormat,userEnteredFormat.backgroundColorStyle',
                     }
                 })
 
@@ -1206,11 +1245,15 @@ def update_filone_formats():
                     f"(formattazioni saltate): {sorted(unknown_cols)}"
                 )
 
-            if batch:
-                batch_len = len(batch)
+            if requests_list:
+                batch_len = len(requests_list)
                 CHUNK = 500
-                for i in range(0, len(batch), CHUNK):
-                    _sheets_retry(ws.batch_format, batch[i:i + CHUNK])
+                for i in range(0, len(requests_list), CHUNK):
+                    _sheets_retry(
+                        ws.client.batch_update,
+                        ws.spreadsheet_id,
+                        {'requests': requests_list[i:i + CHUNK]},
+                    )
 
         # Aggiorna la cache locale con le modifiche. Se il file non esisteva,
         # lo creiamo come `partial=True` così la prossima GET sa che deve

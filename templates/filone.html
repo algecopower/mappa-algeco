@@ -428,7 +428,11 @@
             right: 0;
             border-bottom: 1px solid var(--border);
         }
-        .vrow:hover .vc { background: var(--bg-cell-hover) !important; }
+        /* Hover riga: la regola sta più sotto, dopo le zebra-stripe, per
+           non aver bisogno di !important — così le celle che hanno un
+           background inline (formattazione cell-level / cond format) lo
+           mantengono al passaggio del mouse, mentre le celle non formattate
+           ricevono regolarmente il colore di hover. */
         .vc {
             padding: 4px 10px;
             font-size: 0.82em;
@@ -463,6 +467,9 @@
         .vrow-even .vc.rn { background: var(--bg-cell-alt); }
         .vrow-odd .vc { background: var(--bg-cell); }
         .vrow-odd .vc.rn { background: var(--bg-cell); }
+        /* Hover riga (DOPO le zebra: source order → vince sulle zebra ma
+           non sui background inline applicati dal rendering della formattazione). */
+        .vrow:hover .vc { background: var(--bg-cell-hover); }
         .vc.sel {
             outline: 2px solid var(--primary);
             outline-offset: -1px;
@@ -1302,6 +1309,7 @@
             <div class="toolbar-sep"></div>
             <button class="tb" id="btnHiddenCols" onclick="openColManager()" title="Gestione colonne">&#x2630; Colonne</button>
             <button class="tb" onclick="openCondFormat()" title="Formattazione condizionale">&#x1F3A8; Formato</button>
+            <button class="tb" id="btnStylesToggle" onclick="toggleStylesView()" title="Nascondi gli stili (vista pulita)">&#x1F441;&#xFE0F; Stili</button>
             <div class="toolbar-sep"></div>
             <button class="tb" id="btnRefresh" onclick="manualRefresh()" title="Ricarica dati dal server (F5)">&#x1F504; Aggiorna</button>
             <button class="tb" onclick="AlgecoTour.start(true)" title="Guida interattiva">&#x2753; Guida</button>
@@ -1627,6 +1635,8 @@ async function loadData() {
         detectColTypes();
         initCondFormat();
         loadCellFormats();
+        loadStylesEnabled();
+        updateStylesToggleBtn();
         detectPodColumn();
         initColWidths();
         initColOrder();
@@ -2420,18 +2430,32 @@ function fillRow(node, row, visIdx) {
         // ASSOLUTA e sostituisce completamente quella cell-level (per non
         // essere "diluita" dai colori che arrivano dal foglio Sheets).
         // Senza match cond, applichiamo la cell-level come al solito.
-        var condRule = getCondStyle(i, val);
-        var cfmt = getCellFormat(row._row, cn);
-        var fmtSrc = condRule || cfmt;
-        if (fmtSrc) {
-            if (fmtSrc.bold) cell.style.fontWeight = '700';
-            if (fmtSrc.italic) cell.style.fontStyle = 'italic';
-            var td = [];
-            if (fmtSrc.underline) td.push('underline');
-            if (fmtSrc.strikethrough) td.push('line-through');
-            if (td.length) cell.style.textDecoration = td.join(' ');
-            if (fmtSrc.textColor) cell.style.color = fmtSrc.textColor;
-            if (fmtSrc.bgColor) cell.style.backgroundColor = fmtSrc.bgColor;
+        // Il toggle `stylesEnabled` permette di nascondere temporaneamente
+        // tutti gli stili (cell-level + cond) per una vista "pulita".
+        if (stylesEnabled) {
+            var condRule = getCondStyle(i, val);
+            var cfmt = getCellFormat(row._row, cn);
+            var fmtSrc = condRule || cfmt;
+            if (fmtSrc) {
+                if (fmtSrc.bold) cell.style.fontWeight = '700';
+                if (fmtSrc.italic) cell.style.fontStyle = 'italic';
+                var td = [];
+                if (fmtSrc.underline) td.push('underline');
+                if (fmtSrc.strikethrough) td.push('line-through');
+                if (td.length) cell.style.textDecoration = td.join(' ');
+                if (fmtSrc.textColor) cell.style.color = fmtSrc.textColor;
+                if (fmtSrc.bgColor) {
+                    cell.style.backgroundColor = fmtSrc.bgColor;
+                    // Se non è stato impostato un textColor esplicito,
+                    // calcoliamo un colore con contrasto sufficiente sullo
+                    // sfondo: rende il testo leggibile in entrambi i temi
+                    // (chiaro/scuro) qualunque sia lo sfondo del foglio.
+                    if (!fmtSrc.textColor) {
+                        var auto = getContrastTextColor(fmtSrc.bgColor);
+                        if (auto) cell.style.color = auto;
+                    }
+                }
+            }
         }
 
         // Find & Replace highlight
@@ -4384,6 +4408,58 @@ var _fmtDirty = {};   // Celle modificate dall'utente (da sincronizzare)
 var _fmtCleared = [];  // Celle resettate (da sincronizzare come clear)
 var _fmtSyncTimer = null;
 var _fmtSyncing = false;
+
+// Toggle globale "vista pulita": quando false, gli stili cell-level e
+// condizionali NON vengono applicati visivamente (le modifiche continuano a
+// essere salvate normalmente — è un filtro solo di rendering).
+var stylesEnabled = true;
+
+function loadStylesEnabled() {
+    try {
+        var s = localStorage.getItem('filone_styles_enabled');
+        if (s !== null) stylesEnabled = (s === 'true' || s === '1');
+    } catch(e) {}
+}
+
+function toggleStylesView() {
+    stylesEnabled = !stylesEnabled;
+    try { localStorage.setItem('filone_styles_enabled', stylesEnabled ? '1' : '0'); } catch(e) {}
+    updateStylesToggleBtn();
+    renderVisible(true);
+}
+
+function updateStylesToggleBtn() {
+    var btn = qs('#btnStylesToggle');
+    if (!btn) return;
+    if (stylesEnabled) {
+        btn.innerHTML = '\u{1F441}️ Stili';
+        btn.title = 'Nascondi gli stili (vista pulita)';
+        btn.classList.remove('off');
+        btn.style.opacity = '';
+    } else {
+        btn.innerHTML = '\u{1F6AB} Stili';
+        btn.title = 'Mostra gli stili';
+        btn.classList.add('off');
+        btn.style.opacity = '0.55';
+    }
+}
+
+// Restituisce un colore testo (#1a1a1a o #f5f5f5) con buon contrasto su
+// hexBg. Usata quando una cella ha solo bgColor: garantisce leggibilità
+// del testo qualunque sia il tema attivo.
+function getContrastTextColor(hexBg) {
+    if (!hexBg || typeof hexBg !== 'string' || hexBg[0] !== '#') return null;
+    var h = hexBg.slice(1);
+    if (h.length === 3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+    if (h.length !== 6) return null;
+    var r = parseInt(h.slice(0,2), 16);
+    var g = parseInt(h.slice(2,4), 16);
+    var b = parseInt(h.slice(4,6), 16);
+    if (isNaN(r) || isNaN(g) || isNaN(b)) return null;
+    // Luminanza percepita (formula sRGB approssimata)
+    var luma = (0.299*r + 0.587*g + 0.114*b);
+    return luma > 140 ? '#1a1a1a' : '#f5f5f5';
+}
 
 function loadCellFormats() {
     // Carica dal localStorage come cache locale (il server sovrascriverà al load)

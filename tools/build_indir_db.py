@@ -27,8 +27,9 @@ import pdfplumber
 
 SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_DB_PATH = os.path.join(SCRIPT_DIR, 'cache', 'indir_piem.db')
-DEFAULT_CSV_GLOB = os.path.join(SCRIPT_DIR, 'INDIR_PIEM_*.csv')
-DEFAULT_PDF_GLOB = os.path.join(SCRIPT_DIR, 'T4_codicicatastali_comuni_*.pdf')
+_ANAGRAFE_DIR = os.path.join(SCRIPT_DIR, 'data', 'anagrafe_indirizzi')
+DEFAULT_CSV_GLOB = os.path.join(_ANAGRAFE_DIR, 'INDIR_PIEM_*.csv')
+DEFAULT_PDF_GLOB = os.path.join(_ANAGRAFE_DIR, 'T4_codicicatastali_comuni_*.pdf')
 
 
 # ============================================================================

@@ -14,7 +14,8 @@
       "Bash(/opt/mappa-algeco/venv/bin/python -c \"import pdfplumber, pandas; print\\('ok'\\)\")",
       "Bash(awk -F';' 'NR>500000 && NR<500005 {print NF, \"|\", $0}' /opt/mappa-algeco/INDIR_PIEM_20260504.csv)",
       "Bash(awk -F';' '{print NF}' /opt/mappa-algeco/INDIR_PIEM_20260504.csv)",
-      "Bash(/opt/mappa-algeco/venv/bin/python -c ' *)"
+      "Bash(/opt/mappa-algeco/venv/bin/python -c ' *)",
+      "Bash(git check-ignore *)"
     ]
   }
 }

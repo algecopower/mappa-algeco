@@ -26,6 +26,11 @@ templates/mappa_pavia.html
 # Dati mappa rigenerati automaticamente
 data/*/mappa_data.json
 
+# Anagrafe nazionale numeri civici (ANNCSU) - file troppo grandi per git.
+# Rigenerabili: scarica da fonte ufficiale e lancia tools/build_indir_db.py
+data/anagrafe_indirizzi/*.csv
+data/anagrafe_indirizzi/*.pdf
+
 # OS
 Thumbs.db
 Desktop.ini

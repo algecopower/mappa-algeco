@@ -628,6 +628,7 @@ from routes.bacheca import bp as bacheca_bp
 from routes.dashboard import bp as dashboard_bp
 from routes.report import bp as report_bp
 from routes.access_points import bp as access_points_bp
+from routes.verifica_indirizzi import bp as verifica_indirizzi_bp
 
 app.register_blueprint(contatori_bp)
 app.register_blueprint(distinte_bp)
@@ -638,6 +639,7 @@ app.register_blueprint(bacheca_bp)
 app.register_blueprint(dashboard_bp)
 app.register_blueprint(report_bp)
 app.register_blueprint(access_points_bp)
+app.register_blueprint(verifica_indirizzi_bp)
 
 # ============================================================================
 # CSRF PROTECTION (verifica Origin/Referer per POST/PUT/DELETE)

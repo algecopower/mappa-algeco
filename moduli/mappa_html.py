@@ -35,6 +35,11 @@ from config import (
 )
 
 from .percorso import ordina_percorso, calcola_distanza_haversine
+from .verifica_indirizzi_ui import (
+    genera_css_verifica_indirizzi,
+    genera_js_verifica_indirizzi,
+    genera_html_verifica_indirizzi,
+)
 from .gestionale import (
     genera_css_gestionale,
     genera_js_gestionale,
@@ -3910,6 +3915,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
 
         /* CSS Gestionale */
         {genera_css_gestionale()}
+        {genera_css_verifica_indirizzi()}
 
         /* ============================================ */
         /* MODALITÀ PIANIFICAZIONE                      */
@@ -4617,6 +4623,11 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                 <span class="gp-btn-icon">🔐</span>
                 <span class="gp-btn-text">Sigilli / Matricole</span>
                 <span class="gp-btn-desc">Inserisci sigilli e matricole installate</span>
+            </button>
+            <button class="gestionale-panel-btn gp-btn-sigilli" onclick="toggleGestionalePanel(); apriModalVerificaIndirizzi()">
+                <span class="gp-btn-icon">🔍</span>
+                <span class="gp-btn-text">Verifica Indirizzi</span>
+                <span class="gp-btn-desc">Confronta vie e civici con l'anagrafe nazionale</span>
             </button>
             <a href="/distinte" target="_blank" class="gestionale-panel-btn gp-btn-distinte" style="text-decoration:none;">
                 <span class="gp-btn-icon">📋</span>
@@ -13987,6 +13998,7 @@ function riordinaPerFasciaOraria() {{
         // GESTIONALE - Funzioni editing, Excel, BOXBEAT
         // ============================================================
         {genera_js_gestionale()}
+        {genera_js_verifica_indirizzi()}
 
         // ============================================================
         // INIT
@@ -14019,6 +14031,7 @@ function riordinaPerFasciaOraria() {{
     
     <!-- Modali Gestionale -->
     {genera_html_gestionale()}
+    {genera_html_verifica_indirizzi()}
 <script src="/static/bacheca.js"></script>
 <script src="/static/tour.js"></script>
 <script>

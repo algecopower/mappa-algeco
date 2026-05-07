@@ -23,3 +23,6 @@ flask-cors>=4.0.0
 
 # Excel file reading
 xlrd>=2.0.1
+
+# Fuzzy matching (verifica indirizzi)
+rapidfuzz>=3.0.0

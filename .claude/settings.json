@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -c \"import pdfplumber; print\\('OK'\\)\")",
+      "Bash(python3)",
+      "Bash(awk -F';' 'NR>1 {print $1, \"|\", $5, \"|\", $6, \"|\", $11, \"|\", $12}' /opt/mappa-algeco/INDIR_PIEM_20260504.csv)",
+      "Bash(shuf -n 30)",
+      "Bash(awk -F';' 'NR>1 {print $1}' /opt/mappa-algeco/INDIR_PIEM_20260504.csv)",
+      "Bash(python3 -c ' *)",
+      "Bash(python3 tools/build_indir_db.py)",
+      "Bash(pip install *)",
+      "Bash(/opt/mappa-algeco/.venv/bin/python -c \"import rapidfuzz; print\\(rapidfuzz.__version__\\)\")",
+      "Bash(/opt/mappa-algeco/venv/bin/python -c \"import rapidfuzz; print\\(rapidfuzz.__version__\\)\")",
+      "Bash(/opt/mappa-algeco/venv/bin/python -c \"import pdfplumber, pandas; print\\('ok'\\)\")",
+      "Bash(awk -F';' 'NR>500000 && NR<500005 {print NF, \"|\", $0}' /opt/mappa-algeco/INDIR_PIEM_20260504.csv)",
+      "Bash(awk -F';' '{print NF}' /opt/mappa-algeco/INDIR_PIEM_20260504.csv)",
+      "Bash(/opt/mappa-algeco/venv/bin/python -c ' *)"
+    ]
+  }
+}

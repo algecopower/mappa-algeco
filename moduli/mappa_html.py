@@ -44,6 +44,30 @@ from .gestionale import (
 from .zone_geografiche import is_valid_coordinate
 
 
+def _normalizza_ora_app(valore):
+    """
+    Restituisce una stringa orario "pulita" o None.
+
+    Gestisce i casi in cui ORA_APPUNTAMENTO arriva da pandas come NaN
+    (truthy ma non confrontabile con se' stesso), pd.NA, o stringhe
+    fasulle ('nan', 'None', '<NA>'). Senza questa normalizzazione il
+    frontend riceve `"nan"` e la mostra come badge nella card.
+    """
+    if valore is None:
+        return None
+    # NaN float (nan != nan e' True)
+    if isinstance(valore, float) and valore != valore:
+        return None
+    # pd.NA, pd.NaT e simili: testabili senza importare pandas
+    cls_name = type(valore).__name__
+    if cls_name in ('NAType', 'NaTType'):
+        return None
+    s = str(valore).strip()
+    if not s or s.lower() in ('nan', 'none', 'null', '<na>', 'nat'):
+        return None
+    return s
+
+
 def genera_mappa_html(df, report, risultato_zone, filename=None):
     """
     Genera mappa HTML interattiva completa.
@@ -258,7 +282,9 @@ def prepara_dati_contatori(df, report):
             'access_override': access_source == 'override',
             'lcl': str(row.get('LCL', '')),
             'is_appuntamento': bool(row.get('IS_APPUNTAMENTO', False)),
-            'ora_appuntamento': str(row.get('ORA_APPUNTAMENTO', '')) if row.get('ORA_APPUNTAMENTO') else None,
+            # NaN di pandas e' truthy ma non si confronta uguale a se stesso:
+            # _normalizza_ora_app evita che finisca a UI come la stringa "nan".
+            'ora_appuntamento': _normalizza_ora_app(row.get('ORA_APPUNTAMENTO')),
             'visibile_default': visibile_default,
             'ordine_tappa': ordine_tappa,  # Ordine pre-calcolato da Python/OSRM
             'annullato': is_annullato,  # Flag ANNULLATO dal filone
@@ -1896,6 +1922,54 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         
         .tappa-card.appuntamento .tappa-orari-lettere {{
             bottom: 30px;
+        }}
+
+        /* Toggle ordinamento percorso (sidebar): "Percorso" / "Orario" */
+        .sort-mode-toggle {{
+            display: inline-flex;
+            gap: 2px;
+            padding: 2px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+        }}
+
+        .sort-mode-btn {{
+            background: transparent;
+            border: none;
+            color: var(--text-secondary, #94a3b8);
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 0.72rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.18s ease;
+            line-height: 1;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            white-space: nowrap;
+        }}
+
+        .sort-mode-btn:hover {{
+            color: var(--text-primary, #f1f5f9);
+        }}
+
+        .sort-mode-btn.active {{
+            background: var(--accent-secondary, #06b6d4);
+            color: #ffffff;
+            box-shadow: 0 1px 4px rgba(6, 182, 212, 0.35);
+        }}
+
+        .tappa-orig-pos {{
+            display: inline-flex;
+            align-items: center;
+            gap: 2px;
+            margin-left: 6px;
+            font-size: 0.7em;
+            color: var(--text-muted, #64748b);
+            font-weight: 500;
+            opacity: 0.8;
         }}
 
         .tappa-tempo {{
@@ -4808,30 +4882,13 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                     </div>
                     <div class="settings-field-row">
                         <div class="settings-field">
-                            <label>Raggio microzona (km)</label>
-                            <input type="number" step="0.1" min="0.1" max="5" id="settings_raggio_microzona">
-                        </div>
-                        <div class="settings-field">
                             <label>Ora inizio giornata</label>
                             <input type="text" placeholder="es. 8:00 o 9:00" id="settings_ora_inizio">
                         </div>
-                    </div>
-                    <div class="settings-field-row">
                         <div class="settings-field">
                             <label>Ora fine giornata</label>
                             <input type="text" placeholder="es. 17:00 o 18:00" id="settings_ora_fine">
                         </div>
-                        <div class="settings-field"></div>
-                    </div>
-                    <div class="settings-toggle">
-                        <div>
-                            <div class="settings-toggle-label">Ottimizza per tempo</div>
-                            <div class="settings-toggle-desc">Se attivo, preferisce autostrade (più veloci). Se disattivo, minimizza i km.</div>
-                        </div>
-                        <label class="settings-switch">
-                            <input type="checkbox" id="settings_ottimizza_tempo">
-                            <span class="slider"></span>
-                        </label>
                     </div>
                 </div>
 
@@ -5204,6 +5261,8 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         let zoneCircles = [];
         let eneltelLabels = [];
         let routePolylines = [];  // Polyline delle rotte OSRM
+        /** Invalidazione fetch geometria modalità Orario (incrementato in clearRoutes). */
+        let routeOrarioFetchSeq = 0;
         let mostraRotteAttivo = false;
 
         // Pin & Date Navigation
@@ -5405,6 +5464,8 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         function clearRoutes() {{
             routePolylines.forEach(p => map.removeLayer(p));
             routePolylines = [];
+            // Invalida fetch /api/route_geometry ancora in volo (vista cambiata o redraw).
+            routeOrarioFetchSeq++;
         }}
 
         function toggleRotte() {{
@@ -7913,18 +7974,34 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             let html = '';
             
             // Header con info percorso
+            // Determina la modalita' di ordinamento corrente (persistente).
+            // - 'percorso': ordine OSRM/ancore (default)
+            // - 'orario'  : riordina cronologicamente, le tappe senza orario in fondo
+            const sortMode = getPercorsoSortMode();
+            // Annota la posizione "ottimizzata" (1-based) per mostrarla come badge
+            // anche dopo il riordinamento cronologico.
+            const listaConOrdine = lista.map((c, idx) => {{
+                const conMeta = Object.assign({{}}, c);
+                conMeta._ordineOttimizzato = idx + 1;
+                return conMeta;
+            }});
+            const listaDaMostrare = sortMode === 'orario'
+                ? applicaSortPerOrario(listaConOrdine)
+                : listaConOrdine;
+
             html += `
                 <div style="background: linear-gradient(135deg, var(--bg-tertiary) 0%, var(--bg-secondary) 100%); border-radius: 12px; padding: 16px; margin-bottom: 15px; border: 2px solid ${{colore}};">
                     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
                         <div style="width: 16px; height: 16px; background: ${{colore}}; border-radius: 4px;"></div>
                         <div style="font-weight: 700; font-size: 1.1em; color: var(--text-primary);">👤 ${{nomeOp}}</div>
+                        <div style="margin-left: auto;">${{_renderSortToggleHTML()}}</div>
                     </div>
                     <div style="font-size: 0.85em; color: var(--text-secondary);">
                         📅 ${{formatDate(data)}} | 📍 ${{lista.length}} tappe | 🏘️ ${{new Set(lista.map(c => c.comune)).size}} comuni
                     </div>
                 </div>
             `;
-            
+
             // Deposito partenza
             html += `
                 <div class="tappa-card deposito">
@@ -7937,24 +8014,32 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                     </div>
                 </div>
             `;
-            
-            // Tappe ordinate
-            lista.forEach((c, idx) => {{
-                // Calcola tempo dal punto precedente
+
+            // Tappe (ordinate per percorso o per orario in base al toggle)
+            listaDaMostrare.forEach((c, idx) => {{
+                // In modalita' "orario" il "tempo dalla tappa precedente" non
+                // riflette il percorso reale guidato, quindi viene omesso per
+                // non confondere il tecnico.
                 let tempoInfo = '';
-                if (idx === 0) {{
-                    // Prima tappa: distanza dal deposito
-                    const dist = calcolaDistanzaKm(deposito.lat, deposito.lon, c.lat, c.lon);
-                    const tempo = calcolaTempoMinuti(dist);
-                    tempoInfo = `<div class="tappa-tempo">🚗 ${{formattaTempo(tempo)}} dal deposito (~${{dist.toFixed(1)}} km)</div>`;
-                }} else {{
-                    // Tappa successiva: distanza dalla precedente
-                    const prev = lista[idx - 1];
-                    const dist = calcolaDistanzaKm(prev.lat, prev.lon, c.lat, c.lon);
-                    const tempo = calcolaTempoMinuti(dist);
-                    tempoInfo = `<div class="tappa-tempo">🚗 ${{formattaTempo(tempo)}} dalla tappa ${{idx}} (~${{dist.toFixed(1)}} km)</div>`;
+                if (sortMode !== 'orario') {{
+                    if (idx === 0) {{
+                        const dist = calcolaDistanzaKm(deposito.lat, deposito.lon, c.lat, c.lon);
+                        const tempo = calcolaTempoMinuti(dist);
+                        tempoInfo = `<div class="tappa-tempo">🚗 ${{formattaTempo(tempo)}} dal deposito (~${{dist.toFixed(1)}} km)</div>`;
+                    }} else {{
+                        const prev = listaDaMostrare[idx - 1];
+                        const dist = calcolaDistanzaKm(prev.lat, prev.lon, c.lat, c.lon);
+                        const tempo = calcolaTempoMinuti(dist);
+                        tempoInfo = `<div class="tappa-tempo">🚗 ${{formattaTempo(tempo)}} dalla tappa ${{idx}} (~${{dist.toFixed(1)}} km)</div>`;
+                    }}
                 }}
-                
+
+                // Badge "posizione nel percorso ottimizzato" mostrato solo in
+                // modalita' orario, per non perdere il riferimento alla mappa.
+                const origPosBadge = (sortMode === 'orario' && c._ordineOttimizzato)
+                    ? `<span class="tappa-orig-pos" title="Posizione nel percorso ottimizzato">🧭 ${{c._ordineOttimizzato}}</span>`
+                    : '';
+
                 html += `
                     <div class="tappa-card ${{c.is_appuntamento ? 'appuntamento' : ''}}" 
                          onclick="evidenziaContatore('${{c.id}}')"
@@ -7962,7 +8047,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                          data-eneltel="${{c.eneltel}}">
                         <div class="tappa-header">
                             <div class="tappa-numero" style="background: ${{colore}}">${{idx + 1}}</div>
-                            <div class="tappa-cliente">${{c.cliente || 'N/D'}}</div>
+                            <div class="tappa-cliente">${{c.cliente || 'N/D'}}${{origPosBadge}}</div>
                             <button class="tappa-edit-btn" onclick="event.stopPropagation(); apriVistaModifica('${{c.eneltel}}')" title="Modifica">✏️</button>
                             ${{c.is_appuntamento ? `<div class="tappa-app-badge">☎️ ${{c.ora_appuntamento || 'APP'}}</div>` : ''}}
                         </div>
@@ -8023,7 +8108,64 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             
             resultsDiv.innerHTML = html;
         }}
-        
+
+        /** (lon, lat) per OSRM: stesso criterio lato server (access point se valido). */
+        function lonLatRoutingDaContatore(c) {{
+            const la = c.lat_access != null ? Number(c.lat_access) : NaN;
+            const lo = c.lon_access != null ? Number(c.lon_access) : NaN;
+            const lat = Number.isFinite(la) ? la : Number(c.lat);
+            const lon = Number.isFinite(lo) ? lo : Number(c.lon);
+            return [lon, lat];
+        }}
+
+        function polylineOrarioFallbackLineaAria(listaDaUsare, colore) {{
+            const coords = [[deposito.lat, deposito.lon]];
+            listaDaUsare.forEach(c => coords.push([c.lat, c.lon]));
+            coords.push([deposito.lat, deposito.lon]);
+            const polyline = L.polyline(coords, {{
+                color: colore,
+                weight: 3,
+                opacity: 0.55,
+                dashArray: '6, 8'
+            }}).addTo(map);
+            routePolylines.push(polyline);
+        }}
+
+        /**
+         * Rotta stradale OSRM nell'ordine cronologico mostrato (deposito → tappe → deposito).
+         * Fallback alla polyline tratteggiata linea d’aria se OSRM non risponde.
+         */
+        async function caricaPolylineOsrmOrdineOrario(listaDaUsare, colore) {{
+            const mySeq = routeOrarioFetchSeq;
+            const coords = [[deposito.lon, deposito.lat]];
+            listaDaUsare.forEach(c => coords.push(lonLatRoutingDaContatore(c)));
+            coords.push([deposito.lon, deposito.lat]);
+            try {{
+                const res = await fetch('/api/route_geometry', {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    credentials: 'same-origin',
+                    body: JSON.stringify({{ coordinates: coords }}),
+                }});
+                const js = await res.json();
+                if (mySeq !== routeOrarioFetchSeq) return;
+                if (!res.ok || !js.success || !js.geometry || !js.geometry.length) {{
+                    polylineOrarioFallbackLineaAria(listaDaUsare, colore);
+                    return;
+                }}
+                const latLngs = js.geometry.map(([lon, lat]) => [lat, lon]);
+                const polyline = L.polyline(latLngs, {{
+                    color: colore,
+                    weight: 4,
+                    opacity: 0.82,
+                }}).addTo(map);
+                routePolylines.push(polyline);
+            }} catch (e) {{
+                if (mySeq !== routeOrarioFetchSeq) return;
+                polylineOrarioFallbackLineaAria(listaDaUsare, colore);
+            }}
+        }}
+
         function renderPercorsoOperatoreMappa(lista, data, operatore) {{
             // Salva la vista corrente se richiesto
             let savedCenter = null;
@@ -8050,8 +8192,21 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             depositoMarker.bindPopup('<b>🏠 Deposito</b><br>' + deposito.nome);
             allPoints.push([deposito.lat, deposito.lon]);
             
-            // Prepara lista con indice
-            const listaConIndice = lista.map((c, idx) => ({{
+            // Sortmode coerente con la sidebar (toggle 🧭 Percorso / 🕒 Orario):
+            // - 'percorso': ordine OSRM/ancore originale ricevuto
+            // - 'orario'  : riordina cronologicamente, le tappe senza orario in fondo
+            // Il sort viene applicato prima di costruire indiceTecnico, cosi' i
+            // numeri dei marker coincidono SEMPRE con i numeri della sidebar.
+            const sortMode = getPercorsoSortMode();
+            const listaConOrdine = lista.map((c, idx) => Object.assign({{}}, c, {{
+                _ordineOttimizzato: idx + 1
+            }}));
+            const listaDaUsare = sortMode === 'orario'
+                ? applicaSortPerOrario(listaConOrdine)
+                : listaConOrdine;
+            
+            // Prepara lista con indice (ora basato sull'ordine effettivamente mostrato)
+            const listaConIndice = listaDaUsare.map((c, idx) => ({{
                 ...c,
                 indiceTecnico: idx,
                 colore: colore
@@ -8081,10 +8236,16 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                     const eneltelLast3 = c.eneltel.slice(-3);
                     const idx = c.indiceTecnico;
                     
-                    // Calcola punto precedente per il tempo di percorrenza
-                    const prevPoint = idx === 0 
-                        ? {{ lat: deposito.lat, lon: deposito.lon, isDeposito: true, num: 0 }}
-                        : {{ lat: lista[idx-1].lat, lon: lista[idx-1].lon, isDeposito: false, num: idx }};
+                    // Calcola punto precedente per il tempo di percorrenza.
+                    // In modalita' "orario" l'ordine non riflette il percorso
+                    // reale guidato (i tempi inter-tappa non sono significativi),
+                    // quindi nascondiamo prevPoint per non mostrare informazioni
+                    // fuorvianti nel popup.
+                    const prevPoint = sortMode === 'orario'
+                        ? null
+                        : (idx === 0
+                            ? {{ lat: deposito.lat, lon: deposito.lon, isDeposito: true, num: 0 }}
+                            : {{ lat: listaDaUsare[idx-1].lat, lon: listaDaUsare[idx-1].lon, isDeposito: false, num: idx }});
                     
                     const icon = L.divIcon({{
                         className: 'marker-contatore' + (isApp ? ' marker-appuntamento' : ''),
@@ -8110,16 +8271,18 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                 allPoints.push([gruppo.lat, gruppo.lon]);
             }});
             
-            // Disegna linea del percorso - usa geometria OSRM se disponibile
+            // Disegna linea del percorso.
+            // - In modalita' "percorso": geometria OSRM del sync (ordine ottimizzato).
+            // - In modalita' "orario": richiesta POST /api/route_geometry con i waypoint
+            //   nell'ordine cronologico (stesso dei numeri sui marker); fallback tratteggio.
             if (lista.length > 0) {{
-                // Verifica se esiste la rotta OSRM per questo operatore/data
                 const rottaOSRM = rotte[data] && rotte[data][operatore];
                 
-                if (rottaOSRM && rottaOSRM.length > 0) {{
+                if (sortMode === 'orario') {{
+                    void caricaPolylineOsrmOrdineOrario(listaDaUsare, colore);
+                }} else if (rottaOSRM && rottaOSRM.length > 0) {{
                     // Converti da [lon, lat] (OSRM) a [lat, lon] (Leaflet)
                     const latLngs = rottaOSRM.map(([lon, lat]) => [lat, lon]);
-                    
-                    // Usa la geometria OSRM (strada reale)
                     const polyline = L.polyline(latLngs, {{
                         color: colore,
                         weight: 4,
@@ -8127,10 +8290,9 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                     }}).addTo(map);
                     routePolylines.push(polyline);
                 }} else {{
-                    // Fallback: linea retta tratteggiata
                     const percorsoCoords = [[deposito.lat, deposito.lon]];
                     lista.forEach(c => percorsoCoords.push([c.lat, c.lon]));
-                    percorsoCoords.push([deposito.lat, deposito.lon]); // Ritorno
+                    percorsoCoords.push([deposito.lat, deposito.lon]);
                     
                     const polyline = L.polyline(percorsoCoords, {{
                         color: colore,
@@ -9251,6 +9413,111 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         // L'ordine è già stato calcolato con distanze stradali reali
         // NOTA: OSRM è obbligatorio - nessun fallback JavaScript
         // ================================================================
+        // ============================================================
+        // ORDINAMENTO PERCORSO PER ORARIO (toggle nella sidebar)
+        // ============================================================
+        // Il default e' 'percorso' (ordine ottimizzato OSRM/ancore).
+        // 'orario' riordina cronologicamente la lista usando ora_appuntamento
+        // o, in fallback, orari_lettere (la fascia delle lettere gia' inviate).
+        // Le tappe senza orario vanno in fondo mantenendo l'ordine ottimizzato.
+        function getPercorsoSortMode() {{
+            try {{
+                const v = localStorage.getItem('percorsoSortMode');
+                return v === 'orario' ? 'orario' : 'percorso';
+            }} catch (e) {{ return 'percorso'; }}
+        }}
+
+        function setPercorsoSortMode(mode) {{
+            try {{ localStorage.setItem('percorsoSortMode', mode); }} catch (e) {{}}
+        }}
+
+        function _estraiMinutiInizioTappa(c) {{
+            // Prima ora_appuntamento, poi orari_lettere come fallback.
+            const fonti = [c && c.ora_appuntamento, c && c.orari_lettere];
+            for (const fonte of fonti) {{
+                if (!fonte) continue;
+                const t = String(fonte).trim();
+                if (!t || /^(nan|none|null|<na>|nat)$/i.test(t)) continue;
+
+                let m = t.match(/dalle?\s*(\d{{1,2}})(?:[:.](\d{{2}}))?/i);
+                if (m) {{
+                    const h = parseInt(m[1], 10);
+                    const min = parseInt(m[2] || '0', 10);
+                    if (h >= 0 && h <= 23 && min >= 0 && min <= 59) return h * 60 + min;
+                }}
+                m = t.match(/(\d{{1,2}})[:.](\d{{2}})/);
+                if (m) {{
+                    const h = parseInt(m[1], 10);
+                    const min = parseInt(m[2], 10);
+                    if (h >= 0 && h <= 23 && min >= 0 && min <= 59) return h * 60 + min;
+                }}
+                m = t.match(/(?:alle|ore)\s*(\d{{1,2}})/i);
+                if (m) {{
+                    const h = parseInt(m[1], 10);
+                    if (h >= 0 && h <= 23) return h * 60;
+                }}
+                m = t.match(/(\d{{1,2}})\s*[\-\/]\s*\d{{1,2}}/);
+                if (m) {{
+                    const h = parseInt(m[1], 10);
+                    if (h >= 0 && h <= 23) return h * 60;
+                }}
+            }}
+            return null;
+        }}
+
+        function applicaSortPerOrario(lista) {{
+            // Stable sort: tappe con orario ordinate cronologicamente,
+            // poi quelle senza orario nell'ordine ottimizzato originale.
+            const conOrario = [];
+            const senzaOrario = [];
+            lista.forEach((c, idx) => {{
+                const minuti = _estraiMinutiInizioTappa(c);
+                if (minuti !== null) {{
+                    conOrario.push({{ c, minuti, idx }});
+                }} else {{
+                    senzaOrario.push({{ c, idx }});
+                }}
+            }});
+            conOrario.sort((a, b) => (a.minuti - b.minuti) || (a.idx - b.idx));
+            return [...conOrario.map(x => x.c), ...senzaOrario.map(x => x.c)];
+        }}
+
+        function togglePercorsoSortMode() {{
+            const cur = getPercorsoSortMode();
+            const nuovo = cur === 'orario' ? 'percorso' : 'orario';
+            setPercorsoSortMode(nuovo);
+            // Re-render della vista corrente. Il toggle e' attualmente
+            // disponibile solo in vista "operatore" (percorso del singolo
+            // tecnico). Aggiorna sia la sidebar che i numeri dei marker
+            // sulla mappa: i due ordini restano sempre allineati.
+            // Mantieni la vista mappa corrente per non spaesare l'utente.
+            if (currentView === 'operatore' && currentOperatore && currentData) {{
+                preserveMapView = true;
+                mostraPercorsoCompletoOperatore(currentOperatore, currentData);
+            }}
+        }}
+
+        function _renderSortToggleHTML() {{
+            const mode = getPercorsoSortMode();
+            const isPercorso = mode !== 'orario';
+            const isOrario = mode === 'orario';
+            return `
+                <div class="sort-mode-toggle" title="Ordina la lista: percorso ottimizzato o per orario crescente"
+                     onclick="event.stopPropagation();">
+                    <button class="sort-mode-btn ${{isPercorso ? 'active' : ''}}"
+                            onclick="if(getPercorsoSortMode()==='orario') togglePercorsoSortMode();"
+                            title="Ordine ottimizzato (OSRM)">
+                        🧭 Percorso
+                    </button>
+                    <button class="sort-mode-btn ${{isOrario ? 'active' : ''}}"
+                            onclick="if(getPercorsoSortMode()!=='orario') togglePercorsoSortMode();"
+                            title="Ordine per orario crescente (appuntamenti + lettere)">
+                        🕒 Orario
+                    </button>
+                </div>
+            `;
+        }}
+
         function ordinaPercorsoJS(lista) {{
             if (lista.length <= 1) return lista;
 
@@ -12003,8 +12270,6 @@ function riordinaPerFasciaOraria() {{
             // Percorso
             document.getElementById('settings_velocita').value = s.velocita_media_kmh || 35;
             document.getElementById('settings_tempo_intervento').value = s.tempo_intervento_min || 20;
-            document.getElementById('settings_raggio_microzona').value = s.raggio_microzona_km || 0.5;
-            document.getElementById('settings_ottimizza_tempo').checked = s.ottimizza_per_tempo !== false;
             
             // Ora inizio: converti da minuti a formato HH:MM
             const oraMin = s.ora_inizio_giornata || 480;
@@ -12117,8 +12382,6 @@ function riordinaPerFasciaOraria() {{
                 ora_fine_giornata: oraFine,
                 velocita_media_kmh: parseInt(document.getElementById('settings_velocita').value) || 35,
                 tempo_intervento_min: parseInt(document.getElementById('settings_tempo_intervento').value) || 20,
-                raggio_microzona_km: parseFloat(document.getElementById('settings_raggio_microzona').value) || 0.5,
-                ottimizza_per_tempo: document.getElementById('settings_ottimizza_tempo').checked,
                 data_inizio: document.getElementById('settings_data_inizio').value,
                 data_fine: document.getElementById('settings_data_fine_illimitata').checked ? '' : document.getElementById('settings_data_fine').value,
                 intervallo_sync_secondi: parseInt(document.getElementById('settings_intervallo_sync').value) || 180,

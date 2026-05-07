@@ -1,1 +1,72 @@
-{}
+{
+  "2026-05-07": [
+    {
+      "id": "5c66b3b1",
+      "data_appuntamento": "2026-05-08",
+      "orario": "14:00/15:00",
+      "pod": "IT001E02934502",
+      "eneltel": "29345023",
+      "nominativo": "DOMENICO CLAUDIO COPPOLA",
+      "via": "S LORENZO",
+      "civico": "5",
+      "comune": "SANTENA",
+      "note": "APP 14:00/15:00",
+      "data_pianificata": "2026-05-08",
+      "origine": "filone_manuale",
+      "provincia": "TORINO",
+      "creato_da": "giada",
+      "registrato_il": "2026-05-07T11:03:16.356263"
+    },
+    {
+      "id": "a674bf65",
+      "data_appuntamento": "2026-05-08",
+      "orario": "12:00/15:00",
+      "pod": "IT001E02938187",
+      "eneltel": "29381879",
+      "nominativo": "BOTTEGA DELLA CARNE DI CORNIGLIA MAURO",
+      "via": "CAVOUR",
+      "civico": "65",
+      "comune": "SANTENA",
+      "note": "APP 12:00/15:007",
+      "data_pianificata": "2026-05-08",
+      "origine": "filone_manuale",
+      "provincia": "TORINO",
+      "creato_da": "giada",
+      "registrato_il": "2026-05-07T11:21:37.182167"
+    },
+    {
+      "id": "9bf5600c",
+      "data_appuntamento": "2026-05-08",
+      "orario": "9:00/11:00",
+      "pod": "IT001E02938309",
+      "eneltel": "29383090",
+      "nominativo": "CONDOMINIO CAVOUR 82 3472571259",
+      "via": "CAVOUR",
+      "civico": "82",
+      "comune": "SANTENA",
+      "note": "07/05 APP 9:00/11:00 // nr segr. mandato wa sollecito",
+      "data_pianificata": "2026-05-08",
+      "origine": "filone_manuale",
+      "provincia": "TORINO",
+      "creato_da": "giada",
+      "registrato_il": "2026-05-07T11:23:43.502353"
+    },
+    {
+      "id": "b1b92d48",
+      "data_appuntamento": "2026-05-08",
+      "orario": "8:00-11:00",
+      "pod": "IT001E02938319",
+      "eneltel": "29383197",
+      "nominativo": "EASY COMPANY S.R.L.",
+      "via": "CAVOUR",
+      "civico": "76",
+      "comune": "SANTENA",
+      "note": "APP 8:00-11:00",
+      "data_pianificata": "2026-05-08",
+      "origine": "filone_manuale",
+      "provincia": "TORINO",
+      "creato_da": "giada",
+      "registrato_il": "2026-05-07T12:27:16.151201"
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "timestamp": "2026-05-07T03:30:05.161180",
+  "sheets_rows": 4745,
+  "db_rows": 4745,
+  "only_in_sheets": [],
+  "only_in_sheets_count": 0,
+  "only_in_db": [],
+  "only_in_db_count": 0,
+  "field_diffs": [
+    {
+      "eneltel_key": "191770196",
+      "campo": "orari_lettere",
+      "sheets": "10,00 12,00",
+      "db": "16,00 18,00"
+    }
+  ],
+  "field_diffs_count": 1,
+  "total_discrepancies": 1,
+  "verdict": "DISCREPANCIES"
+}

@@ -26,8 +26,6 @@
   "ora_fine_giornata": 1020,
   "velocita_media_kmh": 35,
   "tempo_intervento_min": 20,
-  "raggio_microzona_km": 0.5,
-  "ottimizza_per_tempo": true,
   "data_inizio": "2025-10-01",
   "data_fine": "",
   "intervallo_sync_secondi": 180,

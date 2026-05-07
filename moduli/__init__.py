@@ -23,7 +23,9 @@ from .percorso import (
     estrai_orario_e_fascia,
     minuti_to_orario,
     ordina_per_fasce_e_vicinanza,
-    ordina_percorso
+    ordina_percorso,
+    rileva_appuntamento,
+    motivo_non_appuntamento,
 )
 
 from .access_points import (

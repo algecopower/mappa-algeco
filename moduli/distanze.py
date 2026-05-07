@@ -424,6 +424,63 @@ def calcola_rotta_osrm(coords_list, profile='car'):
     return risultato
 
 
+def calcola_geometria_percorso_waypoints(coords_list, profile='car'):
+    """
+    Geometria stradale OSRM lungo una sequenza fissa di waypoint (lon, lat).
+
+    OSRM Route ha un limite pratico sul numero di coordinate nella URL; se si
+    supera (~85), la richiesta viene spezzata in segmenti sovrapposti di un
+    punto e le geometrie GeoJSON vengono unite.
+
+    Args:
+        coords_list: lista [(lon, lat), ...] ordine di visita (incluso deposito
+            di partenza e ritorno se serve il round-trip).
+        profile: profilo OSRM (default 'car', come calcola_rotta_osrm).
+
+    Returns:
+        (geometria, errore): geometria e' lista [[lon, lat], ...] oppure None.
+    """
+    if len(coords_list) < 2:
+        return None, 'Servono almeno 2 coordinate'
+
+    max_wp = 85
+
+    if len(coords_list) <= max_wp:
+        ris = calcola_rotta_osrm(coords_list, profile=profile)
+        if ris['successo'] and ris.get('geometria'):
+            return ris['geometria'], None
+        return None, ris.get('errore') or 'OSRM non disponibile'
+
+    merged = []
+    start = 0
+    while start < len(coords_list) - 1:
+        end_exclusive = min(start + max_wp, len(coords_list))
+        chunk = coords_list[start:end_exclusive]
+        ris = calcola_rotta_osrm(chunk, profile=profile)
+        if not ris['successo'] or not ris.get('geometria'):
+            return None, ris.get('errore') or 'OSRM fallito su segmento intermedio'
+
+        g = ris['geometria']
+        if not merged:
+            merged.extend(g)
+        else:
+            if g:
+                lx, ly = merged[-1][0], merged[-1][1]
+                fx, fy = g[0][0], g[0][1]
+                if abs(lx - fx) < 1e-7 and abs(ly - fy) < 1e-7:
+                    merged.extend(g[1:])
+                else:
+                    merged.extend(g)
+            else:
+                return None, 'Geometria OSRM vuota'
+
+        if end_exclusive >= len(coords_list):
+            break
+        start = end_exclusive - 1
+
+    return merged if merged else None, None
+
+
 def calcola_distanze_percorso(percorso_ordinato, deposito, usa_osrm=True):
     """Calcola distanze complete per un percorso."""
     stats = {

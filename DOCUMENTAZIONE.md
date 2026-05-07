@@ -724,24 +724,17 @@ from moduli import carica_cache, salva_cache, carica_dati_google_sheets, genera_
 
 ### `moduli/percorso.py`
 
-**Scopo:** Cuore dell'ottimizzazione — risolve il problema del commesso viaggiatore (TSP) con vincoli di appuntamento.
+**Scopo:** Cuore dell'ottimizzazione — risolve il problema del commesso viaggiatore (TSP) con vincoli di appuntamento, delegando il TSP a OSRM Trip API (rete stradale reale).
 
-| Funzione                                         | Descrizione                              |
-| ------------------------------------------------ | ---------------------------------------- |
-| `ordina_percorso(punti, deposito, usa_osrm)`   | **Entry point principale**         |
-| `raggruppa_in_microzone(punti, raggio_km)`     | Clustering spaziale per evitare "zigzag" |
-| `nearest_neighbor_matrice(matrice, n, start)`  | Nearest neighbor multi-start             |
-| `two_opt_improve_matrice(percorso, matrice)`   | Miglioramento 2-opt                      |
-| `or_opt_improve_matrice(percorso, matrice)`    | Miglioramento Or-opt                     |
-| `three_opt_improve_matrice(percorso, matrice)` | Miglioramento 3-opt                      |
-
-**Pipeline di ottimizzazione:**
-
-1. **Micro-zone** (raggio 500m) — raggruppa contatori vicini
-2. **Nearest neighbor** — trova soluzione iniziale da più punti di partenza
-3. **2-opt** — scambia coppie di archi per ridurre il tempo totale
-4. **Or-opt** — sposta segmenti di 1-3 nodi in posizioni migliori
-5. **3-opt** — rompe 3 archi e riconnette in modo ottimale
+| Funzione                                                | Descrizione                                                          |
+| ------------------------------------------------------- | -------------------------------------------------------------------- |
+| `ordina_percorso(punti, deposito, usa_osrm)`            | **Entry point principale** (alias di `ottimizza_percorso`)           |
+| `_ottimizza_con_osrm_trip(punti, deposito)`             | TSP roundtrip: parte e torna al deposito                             |
+| `_ordina_segmento_osrm(punti, start, end)`              | TSP non-roundtrip: start fisso, end fisso (per riempire un segmento) |
+| `_ordina_con_appuntamenti(punti, deposito, ora_serale)` | Strategia "ancore temporali" con appuntamenti                        |
+| `_ordina_sweep(punti, deposito)`                        | Fallback geografico (sweep angolare) se OSRM cade                    |
+| `rileva_appuntamento(testo)`                            | Whitelist + blacklist per `IS_APPUNTAMENTO`                          |
+| `estrai_orario_e_fascia(testo)`                         | Parser fasce e orari (`dalle 8 alle 12`, `10:30`, ecc.)              |
 6. **2-opt finale** — pulizia finale
 
 **Gestione appuntamenti:**
@@ -1001,8 +994,6 @@ PROVINCE = {
 | `OSRM_TIMEOUT`                 | 30                              | Timeout secondi per richieste OSRM     |
 | `VELOCITA_MEDIA_KMH`           | 35                              | Velocità media per stime fallback     |
 | `TEMPO_INTERVENTO_MIN`         | 20                              | Minuti per sostituzione contatore      |
-| `OTTIMIZZA_PER_TEMPO`          | `True`                        | `True` = preferisce autostrade       |
-| `RAGGIO_MICROZONA_KM`          | 0.5                             | Raggio raggruppamento contatori vicini |
 | `INTERVALLO_SYNC_SECONDI`      | 180                             | Intervallo sync automatico (3 min)     |
 | `DATA_INIZIO` / `DATA_FINE`  | `2025-10-01` / `2026-03-31` | Range date filtro                      |
 | `DIMENSIONE_CELLA_ZONA_KM`     | 8                               | Raggio clustering zone DBSCAN          |
@@ -1054,65 +1045,92 @@ PROVINCE = {
 
 ## 21. Algoritmo di ottimizzazione percorsi
 
-Il modulo `percorso.py` implementa un risolutore TSP (Travelling Salesman Problem) specifico per il contesto delle sostituzioni contatori.
+Il modulo `percorso.py` (~700 righe) delega il TSP a **OSRM Trip API**, che lo
+risolve nativamente sulla rete stradale reale (sensi unici, svincoli, autostrade).
+La riscrittura ha sostituito il vecchio algoritmo "matrice + nearest neighbor +
+2-opt + 3-opt + or-opt" (~1700 righe) con qualcosa di molto più semplice e
+sempre coerente con la traccia OSRM.
 
 ### Pipeline completa
 
 ```
-Input: lista punti con coordinate + info appuntamenti
+Input: lista punti con coordinate (Lat/Lon o Lat_access/Lon_access)
   │
   ▼
-1. RAGGRUPPAMENTO MICROZONE (raggio 0.5 km)
-   └─ I contatori entro 500m vengono raggruppati
-      per evitare percorsi "zigzag" tra zone
+1. CATEGORIZZAZIONE
+   ├─ app_normali: appuntamenti del giorno con orario parsato
+   ├─ app_serali : appuntamenti dopo soglia (17:00 TO / 15:00 PA)
+   └─ punti_base : tutto il resto
   │
   ▼
-2. SEPARAZIONE APPUNTAMENTI
-   └─ Gli appuntamenti sono "ancore temporali"
-      che fissano quando il tecnico deve trovarsi in un punto
+2. SE NESSUN APPUNTAMENTO → OSRM Trip roundtrip
+   GET /trip/v1/driving/{deposito;p1;p2;...;pn;deposito}
+       ?roundtrip=true&source=first&destination=last
+   OSRM ritorna l'ordine ottimale rispettando la rete stradale reale.
   │
   ▼
-3. NEAREST NEIGHBOR MULTI-START
-   └─ Prova N punti di partenza diversi
-      e tiene il percorso più breve
+3. SE CI SONO APPUNTAMENTI → strategia "ancore temporali"
+   ├─ Ordina app_normali per ora_min crescente.
+   ├─ Per ogni segmento (pos -> prossimo_app):
+   │    budget = ora_min(app) - orario_corrente - tempo_diretto(pos, app)
+   │    n_max  = floor(budget / TEMPO_TAPPA_MEDIO)
+   │    Sceglie i n_max punti base con minor "deviazione" dal segmento
+   │    e li ordina con OSRM Trip non-roundtrip (start=pos, end=app).
+   ├─ Aggiunge l'appuntamento (se arriva prima di ora_min, "aspetta").
+   ├─ Punti base rimanenti: OSRM Trip pos -> deposito (o pos -> primo serale).
+   └─ Appuntamenti serali in coda, in ordine cronologico.
   │
   ▼
-4. MIGLIORAMENTO 2-OPT
-   └─ Scambia coppie di archi (A-B, C-D → A-C, B-D)
-      se riduce il tempo totale
+4. FALLBACK (OSRM down): sweep angolare dal deposito
+   Garantisce sempre un percorso geograficamente lineare.
   │
   ▼
-5. MIGLIORAMENTO OR-OPT
-   └─ Sposta segmenti di 1-3 contatori
-      in posizioni migliori del percorso
-  │
-  ▼
-6. MIGLIORAMENTO 3-OPT
-   └─ Rompe 3 archi e riconnette
-      (8 possibili riconnessioni per ogni tripletta)
-  │
-  ▼
-7. 2-OPT FINALE
-   └─ Pulizia finale dopo 3-opt
-  │
-  ▼
-Output: lista punti ordinati con tempo cumulativo
+Output: lista punti ordinata
 ```
 
-### Gestione appuntamenti nel percorso
+### Rilevamento appuntamenti (`rileva_appuntamento`)
 
-- Gli appuntamenti con orario specifico vengono posizionati nel percorso considerando il tempo di viaggio
-- I contatori senza appuntamento riempiono i "gap" tra un appuntamento e l'altro
-- Appuntamenti serali (>17:00 Torino, >15:00 Pavia) → fine giornata
-- La matrice distanze/durate è calcolata con OSRM (strade reali, autostrade incluse)
+`IS_APPUNTAMENTO=True` se la nota contiene `\bapp\b` come token e NON matcha
+nessuno dei pattern di esclusione conservativi:
 
-### Perché le autostrade?
+| Categoria             | Esempi                                                                  |
+| --------------------- | ----------------------------------------------------------------------- |
+| negazione             | `no app`, `non app`, `nessun app`, `niente app`, `senza app`            |
+| annullato/spostato    | `app annullata`, `app cancellata`, `app saltata`, `app rinviata`, `app spostata`, `app sospesa`, `app disdetta` |
+| incerto               | `app?`, `app??`                                                         |
+| da fissare            | `app da fissare`, `app da prendere`, `app da concordare`, `da fissare app` |
+| richiesta non confermata | `richiesta app`, `richiede app`, `vuole un app`, `vorrebbe app`         |
+| ipotetico             | `forse app`, `magari app`, `eventualmente app`, `se possibile app`      |
 
-Con `OTTIMIZZA_PER_TEMPO=True`, OSRM restituisce il percorso più **veloce**, non il più breve in km. Questo significa che:
+I motivi sono loggati in fase di sync per audit:
+`🔍 Falsi positivi 'APP' filtrati: N note (annullato/spostato: X, ...)`.
 
-- L'autostrada viene preferita quando abbatte i tempi (es. Torino → periferia)
-- Il percorso evita il traffico del centro città
-- I tecnici di Torino usano la tangenziale/autostrada, non attraversano il centro
+Pattern aggiuntivi possono essere aggiunti via `config.APPUNTAMENTO_PATTERN_ESCLUSIONE`.
+
+### Parsing orario appuntamento
+
+`estrai_orario_e_fascia` (riusato anche dal frontend in JS) riconosce:
+
+- `dalle 8 alle 12` → `(08:00, 12:00)`
+- `dalle 09:00 alle 12:30` → `(09:00, 12:30)`
+- `ORE 10:30/12:00` → `(10:30, 12:00)`
+- `10/12`, `10-12` → `(10:00, 12:00)`
+- `10:30` → `(10:30, 10:30)` (orario puntuale)
+- `alle 14`, `ore 14` → `(14:00, 14:00)`
+
+Se NOTE APP non contiene un orario parsabile, viene fatto **fallback su
+`ORARI_LETTERE`** (la fascia della colonna "Orari" usata per le lettere già
+spedite ai clienti).
+
+### Perché le autostrade vengono preferite
+
+OSRM con `profile=driving` restituisce sempre il percorso **più veloce**, non
+il più breve in km. Conseguenze:
+
+- Per Torino: i tecnici usano la tangenziale/autostrada anziché attraversare il centro
+- Le autostrade sono preferite anche quando aumentano i km, perché abbattono il tempo
+
+Non è più necessaria una flag dedicata (era ridondante con il profilo OSRM).
 
 ---
 

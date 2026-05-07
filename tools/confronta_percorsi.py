@@ -73,12 +73,13 @@ def prepara_dataframe(backup):
     df['Lat'] = df['Latitudine'].apply(_lat_lon_float)
     df['Lon'] = df['Longitudine'].apply(_lat_lon_float)
 
-    # Note appuntamento + flag IS_APPUNTAMENTO (stessa regex del data_loader)
-    import re as _re
-    _pat_app = _re.compile(r'\bapp\b', _re.IGNORECASE)
+    # Note appuntamento + flag IS_APPUNTAMENTO (stessa logica del data_loader,
+    # con whitelist + blacklist per gestire falsi positivi tipo "no app",
+    # "app annullata", "app??", ecc.).
+    from moduli.percorso import rileva_appuntamento
     note_raw = df['NOTE APP'].fillna('').astype(str).str.strip() if 'NOTE APP' in df.columns else pd.Series([''] * len(df))
     df['NOTE_APP_RAW'] = note_raw
-    df['IS_APPUNTAMENTO'] = note_raw.apply(lambda n: bool(_pat_app.search(n)) if n else False)
+    df['IS_APPUNTAMENTO'] = note_raw.apply(rileva_appuntamento)
     df['ORA_APPUNTAMENTO'] = None  # popolato dall'algoritmo
 
     # Dati identificativi minimi

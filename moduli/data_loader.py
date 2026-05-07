@@ -78,7 +78,12 @@ except ImportError:
 
 from config import USA_LOCALITA_COME_COMUNE
 
-from .percorso import normalizza_eneltel, estrai_orario
+from .percorso import (
+    normalizza_eneltel,
+    estrai_orario,
+    rileva_appuntamento,
+    motivo_non_appuntamento,
+)
 
 
 def _hash_raw_values(values):
@@ -649,10 +654,31 @@ def carica_dati_google_sheets(force=False):
     else:
         df['NOTE_APP_RAW'] = ''
 
-    # Rileva appuntamenti con regex ("APP" nelle note)
-    import re as _re_app
-    _pat_app = _re_app.compile(r'\bapp\b', _re_app.IGNORECASE)
-    df['IS_APPUNTAMENTO'] = df['NOTE_APP_RAW'].apply(lambda n: bool(_pat_app.search(n)) if n else False)
+    # Rileva appuntamenti CONFERMATI: la parola "APP" deve essere presente
+    # come token, MA non deve essere preceduta/seguita da pattern di
+    # negazione/cancellazione/incertezza ("no app", "app annullata",
+    # "app??", "app da fissare", "richiesta app", "forse app", ecc.).
+    # Vedi `rileva_appuntamento` in moduli/percorso.py per i dettagli.
+    df['IS_APPUNTAMENTO'] = df['NOTE_APP_RAW'].apply(rileva_appuntamento)
+
+    # Audit / log dei casi esclusi: NOTE che contengono "app" ma sono state
+    # filtrate (utile in fase di tuning per capire i falsi negativi).
+    note_con_app = df['NOTE_APP_RAW'].astype(str).str.contains(r'\bapp\b', case=False, regex=True, na=False)
+    note_escluse = df.loc[note_con_app & ~df['IS_APPUNTAMENTO'], 'NOTE_APP_RAW']
+    if len(note_escluse) > 0:
+        # Conta per motivo
+        motivi = {}
+        for nota in note_escluse:
+            motivo = motivo_non_appuntamento(nota) or 'altro'
+            motivi[motivo] = motivi.get(motivo, 0) + 1
+        riepilogo = ', '.join(f"{k}: {v}" for k, v in sorted(motivi.items(), key=lambda x: -x[1]))
+        logger.info(
+            f"   🔍 Falsi positivi 'APP' filtrati: {len(note_escluse)} note ({riepilogo})"
+        )
+        # Log dettagliato (DEBUG) dei primi 10 casi per audit
+        for nota in note_escluse.head(10):
+            motivo = motivo_non_appuntamento(nota) or 'altro'
+            logger.debug(f"      [{motivo}] {nota[:80]}")
 
     # Estrai orario appuntamento
     def trova_orario(row):
@@ -684,6 +710,25 @@ def carica_dati_google_sheets(force=False):
     else:
         df['ORARI_LETTERE'] = ''
         logger.warning("   ⚠️ Colonna 'Orari' non trovata nel FILONE")
+
+    # Fallback ORA_APPUNTAMENTO: per le righe con IS_APPUNTAMENTO=True che non
+    # hanno un orario nelle NOTE APP, usa la fascia oraria della colonna "Orari"
+    # (la stessa usata per le lettere). Evita appuntamenti senza orario, che
+    # finirebbero ordinati in modo incoerente e mostrati come "nan" in UI.
+    mask_app_senza_ora = df['IS_APPUNTAMENTO'] & df['ORA_APPUNTAMENTO'].isna()
+    if mask_app_senza_ora.any():
+        df.loc[mask_app_senza_ora, 'ORA_APPUNTAMENTO'] = (
+            df.loc[mask_app_senza_ora, 'ORARI_LETTERE']
+              .apply(lambda s: estrai_orario(s) if s else None)
+        )
+        recuperati = mask_app_senza_ora.sum() - (
+            df.loc[mask_app_senza_ora, 'ORA_APPUNTAMENTO'].isna().sum()
+        )
+        if recuperati > 0:
+            logger.info(
+                f"   🕒 Appuntamenti senza orario nelle NOTE: "
+                f"{recuperati} fasce recuperate dalla colonna 'Orari'"
+            )
 
     # ================================================================
     # FILTRI

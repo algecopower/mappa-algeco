@@ -935,6 +935,52 @@ def get_config():
     })
 
 
+@app.route('/api/route_geometry', methods=['POST'])
+@login_required
+def api_route_geometry():
+    """
+    Geometria stradale OSRM per una sequenza arbitraria di waypoint (lon, lat).
+
+    Usato dalla mappa in modalita' ordinamento per orario: l'ordine delle tappe
+    non coincide con il round-trip pre-calcolato nel JSON sync.
+    """
+    payload = request.get_json(silent=True) or {}
+    coords_raw = payload.get('coordinates')
+
+    if not isinstance(coords_raw, list) or len(coords_raw) < 2:
+        return jsonify({'success': False, 'error': 'coordinates deve essere un array di almeno 2 punti'}), 400
+
+    if len(coords_raw) > 200:
+        return jsonify({'success': False, 'error': 'Troppi punti nella richiesta (max 200)'}), 400
+
+    coords_list = []
+    for pair in coords_raw:
+        if not isinstance(pair, (list, tuple)) or len(pair) != 2:
+            return jsonify({'success': False, 'error': 'Ogni punto deve essere [lon, lat]'}), 400
+        try:
+            lon_f = float(pair[0])
+            lat_f = float(pair[1])
+        except (TypeError, ValueError):
+            return jsonify({'success': False, 'error': 'Coordinate non numeriche'}), 400
+
+        if not (-180.0 <= lon_f <= 180.0 and -90.0 <= lat_f <= 90.0):
+            return jsonify({'success': False, 'error': 'Coordinate fuori range'}), 400
+        # Area operative Italia nord / vicinanze (stesso ordine di grandezza del data loader)
+        if not (35.0 <= lat_f <= 48.5 and 6.0 <= lon_f <= 20.0):
+            return jsonify({'success': False, 'error': 'Coordinate fuori area operative'}), 400
+
+        coords_list.append((lon_f, lat_f))
+
+    from moduli.distanze import calcola_geometria_percorso_waypoints
+
+    geometria, err = calcola_geometria_percorso_waypoints(coords_list)
+    if geometria is None:
+        logger.warning(f"⚠️  route_geometry fallito: {err}")
+        return jsonify({'success': False, 'error': err or 'Calcolo rotta fallito'}), 502
+
+    return jsonify({'success': True, 'geometry': geometria})
+
+
 # ============================================================================
 # API IMPOSTAZIONI
 # ============================================================================
@@ -985,8 +1031,6 @@ def get_settings():
         'ora_fine_giornata': config.ORA_FINE_GIORNATA,
         'velocita_media_kmh': config.VELOCITA_MEDIA_KMH,
         'tempo_intervento_min': config.TEMPO_INTERVENTO_MIN,
-        'raggio_microzona_km': config.RAGGIO_MICROZONA_KM,
-        'ottimizza_per_tempo': config.OTTIMIZZA_PER_TEMPO,
         'intervallo_sync_secondi': config.INTERVALLO_SYNC_SECONDI,
         'data_inizio': config.DATA_INIZIO,
         'data_fine': config.DATA_FINE,
@@ -1059,12 +1103,6 @@ def update_settings():
             'tempo_intervento_min': [
                 (config, 'TEMPO_INTERVENTO_MIN'),
                 (distanze, 'TEMPO_INTERVENTO_MIN'),
-            ],
-            'raggio_microzona_km': [
-                (config, 'RAGGIO_MICROZONA_KM'),
-            ],
-            'ottimizza_per_tempo': [
-                (config, 'OTTIMIZZA_PER_TEMPO'),
             ],
             'intervallo_sync_secondi': [
                 (config, 'INTERVALLO_SYNC_SECONDI'),

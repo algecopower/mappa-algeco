@@ -1311,7 +1311,7 @@
             <button class="tb" onclick="openCondFormat()" title="Formattazione condizionale">&#x1F3A8; Formato</button>
             <button class="tb" id="btnStylesToggle" onclick="toggleStylesView()" title="Nascondi gli stili (vista pulita)">&#x1F441;&#xFE0F; Stili</button>
             <div class="toolbar-sep"></div>
-            <button class="tb" id="btnRefresh" onclick="manualRefresh()" title="Ricarica dati dal server (F5)">&#x1F504; Aggiorna</button>
+            <button class="tb" id="btnRefresh" onclick="manualRefresh()" title="Ricarica dati dal server (F5)">&#x1F504;</button>
             <button class="tb" onclick="AlgecoTour.start(true)" title="Guida interattiva">&#x2753; Guida</button>
             <button class="tb primary" id="btnSave" onclick="saveAll()" disabled title="Salva modifiche (Ctrl+S)">&#x1F4BE; Salva (<span id="changeCount">0</span>)</button>
         </div>
@@ -6429,14 +6429,14 @@ function vlExcelClear() {
 async function manualRefresh() {
     var btn = qs('#btnRefresh');
     btn.disabled = true;
-    btn.innerHTML = '&#x23F3; Aggiorno...';
+    btn.innerHTML = '&#x23F3;';
     try {
         await window._sseRefreshFilone();
     } catch(e) {
         toast('\u274C Errore durante l\'aggiornamento', 'error');
     } finally {
         btn.disabled = false;
-        btn.innerHTML = '&#x1F504; Aggiorna';
+        btn.innerHTML = '&#x1F504;';
     }
 }
 </script>

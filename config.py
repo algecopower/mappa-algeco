@@ -330,21 +330,12 @@ TEMPO_INTERVENTO_MIN = 20
 FATTORE_CORREZIONE_HAVERSINE = 1.35
 USA_OSRM = True
 
-# --- CONFIGURAZIONE OTTIMIZZAZIONE PERCORSO ---
-# L'algoritmo usa le DURATE (tempo) da OSRM, non le distanze in km.
-# Questo significa che:
-# - Le AUTOSTRADE vengono preferite quando sono più veloci (anche se più lunghe in km)
-# - Il percorso evita automaticamente il traffico del centro città
-# - Per Torino: i tecnici usano l'autostrada, non passano per Torino città
-# OSRM calcola il percorso più veloce considerando tipo strada e velocità consentite.
-OTTIMIZZA_PER_TEMPO = True  # True = usa tempo (preferisce autostrade), False = usa km
-
-# --- CONFIGURAZIONE RAGGRUPPAMENTO ZONE (anti-saltelli) ---
-# I contatori vengono raggruppati in "micro-zone" geografiche.
-# L'algoritmo completa tutti i contatori di una zona prima di passare alla successiva.
-# Questo evita percorsi che saltano avanti e indietro tra aree diverse.
-# Le zone vengono poi ordinate usando OSRM (quindi preferendo autostrade tra zone).
-RAGGIO_MICROZONA_KM = 0.5  # Raggio in km per raggruppare contatori vicini (default 500m)
+# Nota: l'ottimizzazione per tempo (preferenza autostrade) e' implicita nel
+# profilo "driving" di OSRM, che restituisce il percorso piu' VELOCE (non il
+# piu' breve in km). Non serve un toggle dedicato.
+# Il vecchio raggruppamento in "micro-zone" e' stato rimosso con la
+# riscrittura di moduli/percorso.py: ora il TSP e' risolto direttamente da
+# OSRM Trip API sulla rete stradale reale.
 
 # --- CONFIGURAZIONE CACHE ---
 FILE_CACHE_DISTANZE = os.path.join('cache', f'cache_distanze_{PROVINCIA_ATTIVA.lower()}.json')
@@ -422,10 +413,8 @@ if os.path.exists(_settings_file):
             VELOCITA_MEDIA_KMH = _user_settings['velocita_media_kmh']
         if 'tempo_intervento_min' in _user_settings:
             TEMPO_INTERVENTO_MIN = _user_settings['tempo_intervento_min']
-        if 'raggio_microzona_km' in _user_settings:
-            RAGGIO_MICROZONA_KM = _user_settings['raggio_microzona_km']
-        if 'ottimizza_per_tempo' in _user_settings:
-            OTTIMIZZA_PER_TEMPO = _user_settings['ottimizza_per_tempo']
+        # 'raggio_microzona_km' e 'ottimizza_per_tempo' (deprecati): se
+        # presenti in vecchi settings.json vengono ignorati silenziosamente.
         if 'intervallo_sync_secondi' in _user_settings:
             INTERVALLO_SYNC_SECONDI = _user_settings['intervallo_sync_secondi']
         if 'data_inizio' in _user_settings:

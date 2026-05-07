@@ -3,19 +3,23 @@ Ottimizzazione percorsi con OSRM - Versione semplificata e robusta.
 
 Approccio:
 1. OSRM Trip API per ordinamento ottimale nativo (rispetta la reale geometria stradale)
-2. Sweep angolare come fallback (sempre lineare geograficamente)
-3. Nessuna matrice, niente 2-opt/3-opt complessi
+2. Strategia "appuntamenti come ancore temporali" per giornate con orari fissi
+3. Sweep angolare come fallback (sempre lineare geograficamente)
+4. Nessuna matrice, niente 2-opt/3-opt complessi
 
 Vantaggi:
 - Percorso calcolato direttamente su strade reali
 - Codice molto più semplice (~200 righe vs 1700)
 - Risultati sempre coerenti con la traccia OSRM
 """
+import logging
 import math
 import re
 import pandas as pd
 import requests
 from typing import List, Dict, Any, Tuple, Optional
+
+logger = logging.getLogger(__name__)
 
 from config import (
     OSRM_SERVER,
@@ -37,6 +41,121 @@ def normalizza_eneltel(val):
     s = str(val).strip()
     s = re.sub(r'^0+', '', s)
     return s if s else None
+
+
+# =============================================================================
+# RILEVAMENTO APPUNTAMENTI (con gestione falsi positivi)
+# =============================================================================
+
+# Pattern POSITIVO: parola "app" come token (case insensitive).
+# Non matcha "appuntamento" (richiede confine di parola), volutamente:
+# l'operatore scrive convenzionalmente "APP" come marker.
+_PAT_APP_TOKEN = re.compile(r'\bapp\b', re.IGNORECASE)
+
+# Pattern NEGATIVI: se uno di questi matcha, NON e' un appuntamento confermato.
+# Sono volutamente CONSERVATIVI: meglio un falso positivo (appuntamento
+# pianificato che andrebbe ignorato) che un falso negativo (appuntamento
+# vero che il tecnico salta).
+_PAT_APP_ESCLUSIONI_DEFAULT = [
+    # Negazioni dirette: "no app", "non app", "nessun app", "niente app", "senza app"
+    (re.compile(r'\b(?:no|non|nessun[ao]?|niente|senza)\s+app\b', re.IGNORECASE),
+     'negazione'),
+    # App seguita da verbi di cancellazione/spostamento/sospensione
+    (re.compile(r'\bapp\b[\s,;:.\-]*(?:annull|cancell|salt|rinvi|spost|sospes|disdet|elimin|rimoss)', re.IGNORECASE),
+     'annullato/spostato'),
+    # App seguita da punto interrogativo (incertezza esplicita)
+    (re.compile(r'\bapp\b\s*\?+', re.IGNORECASE),
+     'incerto (?)'),
+    # App preceduta o seguita da "da fissare/prendere/concordare/confermare"
+    (re.compile(r'\bapp\b\s+da\s+(?:fiss|prend|concord|conferm|defin|stabil|programmar|richied)', re.IGNORECASE),
+     'da fissare'),
+    (re.compile(r'\bda\s+(?:fiss|prend|concord|conferm|defin|stabil|programmar|richied)\w*\s+(?:l[\'aei]?\s+)?app\b', re.IGNORECASE),
+     'da fissare'),
+    # Verbi/sostantivi di richiesta non confermata: "richiede app",
+    # "richiesta app", "chiesta app", "vuole un app", "vorrebbe app", ecc.
+    (re.compile(r'\b(?:richiest|richied|chiest|chied|vuole|desider|vorrebbe|preferirebbe|gradirebbe|cerca|cercando)\w*\s+(?:un[\'a]?\s+)?app\b', re.IGNORECASE),
+     'richiesta non confermata'),
+    # Modalita' ipotetica: "forse app", "magari app", "eventualmente app"
+    (re.compile(r'\b(?:forse|magari|eventualmente|probabilmente|circa|se\s+possibile)\s+(?:un[\'a]?\s+)?app\b', re.IGNORECASE),
+     'ipotetico'),
+]
+
+# Override da config/settings: lista di pattern aggiuntivi (regex) da
+# considerare come esclusione. Usabile per regole locali senza toccare
+# il codice (es. "rifiutato app" tipico di un certo cliente).
+_PAT_APP_ESCLUSIONI_EXTRA = []
+try:
+    import config as _config_module
+    _extra_raw = getattr(_config_module, 'APPUNTAMENTO_PATTERN_ESCLUSIONE', None)
+    if _extra_raw:
+        for _p in _extra_raw:
+            try:
+                _PAT_APP_ESCLUSIONI_EXTRA.append(
+                    (re.compile(_p, re.IGNORECASE), 'config')
+                )
+            except re.error:
+                pass
+except Exception:
+    pass
+
+
+def motivo_non_appuntamento(testo):
+    """
+    Se `testo` contiene la parola "app" ma una regola di esclusione
+    indica che NON e' un appuntamento confermato, ritorna il motivo
+    (stringa breve). Altrimenti ritorna None.
+
+    Utile per logging/audit dei casi ambigui.
+    """
+    if testo is None:
+        return None
+    if pd.isna(testo):
+        return None
+    s = str(testo).strip()
+    if not s or not _PAT_APP_TOKEN.search(s):
+        return None
+    for pat, motivo in _PAT_APP_ESCLUSIONI_EXTRA + _PAT_APP_ESCLUSIONI_DEFAULT:
+        if pat.search(s):
+            return motivo
+    return None
+
+
+def rileva_appuntamento(testo):
+    """
+    Ritorna True se `testo` (campo "NOTE APP") indica un appuntamento
+    CONFERMATO, False altrimenti.
+
+    Logica:
+      1. Deve contenere "app" come parola intera (case insensitive).
+      2. Non deve matchare nessun pattern di esclusione (negazione,
+         cancellazione, incertezza, richiesta non confermata, ipotetico).
+
+    Esempi (positivi → True):
+      - "APP 14:30"
+      - "app dalle 8 alle 12"
+      - "app, citofonare al 3"
+
+    Esempi (negativi → False):
+      - "no app"
+      - "non vuole app"
+      - "app annullata"
+      - "app spostata al 5/12"
+      - "app??"
+      - "app da fissare"
+      - "richiesta app"
+      - "forse app"
+    """
+    if testo is None:
+        return False
+    if pd.isna(testo):
+        return False
+    s = str(testo).strip()
+    if not s or not _PAT_APP_TOKEN.search(s):
+        return False
+    for pat, _ in _PAT_APP_ESCLUSIONI_EXTRA + _PAT_APP_ESCLUSIONI_DEFAULT:
+        if pat.search(s):
+            return False
+    return True
 
 
 def estrai_orario_e_fascia(testo):
@@ -367,43 +486,106 @@ def _ottimizza_grande_con_trip(punti: List[Dict], deposito: Dict) -> List[int]:
 
 
 # =============================================================================
+# OSRM TRIP API - Variante "segmento" (start e end fissi)
+# =============================================================================
+
+def _ordina_segmento_osrm(
+    punti: List[Dict],
+    start: Dict,
+    end: Dict,
+) -> List[Dict]:
+    """
+    Ordina `punti` lungo il segmento da `start` a `end` usando OSRM Trip
+    in modalita' non-roundtrip (source=first, destination=last).
+
+    A differenza di `_ottimizza_con_osrm_trip` (che ritorna al deposito),
+    qui start ed end sono punti distinti: utile per riempire un segmento
+    tra due ancore (deposito->primo_app, app_i->app_i+1, ultimo_app->deposito).
+
+    Returns:
+        Lista dei punti ordinati (esclude start ed end), o sweep dal start
+        come fallback se OSRM fallisce.
+    """
+    if not punti:
+        return []
+    if len(punti) == 1:
+        return list(punti)
+
+    # OSRM Trip ha un limite ~100 waypoint
+    if len(punti) > 90:
+        return _ordina_sweep(punti, start)
+
+    s_lat, s_lon = _coord_routing(start)
+    e_lat, e_lon = _coord_routing(end)
+
+    coords = [(s_lon, s_lat)]
+    for p in punti:
+        plat, plon = _coord_routing(p)
+        coords.append((plon, plat))
+    coords.append((e_lon, e_lat))
+
+    coords_str = ";".join([f"{lon},{lat}" for lon, lat in coords])
+    url = f"{OSRM_SERVER}/trip/v1/driving/{coords_str}"
+    params = {
+        'roundtrip': 'false',
+        'source': 'first',
+        'destination': 'last',
+        'overview': 'false',
+    }
+
+    try:
+        response = requests.get(url, params=params, timeout=OSRM_TIMEOUT * 2)
+        response.raise_for_status()
+        data = response.json()
+
+        if data.get('code') != 'Ok':
+            return _ordina_sweep(punti, start)
+
+        waypoints = data.get('waypoints', [])
+        if len(waypoints) < 2:
+            return _ordina_sweep(punti, start)
+
+        # waypoints[i]['waypoint_index'] = posizione nell'ordine ottimale
+        ordine_wp = [(wp.get('waypoint_index', i), i) for i, wp in enumerate(waypoints)]
+        ordine_wp.sort(key=lambda x: x[0])
+
+        # Indici originali: 0=start, 1..n=punti, n+1=end
+        risultato: List[Dict] = []
+        ultimo_idx = len(waypoints) - 1
+        for _, idx in ordine_wp:
+            if idx == 0 or idx == ultimo_idx:
+                continue
+            risultato.append(punti[idx - 1])
+        return risultato
+    except Exception:
+        return _ordina_sweep(punti, start)
+
+
+# =============================================================================
 # GESTIONE APPUNTAMENTI CON ORARIO
 # =============================================================================
 
 def _estrai_orario(testo: str) -> Optional[Tuple[int, int]]:
-    """Estrae (ora_min, ora_max) in minuti da stringa, o None."""
-    if not testo:
+    """
+    Estrae (ora_min, ora_max) in minuti da stringa.
+
+    Wrapper che riusa `estrai_orario_e_fascia` (definita in cima al modulo),
+    che gestisce correttamente:
+      - "dalle 8 alle 12"          -> (480, 720)
+      - "dalle 09:00 alle 12:30"   -> (540, 750)
+      - "ore 10:30/12:00"          -> (630, 720)
+      - "10/12", "10-12"           -> (600, 720)
+      - "10:30"                    -> (630, 630)
+      - "alle 14"                  -> (840, 840)
+
+    Ritorna None se nessun orario riconosciuto.
+    """
+    if testo is None:
         return None
-    import re
-    testo = str(testo)
-    
-    # Formato "HH:MM-HH:MM" o "HH-HH"
-    match = re.search(r'(\d{1,2})[:.]?(\d{2})?\s*[-/]\s*(\d{1,2})[:.]?(\d{2})?', testo)
-    if match:
-        h1 = int(match.group(1))
-        m1 = int(match.group(2)) if match.group(2) else 0
-        h2 = int(match.group(3))
-        m2 = int(match.group(4)) if match.group(4) else 0
-        if 0 <= h1 <= 23 and 0 <= h2 <= 23:
-            return (h1 * 60 + m1, h2 * 60 + m2)
-    
-    # Formato singolo "HH:MM"
-    match = re.search(r'(\d{1,2})[:.](\d{2})', testo)
-    if match:
-        h, m = int(match.group(1)), int(match.group(2))
-        if 0 <= h <= 23 and 0 <= m <= 59:
-            tot = h * 60 + m
-            return (tot, tot)
-    
-    # Formato "alle HH" o "ore HH"
-    match = re.search(r'(?:alle|ore)\s*(\d{1,2})', testo, re.IGNORECASE)
-    if match:
-        h = int(match.group(1))
-        if 6 <= h <= 22:
-            tot = h * 60
-            return (tot, tot)
-    
-    return None
+    ora_min, ora_max = estrai_orario_e_fascia(testo)
+    if ora_min is None:
+        return None
+    return (ora_min, ora_max)
 
 
 def _ordina_con_appuntamenti(
@@ -412,26 +594,59 @@ def _ordina_con_appuntamenti(
     ora_limite_serale: int
 ) -> List[Dict]:
     """
-    Ordina punti con vincoli di appuntamento.
-    
-    Strategia:
-    1. Separa appuntamenti normali, serali (dopo ora_limite), e punti base
-    2. Ordina appuntamenti per orario
-    3. Tra appuntamenti, inserisce punti base usando sweep locale
-    4. Serali vengono dopo tutti gli altri
+    Ordina punti con vincoli di appuntamento - strategia "ancore temporali".
+
+    Idea:
+    - Gli APPUNTAMENTI sono ancore fisse nel tempo: vanno visitati nell'ordine
+      cronologico, e l'arrivo deve essere entro `ora_max` (e idealmente non
+      molto dopo `ora_min`).
+    - I PUNTI BASE riempiono gli intervalli tra ancore, scelti tra quelli
+      "in transito" (con minor deviazione dal segmento) e in numero coerente
+      con il tempo disponibile.
+    - I residui (non in transito) vanno dopo l'ultimo appuntamento normale.
+    - Gli APPUNTAMENTI SERALI restano in coda.
+
+    Differenze rispetto alla versione precedente (che era buggata):
+    - Target di arrivo = `ora_min` (non `ora_max`): si rispetta l'inizio
+      della fascia, non si "riempie" la fascia con tappe casuali.
+    - Numero di tappe inseribili pre-calcolato dal budget temporale,
+      con un tempo medio per tappa realistico (viaggio + intervento).
+    - Stima cumulativa dell'orario corretta: include tempo di viaggio
+      tra punti consecutivi, non solo tempo di intervento.
+    - Ordinamento intra-segmento via OSRM Trip non-roundtrip (start->end fissi).
     """
     if not punti:
         return []
-    
-    # Categorizza punti
-    app_normali = []  # (ora_min, ora_max, punto)
-    app_serali = []
-    punti_base = []
-    
+
+    # Tempi (in minuti) usati per le stime: il valore reale viene
+    # comunque ricalcolato con OSRM in `stima_orari_arrivo`.
+    TEMPO_INTERVENTO = 20
+    TEMPO_VIAGGIO_INTER_TAPPA_STIMATO = 10  # tempo medio fra due tappe vicine
+    TEMPO_TAPPA_MEDIO = TEMPO_INTERVENTO + TEMPO_VIAGGIO_INTER_TAPPA_STIMATO
+    VEL_STIMA_KMH = 35.0
+
+    def _tempo_haversine_min(p1: Dict, p2: Dict) -> float:
+        lat1, lon1 = _coord_routing(p1)
+        lat2, lon2 = _coord_routing(p2)
+        return (_haversine_km(lat1, lon1, lat2, lon2) / VEL_STIMA_KMH) * 60.0
+
+    # ------------------------------------------------------------------
+    # FASE 1 - Categorizzazione
+    # ------------------------------------------------------------------
+    app_normali: List[Tuple[int, int, Dict]] = []
+    app_serali: List[Tuple[int, int, Dict]] = []
+    punti_base: List[Dict] = []
+    app_senza_orario = 0
+
     for p in punti:
         if p.get('IS_APPUNTAMENTO'):
-            orario = _estrai_orario(p.get('NOTE_APP_RAW', '')) or \
-                     _estrai_orario(p.get('ORA_APPUNTAMENTO', ''))
+            # Fallback chain per l'orario: NOTE APP -> ORA_APPUNTAMENTO ->
+            # ORARI_LETTERE (la fascia della colonna "Orari" usata per le lettere).
+            orario = (
+                _estrai_orario(p.get('NOTE_APP_RAW', ''))
+                or _estrai_orario(p.get('ORA_APPUNTAMENTO', ''))
+                or _estrai_orario(p.get('ORARI_LETTERE', ''))
+            )
             if orario:
                 ora_min, ora_max = orario
                 if ora_min >= ora_limite_serale:
@@ -441,63 +656,121 @@ def _ordina_con_appuntamenti(
                 p['_ORA_MIN'] = ora_min
                 p['_ORA_MAX'] = ora_max
                 continue
+            # IS_APPUNTAMENTO ma orario non parsabile: viene trattato
+            # come punto base (l'ottimizzazione TSP lo posiziona dove
+            # ha senso geograficamente).
+            app_senza_orario += 1
         punti_base.append(p)
-    
-    # Ordina appuntamenti per orario
+
+    if app_senza_orario:
+        logger.warning(
+            "      ⚠️  %d appuntamento/i con flag ma orario non parsabile: "
+            "trattati come tappe normali",
+            app_senza_orario,
+        )
+
+    # Ordina per inizio fascia, a parita' priorita' alla fascia piu' stretta
     app_normali.sort(key=lambda x: (x[0], x[1] - x[0]))
     app_serali.sort(key=lambda x: (x[0], x[1] - x[0]))
-    
-    # Costruisci percorso
-    percorso = []
-    pos_corrente = deposito
-    orario_corrente = ORA_INIZIO_GIORNATA
-    tempo_intervento = 20  # minuti
-    
+
+    # ------------------------------------------------------------------
+    # FASE 2 - Costruzione percorso usando appuntamenti come ancore
+    # ------------------------------------------------------------------
+    percorso: List[Dict] = []
+    pos_corrente: Dict = deposito
+    orario_corrente: float = float(ORA_INIZIO_GIORNATA)
+
     for ora_min, ora_max, app in app_normali:
-        # Punti base da inserire prima di questo appuntamento
-        if punti_base:
-            # Scegli punti raggiungibili (stima con Haversine a 35km/h)
-            # Usa coords di routing (access point se presente)
+        tempo_diretto = _tempo_haversine_min(pos_corrente, app)
+
+        # Budget di tempo per inserire punti base "in transito":
+        # quanto tempo ho prima dell'inizio fascia (target morbido).
+        budget_target = (ora_min - orario_corrente) - tempo_diretto
+        # Limite hard: non superare ora_max andando attraverso un punto base.
+        slack_hard = (ora_max - orario_corrente) - tempo_diretto
+
+        scelti: List[Dict] = []
+        if budget_target > TEMPO_TAPPA_MEDIO and slack_hard > 0 and punti_base:
+            n_max = int(budget_target // TEMPO_TAPPA_MEDIO)
+
             pos_lat, pos_lon = _coord_routing(pos_corrente)
             app_lat, app_lon = _coord_routing(app)
-            da_inserire = []
-            for p in punti_base[:]:
+            dist_diretto_km = _haversine_km(pos_lat, pos_lon, app_lat, app_lon)
+
+            candidati: List[Tuple[float, Dict]] = []
+            for p in punti_base:
                 p_lat, p_lon = _coord_routing(p)
-                dist = _haversine_km(pos_lat, pos_lon, p_lat, p_lon)
-                tempo_andata = (dist / 35) * 60
-                dist_a_app = _haversine_km(p_lat, p_lon, app_lat, app_lon)
-                tempo_a_app = (dist_a_app / 35) * 60
-                
-                orario_arrivo_app = orario_corrente + tempo_andata + tempo_intervento + tempo_a_app
-                if orario_arrivo_app <= ora_max:
-                    da_inserire.append(p)
-            
-            # Ordina i punti selezionati con sweep dal punto corrente
-            if da_inserire:
-                ordinati = _ordina_sweep(da_inserire, pos_corrente)
-                percorso.extend(ordinati)
-                for p in ordinati:
+                d_pos_p = _haversine_km(pos_lat, pos_lon, p_lat, p_lon)
+                d_p_app = _haversine_km(p_lat, p_lon, app_lat, app_lon)
+                # Deviazione = quanto allunghi il segmento passando per p
+                deviazione_km = (d_pos_p + d_p_app) - dist_diretto_km
+                # Tempo extra stimato per il singolo passaggio attraverso p
+                tempo_extra_min = (deviazione_km / VEL_STIMA_KMH) * 60.0 + TEMPO_INTERVENTO
+                # Hard constraint: anche il SOLO p non deve sforare ora_max
+                if tempo_extra_min > slack_hard:
+                    continue
+                candidati.append((deviazione_km, p))
+
+            candidati.sort(key=lambda x: x[0])
+            scelti = [p for _, p in candidati[:n_max]]
+
+        if scelti:
+            # Ordina i punti scelti lungo il segmento pos_corrente -> app
+            ordinati = _ordina_segmento_osrm(scelti, pos_corrente, app)
+            if not ordinati:
+                ordinati = _ordina_sweep(scelti, pos_corrente)
+
+            percorso.extend(ordinati)
+            for p in ordinati:
+                if p in punti_base:
                     punti_base.remove(p)
-                    pos_corrente = p
-                    orario_corrente += tempo_intervento  # Stima semplice
-        
-        # Aggiungi appuntamento
-        percorso.append(app)
+
+            # Aggiorna stima cumulativa dell'orario percorrendo il segmento
+            pp = pos_corrente
+            for p in ordinati:
+                orario_corrente += _tempo_haversine_min(pp, p) + TEMPO_INTERVENTO
+                pp = p
+            pos_corrente = pp
+
+        # Vai all'appuntamento (ancora temporale)
+        tempo_a_app = _tempo_haversine_min(pos_corrente, app)
+        orario_arrivo = orario_corrente + tempo_a_app
+        # Se arriviamo prima di ora_min, aspettiamo; non puo' partire l'intervento
+        # prima dell'inizio fascia.
+        orario_corrente = max(orario_arrivo, float(ora_min)) + TEMPO_INTERVENTO
         pos_corrente = app
-        orario_corrente = ora_min + tempo_intervento
-    
-    # Punti base rimanenti: ottimizza con OSRM Trip
+        percorso.append(app)
+
+    # ------------------------------------------------------------------
+    # FASE 3 - Punti base rimanenti
+    # ------------------------------------------------------------------
+    # Vengono inseriti tra l'ultimo appuntamento normale e i serali (o il
+    # rientro al deposito), ottimizzati come "segmento" da pos_corrente
+    # all'end-point successivo.
     if punti_base:
-        ordine = _ottimizza_con_osrm_trip(punti_base, deposito)
-        if ordine:
-            percorso.extend([punti_base[i] for i in ordine])
+        if app_serali:
+            end_point = app_serali[0][2]
         else:
-            # Fallback: sweep dal deposito
-            percorso.extend(_ordina_sweep(punti_base, deposito))
-    
-    # Appuntamenti serali alla fine
+            end_point = deposito
+
+        ordinati = _ordina_segmento_osrm(punti_base, pos_corrente, end_point)
+        if not ordinati:
+            # Fallback: vecchio TSP roundtrip dal deposito
+            ordine = _ottimizza_con_osrm_trip(punti_base, deposito)
+            if ordine:
+                ordinati = [punti_base[i] for i in ordine]
+            else:
+                ordinati = _ordina_sweep(punti_base, pos_corrente)
+
+        percorso.extend(ordinati)
+        if ordinati:
+            pos_corrente = ordinati[-1]
+
+    # ------------------------------------------------------------------
+    # FASE 4 - Appuntamenti serali alla fine, in ordine cronologico
+    # ------------------------------------------------------------------
     percorso.extend([app for _, _, app in app_serali])
-    
+
     return percorso
 
 

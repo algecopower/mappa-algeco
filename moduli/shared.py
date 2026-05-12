@@ -592,47 +592,47 @@ def _route_to_db_primary(items, *, anchor_col=None, anchor_normalize='upper'):
     n_written = 0
     n_skipped = 0
     n_unchanged = 0  # dedup: stessi valori, niente da scrivere
-    by_eneltel = {}  # eneltel_key -> {col: value}
+    # Mappa (eneltel_key, lcl) -> {col: value}. LCL distingue righe con
+    # stesso Eneltel ma LCL diverso (capita con multi-LCL su Pavia).
+    by_row = {}
     unresolved = 0
 
     anchor_col_low = (anchor_col or '').lower()
 
-    # Mappa eneltel_key → stato corrente (filone + pending in volo). Lazy.
+    # Mappa (eneltel_key, lcl) → stato corrente. Lazy.
     state_cache = {}
 
-    def _current_value(ek, col_name):
-        """Ritorna il valore "visibile" della cella: pending in volo se
-        esiste, altrimenti valore in filone (tipizzato o extra)."""
-        if ek not in state_cache:
-            state_cache[ek] = _build_current_state(ek)
-        return state_cache[ek].get(col_name, '')
+    def _current_value(ek, lcl, col_name):
+        key = (ek, lcl or '')
+        if key not in state_cache:
+            state_cache[key] = _build_current_state(ek, lcl or '')
+        return state_cache[key].get(col_name, '')
 
-    def _build_current_state(ek):
-        """Carica filone + filone_extra + pending in volo per un eneltel."""
+    def _build_current_state(ek, lcl):
+        """Carica filone + filone_extra + pending in volo per (eneltel, lcl)."""
         out = {}
         conn = _db.get_conn()
-        # Filone tipizzato → mappa ad ogni column_name del foglio
         local = conn.execute(
-            'SELECT * FROM filone WHERE eneltel_key=?', (ek,)
+            'SELECT * FROM filone WHERE eneltel_key=? AND COALESCE(lcl,\"\")=?',
+            (ek, lcl),
         ).fetchone()
         if local:
-            # Per ogni colonna nota, trova il nome foglio corrispondente
             for cr in conn.execute(
                 'SELECT column_name, chiave_interna FROM column_registry'
             ).fetchall():
                 chiave = cr['chiave_interna']
                 if chiave and chiave in _db.COLONNE_NOTE:
                     out[cr['column_name']] = local[chiave] if chiave in local.keys() else None
-        # Filone extra
         for r in conn.execute(
-            'SELECT column_name, value FROM filone_extra WHERE eneltel_key=?', (ek,)
+            'SELECT column_name, value FROM filone_extra '
+            'WHERE eneltel_key=? AND COALESCE(lcl,\"\")=?',
+            (ek, lcl),
         ).fetchall():
             out[r['column_name']] = r['value']
-        # Pending in volo (overlay) — quello che il client effettivamente vede
         for r in conn.execute(
             "SELECT column_name, new_value FROM pending_writes "
-            "WHERE eneltel_key=? AND state IN ('pending','in_flight')",
-            (ek,),
+            "WHERE eneltel_key=? AND COALESCE(lcl,'')=? AND state IN ('pending','in_flight')",
+            (ek, lcl),
         ).fetchall():
             out[r['column_name']] = r['new_value']
         return out
@@ -645,47 +645,69 @@ def _route_to_db_primary(items, *, anchor_col=None, anchor_normalize='upper'):
             n_skipped += 1
             continue
         anchor_val = it.get('anchor')
+        # Per i duplicate_eneltel su Pavia (riga con stesso ENELTEL ma LCL
+        # diverso) il client passa anche `anchor_lcl` come secondary anchor.
+        # Se assente, il DB ritorna la "prima" riga associata all'eneltel.
+        anchor_lcl = it.get('anchor_lcl') or ''
 
-        # Risolvi eneltel_key (PK del DB)
+        # Risolvi (eneltel_key, lcl) — la chiave composta del DB
+        ek = None
+        resolved_lcl = anchor_lcl
         if anchor_col_low == 'eneltel' and anchor_val:
             ek = _db.normalize_eneltel(anchor_val)
+            # Risolvi anche LCL dal DB: se anchor_lcl vuoto (caso comune,
+            # client non lo manda), usa il LCL della prima riga di quell'eneltel.
+            # Altrimenti match esatto su (ek, lcl) e fallback alla prima.
+            if not anchor_lcl:
+                local = _db.get_filone_row(ek)
+                if local:
+                    resolved_lcl = local.get('lcl') or ''
+            else:
+                local = _db.get_filone_row(ek, lcl=anchor_lcl)
+                if local is None:
+                    local = _db.get_filone_row(ek)  # fallback prima riga
+                resolved_lcl = (local.get('lcl') or '') if local else anchor_lcl
         elif anchor_col_low == 'pod' and anchor_val:
-            ek = _db.find_eneltel_by_pod(anchor_val)
+            tup = _db.find_filone_row_by_pod(anchor_val, lcl=anchor_lcl)
+            if tup:
+                ek, resolved_lcl = tup
         else:
-            ek = _db.find_eneltel_by_sheets_row(row)
+            tup = _db.find_filone_row_by_sheets_row(row)
+            if tup:
+                ek, resolved_lcl = tup
 
         if not ek:
             unresolved += 1
             n_skipped += 1
             continue
 
-        # DEDUP: confronta col valore corrente "visibile". Nota: per
-        # confronto robusto trattiamo None come ''.
+        # DEDUP: confronta col valore corrente "visibile" per (eneltel, lcl).
         col_canonical = col
         try:
             col_canonical = _db.canonical_column_name(_db.get_conn(), col)
         except Exception:
             pass
         new_str = '' if value is None else str(value)
-        cur_val = _current_value(ek, col_canonical)
+        cur_val = _current_value(ek, resolved_lcl, col_canonical)
         cur_str = '' if cur_val is None else str(cur_val)
         if new_str == cur_str:
             n_unchanged += 1
             continue
 
-        by_eneltel.setdefault(ek, {})[col] = value
+        by_row.setdefault((ek, resolved_lcl), {})[col] = value
         n_written += 1
 
-    # Una record_local_change per riga (state='pending', drainer pusherà)
+    # Una record_local_change per riga (state='pending', drainer pusherà).
+    # Passiamo lcl per identificare la riga specifica (per i duplicate_eneltel).
     user = _safe_username()
-    for ek, fields in by_eneltel.items():
+    for (ek, lcl), fields in by_row.items():
         try:
             _db.record_local_change(
                 ek, fields, user=user, origin='primary_route',
-                initial_state='pending',
+                initial_state='pending', lcl=lcl,
             )
         except Exception as e:
-            logger.warning(f"[primary] record_local_change fallito per {ek}: {e}")
+            logger.warning(f"[primary] record_local_change fallito per {ek}/{lcl!r}: {e}")
             n_written -= len(fields)
             n_skipped += len(fields)
 
@@ -725,7 +747,7 @@ def _route_to_db_primary(items, *, anchor_col=None, anchor_normalize='upper'):
         'written': n_written,
         'skipped': n_skipped,
         'unchanged': n_unchanged,
-        'remapped': 0,  # n/a in primary mode (rimappatura avviene al drain)
+        'remapped': 0,  # remapping avviene al drain
         'invalid_cols': [],
         'lost_anchors': [],
         'primary_routed': True,
@@ -976,16 +998,13 @@ def update_cell(row, col_name, value):
     return safe_update_cell(row, col_name, value)
 
 
-def update_row_fields(eneltel, fields):
-    """Aggiorna più campi di una riga identificata da ENELTEL.
+def update_row_fields(eneltel, fields, *, lcl=None):
+    """Aggiorna più campi di una riga identificata da ENELTEL (+ LCL opzionale).
 
-    Usa safe_batch_update_by_name con verifica via ancora ENELTEL: se la
-    riga è stata spostata (sort, inserimento, cancellazione), viene
-    rimappata al volo. Se la colonna ENELTEL non esiste più o l'ENELTEL
-    cercato non è più presente, la scrittura viene saltata invece di
-    finire nella riga sbagliata.
+    `lcl` è l'ancora secondaria che disambigua le righe duplicate (Pavia
+    multi-LCL). Se None, scrive sulla "prima riga" dell'eneltel (legacy).
     """
-    logger.info(f"🔧 update_row_fields: ENELTEL={eneltel}, campi={fields}")
+    logger.info(f"🔧 update_row_fields: ENELTEL={eneltel}, lcl={lcl!r}, campi={fields}")
 
     row = find_row_by_eneltel(eneltel)
     if row is None:
@@ -996,12 +1015,15 @@ def update_row_fields(eneltel, fields):
     eneltel_col_name = _resolve_anchor_col_name('eneltel') or 'Eneltel'
     items = []
     for col_name, value in fields.items():
-        items.append({
+        item = {
             'row': row,
             'col': col_name,
             'value': value,
             'anchor': str(eneltel),
-        })
+        }
+        if lcl is not None:
+            item['anchor_lcl'] = str(lcl)
+        items.append(item)
 
     if not items:
         return True, "OK"
@@ -1096,7 +1118,7 @@ def _calcola_rimozione_app(nota_attuale):
 def _imposta_appuntamento_db_primary(row, orario, nota_app, *, data_app='',
                                      note_extra='', origine='contatore',
                                      pod_override=None, eneltel_override=None,
-                                     nota_corrente=None):
+                                     nota_corrente=None, lcl=None):
     """Variante FASE 2 di _imposta_appuntamento_su_filone — solo DB."""
     from . import db as _db
 
@@ -1123,6 +1145,7 @@ def _imposta_appuntamento_db_primary(row, orario, nota_app, *, data_app='',
         user=_safe_username(),
         origin=f'imposta_app_primary_{origine}',
         initial_state='pending',
+        lcl=lcl,
     )
 
     # Risveglia drainer
@@ -1176,7 +1199,7 @@ def _imposta_appuntamento_db_primary(row, orario, nota_app, *, data_app='',
     return {'nota_app': nota_app, 'nuova_nota': nuova_nota}
 
 
-def _rimuovi_appuntamento_db_primary(row, *, nota_corrente=None):
+def _rimuovi_appuntamento_db_primary(row, *, nota_corrente=None, lcl=None):
     """Variante FASE 2 di _rimuovi_appuntamento_da_filone — solo DB."""
     from . import db as _db
 
@@ -1185,7 +1208,7 @@ def _rimuovi_appuntamento_db_primary(row, *, nota_corrente=None):
         raise ValueError(f'Eneltel non risolto per riga {row}')
 
     if nota_corrente is None:
-        local = _db.get_filone_row(ek) or {}
+        local = _db.get_filone_row(ek, lcl=lcl) or {}
         nota_corrente = local.get('note_appuntamento') or ''
 
     col_note = _get_colonna_note()
@@ -1196,6 +1219,7 @@ def _rimuovi_appuntamento_db_primary(row, *, nota_corrente=None):
         user=_safe_username(),
         origin='rimuovi_app_primary',
         initial_state='pending',
+        lcl=lcl,
     )
 
     try:
@@ -1210,7 +1234,8 @@ def _rimuovi_appuntamento_db_primary(row, *, nota_corrente=None):
 
 def _imposta_appuntamento_su_filone(row, orario, data_app='', note_extra='',
                                      origine='contatore', pod_override=None,
-                                     eneltel_override=None, nota_corrente=None):
+                                     eneltel_override=None, nota_corrente=None,
+                                     lcl=None):
     """Logica condivisa per impostare appuntamento su una riga del filone.
 
     In modalità 'primary' (Fase 2): legge nota corrente dal DB locale,
@@ -1231,6 +1256,7 @@ def _imposta_appuntamento_su_filone(row, orario, data_app='', note_extra='',
             row, orario, nota_app, data_app=data_app, note_extra=note_extra,
             origine=origine, pod_override=pod_override,
             eneltel_override=eneltel_override, nota_corrente=nota_corrente,
+            lcl=lcl,
         )
 
     with _gsheets_write_lock:
@@ -1312,7 +1338,7 @@ def _imposta_appuntamento_su_filone(row, orario, data_app='', note_extra='',
     return {'nota_app': nota_app, 'nuova_nota': nuova_nota}
 
 
-def _rimuovi_appuntamento_da_filone(row, nota_corrente=None):
+def _rimuovi_appuntamento_da_filone(row, nota_corrente=None, lcl=None):
     """Logica condivisa per rimuovere appuntamento da una riga del filone."""
     nuova_nota = ''
 
@@ -1322,7 +1348,7 @@ def _rimuovi_appuntamento_da_filone(row, nota_corrente=None):
     except ImportError:
         _USE_DB = 'shadow'
     if _USE_DB == 'primary':
-        return _rimuovi_appuntamento_db_primary(row, nota_corrente=nota_corrente)
+        return _rimuovi_appuntamento_db_primary(row, nota_corrente=nota_corrente, lcl=lcl)
 
     with _gsheets_write_lock:
         force_refresh_headers()

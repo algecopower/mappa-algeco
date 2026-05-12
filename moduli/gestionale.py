@@ -2330,6 +2330,11 @@ def genera_js_gestionale():
                 if (noteTextareaCorrente) {{
                     payload.nota_corrente = noteTextareaCorrente.value;
                 }}
+                // LCL della riga (per disambiguare duplicate_eneltel)
+                try {{
+                    const _c = contatori.find(cc => cc.eneltel === currentFullscreenEneltel);
+                    if (_c && _c.lcl !== undefined) payload._anchor_lcl = String(_c.lcl || '');
+                }} catch (e) {{ /* ignora */ }}
                 const response = await fetch(`${{API_BASE}}/api/contatore/${{currentFullscreenEneltel}}/appuntamento`, {{
                     method: 'POST',
                     headers: {{ 'Content-Type': 'application/json' }},
@@ -2414,19 +2419,26 @@ def genera_js_gestionale():
                 }}
             }}
             
+            // LCL della riga corrente (ancora secondaria per disambiguare i
+            // duplicate_eneltel su Pavia: stesso Eneltel su 2 righe diverse).
+            try {{
+                const _cFs = contatori.find(c => c.eneltel === currentFullscreenEneltel);
+                if (_cFs && _cFs.lcl !== undefined) fields['_anchor_lcl'] = String(_cFs.lcl || '');
+            }} catch (e) {{ /* ignora */ }}
+
             try {{
                 const response = await fetch(`${{API_BASE}}/api/contatore/${{currentFullscreenEneltel}}`, {{
                     method: 'PUT',
                     headers: {{ 'Content-Type': 'application/json' }},
                     body: JSON.stringify(fields)
                 }});
-                
+
                 const result = await response.json();
-                
+
                 if (response.ok && result.success) {{
                     statusDiv.className = 'fullscreen-status visible success';
                     statusDiv.textContent = '✅ Salvato con successo!';
-                    
+
                     // Aggiorna dati locali
                     const idx = contatori.findIndex(c => c.eneltel === currentFullscreenEneltel);
                     if (idx >= 0) {{
@@ -2805,15 +2817,21 @@ def genera_js_gestionale():
                 }}
             }}
             
+            // LCL della riga (ancora secondaria per i duplicate_eneltel su Pavia)
+            try {{
+                const _c = contatori.find(cc => cc.eneltel === eneltel);
+                if (_c && _c.lcl !== undefined) fields['_anchor_lcl'] = String(_c.lcl || '');
+            }} catch (e) {{ /* ignora */ }}
+
             try {{
                 const response = await fetch(`${{API_BASE}}/api/contatore/${{eneltel}}`, {{
                     method: 'PUT',
                     headers: {{ 'Content-Type': 'application/json' }},
                     body: JSON.stringify(fields)
                 }});
-                
+
                 const result = await response.json();
-                
+
                 if (response.ok && result.success) {{
                     statusDiv.className = 'edit-status success';
                     statusDiv.textContent = '✅ Salvato con successo!';
@@ -3003,10 +3021,15 @@ def genera_js_gestionale():
             }}
             
             try {{
+                const _payloadApp = {{ orario }};
+                try {{
+                    const _c = contatori.find(cc => cc.eneltel === currentAppuntamentoEneltel);
+                    if (_c && _c.lcl !== undefined) _payloadApp._anchor_lcl = String(_c.lcl || '');
+                }} catch (e) {{ /* ignora */ }}
                 const response = await fetch(`${{API_BASE}}/api/contatore/${{currentAppuntamentoEneltel}}/appuntamento`, {{
                     method: 'POST',
                     headers: {{ 'Content-Type': 'application/json' }},
-                    body: JSON.stringify({{ orario }})
+                    body: JSON.stringify(_payloadApp)
                 }});
                 
                 const result = await response.json();
@@ -3041,6 +3064,10 @@ def genera_js_gestionale():
                 if (noteTextareaCorrente) {{
                     payload.nota_corrente = noteTextareaCorrente.value;
                 }}
+                try {{
+                    const _c = contatori.find(cc => cc.eneltel === eneltel);
+                    if (_c && _c.lcl !== undefined) payload._anchor_lcl = String(_c.lcl || '');
+                }} catch (e) {{ /* ignora */ }}
                 const response = await fetch(`${{API_BASE}}/api/contatore/${{eneltel}}/rimuovi-appuntamento`, {{
                     method: 'POST',
                     headers: {{ 'Content-Type': 'application/json' }},
@@ -3614,11 +3641,21 @@ def genera_js_gestionale():
             status.className = 'sigilli-card-status visible loading';
             status.textContent = '⏳ Salvataggio...';
             
+            // LCL dalla riga locale (ancora secondaria per duplicate_eneltel)
+            let _sLcl = undefined;
             try {{
+                const _c = sigilliData.find(cc => cc.eneltel === eneltel) ||
+                           (typeof contatori !== 'undefined' && contatori.find(cc => cc.eneltel === eneltel));
+                if (_c && _c.lcl !== undefined) _sLcl = String(_c.lcl || '');
+            }} catch (e) {{ /* ignora */ }}
+
+            try {{
+                const _body = {{ sigillo: sigillo }};
+                if (_sLcl !== undefined) _body._anchor_lcl = _sLcl;
                 const response = await fetch(`${{API_BASE}}/api/sigillo/${{eneltel}}`, {{
                     method: 'PUT',
                     headers: {{ 'Content-Type': 'application/json' }},
-                    body: JSON.stringify({{ sigillo: sigillo }})
+                    body: JSON.stringify(_body)
                 }});
                 
                 const result = await response.json();
@@ -3707,11 +3744,20 @@ def genera_js_gestionale():
             status.className = 'sigilli-card-status visible loading';
             status.textContent = '⏳ Salvataggio...';
             
+            let _mLcl = undefined;
             try {{
+                const _c = matricoleData.find(cc => cc.eneltel === eneltel) ||
+                           (typeof contatori !== 'undefined' && contatori.find(cc => cc.eneltel === eneltel));
+                if (_c && _c.lcl !== undefined) _mLcl = String(_c.lcl || '');
+            }} catch (e) {{ /* ignora */ }}
+
+            try {{
+                const _body = {{ matricola: matricola }};
+                if (_mLcl !== undefined) _body._anchor_lcl = _mLcl;
                 const response = await fetch(`${{API_BASE}}/api/matricola/${{eneltel}}`, {{
                     method: 'PUT',
                     headers: {{ 'Content-Type': 'application/json' }},
-                    body: JSON.stringify({{ matricola: matricola }})
+                    body: JSON.stringify(_body)
                 }});
                 
                 const result = await response.json();

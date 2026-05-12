@@ -20,7 +20,7 @@ def test_bootstrap_schema_idempotente(db_isolato):
     db.get_conn()  # ri-esegue _bootstrap_schema
     s2 = db.stats()
     assert s1 == s2
-    assert s1['schema_version'] == '1'
+    assert s1['schema_version'] == '2'
 
 
 def test_record_local_change_coalesce_duplicates(db_isolato):
@@ -121,7 +121,8 @@ def test_mark_orphans(db_isolato):
             )
 
     with conn:
-        n = db.mark_orphans(conn, alive_eneltel_keys={'1', '3'})
+        # mark_orphans v2: keys = set di tuple (eneltel_key, lcl)
+        n = db.mark_orphans(conn, alive_keys={('1', ''), ('3', '')})
 
     assert n == 1
     orphan = conn.execute(

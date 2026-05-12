@@ -129,19 +129,19 @@ def get_contatore(eneltel):
     if _USE_DB == 'primary':
         from moduli import db as _db
         ek = _db.normalize_eneltel(eneltel)
-        local = _db.get_filone_row(ek)
+        # LCL opzionale come query param per disambiguare righe duplicate.
+        # Default: prima riga (sheets_row più basso).
+        lcl_arg = request.args.get('lcl')
+        local = _db.get_filone_row(ek, lcl=lcl_arg)
         if not local:
             return jsonify({'error': f'ENELTEL {eneltel} non trovato'}), 404
+        row_lcl = local.get('lcl') or ''
 
-        # Costruisci `data` (dict header→valore) usando column_registry +
-        # filone_extra per le colonne non tipizzate.
         conn = _db.get_conn()
-        # Carica l'ordine delle colonne dal registry (mantiene il layout del foglio)
         col_rows = conn.execute(
             'SELECT column_name, chiave_interna FROM column_registry '
             'ORDER BY last_index'
         ).fetchall()
-        # Mappa: chiave_interna → colonna SQL (uguali per le note in COLONNE_NOTE)
         data = {}
         for cr in col_rows:
             col_sheet = cr['column_name']
@@ -149,24 +149,20 @@ def get_contatore(eneltel):
             if chiave in _db.COLONNE_NOTE:
                 val = local.get(chiave, '') or ''
             elif chiave == 'eneltel':
-                # Eneltel: ricostruisco dal Eneltel_Key (lstrip '0' inverso non
-                # è possibile esattamente, ma per la UI basta il valore normalizzato)
                 val = local.get('eneltel_key', '') or ''
             else:
-                # Colonna extra: leggi da filone_extra
                 ev = conn.execute(
-                    'SELECT value FROM filone_extra WHERE eneltel_key=? AND column_name=?',
-                    (ek, col_sheet),
+                    "SELECT value FROM filone_extra WHERE eneltel_key=? AND COALESCE(lcl,'')=? AND column_name=?",
+                    (ek, row_lcl, col_sheet),
                 ).fetchone()
                 val = (ev['value'] if ev else '') or ''
             data[col_sheet] = val
 
-        # Applica pending in volo (state pending/in_flight) → sovrascrive con
-        # i valori che l'utente ha appena modificato ma non ancora drenati.
+        # Pending in volo per la specifica (eneltel, lcl)
         pending_rows = conn.execute(
             "SELECT column_name, new_value FROM pending_writes "
-            "WHERE eneltel_key=? AND state IN ('pending','in_flight')",
-            (ek,),
+            "WHERE eneltel_key=? AND COALESCE(lcl,'')=? AND state IN ('pending','in_flight')",
+            (ek, row_lcl),
         ).fetchall()
         for pr in pending_rows:
             data[pr['column_name']] = pr['new_value'] or ''
@@ -174,6 +170,7 @@ def get_contatore(eneltel):
         return jsonify({
             'eneltel': eneltel,
             'row': local.get('sheets_row'),
+            'lcl': row_lcl,
             'data': data,
             'contatore': _format_row_to_contatore(data),
         })
@@ -211,6 +208,10 @@ def update_contatore(eneltel):
         fields = request.json
         if not fields:
             return jsonify({'error': 'Nessun campo da aggiornare'}), 400
+
+        # Estrai LCL come ancora secondaria (per disambiguare duplicate_eneltel
+        # su Pavia). Rimosso dai fields prima della scrittura.
+        anchor_lcl = fields.pop('_anchor_lcl', None)
 
         # Valida che i campi siano modificabili
         campi_ammessi = CAMPI_MODIFICABILI.get(PROVINCIA_ATTIVA, {})
@@ -252,19 +253,19 @@ def update_contatore(eneltel):
         old_values = {}
         if row_num:
             if _USE_DB == 'primary':
-                # Read dal DB locale: nessuna chiamata Sheets, già consistent
-                # con quello che il client vedeva (filone + pending overlay).
+                # Read dal DB locale identificando la riga via (eneltel, lcl).
                 try:
                     from moduli import db as _db
                     ek = _db.normalize_eneltel(eneltel)
-                    local = _db.get_filone_row(ek) or {}
+                    local = _db.get_filone_row(ek, lcl=anchor_lcl) or {}
+                    row_lcl = local.get('lcl') or ''
                     conn = _db.get_conn()
                     pending_overlay = {
                         r['column_name']: r['new_value']
                         for r in conn.execute(
                             "SELECT column_name, new_value FROM pending_writes "
-                            "WHERE eneltel_key=? AND state IN ('pending','in_flight')",
-                            (ek,),
+                            "WHERE eneltel_key=? AND COALESCE(lcl,'')=? AND state IN ('pending','in_flight')",
+                            (ek, row_lcl),
                         ).fetchall()
                     }
                     for col_name in fields_validi:
@@ -276,8 +277,8 @@ def update_contatore(eneltel):
                                 old_values[col_name] = local.get(chiave, '') or ''
                             else:
                                 ev = conn.execute(
-                                    'SELECT value FROM filone_extra WHERE eneltel_key=? AND column_name=?',
-                                    (ek, col_name),
+                                    "SELECT value FROM filone_extra WHERE eneltel_key=? AND COALESCE(lcl,'')=? AND column_name=?",
+                                    (ek, row_lcl, col_name),
                                 ).fetchone()
                                 old_values[col_name] = (ev['value'] if ev else '') or ''
                 except Exception as e:
@@ -295,7 +296,7 @@ def update_contatore(eneltel):
                 except Exception as e:
                     logger.warning(f"[CellLog] Errore lettura valori precedenti: {e}")
 
-        success, msg = update_row_fields(eneltel, fields_validi)
+        success, msg = update_row_fields(eneltel, fields_validi, lcl=anchor_lcl)
 
         if success:
             # Registra nello storico le modifiche
@@ -354,6 +355,8 @@ def bulk_pianifica():
         enteltels = data.get('enteltels', [])
         data_pian = data.get('data_pian', '').strip()
         operatore = data.get('operatore', '').strip()
+        # Mappa opzionale {eneltel: lcl} per disambiguare righe duplicate.
+        lcl_by_eneltel = data.get('lcl_by_eneltel') or {}
         data_pian_filone = ''
 
         if not enteltels:
@@ -407,13 +410,17 @@ def bulk_pianifica():
         # un altro contatore.
         items = []
         for eneltel_str, row in eneltel_to_row.items():
+            anchor_lcl = lcl_by_eneltel.get(eneltel_str)
             for col_name, value in fields_to_set:
-                items.append({
+                item = {
                     'row': row,
                     'col': col_name,
                     'value': value,
                     'anchor': eneltel_str,
-                })
+                }
+                if anchor_lcl is not None:
+                    item['anchor_lcl'] = str(anchor_lcl)
+                items.append(item)
 
         eneltel_anchor_col = _resolve_anchor_col_name('eneltel') or 'Eneltel'
         res = safe_batch_update_by_name(
@@ -619,6 +626,7 @@ def set_appuntamento(eneltel):
         data_app = data.get('data_appuntamento', '')
         note_extra = data.get('note', '')
         nota_corrente = data.get('nota_corrente')
+        anchor_lcl = data.get('_anchor_lcl')
 
         if not orario:
             return jsonify({'error': 'Orario richiesto'}), 400
@@ -630,7 +638,7 @@ def set_appuntamento(eneltel):
         result = _imposta_appuntamento_su_filone(
             row, orario, data_app=data_app, note_extra=note_extra,
             origine='contatore', eneltel_override=eneltel,
-            nota_corrente=nota_corrente
+            nota_corrente=nota_corrente, lcl=anchor_lcl,
         )
         return jsonify({
             'success': True,
@@ -651,12 +659,13 @@ def remove_appuntamento(eneltel):
     try:
         data = request.get_json(silent=True) or {}
         nota_corrente = data.get('nota_corrente')
+        anchor_lcl = data.get('_anchor_lcl')
 
         row = find_row_by_eneltel(eneltel)
         if row is None:
             return jsonify({'error': f'ENELTEL {eneltel} non trovato'}), 404
 
-        result = _rimuovi_appuntamento_da_filone(row, nota_corrente=nota_corrente)
+        result = _rimuovi_appuntamento_da_filone(row, nota_corrente=nota_corrente, lcl=anchor_lcl)
         return jsonify({
             'success': True,
             'message': 'Appuntamento rimosso',
@@ -1352,6 +1361,9 @@ def update_filone_row(row_num):
 
         # Estrae l'ancora POD (se il client l'ha inviata).
         anchor_pod = fields.pop('_anchor_pod', None)
+        # LCL come ancora secondaria per disambiguare righe con stesso
+        # Eneltel ma LCL diverso (caso multi-LCL su Pavia).
+        anchor_lcl = fields.pop('_anchor_lcl', None)
 
         # Colonne protette lato server (escluse quelle sbloccate dall'utente)
         protette = set(c.lower() for c in COLONNE_PROTETTE_FILONE.get(PROVINCIA_ATTIVA, _COLONNE_PROTETTE_BASE))
@@ -1367,6 +1379,8 @@ def update_filone_row(row_num):
             item = {'row': row_num, 'col': col_name, 'value': value}
             if anchor_pod:
                 item['anchor'] = anchor_pod
+            if anchor_lcl is not None:
+                item['anchor_lcl'] = anchor_lcl
             items.append(item)
 
         if not items:
@@ -1529,6 +1543,7 @@ def update_filone_bulk():
             if row_num < 2:
                 continue
             anchor_pod = fields.get('_anchor_pod') if isinstance(fields, dict) else None
+            anchor_lcl = fields.get('_anchor_lcl') if isinstance(fields, dict) else None
             if anchor_pod:
                 any_anchor = True
 
@@ -1540,6 +1555,8 @@ def update_filone_bulk():
                 item = {'row': row_num, 'col': col_name, 'value': value}
                 if anchor_pod:
                     item['anchor'] = anchor_pod
+                if anchor_lcl is not None:
+                    item['anchor_lcl'] = anchor_lcl
                 items.append(item)
             rows_ok.add(row_num_str)
 
@@ -1876,10 +1893,11 @@ def genera_orari_lettere():
 
             col_pod_idx = header_map[pod_anchor_col]
             col_dest_idx = header_map[col_dest_name]
+            # LCL serve come ancora secondaria per disambiguare i POD duplicati
+            # (stesso POD su 2 righe diverse del foglio, frequente su Pavia).
+            col_lcl_idx = header_map.get('LCL')
 
             ws = get_worksheet()
-            # Leggi tutte le righe FRESCHE (sotto lock) per non sovrascrivere
-            # celle Orari già compilate e per posizioni POD attuali.
             all_values = _sheets_retry(ws.get_all_values)
 
             items = []
@@ -1906,11 +1924,18 @@ def genera_orari_lettere():
                     saltati_occupati += 1
                     continue
 
+                # LCL della riga del foglio: ancora secondaria per identificare
+                # univocamente la riga in caso di POD duplicato (es. Pavia).
+                lcl_val = ''
+                if col_lcl_idx is not None and col_lcl_idx - 1 < len(row_values):
+                    lcl_val = str(row_values[col_lcl_idx - 1] or '').strip()
+
                 items.append({
                     'row': row_idx,
                     'col': col_dest_name,
                     'value': fascia_trovata,
                     'anchor': pod_val,
+                    'anchor_lcl': lcl_val,
                 })
                 scritti += 1
 

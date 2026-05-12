@@ -108,36 +108,37 @@ def _apply_pending_to_values(values):
         return values
 
     headers = values[0]
-    # Trova colonna eneltel + indice colonne CASE-INSENSITIVE
-    # (le pending possono essere state create con un case diverso da quello
-    # del foglio, vedi 'email' vs 'EMAIL').
+    # Trova colonna eneltel + lcl + indice colonne case-insensitive
     internal_lookup = _db._build_internal_lookup()
     eneltel_col_idx = None
+    lcl_col_idx = None
     col_name_to_idx = {}
     for i, name in enumerate(headers):
         if not name:
             continue
         col_name_to_idx[name.strip().lower()] = i
-        if internal_lookup.get(name.strip().lower()) == 'eneltel':
+        chiave = internal_lookup.get(name.strip().lower())
+        if chiave == 'eneltel':
             eneltel_col_idx = i
+        elif chiave == 'lcl':
+            lcl_col_idx = i
     if eneltel_col_idx is None:
         return values
 
-    # Carica tutte le pending in volo (stato pending o in_flight)
+    # Carica tutte le pending in volo, indicizzate per (eneltel_key, lcl)
     conn = _db.get_conn()
     rows = conn.execute(
-        "SELECT eneltel_key, column_name, new_value FROM pending_writes "
-        "WHERE state IN ('pending','in_flight')"
+        "SELECT eneltel_key, COALESCE(lcl,'') AS lcl, column_name, new_value "
+        "FROM pending_writes WHERE state IN ('pending','in_flight')"
     ).fetchall()
     if not rows:
         return values
 
-    # Indicizza pending per eneltel_key
-    pending_by_ek = {}
+    pending_by_key = {}
     for r in rows:
-        pending_by_ek.setdefault(r['eneltel_key'], {})[r['column_name']] = r['new_value']
+        key = (r['eneltel_key'], r['lcl'])
+        pending_by_key.setdefault(key, {})[r['column_name']] = r['new_value']
 
-    # Costruisci una lista mutabile dei body rows
     new_values = [list(headers)]
     n_overrides = 0
     for body_row in values[1:]:
@@ -146,11 +147,18 @@ def _apply_pending_to_values(values):
             new_values.append(body_row)
             continue
         ek = _db.normalize_eneltel(body_row[eneltel_col_idx])
-        overrides = pending_by_ek.get(ek)
+        # LCL della riga sul foglio (può essere '')
+        lcl_val = ''
+        if lcl_col_idx is not None and lcl_col_idx < len(body_row):
+            lcl_val = str(body_row[lcl_col_idx] or '').strip()
+
+        # Match esatto (eneltel, lcl); fallback su (eneltel, '') se non c'è LCL pending
+        overrides = pending_by_key.get((ek, lcl_val))
+        if not overrides:
+            overrides = pending_by_key.get((ek, ''))
         if not overrides:
             new_values.append(body_row)
             continue
-        # Estendi la riga se più corta degli header
         while len(body_row) < len(headers):
             body_row.append('')
         for col_name, new_val in overrides.items():

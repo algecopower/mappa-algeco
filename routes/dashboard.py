@@ -340,6 +340,134 @@ def _calcola_statistiche_filone(backup: dict) -> dict:
     }
 
 
+def _calcola_andamento_lcl(backup: dict) -> dict:
+    """Aggregazione per LCL: replica le viste del file 'Andamento LCL.xlsx'
+    calcolando Assegnate/Evase/Residui/Annullate/% Produttività e andamento
+    mensile direttamente dal backup FILONE."""
+    headers = backup.get('headers', [])
+    righe = backup.get('righe', [])
+
+    i_lcl = _col_index(headers, ['LCL'])
+    i_data = _col_index(headers, ['DATA PIAN', 'Data Pian'])
+    i_esito = _col_index(headers, ['Esito', 'ESITO'])
+    i_data_inst = _col_index(headers, ['Data Installazione', 'DATA INSTALLAZIONE'])
+    i_mot = _col_index(headers, ['Mot. Rich.', 'MOT. RICH.', 'Mot Rich'])
+
+    per_lcl = {}
+    monthly_totale = Counter()
+
+    for row in righe:
+        lcl = _cell(row, i_lcl)
+        if not lcl:
+            continue
+        if lcl not in per_lcl:
+            per_lcl[lcl] = {
+                'tipi': Counter(),
+                'assegnate': 0,
+                'evase': 0,
+                'annullate': 0,
+                'date_inst': [],
+                'date_pian': [],
+                'monthly': Counter(),
+            }
+        s = per_lcl[lcl]
+        s['assegnate'] += 1
+
+        data_raw = _cell(row, i_data)
+        esito = _cell(row, i_esito)
+        data_inst_raw = _cell(row, i_data_inst)
+        mot = _cell(row, i_mot)
+
+        if mot:
+            s['tipi'][mot] += 1
+
+        if data_raw and 'annullat' in data_raw.lower():
+            s['annullate'] += 1
+            continue
+
+        d_pian = _parse_data(data_raw) if data_raw else None
+        if d_pian:
+            s['date_pian'].append(d_pian)
+
+        if esito and 'ok' in esito.lower():
+            s['evase'] += 1
+            d_inst = _parse_data(data_inst_raw) if data_inst_raw else d_pian
+            if d_inst and len(d_inst) >= 7:
+                month = d_inst[:7]
+                s['monthly'][month] += 1
+                monthly_totale[month] += 1
+                s['date_inst'].append(d_inst)
+
+    lcl_list = []
+    for code, s in per_lcl.items():
+        ass = s['assegnate']
+        eva = s['evase']
+        ann = s['annullate']
+        res = max(ass - eva - ann, 0)
+        pct = round(eva / ass * 100, 1) if ass else 0.0
+        prima = min(s['date_inst']) if s['date_inst'] else (
+            min(s['date_pian']) if s['date_pian'] else '')
+        ultima = max(s['date_inst']) if s['date_inst'] else (
+            max(s['date_pian']) if s['date_pian'] else '')
+        if res == 0 and ass > 0:
+            stato = 'Chiusa'
+        elif eva == 0:
+            stato = 'Da avviare'
+        else:
+            stato = 'Attiva'
+        tipo = s['tipi'].most_common(1)[0][0] if s['tipi'] else ''
+        lcl_list.append({
+            'codice': code,
+            'tipo': tipo,
+            'stato': stato,
+            'assegnate': ass,
+            'evase': eva,
+            'residui': res,
+            'annullate': ann,
+            'pct_produttivita': pct,
+            'prima_installazione': prima,
+            'ultima_installazione': ultima,
+        })
+
+    lcl_list.sort(key=lambda x: x['codice'])
+
+    tot_ass = sum(l['assegnate'] for l in lcl_list)
+    tot_eva = sum(l['evase'] for l in lcl_list)
+    tot_ann = sum(l['annullate'] for l in lcl_list)
+    tot_res = sum(l['residui'] for l in lcl_list)
+    pct_prod = round(tot_eva / tot_ass * 100, 1) if tot_ass else 0.0
+    lcl_attivi = sum(1 for l in lcl_list if l['stato'] == 'Attiva')
+    lcl_chiusi = sum(1 for l in lcl_list if l['stato'] == 'Chiusa')
+
+    if monthly_totale:
+        all_months = sorted(monthly_totale.keys())
+        labels = all_months[-12:]
+        values = [monthly_totale.get(m, 0) for m in labels]
+    else:
+        labels, values = [], []
+
+    critici = sorted(
+        [l for l in lcl_list if l['residui'] > 0 and l['stato'] == 'Attiva'],
+        key=lambda x: (-x['residui'], x['pct_produttivita'])
+    )[:5]
+
+    return {
+        'kpi': {
+            'totale_assegnate': tot_ass,
+            'totale_evase': tot_eva,
+            'totale_residui': tot_res,
+            'totale_annullate': tot_ann,
+            'pct_produttivita': pct_prod,
+            'numero_lcl': len(lcl_list),
+            'numero_lcl_attivi': lcl_attivi,
+            'numero_lcl_chiusi': lcl_chiusi,
+        },
+        'lcl_list': lcl_list,
+        'andamento_mensile': {'labels': labels, 'values': values},
+        'critici': critici,
+    }
+
+
 # ============================================================================
 # ROUTE: pagina HTML
 # ============================================================================
@@ -362,9 +490,11 @@ def api_dashboard():
         backup = _carica_ultimo_backup()
         if backup:
             filone_stats = _calcola_statistiche_filone(backup)
+            andamento_lcl = _calcola_andamento_lcl(backup)
             data_backup = backup.get('data_backup', '?')
         else:
             filone_stats = {}
+            andamento_lcl = {}
             data_backup = None
 
         # 2. Attività calendario (oggi e prossime)
@@ -407,6 +537,7 @@ def api_dashboard():
             'data_backup': data_backup,
             'timestamp': datetime.now().isoformat(),
             'filone': filone_stats,
+            'andamento_lcl': andamento_lcl,
             'calendario': cal_stats,
             'bacheca': bacheca_stats,
         })

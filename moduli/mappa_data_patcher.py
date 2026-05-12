@@ -112,27 +112,26 @@ DB_FIELD_DUPLICATES = {
 
 
 def _classify_pending(conn):
-    """Classifica le pending in volo:
-      - eneltel_key → {col_name: new_value} per campi SOFT
-      - eneltel_key → set di chiavi STRUTTURALI
+    """Classifica le pending in volo per (eneltel, lcl):
+      - (eneltel_key, lcl) → {col_name: new_value} per campi SOFT
+      - has_structural se almeno una pending è strutturale
 
-    Solo le pending in stato 'pending'/'in_flight' contano (quelle 'done'
-    sono già state pushate, quelle 'quarantined' non vanno mostrate).
+    Solo le pending in stato 'pending'/'in_flight' contano.
 
-    Returns: (soft_pending_by_ek, has_structural)
+    Returns: (soft_pending_by_row_key, has_structural)
     """
     from . import db as _db
 
-    soft_by_ek = {}
+    soft_by_key = {}
     has_structural = False
 
     rows = conn.execute(
-        "SELECT eneltel_key, column_name, new_value, base_value FROM pending_writes "
-        "WHERE state IN ('pending','in_flight')"
+        "SELECT eneltel_key, COALESCE(lcl,'') AS lcl, column_name, new_value, base_value "
+        "FROM pending_writes WHERE state IN ('pending','in_flight')"
     ).fetchall()
 
     for r in rows:
-        ek = r['eneltel_key']
+        key = (r['eneltel_key'], r['lcl'])
         col = r['column_name']
         chiave = _db.column_to_internal_key(conn, col)
 
@@ -140,26 +139,20 @@ def _classify_pending(conn):
             has_structural = True
             continue
 
-        # NOTE APP: SOFT solo se il flag IS_APPUNTAMENTO non cambia (= né
-        # vecchia né nuova nota contengono "APP"). Altrimenti è strutturale
-        # perché cambia ORA_APPUNTAMENTO/IS_APPUNTAMENTO nel DataFrame.
         if chiave == 'note_appuntamento':
             if _note_change_is_soft(r['base_value'], r['new_value']):
-                soft_by_ek.setdefault(ek, {})[chiave] = r['new_value']
+                soft_by_key.setdefault(key, {})[chiave] = r['new_value']
             else:
                 has_structural = True
             continue
 
         if chiave in SOFT_FIELDS_DB:
-            soft_by_ek.setdefault(ek, {})[chiave] = r['new_value']
-        # Chiavi sconosciute (es. 'eneltel' o non mappate): per safety le
-        # consideriamo strutturali (forza sync classico). Ma 'eneltel' non
-        # dovrebbe mai capitare perché record_local_change la rifiuta.
+            soft_by_key.setdefault(key, {})[chiave] = r['new_value']
         elif chiave is None:
             logger.debug(f"[patcher] pending su colonna senza mapping interno: {col}")
             has_structural = True
 
-    return soft_by_ek, has_structural
+    return soft_by_key, has_structural
 
 
 def _mappa_data_json_path():
@@ -181,16 +174,12 @@ def try_patch_inplace():
     from . import safe_json as _sj
 
     conn = _db.get_conn()
-    soft_by_ek, has_structural = _classify_pending(conn)
+    soft_by_key, has_structural = _classify_pending(conn)
 
     if has_structural:
-        # Almeno una modifica è strutturale: serve il sync_loop classico.
         return False
 
-    if not soft_by_ek:
-        # Niente da patchare (es. tutte le pending sono già done o nessuna).
-        # Non possiamo asserire che mappa_data.json sia aggiornato senza il
-        # sync_loop, quindi diciamo "non patchato": fallback.
+    if not soft_by_key:
         return False
 
     json_path = _mappa_data_json_path()
@@ -198,30 +187,40 @@ def try_patch_inplace():
         logger.warning(f"[patcher] {json_path} non esiste, fallback al sync_loop")
         return False
 
+    # `soft_by_key` ha chiavi (eneltel, lcl). Per matching nel JSON dei
+    # contatori (che ha campi `eneltel` e `lcl`), iteriamo su tutti i
+    # contatori e troviamo i match esatti.
     def _modifier(data):
         if not isinstance(data, dict) or 'contatori' not in data:
-            return None  # struttura inattesa: skip
+            return None
         contatori = data['contatori']
         if not isinstance(contatori, list):
             return None
         n_patched = 0
         for c in contatori:
             ek = _db.normalize_eneltel(c.get('eneltel') or c.get('id') or '')
-            if not ek or ek not in soft_by_ek:
+            if not ek:
                 continue
-            for chiave_interna, new_val in soft_by_ek[ek].items():
-                # Campi con duplicati (es. posizione_misuratore → note + posizione_mis)
+            lcl = str(c.get('lcl') or '')
+            key = (ek, lcl)
+            # Match esatto (eneltel, lcl). Fallback: solo eneltel se la
+            # pending è per quell'eneltel ma LCL non specificato (raro).
+            if key in soft_by_key:
+                overrides = soft_by_key[key]
+            elif (ek, '') in soft_by_key:
+                overrides = soft_by_key[(ek, '')]
+            else:
+                continue
+            for chiave_interna, new_val in overrides.items():
                 if chiave_interna in DB_FIELD_DUPLICATES:
                     for jf in DB_FIELD_DUPLICATES[chiave_interna]:
                         c[jf] = '' if new_val is None else str(new_val)
-                # Mapping standard
                 json_field = DB_TO_JSON_FIELD.get(chiave_interna)
                 if json_field:
                     c[json_field] = '' if new_val is None else str(new_val)
             n_patched += 1
         if n_patched == 0:
-            return None  # nessun match, skip scrittura
-        # Aggiorna anche il timestamp così il frontend vede dati nuovi
+            return None
         import time as _time
         data['timestamp'] = int(_time.time() * 1000)
         return data
@@ -231,6 +230,6 @@ def try_patch_inplace():
         logger.warning("[patcher] json_modify ha fallito, fallback al sync_loop")
         return False
 
-    n_eks = len(soft_by_ek)
-    logger.info(f"[patcher] inplace patch OK su {n_eks} contatore(i): {list(soft_by_ek.keys())[:5]}")
+    n_keys = len(soft_by_key)
+    logger.info(f"[patcher] inplace patch OK su {n_keys} riga(he): {list(soft_by_key.keys())[:5]}")
     return True

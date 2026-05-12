@@ -154,16 +154,15 @@ def salva_sigillo(eneltel):
     try:
         data = request.json
         sigillo = data.get('sigillo', '').strip()
+        anchor_lcl = data.get('_anchor_lcl')
 
         if not sigillo:
             return jsonify({'error': 'Sigillo vuoto'}), 400
 
-        # Cerca riga per ENELTEL (find_row_by_eneltel rilegge ora gli header freschi)
         row_num = find_row_by_eneltel(eneltel)
         if row_num is None:
             return jsonify({'error': f'Contatore {eneltel} non trovato'}), 404
 
-        # Trova nome canonico colonna SIGILLO presente sul foglio
         _header_map = get_header_map()
         col_name_sigillo = None
         for col_name in ['SIGILLO', 'Sigillo', 'sigillo']:
@@ -173,18 +172,17 @@ def salva_sigillo(eneltel):
         if col_name_sigillo is None:
             return jsonify({'error': 'Colonna SIGILLO non trovata'}), 400
 
-        # Scrittura SAFE: refresh atomico header + verifica ancora ENELTEL.
-        # Se la collega ha appena spostato/aggiunto colonne, il safe writer
-        # legge l'header attuale e scrive nella colonna giusta. Se la riga è
-        # stata spostata, viene re-cercata via ENELTEL.
         eneltel_anchor_col = _resolve_anchor_col_name('eneltel') or 'Eneltel'
+        item = {
+            'row': row_num,
+            'col': col_name_sigillo,
+            'value': sigillo,
+            'anchor': str(eneltel),
+        }
+        if anchor_lcl is not None:
+            item['anchor_lcl'] = str(anchor_lcl)
         res = safe_batch_update_by_name(
-            [{
-                'row': row_num,
-                'col': col_name_sigillo,
-                'value': sigillo,
-                'anchor': str(eneltel),
-            }],
+            [item],
             anchor_col=eneltel_anchor_col,
             anchor_normalize='lstrip0',
         )
@@ -329,6 +327,7 @@ def salva_matricola(eneltel):
     try:
         data = request.json
         matricola = data.get('matricola', '').strip()
+        anchor_lcl = data.get('_anchor_lcl')
 
         if not matricola:
             return jsonify({'error': 'Matricola vuota'}), 400
@@ -337,7 +336,6 @@ def salva_matricola(eneltel):
         if row_num is None:
             return jsonify({'error': f'Contatore {eneltel} non trovato'}), 404
 
-        # Trova nome canonico colonna Matricola installata
         _header_map = get_header_map()
         col_name_mat = None
         for col_name in ['Matricola CE inst', 'Matricola misuratore installato', 'MATRICOLA CE INST']:
@@ -348,13 +346,16 @@ def salva_matricola(eneltel):
             return jsonify({'error': 'Colonna Matricola non trovata'}), 400
 
         eneltel_anchor_col = _resolve_anchor_col_name('eneltel') or 'Eneltel'
+        item = {
+            'row': row_num,
+            'col': col_name_mat,
+            'value': matricola,
+            'anchor': str(eneltel),
+        }
+        if anchor_lcl is not None:
+            item['anchor_lcl'] = str(anchor_lcl)
         res = safe_batch_update_by_name(
-            [{
-                'row': row_num,
-                'col': col_name_mat,
-                'value': matricola,
-                'anchor': str(eneltel),
-            }],
+            [item],
             anchor_col=eneltel_anchor_col,
             anchor_normalize='lstrip0',
         )

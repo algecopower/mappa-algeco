@@ -94,10 +94,14 @@ def pull_once(values=None):
     # Costruita una sola volta per tutto il pull.
     internal_lookup = db._build_internal_lookup()
     col_to_internal = {}  # idx_0based -> chiave_interna (o None)
+    col_lcl_idx = None
     for i, name in enumerate(headers):
         if not name:
             continue
-        col_to_internal[i] = internal_lookup.get(name.strip().lower())
+        chiave = internal_lookup.get(name.strip().lower())
+        col_to_internal[i] = chiave
+        if chiave == 'lcl':
+            col_lcl_idx = i
 
     n_changed = 0
     n_new = 0
@@ -111,13 +115,12 @@ def pull_once(values=None):
         # Aggiorna column_registry con header attuale
         db.update_column_registry(conn, headers)
 
-        # Pulisci anomalie ricalcolabili: i duplicati e le righe senza Eneltel
-        # vengono ri-rilevati dal pull, quindi le entries precedenti sono solo
-        # rumore. Le altre kind (es. anomalie semantiche aggiunte in futuro)
-        # restano per audit storico.
+        # Pulisci anomalie ricalcolabili. NB: 'duplicate_eneltel' non viene
+        # più registrato dal v2 in poi (le righe con stesso Eneltel + LCL
+        # diverso sono legittime); puliamo eventuali residui storici.
         conn.execute(
             "DELETE FROM filone_anomalies "
-            "WHERE kind IN ('duplicate_eneltel', 'row_without_eneltel')"
+            "WHERE kind IN ('duplicate_eneltel', 'row_without_eneltel', 'duplicate_eneltel_lcl')"
         )
 
         for row_offset, row_values in enumerate(body):
@@ -136,35 +139,45 @@ def pull_once(values=None):
                     )
                 continue
 
-            if eneltel_key in eneltel_seen:
-                duplicates.append({'eneltel_key': eneltel_key, 'sheets_row': sheets_row})
+            # LCL della riga: parte della chiave composta. Se vuoto, '' (no None).
+            lcl_val = ''
+            if col_lcl_idx is not None and col_lcl_idx < len(row_values):
+                lcl_val = str(row_values[col_lcl_idx] or '').strip()
+
+            row_key = (eneltel_key, lcl_val)
+            if row_key in eneltel_seen:
+                # Stesso Eneltel + stesso LCL su 2 righe → anomalia vera
+                duplicates.append({'eneltel_key': eneltel_key, 'lcl': lcl_val,
+                                   'sheets_row': sheets_row})
                 db.record_anomaly(
-                    conn, kind='duplicate_eneltel',
+                    conn, kind='duplicate_eneltel_lcl',
                     eneltel_key=eneltel_key, sheets_row=sheets_row,
+                    detail={'lcl': lcl_val},
                 )
                 continue
-            eneltel_seen.add(eneltel_key)
+            eneltel_seen.add(row_key)
 
             # Hash della riga (basato sui valori nell'ordine del foglio)
             row_hash = db.compute_row_hash(row_values)
 
-            # Confronto con stato locale
+            # Confronto con stato locale (chiave composta)
             cur = conn.execute(
-                'SELECT * FROM filone WHERE eneltel_key=?', (eneltel_key,)
+                "SELECT * FROM filone WHERE eneltel_key=? AND COALESCE(lcl,'')=?",
+                (eneltel_key, lcl_val),
             )
             existing = cur.fetchone()
 
             if existing is not None and existing['row_hash'] == row_hash and \
                     existing['sheets_row'] == sheets_row:
-                # Riga invariata anche di posizione → solo aggiorna pull_ts
                 conn.execute(
-                    'UPDATE filone SET last_remote_pull_ts=?, is_orphan=0 WHERE eneltel_key=?',
-                    (db._now_ts(), eneltel_key),
+                    "UPDATE filone SET last_remote_pull_ts=?, is_orphan=0 "
+                    "WHERE eneltel_key=? AND COALESCE(lcl,'')=?",
+                    (db._now_ts(), eneltel_key, lcl_val),
                 )
                 continue
 
-            # Cambio rilevato (o riga nuova). Carico pending in volo per la riga.
-            pending_by_col = _load_pending_by_col(conn, eneltel_key)
+            # Cambio rilevato (o riga nuova). Carico pending in volo per (eneltel, lcl).
+            pending_by_col = _load_pending_by_col(conn, eneltel_key, lcl_val)
 
             # Costruisco typed_values + extra_values per upsert
             typed_values = {}
@@ -228,6 +241,7 @@ def pull_once(values=None):
             db.upsert_filone_row(
                 conn,
                 eneltel_key=eneltel_key,
+                lcl=lcl_val,
                 sheets_row=sheets_row,
                 typed_values=typed_values,
                 extra_values=extra_values,
@@ -272,12 +286,13 @@ def _find_eneltel_column_index(conn, headers):
     return None
 
 
-def _load_pending_by_col(conn, eneltel_key):
-    """Mappa {column_name: pending_dict} per le pending non ancora pushate."""
+def _load_pending_by_col(conn, eneltel_key, lcl=''):
+    """Mappa {column_name: pending_dict} per le pending non ancora pushate
+    di una specifica coppia (eneltel_key, lcl)."""
     cur = conn.execute(
         "SELECT id, column_name, new_value, base_value, state FROM pending_writes "
-        "WHERE eneltel_key=? AND state IN ('pending','in_flight')",
-        (eneltel_key,),
+        "WHERE eneltel_key=? AND COALESCE(lcl,'')=? AND state IN ('pending','in_flight')",
+        (eneltel_key, lcl or ''),
     )
     return {r['column_name']: dict(r) for r in cur.fetchall()}
 
@@ -322,25 +337,29 @@ def drain_once(*, batch_size=None):
     # force_refresh_headers internamente; qui basta un nome standard.
     eneltel_col_name = shared._resolve_anchor_col_name('eneltel') or 'Eneltel'
 
-    # Costruisci items per safe_batch_update_by_name. Una pending = un item.
-    # Servono le posizioni di riga: le prendiamo da filone.sheets_row, ma
-    # safe_batch_update_by_name le rimappa al volo via ancora se cambiate.
+    # Costruisci items: per ogni pending, prendi `sheets_row` dalla riga
+    # corrispondente in `filone` identificata da (eneltel_key, lcl).
+    # safe_batch_update_by_name rimappa al volo via ancora se la riga è
+    # stata spostata sul foglio.
     conn = db.get_conn()
-    eneltel_keys = list({p['eneltel_key'] for p in pending})
-    placeholders = ','.join('?' * len(eneltel_keys))
-    rows_map = {
-        r['eneltel_key']: r['sheets_row']
-        for r in conn.execute(
-            f'SELECT eneltel_key, sheets_row FROM filone WHERE eneltel_key IN ({placeholders})',
-            eneltel_keys,
-        ).fetchall()
-    }
+    rows_map = {}  # (eneltel_key, lcl) -> sheets_row
+    keys = list({(p['eneltel_key'], (p['lcl'] or '') if 'lcl' in p.keys() else '')
+                 for p in pending})
+    for ek, lcl in keys:
+        cur = conn.execute(
+            "SELECT sheets_row FROM filone WHERE eneltel_key=? AND COALESCE(lcl,'')=?",
+            (ek, lcl),
+        ).fetchone()
+        if cur:
+            rows_map[(ek, lcl)] = cur['sheets_row']
 
     items = []
     item_to_pending_id = []
     pending_without_row = []
     for p in pending:
-        sheets_row = rows_map.get(p['eneltel_key'])
+        ek = p['eneltel_key']
+        lcl = (p['lcl'] or '') if 'lcl' in p.keys() else ''
+        sheets_row = rows_map.get((ek, lcl))
         if sheets_row is None:
             pending_without_row.append(p['id'])
             continue
@@ -348,7 +367,8 @@ def drain_once(*, batch_size=None):
             'row': sheets_row,
             'col': p['column_name'],
             'value': p['new_value'],
-            'anchor': p['eneltel_key'],
+            'anchor': ek,
+            'anchor_lcl': lcl,
         })
         item_to_pending_id.append(p['id'])
 

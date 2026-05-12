@@ -233,6 +233,174 @@ def test_route_primary_dedup_skips_unchanged(db_isolato):
     assert pending[0]['new_value'] == 'new@x.com'
 
 
+def test_route_primary_duplicate_eneltel_lcl(db_isolato):
+    """Due righe con stesso Eneltel ma LCL diverso → entrambe in DB.
+    L'utente modifica via anchor=POD + anchor_lcl='LCL_B' → pending creata
+    solo sulla riga giusta (LCL_B), non sulla primaria (LCL_A).
+    """
+    db = db_isolato
+    conn = db.get_conn()
+    db.update_column_registry(conn, ['Eneltel', 'LCL', 'EMAIL', 'POD'])
+    with conn:
+        db.upsert_filone_row(
+            conn, eneltel_key='194202261', lcl='LCL_A', sheets_row=248,
+            typed_values={'pod': 'IT001E19420657', 'email': 'a@x.com'},
+            extra_values={}, row_hash='h_a', source='bootstrap',
+        )
+        db.upsert_filone_row(
+            conn, eneltel_key='194202261', lcl='LCL_B', sheets_row=2132,
+            typed_values={'pod': 'IT001E19420657', 'email': 'b@x.com'},
+            extra_values={}, row_hash='h_b', source='bootstrap',
+        )
+
+    from moduli import shared
+    items = [
+        {'row': 2132, 'col': 'EMAIL', 'value': 'new_b@x.com',
+         'anchor': 'IT001E19420657', 'anchor_lcl': 'LCL_B'},
+    ]
+    res = shared._route_to_db_primary(items, anchor_col='POD', anchor_normalize='upper')
+    assert res['written'] == 1
+    # Pending creata sulla (eneltel=194202261, lcl=LCL_B)
+    pending = db.list_pending_writes(state='pending')
+    assert len(pending) == 1
+    p = pending[0]
+    assert p['eneltel_key'] == '194202261'
+    assert p['lcl'] == 'LCL_B'
+    assert p['new_value'] == 'new_b@x.com'
+
+    # La riga primaria (LCL_A) NON deve essere stata toccata
+    row_a = conn.execute(
+        "SELECT email FROM filone WHERE eneltel_key=? AND lcl=?",
+        ('194202261', 'LCL_A'),
+    ).fetchone()
+    assert row_a['email'] == 'a@x.com'
+
+    # La riga duplicata (LCL_B) deve avere preview ottimistica aggiornata
+    row_b = conn.execute(
+        "SELECT email FROM filone WHERE eneltel_key=? AND lcl=?",
+        ('194202261', 'LCL_B'),
+    ).fetchone()
+    assert row_b['email'] == 'new_b@x.com'
+
+
+def test_route_primary_anchor_eneltel_dedup_with_lcl(db_isolato):
+    """Caso reale: modale mappa chiama PUT /api/contatore/<eneltel>, che
+    passa anchor=Eneltel e NO anchor_lcl. Il DB ha la riga con LCL='X'.
+    Il dedup deve confrontare contro i valori veri della riga in DB
+    (non con stato vuoto). Senza il fix, il dedup vedeva tutto come ''
+    e mancava tutti i match.
+    """
+    db = db_isolato
+    conn = db.get_conn()
+    db.update_column_registry(conn, ['Eneltel', 'LCL', 'NOMINATIVO', 'EMAIL', 'Operatore'])
+    with conn:
+        db.upsert_filone_row(
+            conn, eneltel_key='16840441', lcl='6600101316', sheets_row=17306,
+            typed_values={
+                'nominativo': 'EDJ PAVANEL',
+                'operatore': 'AG49808',
+                'email': '',
+            },
+            extra_values={}, row_hash='h', source='bootstrap',
+        )
+
+    from moduli import shared
+    # Simula: client manda 4 campi, di cui 3 uguali al DB
+    items = [
+        {'row': 17306, 'col': 'NOMINATIVO', 'value': 'EDJ PAVANEL', 'anchor': '16840441'},
+        {'row': 17306, 'col': 'Operatore',  'value': 'AG49808',    'anchor': '16840441'},
+        {'row': 17306, 'col': 'EMAIL',      'value': '',           'anchor': '16840441'},
+        {'row': 17306, 'col': 'EMAIL',      'value': 'new@x.com',  'anchor': '16840441'},
+    ]
+    # NB: 4° è duplicato chiave per simulare; in pratica c'è una sola modifica.
+    # Usiamo solo i primi 3 + l'ultimo che è il "vero cambio".
+    items = items[:3] + [items[3]]  # tutti e 4; dedup dovrebbe prendere 3 e scriverne 1
+    res = shared._route_to_db_primary(items, anchor_col='Eneltel', anchor_normalize='lstrip0')
+    # 3 uguali al DB + 1 diverso (EMAIL='new@x.com' vs DB.'' poi diventa 'new...')
+    assert res['unchanged'] >= 3
+    assert res['written'] == 1
+
+
+def test_route_primary_anchor_eneltel_send_empty_value(db_isolato):
+    """Bug fix #2: l'utente cancella un campo (manda '' al backend). Il DB
+    ha il valore vecchio. Dedup deve NON dichiarare match (cur != ''), e
+    creare la pending per scrivere '' su Sheets.
+    """
+    db = db_isolato
+    conn = db.get_conn()
+    db.update_column_registry(conn, ['Eneltel', 'LCL', 'NOTE APP'])
+    with conn:
+        db.upsert_filone_row(
+            conn, eneltel_key='16840441', lcl='6600101316', sheets_row=17306,
+            typed_values={'note_appuntamento': 'testo precedente'},
+            extra_values={}, row_hash='h', source='bootstrap',
+        )
+
+    from moduli import shared
+    items = [
+        {'row': 17306, 'col': 'NOTE APP', 'value': '', 'anchor': '16840441'},
+    ]
+    res = shared._route_to_db_primary(items, anchor_col='Eneltel', anchor_normalize='lstrip0')
+    # Confronto: DB ha 'testo precedente', nuovo '' → DIVERSO → write
+    assert res['written'] == 1
+    pending = db.list_pending_writes(state='pending')
+    assert len(pending) == 1
+    assert (pending[0]['new_value'] or '') == ''
+    # E deve essere associata alla riga giusta (LCL del DB)
+    assert pending[0]['lcl'] == '6600101316'
+
+
+def test_route_primary_lcl_fallback_to_primary(db_isolato):
+    """Bug fix: il client manda anchor_lcl='' (non sa l'LCL della riga, es.
+    modale contatore singolo), ma la riga in DB ha LCL valorizzato. Il
+    backend deve fallback alla prima riga (legacy), NON quarantinare.
+    """
+    db = db_isolato
+    conn = db.get_conn()
+    db.update_column_registry(conn, ['Eneltel', 'LCL', 'EMAIL'])
+    with conn:
+        db.upsert_filone_row(
+            conn, eneltel_key='16840441', lcl='6600101316', sheets_row=17306,
+            typed_values={'email': 'old@x.com'},
+            extra_values={}, row_hash='h', source='bootstrap',
+        )
+
+    from moduli import shared
+    # Item con anchor_lcl='' (caso reale: modale contatore non manda LCL)
+    items = [
+        {'row': 17306, 'col': 'EMAIL', 'value': 'new@x.com',
+         'anchor': '16840441', 'anchor_lcl': ''},
+    ]
+    res = shared._route_to_db_primary(items, anchor_col='Eneltel', anchor_normalize='lstrip0')
+    assert res['written'] == 1
+    pending = db.list_pending_writes(state='pending')
+    assert len(pending) == 1
+    # La pending deve avere il LCL della riga reale, non ''
+    assert pending[0]['lcl'] == '6600101316'
+
+
+def test_route_primary_no_lcl_takes_first(db_isolato):
+    """Se non c'è anchor_lcl, prende la prima riga (legacy)."""
+    db = db_isolato
+    conn = db.get_conn()
+    db.update_column_registry(conn, ['Eneltel', 'EMAIL'])
+    with conn:
+        db.upsert_filone_row(
+            conn, eneltel_key='999', sheets_row=42,
+            typed_values={'email': 'old@x.com'},
+            extra_values={}, row_hash='h', source='bootstrap',
+        )
+
+    from moduli import shared
+    res = shared._route_to_db_primary(
+        [{'row': 42, 'col': 'EMAIL', 'value': 'new@x.com', 'anchor': '999'}],
+        anchor_col='Eneltel', anchor_normalize='lstrip0',
+    )
+    assert res['written'] == 1
+    pending = db.list_pending_writes(state='pending')
+    assert len(pending) == 1
+
+
 def test_route_primary_dedup_uses_pending_overlay(db_isolato):
     """Se l'utente fa due edit rapidi sulla stessa cella, la SECONDA edit
     con lo stesso valore della pending in volo non crea nuova pending."""

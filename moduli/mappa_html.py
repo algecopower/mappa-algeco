@@ -9934,11 +9934,17 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         
         async function rimuoviAppuntamento(eneltel) {{
             if (!confirm('Vuoi rimuovere l\\'appuntamento da questo contatore?')) return;
-            
+
             try {{
+                const _payloadRA = {{}};
+                try {{
+                    const _c = contatori.find(cc => cc.eneltel === eneltel);
+                    if (_c && _c.lcl !== undefined) _payloadRA._anchor_lcl = String(_c.lcl || '');
+                }} catch (e) {{ /* ignora */ }}
                 const response = await fetch(`${{window.location.origin}}/api/contatore/${{eneltel}}/rimuovi-appuntamento`, {{
                     method: 'POST',
-                    headers: {{ 'Content-Type': 'application/json' }}
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify(_payloadRA)
                 }});
                 
                 const result = await response.json();
@@ -13919,6 +13925,13 @@ function riordinaPerFasciaOraria() {{
             }}
 
             const enteltels = Array.from(planSelectedEnteltels);
+            // Mappa eneltel → LCL per identificare la riga giusta in caso di
+            // duplicate_eneltel (es. Pavia multi-LCL). Inviata al backend.
+            const lclByEneltel = {{}};
+            enteltels.forEach(en => {{
+                const c = contatori.find(cc => cc.eneltel === en);
+                if (c && c.lcl !== undefined) lclByEneltel[en] = String(c.lcl || '');
+            }});
             const btn = document.getElementById('btnBulkConfirm');
             btn.disabled = true;
             btn.textContent = '⏳ Salvataggio...';
@@ -13930,7 +13943,8 @@ function riordinaPerFasciaOraria() {{
                     body: JSON.stringify({{
                         enteltels: enteltels,
                         data_pian: dataPian,
-                        operatore: operatore
+                        operatore: operatore,
+                        lcl_by_eneltel: lclByEneltel
                     }})
                 }});
 

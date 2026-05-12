@@ -86,17 +86,37 @@ def test_pull_marca_orphan_riga_sparita(sync_engine_isolato, db_isolato):
     assert row222['is_orphan'] == 1
 
 
-def test_pull_gestisce_eneltel_duplicato(sync_engine_isolato, db_isolato):
-    """Due righe con stesso Eneltel → la seconda finisce in filone_anomalies."""
+def test_pull_due_righe_stesso_eneltel_lcl_diverso(sync_engine_isolato, db_isolato):
+    """Due righe con stesso Eneltel ma LCL diverso → entrambe inserite in filone
+    (schema v2: PK = (eneltel_key, lcl))."""
     se = sync_engine_isolato
     db = db_isolato
-    headers = ['Eneltel', 'NOMINATIVO', 'DATA PIAN', 'Operatore', 'NOTE APP', 'POD']
-    res = se.pull_once(values=[headers,
-                                ['77', 'Primo', '2026-01-01', '', '', ''],
-                                ['77', 'Secondo', '2026-01-02', '', '', '']])
+    headers = ['Eneltel', 'NOMINATIVO', 'LCL', 'DATA PIAN', 'Operatore', 'NOTE APP', 'POD']
+    res = se.pull_once(values=[
+        headers,
+        ['77', 'Primo',   'LCL_A', '2026-01-01', '', '', ''],
+        ['77', 'Secondo', 'LCL_B', '2026-01-02', '', '', ''],
+    ])
+    # Entrambe inserite, nessuna anomalia
+    assert res['duplicates'] == 0
+    assert res['new'] == 2
+    n = db.get_conn().execute('SELECT COUNT(*) FROM filone WHERE eneltel_key=?', ('77',)).fetchone()[0]
+    assert n == 2
+
+
+def test_pull_gestisce_eneltel_e_lcl_uguali(sync_engine_isolato, db_isolato):
+    """Due righe con stesso Eneltel E stesso LCL → seconda in anomalia."""
+    se = sync_engine_isolato
+    db = db_isolato
+    headers = ['Eneltel', 'NOMINATIVO', 'LCL', 'POD']
+    res = se.pull_once(values=[
+        headers,
+        ['77', 'Primo',   'X', ''],
+        ['77', 'Secondo', 'X', ''],
+    ])
     assert res['duplicates'] == 1
     anomalie = db.get_conn().execute(
-        "SELECT * FROM filone_anomalies WHERE kind='duplicate_eneltel'"
+        "SELECT * FROM filone_anomalies WHERE kind='duplicate_eneltel_lcl'"
     ).fetchall()
     assert len(anomalie) == 1
 

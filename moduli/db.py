@@ -48,7 +48,7 @@ COLONNE_NOTE = [
 # Colonne TEXT vs REAL (latitudine/longitudine sono numeriche)
 _COLONNE_REAL = {'latitudine', 'longitudine'}
 
-SCHEMA_VERSION_CORRENTE = 1
+SCHEMA_VERSION_CORRENTE = 2
 
 
 # ============================================================================
@@ -132,6 +132,8 @@ def _bootstrap_schema(conn):
         tipo = 'REAL' if c in _COLONNE_REAL else 'TEXT'
         cols_sql.append(f'{c} {tipo}')
 
+    # Schema v2: PK di filone è (eneltel_key, lcl) per supportare righe con
+    # stesso Eneltel ma LCL diversi (Pavia multi-LCL).
     conn.executescript(f'''
         CREATE TABLE IF NOT EXISTS sync_state (
             key TEXT PRIMARY KEY,
@@ -139,29 +141,34 @@ def _bootstrap_schema(conn):
         );
 
         CREATE TABLE IF NOT EXISTS filone (
-            eneltel_key TEXT PRIMARY KEY,
+            eneltel_key TEXT NOT NULL,
+            lcl TEXT NOT NULL DEFAULT '',
             sheets_row INTEGER NOT NULL,
-            {', '.join(cols_sql)},
+            {', '.join(c for c in cols_sql if not c.startswith('lcl '))},
             row_hash TEXT NOT NULL,
             last_remote_pull_ts INTEGER NOT NULL,
             last_local_change_ts INTEGER,
-            is_orphan INTEGER NOT NULL DEFAULT 0
+            is_orphan INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (eneltel_key, lcl)
         );
         CREATE INDEX IF NOT EXISTS idx_filone_pod ON filone(pod);
         CREATE INDEX IF NOT EXISTS idx_filone_sheets_row ON filone(sheets_row);
         CREATE INDEX IF NOT EXISTS idx_filone_data_pian ON filone(data_pianificata);
+        CREATE INDEX IF NOT EXISTS idx_filone_eneltel ON filone(eneltel_key);
 
         CREATE TABLE IF NOT EXISTS filone_extra (
             eneltel_key TEXT NOT NULL,
+            lcl TEXT NOT NULL DEFAULT '',
             column_name TEXT NOT NULL,
             value TEXT,
-            PRIMARY KEY (eneltel_key, column_name),
-            FOREIGN KEY (eneltel_key) REFERENCES filone(eneltel_key) ON DELETE CASCADE
+            PRIMARY KEY (eneltel_key, lcl, column_name),
+            FOREIGN KEY (eneltel_key, lcl) REFERENCES filone(eneltel_key, lcl) ON DELETE CASCADE
         );
 
         CREATE TABLE IF NOT EXISTS pending_writes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             eneltel_key TEXT NOT NULL,
+            lcl TEXT NOT NULL DEFAULT '',
             column_name TEXT NOT NULL,
             new_value TEXT,
             base_value TEXT,
@@ -175,7 +182,7 @@ def _bootstrap_schema(conn):
         );
         CREATE INDEX IF NOT EXISTS idx_pw_drain ON pending_writes(state, next_attempt_ts);
         CREATE UNIQUE INDEX IF NOT EXISTS idx_pw_coalesce
-            ON pending_writes(eneltel_key, column_name)
+            ON pending_writes(eneltel_key, lcl, column_name)
             WHERE state IN ('pending','in_flight');
 
         CREATE TABLE IF NOT EXISTS audit_log (
@@ -230,15 +237,114 @@ def _bootstrap_schema(conn):
 def _apply_migrations(conn, da_versione):
     """Applica migrations dalla versione `da_versione` alla corrente.
 
-    Ogni migration è idempotente. Aggiungere qui nuovi step (alter table,
-    nuovi indici, ecc.) incrementando SCHEMA_VERSION_CORRENTE.
+    Ogni migration è idempotente.
     """
-    # Per ora c'è solo la v1. Quando aggiungerai una v2, scrivi il blocco
-    # `if da_versione < 2: ... ; da_versione = 2`.
+    if da_versione < 2:
+        _migrate_v1_to_v2(conn)
+        da_versione = 2
+
     conn.execute(
         "UPDATE sync_state SET value=? WHERE key='schema_version'",
         (str(SCHEMA_VERSION_CORRENTE),),
     )
+
+
+def _migrate_v1_to_v2(conn):
+    """Schema v2: PK di `filone`/`filone_extra` diventa composta
+    `(eneltel_key, lcl)` per supportare righe con stesso Eneltel ma LCL
+    diverso (Pavia multi-LCL). Aggiunge `lcl` a `pending_writes`.
+
+    Migration sicura: nessuna perdita di dati. Le righe duplicate che
+    prima finivano in `filone_anomalies` verranno re-importate dal pull
+    successivo (perché lo schema ora le accetta).
+    """
+    logger.info("[DB-migration] v1→v2: PK composta (eneltel_key, lcl)")
+
+    cur = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='filone'")
+    if not cur.fetchone():
+        return  # DB fresh, niente da migrare
+
+    # Filone: ricrea con PK (eneltel_key, lcl)
+    cols_sql = []
+    for c in COLONNE_NOTE:
+        if c == 'lcl':
+            continue  # dichiarato esplicitamente nella PK
+        tipo = 'REAL' if c in _COLONNE_REAL else 'TEXT'
+        cols_sql.append(f'{c} {tipo}')
+
+    conn.executescript(f'''
+        CREATE TABLE filone_v2 (
+            eneltel_key TEXT NOT NULL,
+            lcl TEXT NOT NULL DEFAULT '',
+            sheets_row INTEGER NOT NULL,
+            {', '.join(cols_sql)},
+            row_hash TEXT NOT NULL,
+            last_remote_pull_ts INTEGER NOT NULL,
+            last_local_change_ts INTEGER,
+            is_orphan INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (eneltel_key, lcl)
+        );
+    ''')
+
+    # Colonne v1 escluso 'lcl' (sarà spostata in PK con COALESCE)
+    cols_select = ['eneltel_key', "COALESCE(lcl,'')", 'sheets_row']
+    cols_insert = ['eneltel_key', 'lcl', 'sheets_row']
+    for c in COLONNE_NOTE:
+        if c == 'lcl':
+            continue
+        cols_select.append(c)
+        cols_insert.append(c)
+    cols_select += ['row_hash', 'last_remote_pull_ts', 'last_local_change_ts', 'is_orphan']
+    cols_insert += ['row_hash', 'last_remote_pull_ts', 'last_local_change_ts', 'is_orphan']
+
+    conn.execute(
+        f"INSERT INTO filone_v2 ({', '.join(cols_insert)}) "
+        f"SELECT {', '.join(cols_select)} FROM filone"
+    )
+    conn.execute('DROP TABLE filone')
+    conn.execute('ALTER TABLE filone_v2 RENAME TO filone')
+
+    conn.executescript('''
+        CREATE INDEX IF NOT EXISTS idx_filone_pod ON filone(pod);
+        CREATE INDEX IF NOT EXISTS idx_filone_sheets_row ON filone(sheets_row);
+        CREATE INDEX IF NOT EXISTS idx_filone_data_pian ON filone(data_pianificata);
+        CREATE INDEX IF NOT EXISTS idx_filone_eneltel ON filone(eneltel_key);
+    ''')
+
+    # filone_extra: ricrea con PK (eneltel_key, lcl, column_name)
+    conn.executescript('''
+        CREATE TABLE filone_extra_v2 (
+            eneltel_key TEXT NOT NULL,
+            lcl TEXT NOT NULL DEFAULT '',
+            column_name TEXT NOT NULL,
+            value TEXT,
+            PRIMARY KEY (eneltel_key, lcl, column_name)
+        );
+    ''')
+    # Migrazione: per ogni riga di filone_extra v1, deduciamo LCL dalla riga
+    # corrispondente in filone (univoca pre-v2). Se non c'è, lcl=''.
+    conn.execute('''
+        INSERT OR IGNORE INTO filone_extra_v2 (eneltel_key, lcl, column_name, value)
+        SELECT fe.eneltel_key, COALESCE(f.lcl, ''), fe.column_name, fe.value
+        FROM filone_extra fe
+        LEFT JOIN filone f ON f.eneltel_key = fe.eneltel_key
+    ''')
+    conn.execute('DROP TABLE filone_extra')
+    conn.execute('ALTER TABLE filone_extra_v2 RENAME TO filone_extra')
+
+    # pending_writes: aggiungi colonna lcl + ricostruisci indice UNIQUE parziale
+    pending_cols = {r['name'] for r in conn.execute('PRAGMA table_info(pending_writes)')}
+    if 'lcl' not in pending_cols:
+        conn.execute("ALTER TABLE pending_writes ADD COLUMN lcl TEXT NOT NULL DEFAULT ''")
+    # Rimuovi vecchio indice UNIQUE su (eneltel_key, column_name) e creane uno nuovo
+    conn.execute('DROP INDEX IF EXISTS idx_pw_coalesce')
+    conn.execute('''
+        CREATE UNIQUE INDEX idx_pw_coalesce
+            ON pending_writes(eneltel_key, lcl, column_name)
+            WHERE state IN ('pending','in_flight')
+    ''')
+
+    logger.info("[DB-migration] v2 applicato.")
 
 
 # ============================================================================
@@ -382,7 +488,7 @@ def record_anomaly(conn, *, kind, eneltel_key=None, sheets_row=None, detail=None
 # WRITE PATH (locale → DB → pending_writes)
 # ============================================================================
 def record_local_change(eneltel, fields, *, base_values=None, user=None,
-                        origin='unknown', initial_state='pending'):
+                        origin='unknown', initial_state='pending', lcl=None):
     """Registra una modifica locale: aggiorna `filone` e accoda `pending_writes`.
 
     Args:
@@ -417,9 +523,32 @@ def record_local_change(eneltel, fields, *, base_values=None, user=None,
     with conn:  # TX
         conn.execute('BEGIN IMMEDIATE')
 
-        # Carica riga corrente (per base_values e per UPDATE filone)
-        cur = conn.execute('SELECT * FROM filone WHERE eneltel_key=?', (eneltel_key,))
-        existing = cur.fetchone()
+        # Risolvi (eneltel_key, lcl):
+        # - Se lcl è None o '' (client non lo sa) → prima riga (legacy).
+        # - Se lcl è valorizzato → match esatto. Se non trovato, fallback alla
+        #   prima riga (es. il client passa '' per righe senza LCL ma in DB
+        #   esiste una sola riga con lcl='...').
+        existing = None
+        if lcl is None or lcl == '':
+            cur = conn.execute(
+                "SELECT * FROM filone WHERE eneltel_key=? ORDER BY sheets_row LIMIT 1",
+                (eneltel_key,),
+            )
+            existing = cur.fetchone()
+        else:
+            cur = conn.execute(
+                "SELECT * FROM filone WHERE eneltel_key=? AND COALESCE(lcl,'')=?",
+                (eneltel_key, lcl),
+            )
+            existing = cur.fetchone()
+            if existing is None:
+                # Fallback alla prima riga dell'eneltel
+                cur = conn.execute(
+                    "SELECT * FROM filone WHERE eneltel_key=? ORDER BY sheets_row LIMIT 1",
+                    (eneltel_key,),
+                )
+                existing = cur.fetchone()
+        resolved_lcl = (existing['lcl'] or '') if existing else (lcl or '')
         if existing is None:
             # Riga non ancora nel DB locale: registriamo solo le pending,
             # `filone` verrà popolato al prossimo pull. NB: questo capita solo
@@ -435,8 +564,6 @@ def record_local_change(eneltel, fields, *, base_values=None, user=None,
         for col_name_raw, new_val in fields.items():
             if not col_name_raw:
                 continue
-            # Normalizza al case esatto del foglio (es. 'email' → 'EMAIL')
-            # così pending e merge_to_values trovano la colonna corretta.
             col_name = canonical_column_name(conn, col_name_raw)
             chiave = column_to_internal_key(conn, col_name)
 
@@ -445,30 +572,33 @@ def record_local_change(eneltel, fields, *, base_values=None, user=None,
                 base_val = base_values[col_name]
             else:
                 base_val = (existing_row.get(chiave) if chiave in COLONNE_NOTE
-                            else _read_extra(conn, eneltel_key, col_name))
+                            else _read_extra(conn, eneltel_key, resolved_lcl, col_name))
 
-            # 1. Pending write — coalesce per (eneltel,col): cancello le
-            # pending precedenti non ancora pushate e ne loggo la sostituzione.
+            # Coalesce per (eneltel, lcl, col): cancella eventuali pending
+            # precedenti non ancora pushate per quella stessa cella.
             old_pending = conn.execute(
                 "SELECT id, new_value FROM pending_writes "
-                "WHERE eneltel_key=? AND column_name=? AND state IN ('pending','in_flight')",
-                (eneltel_key, col_name),
+                "WHERE eneltel_key=? AND COALESCE(lcl,'')=? AND column_name=? "
+                "AND state IN ('pending','in_flight')",
+                (eneltel_key, resolved_lcl, col_name),
             ).fetchall()
             for op in old_pending:
                 audit(conn, eneltel_key=eneltel_key, column_name=col_name,
                       old_value=op['new_value'], new_value=new_val,
                       source='local', user=user,
-                      detail={'origin': origin, 'replaced_pending_id': op['id']})
+                      detail={'origin': origin, 'replaced_pending_id': op['id'],
+                              'lcl': resolved_lcl})
             conn.execute(
                 "DELETE FROM pending_writes "
-                "WHERE eneltel_key=? AND column_name=? AND state IN ('pending','in_flight')",
-                (eneltel_key, col_name),
+                "WHERE eneltel_key=? AND COALESCE(lcl,'')=? AND column_name=? "
+                "AND state IN ('pending','in_flight')",
+                (eneltel_key, resolved_lcl, col_name),
             )
 
             conn.execute(
-                'INSERT INTO pending_writes(eneltel_key, column_name, new_value, base_value, '
-                'created_ts, user, origin, state) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-                (eneltel_key, col_name,
+                'INSERT INTO pending_writes(eneltel_key, lcl, column_name, new_value, base_value, '
+                'created_ts, user, origin, state) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                (eneltel_key, resolved_lcl, col_name,
                  None if new_val is None else str(new_val),
                  None if base_val is None else str(base_val),
                  now, user, origin, initial_state),
@@ -479,13 +609,12 @@ def record_local_change(eneltel, fields, *, base_values=None, user=None,
             audit(conn, eneltel_key=eneltel_key, column_name=col_name,
                   old_value=base_val, new_value=new_val,
                   source='local', user=user,
-                  detail={'origin': origin})
+                  detail={'origin': origin, 'lcl': resolved_lcl})
 
             # 3. Aggiorna riga locale (preview ottimistica)
             if chiave in COLONNE_NOTE:
                 local_updates_typed[chiave] = new_val
             elif chiave == 'eneltel':
-                # rinominare l'eneltel non lo facciamo qui: troppo invasivo.
                 logger.warning(f"[DB] Tentativo di modificare la colonna Eneltel su {eneltel_key}: ignorato")
             else:
                 local_updates_extra[col_name] = new_val
@@ -496,29 +625,34 @@ def record_local_change(eneltel, fields, *, base_values=None, user=None,
                 vals = list(local_updates_typed.values())
                 vals.append(now)
                 vals.append(eneltel_key)
+                vals.append(resolved_lcl)
                 conn.execute(
-                    f'UPDATE filone SET {set_clause}, last_local_change_ts=? WHERE eneltel_key=?',
+                    f"UPDATE filone SET {set_clause}, last_local_change_ts=? "
+                    f"WHERE eneltel_key=? AND COALESCE(lcl,'')=?",
                     vals,
                 )
             elif local_updates_extra:
                 conn.execute(
-                    'UPDATE filone SET last_local_change_ts=? WHERE eneltel_key=?',
-                    (now, eneltel_key),
+                    "UPDATE filone SET last_local_change_ts=? "
+                    "WHERE eneltel_key=? AND COALESCE(lcl,'')=?",
+                    (now, eneltel_key, resolved_lcl),
                 )
             for col_name, val in local_updates_extra.items():
                 conn.execute(
-                    'INSERT OR REPLACE INTO filone_extra(eneltel_key, column_name, value) VALUES (?, ?, ?)',
-                    (eneltel_key, col_name, None if val is None else str(val)),
+                    'INSERT OR REPLACE INTO filone_extra(eneltel_key, lcl, column_name, value) '
+                    'VALUES (?, ?, ?, ?)',
+                    (eneltel_key, resolved_lcl, col_name,
+                     None if val is None else str(val)),
                 )
 
     return {'written_local': len(fields), 'pending_count': pending_count}
 
 
-def _read_extra(conn, eneltel_key, column_name):
+def _read_extra(conn, eneltel_key, lcl, column_name):
     """Lettura puntuale da filone_extra."""
     cur = conn.execute(
-        'SELECT value FROM filone_extra WHERE eneltel_key=? AND column_name=?',
-        (eneltel_key, column_name),
+        "SELECT value FROM filone_extra WHERE eneltel_key=? AND COALESCE(lcl,'')=? AND column_name=?",
+        (eneltel_key, lcl or '', column_name),
     )
     row = cur.fetchone()
     return row['value'] if row else None
@@ -527,42 +661,97 @@ def _read_extra(conn, eneltel_key, column_name):
 # ============================================================================
 # READ HELPERS
 # ============================================================================
-def get_filone_row(eneltel):
-    """Ritorna la riga `filone` come dict, o None."""
+def get_filone_row(eneltel, lcl=None):
+    """Ritorna la riga `filone` come dict, o None.
+
+    Se `lcl` è None: ritorna la "prima" riga associata all'eneltel
+    (backward-compat). Se è una stringa (incluso ''): match esatto.
+    """
     eneltel_key = normalize_eneltel(eneltel)
     conn = get_conn()
-    cur = conn.execute('SELECT * FROM filone WHERE eneltel_key=?', (eneltel_key,))
+    if lcl is None:
+        cur = conn.execute(
+            'SELECT * FROM filone WHERE eneltel_key=? ORDER BY sheets_row LIMIT 1',
+            (eneltel_key,),
+        )
+    else:
+        cur = conn.execute(
+            "SELECT * FROM filone WHERE eneltel_key=? AND COALESCE(lcl,'')=?",
+            (eneltel_key, lcl or ''),
+        )
     row = cur.fetchone()
     return dict(row) if row else None
 
 
 def find_eneltel_by_pod(pod):
-    """Lookup POD → eneltel_key. None se non trovato."""
+    """Lookup POD → eneltel_key (prima occorrenza). None se non trovato.
+
+    Compatibilità con codice legacy: ritorna solo l'eneltel, non il LCL.
+    Per disambiguare righe duplicate usare `find_filone_row_by_pod`.
+    """
     if not pod:
         return None
     pod_norm = str(pod).strip().upper()
     conn = get_conn()
     cur = conn.execute(
-        'SELECT eneltel_key FROM filone WHERE UPPER(TRIM(pod))=? LIMIT 1',
+        'SELECT eneltel_key FROM filone WHERE UPPER(TRIM(pod))=? ORDER BY sheets_row LIMIT 1',
         (pod_norm,),
     )
     row = cur.fetchone()
     return row['eneltel_key'] if row else None
 
 
-def find_eneltel_by_sheets_row(row_num):
-    """Lookup numero riga (1-based) → eneltel_key. None se non trovato.
+def find_filone_row_by_pod(pod, lcl=None):
+    """Lookup POD (+ opzionale LCL) → (eneltel_key, lcl).
 
-    NB: la riga può cambiare se il foglio viene riordinato. Da usare solo
-    come fallback quando POD/Eneltel non sono disponibili.
+    Se `lcl` è valorizzato: prova match esatto (POD, LCL). Se non trovato,
+    fallback alla prima riga con quel POD.
+    Se `lcl` è None/'': prima riga con quel POD.
+
+    Ritorna `(eneltel_key, lcl_della_riga_trovata)` o None.
+    """
+    if not pod:
+        return None
+    pod_norm = str(pod).strip().upper()
+    conn = get_conn()
+    if lcl is not None and lcl != '':
+        cur = conn.execute(
+            "SELECT eneltel_key, COALESCE(lcl,'') AS lcl FROM filone "
+            "WHERE UPPER(TRIM(pod))=? AND COALESCE(lcl,'')=? LIMIT 1",
+            (pod_norm, lcl),
+        )
+        row = cur.fetchone()
+        if row:
+            return (row['eneltel_key'], row['lcl'])
+        # Fallback: nessun match esatto, prendi prima riga POD
+    cur = conn.execute(
+        "SELECT eneltel_key, COALESCE(lcl,'') AS lcl FROM filone "
+        "WHERE UPPER(TRIM(pod))=? ORDER BY sheets_row LIMIT 1",
+        (pod_norm,),
+    )
+    row = cur.fetchone()
+    return (row['eneltel_key'], row['lcl']) if row else None
+
+
+def find_filone_row_by_sheets_row(row_num):
+    """Lookup sheets_row → (eneltel_key, lcl). None se non trovato.
+
+    NB: sheets_row è univoco a un dato istante (un foglio ha una riga per
+    posizione). Indice utile.
     """
     conn = get_conn()
     cur = conn.execute(
-        'SELECT eneltel_key FROM filone WHERE sheets_row=? LIMIT 1',
+        "SELECT eneltel_key, COALESCE(lcl,'') AS lcl FROM filone WHERE sheets_row=? LIMIT 1",
         (int(row_num),),
     )
     row = cur.fetchone()
-    return row['eneltel_key'] if row else None
+    return (row['eneltel_key'], row['lcl']) if row else None
+
+
+def find_eneltel_by_sheets_row(row_num):
+    """Compat legacy: ritorna solo eneltel_key."""
+    tup = find_filone_row_by_sheets_row(row_num)
+    return tup[0] if tup else None
 
 
 # ============================================================================
@@ -590,8 +779,8 @@ def shadow_record_batch(items, *, anchor_col=None, user=None, origin='unknown'):
 
     try:
         anchor_col_low = (anchor_col or '').lower()
-        # Risolvi eneltel per ogni item
-        by_eneltel = {}
+        # Risolvi (eneltel, lcl) per ogni item
+        by_row_keys = {}  # (ek, lcl) -> {col: value}
         unresolved = 0
         for it in items:
             row = it.get('row')
@@ -600,44 +789,50 @@ def shadow_record_batch(items, *, anchor_col=None, user=None, origin='unknown'):
             if not col or row is None:
                 continue
             anchor_val = it.get('anchor')
+            anchor_lcl = it.get('anchor_lcl') or ''
 
+            ek = None
+            resolved_lcl = anchor_lcl
             if anchor_col_low == 'eneltel' and anchor_val:
                 ek = normalize_eneltel(anchor_val)
             elif anchor_col_low == 'pod' and anchor_val:
-                ek = find_eneltel_by_pod(anchor_val)
+                tup = find_filone_row_by_pod(anchor_val, lcl=anchor_lcl)
+                if tup:
+                    ek, resolved_lcl = tup
             else:
-                # Nessuna ancora utilizzabile: prova via sheets_row
-                ek = find_eneltel_by_sheets_row(row)
+                tup = find_filone_row_by_sheets_row(row)
+                if tup:
+                    ek, resolved_lcl = tup
 
             if not ek:
                 unresolved += 1
                 continue
-            by_eneltel.setdefault(ek, {})[col] = value
+            by_row_keys.setdefault((ek, resolved_lcl), {})[col] = value
 
         recorded = 0
-        for ek, fields in by_eneltel.items():
+        for (ek, lcl), fields in by_row_keys.items():
             try:
                 record_local_change(
                     ek, fields, user=user, origin=origin,
-                    initial_state='done',
+                    initial_state='done', lcl=lcl,
                 )
                 recorded += 1
             except Exception as e:
-                logger.warning(f"[shadow] record_local_change fallito per {ek}: {e}")
+                logger.warning(f"[shadow] record_local_change fallito per {ek}/{lcl!r}: {e}")
         return {'recorded': recorded, 'unresolved': unresolved}
     except Exception as e:
         logger.warning(f"[shadow] shadow_record_batch fallito (assorbito): {e}")
         return {'recorded': 0, 'error': str(e)}
 
 
-def shadow_record_single(eneltel, fields, *, user=None, origin='unknown'):
-    """Variante a singola riga di shadow_record_batch (per le 2 funzioni
-    appuntamento e per le scritture cell-by-cell)."""
+def shadow_record_single(eneltel, fields, *, user=None, origin='unknown', lcl=None):
+    """Variante a singola riga di shadow_record_batch."""
     if not eneltel or not fields:
         return
     try:
         record_local_change(
-            eneltel, fields, user=user, origin=origin, initial_state='done',
+            eneltel, fields, user=user, origin=origin,
+            initial_state='done', lcl=lcl,
         )
     except Exception as e:
         logger.warning(f"[shadow] shadow_record_single fallito per {eneltel}: {e}")
@@ -740,30 +935,40 @@ def sync_state_set(key, value):
 # UPSERT RIGA (usato dal pull engine e dal bootstrap)
 # ============================================================================
 def upsert_filone_row(conn, *, eneltel_key, sheets_row, typed_values, extra_values,
-                     row_hash, source='remote', skip_columns=None):
+                     row_hash, source='remote', skip_columns=None, lcl=None):
     """Upsert di una riga (chiamata in TX dal pull engine).
 
     Args:
-        conn: connessione (TX esistente).
         eneltel_key: già normalizzato.
         sheets_row: numero riga 1-based.
-        typed_values: dict {chiave_interna: valore} per le colonne note (può essere parziale).
-        extra_values: dict {nome_colonna_foglio: valore} per le colonne extra.
+        typed_values: dict {chiave_interna: valore}.
+        extra_values: dict {nome_colonna_foglio: valore}.
         row_hash: hash della riga remota.
         source: 'remote' (sync da Sheets) o 'bootstrap' (migrazione iniziale).
-        skip_columns: set di chiavi_interne da NON sovrascrivere (cells con
-            pending in volo, gestite a parte dal pull).
+        skip_columns: set di chiavi_interne da NON sovrascrivere.
+        lcl: LCL della riga. Se None, viene letto da typed_values.get('lcl').
     """
     skip_columns = skip_columns or set()
     now = _now_ts()
 
-    cur = conn.execute('SELECT * FROM filone WHERE eneltel_key=?', (eneltel_key,))
+    # LCL effettivo della riga: priorità a parametro esplicito, fallback al
+    # valore nei typed_values (= colonna LCL della riga del foglio).
+    if lcl is None:
+        lcl = typed_values.get('lcl') or ''
+    lcl = str(lcl) if lcl is not None else ''
+
+    cur = conn.execute(
+        "SELECT * FROM filone WHERE eneltel_key=? AND COALESCE(lcl,'')=?",
+        (eneltel_key, lcl),
+    )
     existing = cur.fetchone()
 
     if existing is None:
-        cols = ['eneltel_key', 'sheets_row']
-        vals = [eneltel_key, sheets_row]
+        cols = ['eneltel_key', 'lcl', 'sheets_row']
+        vals = [eneltel_key, lcl, sheets_row]
         for c in COLONNE_NOTE:
+            if c == 'lcl':
+                continue  # già dichiarato come parte della PK
             cols.append(c)
             vals.append(typed_values.get(c))
         cols.extend(['row_hash', 'last_remote_pull_ts', 'is_orphan'])
@@ -775,50 +980,53 @@ def upsert_filone_row(conn, *, eneltel_key, sheets_row, typed_values, extra_valu
         )
         if source == 'remote':
             audit(conn, eneltel_key=eneltel_key, source='remote',
-                  detail={'kind': 'new_row', 'sheets_row': sheets_row})
+                  detail={'kind': 'new_row', 'sheets_row': sheets_row, 'lcl': lcl})
     else:
-        # Aggiorna SOLO le colonne note non skippate + meta
         sets = ['sheets_row=?', 'row_hash=?', 'last_remote_pull_ts=?', 'is_orphan=0']
         vals = [sheets_row, row_hash, now]
         for c in COLONNE_NOTE:
+            if c == 'lcl':
+                continue
             if c in skip_columns:
                 continue
             if c in typed_values:
                 sets.append(f'{c}=?')
                 vals.append(typed_values[c])
         vals.append(eneltel_key)
-        conn.execute(f'UPDATE filone SET {", ".join(sets)} WHERE eneltel_key=?', vals)
+        vals.append(lcl)
+        conn.execute(
+            f"UPDATE filone SET {', '.join(sets)} WHERE eneltel_key=? AND COALESCE(lcl,'')=?",
+            vals,
+        )
 
-    # Extra values: upsert (skip se è skippata)
     for col_name, value in extra_values.items():
         if col_name in skip_columns:
             continue
         conn.execute(
-            'INSERT INTO filone_extra(eneltel_key, column_name, value) VALUES (?, ?, ?) '
-            'ON CONFLICT(eneltel_key, column_name) DO UPDATE SET value=excluded.value',
-            (eneltel_key, col_name, None if value is None else str(value)),
+            'INSERT INTO filone_extra(eneltel_key, lcl, column_name, value) VALUES (?, ?, ?, ?) '
+            'ON CONFLICT(eneltel_key, lcl, column_name) DO UPDATE SET value=excluded.value',
+            (eneltel_key, lcl, col_name, None if value is None else str(value)),
         )
 
 
-def mark_orphans(conn, alive_eneltel_keys):
-    """Marca come orphan tutte le righe NON presenti nel set fornito.
+def mark_orphans(conn, alive_keys):
+    """Marca come orphan le righe (eneltel_key, lcl) NON in `alive_keys`.
 
     Args:
-        alive_eneltel_keys: set[str] con tutti gli eneltel_key visti nell'ultimo pull.
+        alive_keys: set di tuple (eneltel_key, lcl) viste nell'ultimo pull.
     """
-    cur = conn.execute('SELECT eneltel_key FROM filone WHERE is_orphan=0')
-    locali = {r['eneltel_key'] for r in cur.fetchall()}
-    nuovi_orfani = locali - alive_eneltel_keys
+    cur = conn.execute("SELECT eneltel_key, COALESCE(lcl,'') AS lcl FROM filone WHERE is_orphan=0")
+    locali = {(r['eneltel_key'], r['lcl']) for r in cur.fetchall()}
+    nuovi_orfani = locali - alive_keys
     if not nuovi_orfani:
         return 0
-    placeholders = ','.join('?' * len(nuovi_orfani))
-    conn.execute(
-        f'UPDATE filone SET is_orphan=1 WHERE eneltel_key IN ({placeholders})',
-        list(nuovi_orfani),
-    )
-    for ek in nuovi_orfani:
+    for ek, lcl in nuovi_orfani:
+        conn.execute(
+            "UPDATE filone SET is_orphan=1 WHERE eneltel_key=? AND COALESCE(lcl,'')=?",
+            (ek, lcl),
+        )
         audit(conn, eneltel_key=ek, source='remote',
-              detail={'kind': 'orphaned'})
+              detail={'kind': 'orphaned', 'lcl': lcl})
     return len(nuovi_orfani)
 
 
@@ -838,14 +1046,14 @@ def dump_filone():
     if not righe:
         return []
 
-    # Carica extra in batch
+    # Carica extra in batch, indicizzato per (eneltel_key, lcl)
     extras = {}
-    cur = conn.execute('SELECT eneltel_key, column_name, value FROM filone_extra')
+    cur = conn.execute("SELECT eneltel_key, COALESCE(lcl,'') AS lcl, column_name, value FROM filone_extra")
     for r in cur.fetchall():
-        extras.setdefault(r['eneltel_key'], {})[r['column_name']] = r['value']
+        extras.setdefault((r['eneltel_key'], r['lcl']), {})[r['column_name']] = r['value']
 
     for r in righe:
-        r['extra'] = extras.get(r['eneltel_key'], {})
+        r['extra'] = extras.get((r['eneltel_key'], r.get('lcl') or ''), {})
 
     return righe
 

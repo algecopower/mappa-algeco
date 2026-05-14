@@ -1058,6 +1058,108 @@ def dump_filone():
     return righe
 
 
+def dump_filone_as_rows(*, include_orphans=False, apply_pending_overlay=True):
+    """Ritorna `(headers, rows)` in formato compatibile con la risposta di
+    `/api/filone`: stessa shape che il client si aspetta dalla lettura di Sheets.
+
+      headers: list[str] nell'ordine `column_registry.last_index`.
+      rows:    list[dict] con chiave `_row` (= `sheets_row`) + un campo per ogni
+               header. Ordinate per `sheets_row`.
+
+    Args:
+        include_orphans: includi righe `is_orphan=1` (default False).
+        apply_pending_overlay: applica `pending_writes` in volo (default True).
+            In primary mode il client deve vedere subito le scritture dell'utente
+            anche se il drainer non ha ancora pushato su Sheets.
+
+    Usata da `/api/filone` in primary mode per leggere direttamente dal DB
+    invece che dal cache Sheets, eliminando ogni finestra di staleness.
+    """
+    conn = get_conn()
+
+    # 1. Headers nell'ordine del foglio (last_index = posizione 1-based).
+    # De-duplicazione: column_registry può contenere alias stale (es. 'POD' +
+    # 'Pod' con stesso last_index dopo un rename). Per ogni last_index teniamo
+    # SOLO l'entry con last_seen_ts più recente.
+    cur = conn.execute('''
+        SELECT cr.column_name, cr.chiave_interna, cr.last_index
+        FROM column_registry cr
+        WHERE cr.last_seen_ts = (
+            SELECT MAX(cr2.last_seen_ts)
+            FROM column_registry cr2
+            WHERE cr2.last_index = cr.last_index
+        )
+        ORDER BY cr.last_index
+    ''')
+    registry = cur.fetchall()
+    if not registry:
+        return ([], [])
+
+    headers = [r['column_name'] for r in registry]
+    # Mappa header → chiave_interna (per sapere se leggere da filone o filone_extra)
+    header_to_chiave = {r['column_name']: r['chiave_interna'] for r in registry}
+
+    # 2. Tutte le righe filone (escluse orphan se non richieste)
+    where = '' if include_orphans else ' WHERE is_orphan=0'
+    cur = conn.execute(f'SELECT * FROM filone{where} ORDER BY sheets_row')
+    filone_rows = [dict(r) for r in cur.fetchall()]
+    if not filone_rows:
+        return (headers, [])
+
+    # 3. filone_extra in batch → dict per accesso O(1)
+    extras = {}
+    cur = conn.execute(
+        "SELECT eneltel_key, COALESCE(lcl,'') AS lcl, column_name, value "
+        "FROM filone_extra"
+    )
+    for r in cur.fetchall():
+        extras.setdefault((r['eneltel_key'], r['lcl']), {})[r['column_name']] = r['value']
+
+    # 4. pending_writes overlay (in_flight/pending)
+    pending_by_key = {}
+    if apply_pending_overlay:
+        cur = conn.execute(
+            "SELECT eneltel_key, COALESCE(lcl,'') AS lcl, column_name, new_value "
+            "FROM pending_writes WHERE state IN ('pending','in_flight')"
+        )
+        for r in cur.fetchall():
+            pending_by_key.setdefault((r['eneltel_key'], r['lcl']), {})[r['column_name']] = r['new_value']
+
+    # 5. Materializza ogni riga nell'ordine degli headers
+    out_rows = []
+    for fr in filone_rows:
+        ek = fr['eneltel_key']
+        lcl = fr.get('lcl') or ''
+        key = (ek, lcl)
+        row_extras = extras.get(key, {})
+        row_pending = pending_by_key.get(key, {})
+
+        row_dict = {'_row': fr['sheets_row']}
+        for header in headers:
+            chiave = header_to_chiave.get(header)
+            if chiave == 'eneltel':
+                val = ek
+            elif chiave and chiave in fr:
+                val = fr.get(chiave)
+            else:
+                val = row_extras.get(header)
+            # pending overlay (header matching case-insensitive)
+            if row_pending:
+                # match esatto prima, poi case-insensitive
+                if header in row_pending:
+                    val = row_pending[header]
+                else:
+                    h_lower = header.strip().lower()
+                    for pcol, pval in row_pending.items():
+                        if pcol.strip().lower() == h_lower:
+                            val = pval
+                            break
+            row_dict[header] = '' if val is None else str(val)
+        out_rows.append(row_dict)
+
+    return (headers, out_rows)
+
+
 # ============================================================================
 # DIAGNOSTICA
 # ============================================================================

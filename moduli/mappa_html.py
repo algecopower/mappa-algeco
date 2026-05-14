@@ -10288,15 +10288,24 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
 
         // Toast discreto in basso al centro per notificare aggiornamenti
         let _mappaToastTimeout = null;
-        function showMappaToast(msg) {{
+        function showMappaToast(msg, opts) {{
             const toast = document.getElementById('mappaToast');
             if (!toast) return;
             toast.textContent = msg;
             toast.classList.add('visible');
             clearTimeout(_mappaToastTimeout);
+            // persistent=true → niente auto-dismiss (chi mostra è responsabile di chiamare hideMappaToast)
+            if (opts && opts.persistent) return;
             _mappaToastTimeout = setTimeout(() => {{
                 toast.classList.remove('visible');
             }}, 3500);
+        }}
+
+        function hideMappaToast() {{
+            const toast = document.getElementById('mappaToast');
+            if (!toast) return;
+            clearTimeout(_mappaToastTimeout);
+            toast.classList.remove('visible');
         }}
 
         // Flash discreto sull'orario quando i dati vengono aggiornati
@@ -10349,7 +10358,8 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             
             eventSource.addEventListener('data_changing', (e) => {{
                 console.log('[SSE] ⏳ Sync esterno in corso...');
-                showMappaToast('⏳ Aggiornamento dati in corso...');
+                // Toast persistente: stay visible finché sync_complete non chiude
+                showMappaToast('⏳ Rigenerazione mappa in corso...', {{persistent: true}});
                 // Mostra clessidra sul pulsante refresh
                 const btn = document.getElementById('refreshBtn');
                 if (btn && !_refreshWaitingForSSE) {{
@@ -10359,10 +10369,11 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                     btn.style.opacity = '0.7';
                 }}
             }});
-            
+
             eventSource.addEventListener('sync_complete', async (e) => {{
                 const data = JSON.parse(e.data);
                 console.log('[SSE] 📢 Sync completato:', data);
+                hideMappaToast();
                 _onSyncComplete();
                 await reloadData();
             }});

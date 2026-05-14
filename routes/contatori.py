@@ -683,18 +683,32 @@ def remove_appuntamento(eneltel):
 def get_filone():
     """
     Restituisce tutti i dati del FILONE per la vista Excel.
-    Usa cache in memoria per evitare download ripetuti da Google Sheets.
 
-    In primary mode (Fase 2) applica le pending_writes in volo: la vista
-    Excel mostra subito i valori che l'utente ha appena salvato anche se
-    il drainer non ha ancora pushato su Sheets.
+    In primary mode (Fase 2) legge direttamente dal DB locale: zero finestre
+    di staleness, niente race condition con il cache Sheets/drainer. Il DB è
+    fonte di verità e il drainer asincrono si occupa di pushare verso Sheets.
+
+    In shadow/off legge dal cache Sheets in memoria (comportamento legacy).
     """
     try:
-        # Usa cache in memoria (non ri-scarica se dati freschi)
+        from config import USE_DB_BACKEND as _USE_DB
+
+        if _USE_DB == 'primary':
+            from moduli import db as _db
+            headers, data = _db.dump_filone_as_rows()
+            if headers:
+                return jsonify({
+                    'headers': headers,
+                    'data': data,
+                    'total': len(data),
+                    'protectedCols': COLONNE_PROTETTE_FILONE.get(PROVINCIA_ATTIVA, []),
+                })
+            # DB vuoto (es. primo avvio prima del bootstrap pull): fallback a Sheets
+            logger.warning("[primary] dump_filone_as_rows vuoto, fallback al cache Sheets")
+
+        # Path legacy (shadow/off o fallback)
         all_data = get_all_values_cached()
 
-        # Applica overlay pending (primary mode) per coerenza con la UI mappa
-        from config import USE_DB_BACKEND as _USE_DB
         if _USE_DB == 'primary' and all_data:
             try:
                 from moduli.data_loader import _apply_pending_to_values
@@ -705,10 +719,9 @@ def get_filone():
         headers = all_data[0] if all_data else []
         rows = all_data[1:] if len(all_data) > 1 else []
 
-        # Converti in lista di dict
         data = []
         for i, row in enumerate(rows, start=2):  # +2 perché riga 1 è header
-            row_dict = {'_row': i}  # Numero riga per aggiornamenti
+            row_dict = {'_row': i}
             for j, h in enumerate(headers):
                 row_dict[h] = row[j] if j < len(row) else ''
             data.append(row_dict)

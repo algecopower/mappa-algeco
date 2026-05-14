@@ -30,6 +30,7 @@ data/*/mappa_data.json
 # Rigenerabili: scarica da fonte ufficiale e lancia tools/build_indir_db.py
 data/anagrafe_indirizzi/*.csv
 data/anagrafe_indirizzi/*.pdf
+INDIR_*.csv
 
 # OS
 Thumbs.db

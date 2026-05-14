@@ -1,0 +1,32 @@
+# systemd unit per il router multi-provincia di Mappa Algeco.
+# Da copiare in /etc/systemd/system/mappa-algeco-router.service.
+#
+# Dipendenze: cloudflared-tunnel.service (gira separatamente come systemd unit).
+# Il router spawna i backend per ogni provincia in data/provinces.json.
+
+[Unit]
+Description=Mappa Algeco - Router multi-provincia
+After=network.target osrm-server.service cloudflared-tunnel.service
+Wants=osrm-server.service cloudflared-tunnel.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/mappa-algeco
+Environment="PATH=/opt/mappa-algeco/venv/bin:/usr/local/bin:/usr/bin:/bin"
+# SESSION_COOKIE_DOMAIN: cookie sessione visibile su tutti i sottodomini
+# (consente all'UI admin.mappa-algeco.com di riusare l'auth fatta su
+# torino.* o pavia.*). I backend ereditano questa env var dal router.
+Environment="SESSION_COOKIE_DOMAIN=.mappa-algeco.com"
+Environment="FLASK_ENV=production"
+Environment="ROUTER_PORT=5050"
+Environment="ROUTER_HOST=127.0.0.1"
+ExecStart=/opt/mappa-algeco/venv/bin/python /opt/mappa-algeco/router.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

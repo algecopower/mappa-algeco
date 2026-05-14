@@ -1,0 +1,18 @@
+# Cloudflare Tunnel — modello di configurazione per il deploy multi-tenant.
+# Da copiare in /etc/cloudflared/config.yml (sostituire credentials-file con il
+# proprio tunnel UUID).
+#
+# Wildcard *.mappa-algeco.com → router.py (porta 5050). Il router fa lo
+# smistamento interno per Host header verso il backend giusto.
+#
+# Per supportare nuovi sottodomini su Cloudflare basta aggiungere un record
+# DNS (CNAME a <tunnel-uuid>.cfargotunnel.com) — niente da toccare qui.
+
+tunnel: mappa-algeco
+credentials-file: /root/.cloudflared/REPLACE_WITH_TUNNEL_UUID.json
+
+ingress:
+  - hostname: "*.mappa-algeco.com"
+    service: http://localhost:5050
+
+  - service: http_status:404

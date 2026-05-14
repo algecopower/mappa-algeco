@@ -11318,10 +11318,14 @@ function riordinaPerFasciaOraria() {{
                 label.element.style.left = newX + 'px';
                 label.element.style.top = newY + 'px';
 
-                // Ridisegna freccia per tutte le etichette
+                // Ridisegna freccia solo se la distanza tra etichetta e marker e' apprezzabile
                 const elWidth = label.element.offsetWidth || (label.type === 'list' ? 70 : 55);
                 const elHeight = label.element.offsetHeight || (label.type === 'list' ? 50 : 26);
-                drawArrowToMarker(svgLines, {{ x: newX, y: newY }}, elWidth, elHeight, point);
+                const updLine = computeFutureLine(newX, newY, elWidth, elHeight, point.x, point.y);
+                const updLen = Math.hypot(updLine.x2 - updLine.x1, updLine.y2 - updLine.y1);
+                if (updLen >= 14) {{
+                    drawArrowToMarker(svgLines, {{ x: newX, y: newY }}, elWidth, elHeight, point);
+                }}
             }});
         }}
 
@@ -11384,11 +11388,13 @@ function riordinaPerFasciaOraria() {{
             const svgLines = document.getElementById('printLabelLines');
 
             const placedBoxes = []; // Traccia tutte le etichette/liste posizionate
+            const placedLines = []; // Traccia le linee gia' tracciate per evitarne l'incrocio
             const SINGLE_LABEL_HEIGHT = 34;
             const SINGLE_LABEL_WIDTH = 55;
             const LIST_ITEM_HEIGHT = 22;
             const LIST_WIDTH = 75;
             const PADDING = 10;
+            const MIN_LINE_LENGTH = 14; // Sotto questa lunghezza il tratteggio non viene disegnato (etichetta gia' adiacente al marker)
 
             // Raccoglie posizioni marker
             const markerPositions = clusters.map(cluster => {{
@@ -11413,21 +11419,13 @@ function riordinaPerFasciaOraria() {{
                     }}
                     if (appMatches.length === 0) return null;
 
+                    // Appuntamento con orario singolo (es. "9:30"): mostra solo
+                    // l'orario fissato. La fascia oraria della lettera rappresenta
+                    // la disponibilita' generale, ma l'orario dell'appuntamento e'
+                    // un punto preciso e non va esteso a "9:30/17".
                     const appH = appMatches[0][1];
                     const appM = appMatches[0][2] || '00';
-                    const appStr = formatShortTime(appH, appM);
-
-                    // Estrai fine fascia da orari_lettere
-                    if (orariLettere) {{
-                        const fasciaMatches = [...orariLettere.matchAll(/(\\d{{1,2}})[:.]?(\\d{{2}})?/g)];
-                        if (fasciaMatches.length >= 2) {{
-                            const endH = fasciaMatches[fasciaMatches.length - 1][1];
-                            const endM = fasciaMatches[fasciaMatches.length - 1][2] || '00';
-                            const endStr = formatShortTime(endH, endM);
-                            return appStr + '/' + endStr;
-                        }}
-                    }}
-                    return appStr;
+                    return formatShortTime(appH, appM);
                 }}
                 if (!orariLettere) return null;
                 // Fascia oraria: estrai inizio e fine
@@ -11459,7 +11457,7 @@ function riordinaPerFasciaOraria() {{
                     const pos = findAdjacentPosition(
                         point.x, point.y,
                         SINGLE_LABEL_WIDTH, SINGLE_LABEL_HEIGHT,
-                        placedBoxes, markerPositions, mapRect
+                        placedBoxes, markerPositions, mapRect, placedLines
                     );
 
                     // Crea etichetta singola
@@ -11488,8 +11486,12 @@ function riordinaPerFasciaOraria() {{
                         markerPoint: {{ x: point.x, y: point.y }}
                     }});
 
-                    // Disegna freccia dall'etichetta al marker
-                    drawArrowToMarker(svgLines, pos, SINGLE_LABEL_WIDTH, SINGLE_LABEL_HEIGHT, point);
+                    // Disegna freccia dall'etichetta al marker solo se serve davvero
+                    const sLine = computeFutureLine(pos.x, pos.y, SINGLE_LABEL_WIDTH, SINGLE_LABEL_HEIGHT, point.x, point.y);
+                    if (lineLengthPx(sLine) >= MIN_LINE_LENGTH) {{
+                        drawArrowToMarker(svgLines, pos, SINGLE_LABEL_WIDTH, SINGLE_LABEL_HEIGHT, point);
+                    }}
+                    placedLines.push(sLine);
 
                 }} else {{
                     // ========== CLUSTER MULTIPLO - LISTA ==========
@@ -11499,7 +11501,7 @@ function riordinaPerFasciaOraria() {{
                     const pos = findListPosition(
                         point.x, point.y,
                         LIST_WIDTH, listHeight,
-                        placedBoxes, markerPositions, mapRect
+                        placedBoxes, markerPositions, mapRect, placedLines
                     );
 
                     // Crea contenitore lista
@@ -11535,15 +11537,47 @@ function riordinaPerFasciaOraria() {{
                         markerPoint: {{ x: point.x, y: point.y }}
                     }});
 
-                    // Disegna freccia dalla lista al marker
-                    drawArrowToMarker(svgLines, pos, LIST_WIDTH, listHeight, point);
+                    // Disegna freccia dalla lista al marker solo se serve davvero
+                    const lLine = computeFutureLine(pos.x, pos.y, LIST_WIDTH, listHeight, point.x, point.y);
+                    if (lineLengthPx(lLine) >= MIN_LINE_LENGTH) {{
+                        drawArrowToMarker(svgLines, pos, LIST_WIDTH, listHeight, point);
+                    }}
+                    placedLines.push(lLine);
                 }}
             }});
         }}
 
-        // Trova posizione adiacente per etichetta singola (senza linea)
-        function findAdjacentPosition(markerX, markerY, width, height, placedBoxes, markerPositions, mapRect) {{
-            const CLOSE_OFFSET = 8;
+        // Calcola la linea che collegherebbe etichetta -> marker (stessa logica di drawArrowToMarker).
+        function computeFutureLine(labelX, labelY, labelW, labelH, markerX, markerY) {{
+            let startX, startY;
+            if (markerX > labelX + labelW) {{
+                startX = labelX + labelW;
+                startY = Math.max(labelY + 5, Math.min(labelY + labelH - 5, markerY));
+            }} else if (markerX < labelX) {{
+                startX = labelX;
+                startY = Math.max(labelY + 5, Math.min(labelY + labelH - 5, markerY));
+            }} else if (markerY < labelY) {{
+                startX = Math.max(labelX + 5, Math.min(labelX + labelW - 5, markerX));
+                startY = labelY;
+            }} else {{
+                startX = Math.max(labelX + 5, Math.min(labelX + labelW - 5, markerX));
+                startY = labelY + labelH;
+            }}
+            return {{ x1: startX, y1: startY, x2: markerX, y2: markerY }};
+        }}
+
+        function lineLengthPx(line) {{
+            const dx = line.x2 - line.x1, dy = line.y2 - line.y1;
+            return Math.sqrt(dx * dx + dy * dy);
+        }}
+
+        // Trova posizione adiacente per etichetta singola. Two-pass: prima tenta
+        // di non incrociare le linee gia' tracciate, poi accetta come fallback.
+        function findAdjacentPosition(markerX, markerY, width, height, placedBoxes, markerPositions, mapRect, placedLines) {{
+            placedLines = placedLines || [];
+            const CLOSE_OFFSET = 4;
+            const STEP = 4;
+            const MAX_OFFSET = 60;
             const directions = [
                 {{ x: 0, y: -1 }},   // sopra
                 {{ x: 1, y: 0 }},    // destra
@@ -11552,35 +11586,44 @@ function riordinaPerFasciaOraria() {{
                 {{ x: 0.7, y: -0.7 }}, {{ x: 0.7, y: 0.7 }}, {{ x: -0.7, y: -0.7 }}, {{ x: -0.7, y: 0.7 }}
             ];
 
-            for (let offset = CLOSE_OFFSET; offset <= 80; offset += 8) {{
-                for (const dir of directions) {{
-                    let x = markerX + dir.x * offset - width / 2;
-                    let y = markerY + dir.y * offset - height / 2;
+            for (let pass = 0; pass < 2; pass++) {{
+                const avoidCrossing = (pass === 0);
+                for (let offset = CLOSE_OFFSET; offset <= MAX_OFFSET; offset += STEP) {{
+                    for (const dir of directions) {{
+                        let x, y;
+                        if (dir.x > 0.5) x = markerX + offset;
+                        else if (dir.x < -0.5) x = markerX - offset - width;
+                        else x = markerX - width / 2;
 
-                    if (dir.x > 0.5) x = markerX + offset;
-                    else if (dir.x < -0.5) x = markerX - offset - width;
-                    else x = markerX - width / 2;
+                        if (dir.y > 0.5) y = markerY + offset;
+                        else if (dir.y < -0.5) y = markerY - offset - height;
+                        else y = markerY - height / 2;
 
-                    if (dir.y > 0.5) y = markerY + offset;
-                    else if (dir.y < -0.5) y = markerY - offset - height;
-                    else y = markerY - height / 2;
+                        if (x < 10 || y < 10 || x + width > mapRect.width - 10 || y + height > mapRect.height - 10) continue;
+                        if (hasOverlap(x, y, width, height, placedBoxes, markerPositions)) continue;
 
-                    // Verifica limiti mappa
-                    if (x < 10 || y < 10 || x + width > mapRect.width - 10 || y + height > mapRect.height - 10) continue;
-
-                    // Verifica sovrapposizioni
-                    if (!hasOverlap(x, y, width, height, placedBoxes, markerPositions)) {{
+                        if (avoidCrossing && placedLines.length > 0) {{
+                            const futLine = computeFutureLine(x, y, width, height, markerX, markerY);
+                            const crosses = placedLines.some(l =>
+                                segmentsIntersect(futLine.x1, futLine.y1, futLine.x2, futLine.y2,
+                                                  l.x1, l.y1, l.x2, l.y2)
+                            );
+                            if (crosses) continue;
+                        }}
                         return {{ x, y }};
                     }}
                 }}
             }}
-            // Fallback
-            return {{ x: markerX + 25, y: markerY - height / 2 }};
+            // Fallback finale
+            return {{ x: markerX + 18, y: markerY - height / 2 }};
         }}
 
-        // Trova posizione per lista cluster (con freccia)
-        function findListPosition(markerX, markerY, width, height, placedBoxes, markerPositions, mapRect) {{
-            const OFFSET_START = 30;
+        // Trova posizione per lista cluster. Two-pass come findAdjacentPosition.
+        function findListPosition(markerX, markerY, width, height, placedBoxes, markerPositions, mapRect, placedLines) {{
+            placedLines = placedLines || [];
+            const OFFSET_START = 18;
+            const STEP = 8;
+            const MAX_OFFSET = 120;
             const directions = [
                 {{ x: 1, y: -0.3 }},   // destra-alto
                 {{ x: 1, y: 0.3 }},    // destra-basso
@@ -11590,33 +11633,40 @@ function riordinaPerFasciaOraria() {{
                 {{ x: 0, y: 1 }},      // sotto
             ];
 
-            for (let offset = OFFSET_START; offset <= 150; offset += 15) {{
-                for (const dir of directions) {{
-                    let x, y;
+            for (let pass = 0; pass < 2; pass++) {{
+                const avoidCrossing = (pass === 0);
+                for (let offset = OFFSET_START; offset <= MAX_OFFSET; offset += STEP) {{
+                    for (const dir of directions) {{
+                        let x, y;
+                        if (dir.x > 0) x = markerX + offset;
+                        else if (dir.x < 0) x = markerX - offset - width;
+                        else x = markerX - width / 2;
 
-                    if (dir.x > 0) x = markerX + offset;
-                    else if (dir.x < 0) x = markerX - offset - width;
-                    else x = markerX - width / 2;
+                        if (dir.y > 0) y = markerY + Math.abs(dir.y) * offset;
+                        else if (dir.y < 0) y = markerY - Math.abs(dir.y) * offset - height;
+                        else y = markerY - height / 2;
 
-                    if (dir.y > 0) y = markerY + Math.abs(dir.y) * offset;
-                    else if (dir.y < 0) y = markerY - Math.abs(dir.y) * offset - height;
-                    else y = markerY - height / 2;
+                        if (x < 10 || y < 10 || x + width > mapRect.width - 10 || y + height > mapRect.height - 10) continue;
+                        if (hasOverlap(x, y, width, height, placedBoxes, markerPositions)) continue;
 
-                    // Verifica limiti
-                    if (x < 10 || y < 10 || x + width > mapRect.width - 10 || y + height > mapRect.height - 10) continue;
-
-                    // Verifica sovrapposizioni
-                    if (!hasOverlap(x, y, width, height, placedBoxes, markerPositions)) {{
+                        if (avoidCrossing && placedLines.length > 0) {{
+                            const futLine = computeFutureLine(x, y, width, height, markerX, markerY);
+                            const crosses = placedLines.some(l =>
+                                segmentsIntersect(futLine.x1, futLine.y1, futLine.x2, futLine.y2,
+                                                  l.x1, l.y1, l.x2, l.y2)
+                            );
+                            if (crosses) continue;
+                        }}
                         return {{ x, y }};
                     }}
                 }}
             }}
-            return {{ x: markerX + 50, y: markerY - height / 2 }};
+            return {{ x: markerX + 30, y: markerY - height / 2 }};
         }}
 
         // Verifica sovrapposizioni
         function hasOverlap(x, y, width, height, placedBoxes, markerPositions) {{
-            const SPACING = 6;
+            const SPACING = 3;
             const allBoxes = [...placedBoxes, ...markerPositions];
             return allBoxes.some(box => {{
                 return x < box.x + box.width + SPACING &&

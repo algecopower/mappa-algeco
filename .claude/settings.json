@@ -15,7 +15,14 @@
       "Bash(awk -F';' 'NR>500000 && NR<500005 {print NF, \"|\", $0}' /opt/mappa-algeco/INDIR_PIEM_20260504.csv)",
       "Bash(awk -F';' '{print NF}' /opt/mappa-algeco/INDIR_PIEM_20260504.csv)",
       "Bash(/opt/mappa-algeco/venv/bin/python -c ' *)",
-      "Bash(git check-ignore *)"
+      "Bash(git check-ignore *)",
+      "Bash(FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch --force --index-filter 'git rm --cached --ignore-unmatch INDIR_PIEM_20260504.csv' --prune-empty origin/main..HEAD)",
+      "Bash(git stash *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(python3 -c \"import ast; ast.parse\\(open\\('moduli/mappa_html.py'\\).read\\(\\)\\); print\\('OK'\\)\")",
+      "Bash(python3 -c \"import sys; sys.path.insert\\(0, '.'\\); from moduli import mappa_html; print\\('Import OK'\\)\")"
     ]
   }
 }

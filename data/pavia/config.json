@@ -8,19 +8,22 @@
     "ALESSANDRO": "#e74c3c",
     "MELEK": "#f1c40f",
     "BRAHIM": "#2ecc71",
-    "PAUL": "#3498db"
+    "PAUL": "#3498db",
+    "SIMONE": "#9b59b6"
   },
   "matricoleVip": [
     "ALESSANDRO",
     "MELEK",
     "BRAHIM",
-    "PAUL"
+    "PAUL",
+    "SIMONE"
   ],
   "operatoriDict": {
     "ALESSANDRO": "ALESSANDRO",
     "MELEK": "MELEK",
     "BRAHIM": "BRAHIM",
-    "PAUL": "PAUL"
+    "PAUL": "PAUL",
+    "SIMONE": "SIMONE"
   },
   "provincia": "PAVIA",
   "refreshInterval": 185000

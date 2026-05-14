@@ -3,19 +3,22 @@
     "ALESSANDRO",
     "MELEK",
     "BRAHIM",
-    "PAUL"
+    "PAUL",
+    "SIMONE"
   ],
   "colori_operatori": {
     "ALESSANDRO": "#e74c3c",
     "MELEK": "#f1c40f",
     "BRAHIM": "#2ecc71",
-    "PAUL": "#3498db"
+    "PAUL": "#3498db",
+    "SIMONE": "#9b59b6"
   },
   "operatori_dict": {
     "ALESSANDRO": "ALESSANDRO",
     "MELEK": "MELEK",
     "BRAHIM": "BRAHIM",
-    "PAUL": "PAUL"
+    "PAUL": "PAUL",
+    "SIMONE": "SIMONE"
   },
   "deposito": {
     "Nome": "DEPOSITO PAVIA",

@@ -483,8 +483,144 @@ def _admin_dispatch(path):
             'router_port': ROUTER_PORT,
             'backends': pm.stato(),
         })
+    if p == 'api/probe-sheet' and method == 'POST':
+        return _admin_check() or _admin_probe_sheet()
+    m = re.match(r'^api/provinces/([A-Z0-9_]+)/bootstrap$', p)
+    if m and method == 'POST':
+        return _admin_check() or _admin_bootstrap(m.group(1))
 
     return jsonify({'error': 'admin endpoint non trovato', 'path': p}), 404
+
+
+# ============================================================================
+# ADMIN — probe Google Sheet (validazione + suggerimento mapping colonne)
+# ============================================================================
+def _admin_probe_sheet():
+    """Apre il foglio Google indicato e ritorna headers + mapping suggerito.
+
+    Body: { id_foglio, gid_scheda }
+    Risposta: {
+      ok: bool, headers: [str], suggested_mapping: { chiave_interna: nome_colonna_o_null },
+      missing: [chiave_interna], errore: str|null
+    }
+    """
+    body = request.get_json(silent=True) or {}
+    id_foglio = (body.get('id_foglio') or '').strip()
+    gid_scheda = body.get('gid_scheda')
+    if not id_foglio:
+        return jsonify({'ok': False, 'errore': 'id_foglio mancante'}), 400
+
+    try:
+        import gspread
+        from oauth2client.service_account import ServiceAccountCredentials
+    except ImportError as e:
+        return jsonify({'ok': False, 'errore': f'gspread non disponibile: {e}'}), 500
+
+    creds_path = os.path.join(SCRIPT_DIR, 'credenziali.json')
+    if not os.path.exists(creds_path):
+        return jsonify({'ok': False, 'errore': 'credenziali.json non trovato'}), 500
+
+    try:
+        scope = [
+            'https://spreadsheets.google.com/feeds',
+            'https://www.googleapis.com/auth/drive',
+        ]
+        creds = ServiceAccountCredentials.from_json_keyfile_name(creds_path, scope)
+        client = gspread.authorize(creds)
+        ss = client.open_by_key(id_foglio)
+        # Risolvi worksheet via gid se fornito, altrimenti primo
+        ws = None
+        if gid_scheda is not None and gid_scheda != '':
+            try:
+                gid = int(gid_scheda)
+                for w in ss.worksheets():
+                    if w.id == gid:
+                        ws = w
+                        break
+            except (ValueError, TypeError):
+                pass
+        if ws is None:
+            ws = ss.sheet1
+        headers = ws.row_values(1)
+    except Exception as e:
+        return jsonify({'ok': False, 'errore': f'lettura foglio fallita: {e.__class__.__name__}: {e}'}), 400
+
+    # Suggerisci mapping via MAPPATURA_COLONNE_DEFAULT
+    try:
+        from config import MAPPATURA_COLONNE_DEFAULT
+    except ImportError:
+        MAPPATURA_COLONNE_DEFAULT = {}
+
+    headers_lower = {h.strip().lower(): h for h in headers if h}
+    suggested = {}
+    missing = []
+    for chiave, info in MAPPATURA_COLONNE_DEFAULT.items():
+        sinonimi = info.get('nomi_default', [])
+        match = None
+        for nome in sinonimi:
+            if nome.strip().lower() in headers_lower:
+                match = headers_lower[nome.strip().lower()]
+                break
+        suggested[chiave] = match
+        if match is None and chiave in ('eneltel', 'pod', 'nominativo'):
+            # campi critici
+            missing.append(chiave)
+
+    return jsonify({
+        'ok': True,
+        'foglio': ss.title,
+        'sheet_name': ws.title,
+        'headers': headers,
+        'n_colonne': len(headers),
+        'suggested_mapping': suggested,
+        'missing_critici': missing,
+    })
+
+
+# ============================================================================
+# ADMIN — bootstrap DB iniziale per nuova provincia
+# ============================================================================
+def _admin_bootstrap(slug):
+    """Esegue tools/migrate_to_sqlite.py come subprocess per la provincia.
+
+    Sincrono: aspetta il completamento + ritorna stdout/stderr. Per province
+    grandi il pull iniziale può richiedere 30-60s — il client deve usare
+    timeout adeguato (almeno 120s).
+    """
+    slug = slug.upper()
+    try:
+        province = carica_province()
+    except Exception as e:
+        return jsonify({'ok': False, 'errore': f'lettura provinces.json fallita: {e}'}), 500
+    if slug not in province:
+        return jsonify({'ok': False, 'errore': f'provincia {slug} non trovata'}), 404
+
+    env = os.environ.copy()
+    env['PROVINCIA'] = slug
+
+    log.info(f"[admin] bootstrap DB per {slug}")
+    try:
+        result = subprocess.run(
+            [sys.executable, os.path.join(SCRIPT_DIR, 'tools', 'migrate_to_sqlite.py')],
+            env=env, cwd=SCRIPT_DIR,
+            capture_output=True, text=True, timeout=300,
+        )
+    except subprocess.TimeoutExpired:
+        return jsonify({'ok': False, 'errore': 'bootstrap timeout (>5min)'}), 504
+
+    output = result.stdout + ('\n[STDERR]\n' + result.stderr if result.stderr else '')
+    if result.returncode != 0:
+        return jsonify({
+            'ok': False,
+            'errore': f'bootstrap fallito (exit {result.returncode})',
+            'output': output[-4000:],
+        }), 500
+    return jsonify({
+        'ok': True,
+        'slug': slug,
+        'output': output[-4000:],
+        'note': 'DB inizializzato. Clicca "Avvia" per partire il backend.',
+    })
 
 
 def _admin_check():
@@ -505,6 +641,10 @@ def _admin_list_provinces():
         item = dict(cfg)
         item['slug'] = slug
         item['stato'] = stato.get(slug, 'stopped')
+        # Heuristica: DB bootstrappato se state.db esiste e ha > 32KB
+        # (uno schema vuoto pesa ~32KB, quindi >32KB significa che ci sono dati).
+        db_path = os.path.join(SCRIPT_DIR, 'data', slug.lower(), 'state.db')
+        item['db_exists'] = os.path.exists(db_path) and os.path.getsize(db_path) > 32 * 1024
         out.append(item)
     return jsonify({'province': out})
 
@@ -707,6 +847,11 @@ _ADMIN_HTML = r"""
       </div>
 
       <div class="form-group">
+        <button type="button" class="btn secondary" onclick="verificaFoglio()">🔍 Verifica foglio</button>
+        <div id="probe-result" style="margin-top: 8px;"></div>
+      </div>
+
+      <div class="form-group">
         <label>Deposito — Nome</label>
         <input name="deposito_nome" required placeholder="DEPOSITO X">
       </div>
@@ -806,13 +951,17 @@ function rendiGrid(province) {
       <div class="field"><strong>ID Foglio:</strong> <span style="font-family:monospace;font-size:11px;">${escapeHtml((p.id_foglio || '').slice(0, 20))}…</span></div>
       <div class="field"><strong>Deposito:</strong> ${escapeHtml(p.deposito && p.deposito.Nome || '—')}</div>
       <div class="actions">
-        ${stato === 'running'
-          ? `<button class="btn secondary" onclick="azione('${p.slug}','restart')">🔄 Riavvia</button>
-             <button class="btn danger" onclick="azione('${p.slug}','stop')">⏸ Ferma</button>`
-          : `<button class="btn success" onclick="azione('${p.slug}','start')">▶ Avvia</button>`
+        ${!p.db_exists
+          ? `<button class="btn success" onclick="bootstrap('${p.slug}')">📥 Inizializza DB</button>`
+          : (stato === 'running'
+              ? `<button class="btn secondary" onclick="azione('${p.slug}','restart')">🔄 Riavvia</button>
+                 <button class="btn danger" onclick="azione('${p.slug}','stop')">⏸ Ferma</button>`
+              : `<button class="btn success" onclick="azione('${p.slug}','start')">▶ Avvia</button>`
+            )
         }
         <button class="btn danger" onclick="elimina('${p.slug}')">🗑️ Elimina</button>
       </div>
+      ${!p.db_exists ? '<div class="help" style="margin-top:8px;color:#dc2626;">⚠️ DB non ancora inizializzato. Clicca "Inizializza DB" per il primo pull dal foglio.</div>' : ''}
     `;
     grid.appendChild(card);
   }
@@ -857,6 +1006,47 @@ function onSlugChange(input) {
   }
 }
 document.querySelector('[name=sottodominio]').addEventListener('input', e => e.target._editedSub = true);
+
+async function verificaFoglio() {
+  const id_foglio = document.querySelector('[name=id_foglio]').value.trim();
+  const gid_scheda = document.querySelector('[name=gid_scheda]').value.trim();
+  const out = document.getElementById('probe-result');
+  if (!id_foglio) { out.innerHTML = '<span style="color:#dc2626">Inserisci prima l\'ID del foglio.</span>'; return; }
+  out.innerHTML = '<span style="color:#6b7280">⏳ Verifica in corso...</span>';
+  try {
+    const r = await api('POST', '/api/probe-sheet', { id_foglio, gid_scheda: gid_scheda || null });
+    let html = `<div style="background:#d1fae5;color:#065f46;padding:8px;border-radius:4px;font-size:13px;">
+      ✅ Foglio trovato: <b>${escapeHtml(r.foglio)}</b> / scheda <b>${escapeHtml(r.sheet_name)}</b> (${r.n_colonne} colonne)
+    </div>`;
+    if (r.missing_critici && r.missing_critici.length) {
+      html += `<div style="background:#fee2e2;color:#991b1b;padding:8px;border-radius:4px;font-size:13px;margin-top:6px;">
+        ⚠️ Colonne critiche non trovate: <b>${r.missing_critici.join(', ')}</b><br>
+        Dovrai mappare manualmente queste colonne nelle Impostazioni dopo aver avviato la provincia.
+      </div>`;
+    }
+    // Mostra mapping dedotto compattamente
+    const mapped = Object.entries(r.suggested_mapping || {}).filter(([k,v]) => v).map(([k,v]) => `${k}→${v}`);
+    if (mapped.length) {
+      html += `<details style="margin-top:6px;font-size:12px;color:#4b5563;"><summary>Mapping dedotto (${mapped.length})</summary>
+        <div style="font-family:monospace;padding:6px 0;line-height:1.5;">${escapeHtml(mapped.join(' · '))}</div></details>`;
+    }
+    out.innerHTML = html;
+  } catch (e) {
+    out.innerHTML = `<div style="background:#fee2e2;color:#991b1b;padding:8px;border-radius:4px;font-size:13px;">❌ ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+async function bootstrap(slug) {
+  if (!confirm(`Inizializzare il DB locale per ${slug}? Questa operazione scarica TUTTI i contatori dal foglio Google e popola data/${slug.toLowerCase()}/state.db. Può richiedere 30-60 secondi per fogli grandi.`)) return;
+  toast(`⏳ Inizializzazione DB ${slug} in corso (può richiedere 30-60s)...`);
+  try {
+    const r = await api('POST', `/api/provinces/${slug}/bootstrap`);
+    toast(`✅ DB ${slug} inizializzato. Ora clicca "Avvia".`);
+    setTimeout(caricaProvince, 500);
+  } catch (e) {
+    toast('Errore bootstrap: ' + e.message, true);
+  }
+}
 
 async function submitAggiungi(ev) {
   ev.preventDefault();

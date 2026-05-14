@@ -10396,22 +10396,47 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         
         async function reloadData() {{
             try {{
-                const response = await fetch(DATA_PATH + '?t=' + Date.now(), {{ cache: 'no-store' }});
-                if (!response.ok) {{
+                // Ricarica in parallelo dati + config: config.json contiene
+                // operatoriDict / coloriTecnici / deposito che possono cambiare
+                // a seguito di un salvataggio impostazioni. Senza ricaricarlo,
+                // i nomi display rimarrebbero quelli embedded al primo load.
+                const cb = Date.now();
+                const [dataResp, configResp] = await Promise.all([
+                    fetch(DATA_PATH + '?t=' + cb, {{ cache: 'no-store' }}),
+                    fetch(CONFIG_PATH + '?t=' + cb, {{ cache: 'no-store' }}).catch(() => null)
+                ]);
+
+                if (!dataResp.ok) {{
                     console.log('[SSE] ❌ Fetch dati fallito');
                     return;
                 }}
-                
-                const newData = await response.json();
+
+                const newData = await dataResp.json();
                 console.log('[SSE] 🔄 Aggiornamento dati, timestamp:', newData.timestamp);
-                
+
                 // Aggiorna dati in memoria
                 zone = newData.zone;
                 contatori = newData.contatori;
                 rotte = newData.rotte;
                 dataTimestamp = newData.timestamp;
                 lastTimestamp = newData.timestamp;
-                
+
+                // Aggiorna config (operatoriDict, colori, deposito) se disponibile
+                if (configResp && configResp.ok) {{
+                    try {{
+                        const newConfig = await configResp.json();
+                        if (newConfig.coloriTecnici) coloriTecnici = newConfig.coloriTecnici;
+                        if (newConfig.matricoleVip) matricoleVip = newConfig.matricoleVip;
+                        if (newConfig.operatoriDict) {{
+                            operatoriDict = newConfig.operatoriDict;
+                            buildReverseOperatoriDict();
+                        }}
+                        if (newConfig.deposito) deposito = newConfig.deposito;
+                    }} catch (cfgErr) {{
+                        console.log('[SSE] config.json non aggiornabile:', cfgErr);
+                    }}
+                }}
+
                 // Ricalcola e refresh
                 updateContatoriVisibili();
                 updateSchedulabiliBadge();
@@ -10421,7 +10446,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
                 }} else {{
                     refreshCurrentView();
                 }}
-                
+
                 // Aggiorna UI
                 document.getElementById('updateTime').textContent = formatTimestamp(dataTimestamp);
                 flashUpdateTime();
@@ -12508,8 +12533,8 @@ function riordinaPerFasciaOraria() {{
                 
                 if (resp.ok && result.success) {{
                     mostraSettingsStatus('✅ ' + result.message, 'success');
-                    
-                    // Aggiorna anche i dati locali per effetto immediato
+
+                    // Aggiorna i dati locali per effetto immediato
                     coloriTecnici = dati.colori_operatori;
                     matricoleVip = dati.operatori_vip;
                     operatoriDict = dati.operatori_dict || {{}};
@@ -12519,7 +12544,17 @@ function riordinaPerFasciaOraria() {{
                         lat: dati.deposito.Lat,
                         lon: dati.deposito.Lon
                     }};
-                    
+
+                    // Forza il refresh della vista corrente: senza questo i
+                    // nomi display nei dropdown, nella sidebar e nelle etichette
+                    // restano quelli vecchi finche' non si ricarica la pagina.
+                    try {{
+                        updateContatoriVisibili();
+                        if (typeof refreshCurrentView === 'function') refreshCurrentView();
+                    }} catch (uiErr) {{
+                        console.log('[Settings] refresh UI fallito:', uiErr);
+                    }}
+
                     setTimeout(() => chiudiImpostazioni(), 2500);
                 }} else {{
                     mostraSettingsStatus('❌ ' + (result.error || 'Errore sconosciuto'), 'error');

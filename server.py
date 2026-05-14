@@ -1150,11 +1150,43 @@ def update_settings():
             config.PROVINCE[PROVINCIA_ATTIVA]['ora_fine_giornata'] = data['ora_fine_giornata']
         
         logger.info(f"⚙️  Impostazioni aggiornate da {session.get('user', 'unknown')}")
-        
-        # Ri-sincronizza in background (rigenera mappa con nuove impostazioni)
-        threading.Thread(target=sincronizza_dati, daemon=True).start()
-        
-        return jsonify({'success': True, 'message': 'Impostazioni salvate. Ri-sincronizzazione in corso...'})
+
+        # Rigenera SUBITO config.json e (se possibile) la mappa HTML usando i dati in
+        # cache. Senza questo, il loop di sync salta tutto se i dati Google Sheets
+        # non sono cambiati (Livello 1: "dati invariati") e le nuove impostazioni
+        # non vengono riflesse nei file serviti al frontend finche' i dati non
+        # cambiano (o finche' il server non viene riavviato).
+        from moduli.mappa_html import salva_config_statica, genera_mappa_html
+        try:
+            salva_config_statica()
+            logger.info("[SETTINGS] config.json rigenerato sincronicamente")
+        except Exception as e_cfg:
+            logger.warning(f"[SETTINGS] Rigenerazione config.json fallita: {e_cfg}")
+
+        html_regen_ok = False
+        if _last_report is not None and _last_risultato_zone is not None:
+            try:
+                from moduli.data_loader import carica_dati_google_sheets
+                df_cached = carica_dati_google_sheets(force=False)
+                if df_cached is not None:
+                    genera_mappa_html(df_cached, _last_report, _last_risultato_zone, filename=FILE_MAPPA)
+                    html_regen_ok = True
+                    logger.info("[SETTINGS] HTML rigenerato sincronicamente con dati in cache")
+            except Exception as e_html:
+                logger.warning(f"[SETTINGS] Rigenerazione HTML fallita: {e_html}")
+
+        # Notifica i client connessi cosi' ricaricano subito config + dati.
+        sse_notify_all('sync_complete', {'source': 'settings_change'})
+
+        # Se non avevamo cache (server appena avviato), forza un full sync in
+        # background per generare la mappa con i dati piu' recenti.
+        if not html_regen_ok:
+            threading.Thread(target=sincronizza_dati, daemon=True).start()
+            msg = 'Impostazioni salvate. Ri-sincronizzazione in corso...'
+        else:
+            msg = 'Impostazioni salvate e applicate.'
+
+        return jsonify({'success': True, 'message': msg})
     except Exception as e:
         return _api_error(e, 'salvataggio impostazioni')
 

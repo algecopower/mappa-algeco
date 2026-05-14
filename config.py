@@ -27,40 +27,44 @@ if sys.stderr.encoding != 'utf-8':
 # ============================================================================
 _PROVINCIA_DEFAULT = 'TORINO'  # Default se non specificato altrove
 
-# Leggi da variabile d'ambiente se presente
-PROVINCIA_ATTIVA = os.environ.get('PROVINCIA', _PROVINCIA_DEFAULT).upper()
-
-# Verifica validità
-if PROVINCIA_ATTIVA not in ['TORINO', 'PAVIA']:
-    print(f"⚠️ Provincia '{PROVINCIA_ATTIVA}' non valida. Uso default: {_PROVINCIA_DEFAULT}")
-    PROVINCIA_ATTIVA = _PROVINCIA_DEFAULT
-
 # ============================================================================
 # CONFIGURAZIONI PER PROVINCIA
 # ============================================================================
-PROVINCE = {
+# Le definizioni vivono in `data/provinces.json` (file di stato persistente).
+# Vengono caricate qui a startup. Se il file è assente, vengono usati i
+# default hardcoded come fallback (retrocompat e bootstrap fresco).
+#
+# Per aggiungere/rimuovere una provincia: modificare provinces.json
+# (manualmente o via UI di gestione delle province) e riavviare.
+# ============================================================================
+_PROVINCE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                              'data', 'provinces.json')
+
+# Default hardcoded — usati se provinces.json non esiste (es. clone fresco).
+# Una volta che provinces.json è scritto (manualmente o via UI), questi
+# diventano inerti.
+_PROVINCE_DEFAULTS = {
     'TORINO': {
         'nome': 'Torino',
         'id_foglio': '1ZYDay6FgMZqArPxTInumGzPpZ1aMJ3XxTF_vmxPgwXw',
         'gid_scheda': 2061618218,
-        'deposito': {'Nome': 'DEPOSITO VOLPIANO', 'Lat': 45.1964682, 'Lon': 7.7888303},  # Via Brandizzo 121d, 10088 Volpiano
+        'deposito': {'Nome': 'DEPOSITO VOLPIANO', 'Lat': 45.1964682, 'Lon': 7.7888303},
         'operatori_vip': ['AE101392', 'AG49808', 'AG18966'],
         'colori_operatori': {
-            'AE101392': '#e74c3c',      # Rosso
-            'AG49808': '#f1c40f',       # Giallo
-            'AG18966': '#2ecc71',       # Verde lime
+            'AE101392': '#e74c3c',
+            'AG49808': '#f1c40f',
+            'AG18966': '#2ecc71',
         },
-        # Dizionario nomi -> matricole per dropdown gestionale
         'operatori_dict': {
             'Operatore 1 (AE101392)': 'AE101392',
             'Operatore 2 (AG49808)': 'AG49808',
             'Operatore 3 (AG18966)': 'AG18966',
         },
         'file_mappa': os.path.join('templates', 'mappa_torino.html'),
-        # Orario inizio giornata tecnici (9:00 per Torino)
-        'ora_inizio_giornata': 9 * 60,  # 9:00 in minuti
-        # Orario fine giornata tecnici (17:00 per Torino)
-        'ora_fine_giornata': 17 * 60,  # 17:00 in minuti
+        'ora_inizio_giornata': 9 * 60,
+        'ora_fine_giornata': 17 * 60,
+        'sottodominio': 'torino.mappa-algeco.com',
+        'porta': 5001,
     },
     'PAVIA': {
         'nome': 'Pavia',
@@ -69,25 +73,68 @@ PROVINCE = {
         'deposito': {'Nome': 'DEPOSITO PAVIA', 'Lat': 45.2221001, 'Lon': 9.2254115},
         'operatori_vip': ['ALESSANDRO', 'MELEK', 'BRAHIM'],
         'colori_operatori': {
-            'ALESSANDRO': '#e74c3c',    # Rosso
-            'MELEK': '#f1c40f',         # Giallo
-            'BRAHIM': '#2ecc71',        # Verde lime
+            'ALESSANDRO': '#e74c3c',
+            'MELEK': '#f1c40f',
+            'BRAHIM': '#2ecc71',
         },
-        # Dizionario nomi -> matricole per dropdown gestionale
         'operatori_dict': {
             'Alessandro': 'ALESSANDRO',
             'Melek': 'MELEK',
             'Brahim': 'BRAHIM',
         },
         'file_mappa': os.path.join('templates', 'mappa_pavia.html'),
-        # Usa la colonna Località come Comune per raggruppamento zone
         'usa_localita_come_comune': True,
-        # Orario inizio giornata tecnici (8:00 per Pavia)
-        'ora_inizio_giornata': 8 * 60,  # 8:00 in minuti
-        # Orario fine giornata tecnici (17:00 per Pavia)
-        'ora_fine_giornata': 17 * 60,  # 17:00 in minuti
+        'ora_inizio_giornata': 8 * 60,
+        'ora_fine_giornata': 17 * 60,
+        'sottodominio': 'pavia.mappa-algeco.com',
+        'porta': 5002,
     },
 }
+
+
+def _load_province_da_json():
+    """Carica le definizioni province da data/provinces.json.
+
+    Ritorna dict {SLUG_UPPER: dict}. Se il file non esiste o è malformato,
+    ritorna i default hardcoded (retrocompat per clone fresco). Le chiavi
+    vengono normalizzate UPPER per consistenza con il resto del codice.
+
+    NOTA: il campo 'file_mappa' viene auto-derivato dal slug se assente
+    (es. provincia 'LECCO' → 'templates/mappa_lecco.html'), così l'UI di
+    aggiunta provincia non deve preoccuparsene.
+    """
+    import json
+    if not os.path.exists(_PROVINCE_FILE):
+        return dict(_PROVINCE_DEFAULTS)
+    try:
+        with open(_PROVINCE_FILE, 'r', encoding='utf-8') as f:
+            raw = json.load(f)
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"⚠️ Errore lettura provinces.json ({e}), uso default hardcoded")
+        return dict(_PROVINCE_DEFAULTS)
+
+    out = {}
+    for slug, cfg in raw.items():
+        slug_upper = slug.upper()
+        # Default per file_mappa derivato dallo slug
+        cfg.setdefault('file_mappa',
+                       os.path.join('templates', f'mappa_{slug_upper.lower()}.html'))
+        out[slug_upper] = cfg
+    return out
+
+
+PROVINCE = _load_province_da_json()
+
+# Leggi da variabile d'ambiente se presente
+PROVINCIA_ATTIVA = os.environ.get('PROVINCIA', _PROVINCIA_DEFAULT).upper()
+
+# Verifica validità: la provincia richiesta deve esistere in PROVINCE.
+# (Niente whitelist hardcoded: la lista è derivata da PROVINCE.)
+if PROVINCIA_ATTIVA not in PROVINCE:
+    province_disponibili = ', '.join(sorted(PROVINCE.keys()))
+    print(f"⚠️ Provincia '{PROVINCIA_ATTIVA}' non configurata. "
+          f"Disponibili: {province_disponibili}. Uso default: {_PROVINCIA_DEFAULT}")
+    PROVINCIA_ATTIVA = _PROVINCIA_DEFAULT if _PROVINCIA_DEFAULT in PROVINCE else next(iter(PROVINCE))
 
 # ============================================================================
 # VARIABILI DINAMICHE (basate su PROVINCIA_ATTIVA)
@@ -118,52 +165,30 @@ _CAMPI_MODIFICABILI_COMUNI = {
     'posizione_mis': 'Posizione_Ante_Mis',
     'operatore': 'Operatore',
 }
-CAMPI_MODIFICABILI = {
-    'TORINO': _CAMPI_MODIFICABILI_COMUNI,
-    'PAVIA': _CAMPI_MODIFICABILI_COMUNI,
+# Campi BOXBEAT/SIGILLI/MODIFICABILI: oggi identici tra Torino e Pavia.
+# Vengono replicati per ogni provincia configurata in PROVINCE così che una
+# nuova provincia aggiunta via UI eredita questi default senza dover ridichiarare.
+_CAMPI_BOXBEAT_COMUNI = {
+    'matricola_preposto': 'Matricola preposto',
+    'data_esecuzione': 'Data esecuzione',
+    'esito': 'Esito',
+    'esito_ok_valore': 'Esito OK',
+    'colonna_dest_operatore': 'Operatore',
+    'colonna_dest_data_inst': 'Data Installazione',
+    'colonna_dest_esito': 'Esito',
+}
+_COLONNE_SIGILLI_COMUNI = {
+    'colonna_sigillo': 'SIGILLO',
+    'colonna_data_inst': 'Data Installazione',
+    'colonna_operatore': 'Operatore',
+    'colonna_esito': 'Esito',
+    'esito_ok_valore': 'Esito OK',
+    'colonna_matricola': 'Matricola CE inst',
 }
 
-# Campi per import BOXBEAT (Enel)
-CAMPI_BOXBEAT = {
-    'TORINO': {
-        'matricola_preposto': 'Matricola preposto',  # -> Operatore
-        'data_esecuzione': 'Data esecuzione',        # -> Data Installazione (solo data)
-        'esito': 'Esito',                            # -> Esito
-        'esito_ok_valore': 'Esito OK',               # Valore che indica installazione riuscita
-        'colonna_dest_operatore': 'Operatore',
-        'colonna_dest_data_inst': 'Data Installazione',
-        'colonna_dest_esito': 'Esito',
-    },
-    'PAVIA': {
-        'matricola_preposto': 'Matricola preposto',
-        'data_esecuzione': 'Data esecuzione',
-        'esito': 'Esito',
-        'esito_ok_valore': 'Esito OK',
-        'colonna_dest_operatore': 'Operatore',
-        'colonna_dest_data_inst': 'Data Installazione',
-        'colonna_dest_esito': 'Esito',
-    }
-}
-
-# Configurazione per gestione sigilli
-COLONNE_SIGILLI = {
-    'TORINO': {
-        'colonna_sigillo': 'SIGILLO',
-        'colonna_data_inst': 'Data Installazione',
-        'colonna_operatore': 'Operatore',
-        'colonna_esito': 'Esito',
-        'esito_ok_valore': 'Esito OK',
-        'colonna_matricola': 'Matricola CE inst',
-    },
-    'PAVIA': {
-        'colonna_sigillo': 'SIGILLO',
-        'colonna_data_inst': 'Data Installazione',
-        'colonna_operatore': 'Operatore',
-        'colonna_esito': 'Esito',
-        'esito_ok_valore': 'Esito OK',
-        'colonna_matricola': 'Matricola CE inst',  
-    }
-}
+CAMPI_MODIFICABILI = {p: _CAMPI_MODIFICABILI_COMUNI for p in PROVINCE}
+CAMPI_BOXBEAT = {p: _CAMPI_BOXBEAT_COMUNI for p in PROVINCE}
+COLONNE_SIGILLI = {p: _COLONNE_SIGILLI_COMUNI for p in PROVINCE}
 
 print(f"🗺️  Provincia attiva: {_provincia['nome'].upper()}")
 

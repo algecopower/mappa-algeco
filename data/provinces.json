@@ -1,0 +1,55 @@
+{
+  "TORINO": {
+    "nome": "Torino",
+    "id_foglio": "1ZYDay6FgMZqArPxTInumGzPpZ1aMJ3XxTF_vmxPgwXw",
+    "gid_scheda": 2061618218,
+    "deposito": {
+      "Nome": "DEPOSITO VOLPIANO",
+      "Lat": 45.1964682,
+      "Lon": 7.7888303
+    },
+    "operatori_vip": ["AE101392", "AG49808", "AG18966"],
+    "colori_operatori": {
+      "AE101392": "#e74c3c",
+      "AG49808": "#f1c40f",
+      "AG18966": "#2ecc71"
+    },
+    "operatori_dict": {
+      "Operatore 1 (AE101392)": "AE101392",
+      "Operatore 2 (AG49808)": "AG49808",
+      "Operatore 3 (AG18966)": "AG18966"
+    },
+    "file_mappa": "templates/mappa_torino.html",
+    "ora_inizio_giornata": 540,
+    "ora_fine_giornata": 1020,
+    "sottodominio": "torino.mappa-algeco.com",
+    "porta": 5001
+  },
+  "PAVIA": {
+    "nome": "Pavia",
+    "id_foglio": "1vyEooPBbmWf3D44NC-zRtZGjYMoUITOlGWX7fZf4wm0",
+    "gid_scheda": 198162274,
+    "deposito": {
+      "Nome": "DEPOSITO PAVIA",
+      "Lat": 45.2221001,
+      "Lon": 9.2254115
+    },
+    "operatori_vip": ["ALESSANDRO", "MELEK", "BRAHIM"],
+    "colori_operatori": {
+      "ALESSANDRO": "#e74c3c",
+      "MELEK": "#f1c40f",
+      "BRAHIM": "#2ecc71"
+    },
+    "operatori_dict": {
+      "Alessandro": "ALESSANDRO",
+      "Melek": "MELEK",
+      "Brahim": "BRAHIM"
+    },
+    "file_mappa": "templates/mappa_pavia.html",
+    "usa_localita_come_comune": true,
+    "ora_inizio_giornata": 480,
+    "ora_fine_giornata": 1020,
+    "sottodominio": "pavia.mappa-algeco.com",
+    "porta": 5002
+  }
+}

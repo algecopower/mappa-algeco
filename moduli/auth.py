@@ -361,6 +361,13 @@ def init_auth(app, secret_key=None):
     app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
     app.config['SESSION_COOKIE_SECURE'] = os.environ.get('FLASK_ENV') == 'production'  # True solo via HTTPS (Cloudflare)
     app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=SESSION_LIFETIME_HOURS)
+    # Cookie domain: se impostato via env var (es. '.mappa-algeco.com' in prod),
+    # la sessione vale per tutti i sottodomini → l'auth fatto su torino.* o
+    # pavia.* vale anche su admin.* (UI di gestione province nel router).
+    # Default unset: comportamento legacy (cookie scoped al singolo host).
+    cookie_domain = os.environ.get('SESSION_COOKIE_DOMAIN')
+    if cookie_domain:
+        app.config['SESSION_COOKIE_DOMAIN'] = cookie_domain
     
     # Crea utente admin di default se non esistono utenti
     users = load_users()

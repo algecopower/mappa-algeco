@@ -323,11 +323,17 @@ def get_matricole_pending():
 def salva_matricola(eneltel):
     """
     Salva la matricola per un contatore (anti-spanamento: header fresco + ancora ENELTEL).
+    Opzionalmente aggiorna la colonna SMART TEST se smart_test_negativo è True:
+        - smart_test_negativo=True, spiegazione vuota → "NO"
+        - smart_test_negativo=True, spiegazione presente → "NO: [SPIEGAZIONE]"
+        - smart_test_negativo=False → nessuna modifica alla colonna SMART TEST
     """
     try:
         data = request.json
         matricola = data.get('matricola', '').strip()
         anchor_lcl = data.get('_anchor_lcl')
+        smart_test_negativo = bool(data.get('smart_test_negativo', False))
+        smart_test_spiegazione = (data.get('smart_test_spiegazione') or '').strip()
 
         if not matricola:
             return jsonify({'error': 'Matricola vuota'}), 400
@@ -345,24 +351,47 @@ def salva_matricola(eneltel):
         if col_name_mat is None:
             return jsonify({'error': 'Colonna Matricola non trovata'}), 400
 
+        # Risolvi colonna SMART TEST solo se richiesto
+        col_name_smart = None
+        if smart_test_negativo:
+            for col_name in ['SMART TEST', 'Smart Test', 'smart test']:
+                if col_name in _header_map:
+                    col_name_smart = col_name
+                    break
+            if col_name_smart is None:
+                return jsonify({'error': 'Colonna SMART TEST non trovata sul foglio'}), 400
+
         eneltel_anchor_col = _resolve_anchor_col_name('eneltel') or 'Eneltel'
-        item = {
+
+        items = [{
             'row': row_num,
             'col': col_name_mat,
             'value': matricola,
             'anchor': str(eneltel),
-        }
+        }]
+        smart_test_valore = None
+        if smart_test_negativo:
+            smart_test_valore = f'NO: {smart_test_spiegazione}' if smart_test_spiegazione else 'NO'
+            items.append({
+                'row': row_num,
+                'col': col_name_smart,
+                'value': smart_test_valore,
+                'anchor': str(eneltel),
+            })
+
         if anchor_lcl is not None:
-            item['anchor_lcl'] = str(anchor_lcl)
+            for it in items:
+                it['anchor_lcl'] = str(anchor_lcl)
+
         res = safe_batch_update_by_name(
-            [item],
+            items,
             anchor_col=eneltel_anchor_col,
             anchor_normalize='lstrip0',
         )
 
         if not res['success']:
             if res.get('invalid_cols'):
-                return jsonify({'error': 'Colonna Matricola non trovata sul foglio'}), 400
+                return jsonify({'error': 'Colonna Matricola/SMART TEST non trovata sul foglio'}), 400
             if res.get('lost_anchors'):
                 return jsonify({'error': f'ENELTEL {eneltel} non più presente nel foglio'}), 404
             return jsonify({'error': 'Scrittura non completata'}), 500
@@ -370,8 +399,9 @@ def salva_matricola(eneltel):
         cell_ref = gspread.utils.rowcol_to_a1(
             row_num, get_header_map().get(col_name_mat, 0)
         )
+        log_extra = f" + SMART TEST='{smart_test_valore}'" if smart_test_valore else ''
         logger.info(
-            f"[MATRICOLE] ✅ Matricola '{matricola}' salvata per {eneltel} "
+            f"[MATRICOLE] ✅ Matricola '{matricola}' salvata per {eneltel}{log_extra} "
             f"(written={res['written']}, remapped={res['remapped']})"
         )
 
@@ -379,6 +409,7 @@ def salva_matricola(eneltel):
             'success': True,
             'message': f'Matricola salvata per {eneltel}',
             'matricola': matricola,
+            'smart_test': smart_test_valore,
             'cell': cell_ref,
             'remapped': res['remapped'] > 0,
         })

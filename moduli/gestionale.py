@@ -843,10 +843,71 @@ def genera_css_gestionale():
             background: rgba(39, 174, 96, 0.1);
             border-color: rgba(39, 174, 96, 0.3);
         }
-        
+
         .sigilli-card.completato .sigilli-input {
             background: rgba(39, 174, 96, 0.1);
             border-color: rgba(39, 174, 96, 0.3);
+        }
+
+        /* Smart Test toggle (solo matricole) */
+        .smart-test-row {
+            margin-top: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .smart-test-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            font-size: 0.9em;
+            color: var(--text-secondary);
+            user-select: none;
+        }
+
+        .smart-test-toggle input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+            accent-color: #e74c3c;
+        }
+
+        .smart-test-toggle.checked {
+            color: #e74c3c;
+            font-weight: 600;
+        }
+
+        .smart-test-spiegazione {
+            display: none;
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            font-size: 0.9em;
+            transition: all 0.2s;
+        }
+
+        .smart-test-spiegazione.visible {
+            display: block;
+        }
+
+        .smart-test-spiegazione:focus {
+            outline: none;
+            border-color: #e74c3c;
+            box-shadow: 0 0 0 3px rgba(231, 76, 60, 0.2);
+        }
+
+        .sigilli-card.completato .smart-test-toggle,
+        .sigilli-card.completato .smart-test-spiegazione {
+            pointer-events: none;
+        }
+        .sigilli-card.completato .smart-test-toggle input,
+        .sigilli-card.completato .smart-test-spiegazione {
+            opacity: 0.85;
         }
 
         /* Modale appuntamento */
@@ -3593,17 +3654,30 @@ def genera_js_gestionale():
                             <span>🔌 ${{eneltel}}</span>
                         </div>
                         <div class="sigilli-input-row">
-                            <input type="text" 
-                                   class="sigilli-input matricola" 
+                            <input type="text"
+                                   class="sigilli-input matricola"
                                    id="matricola-input-${{originalIdx}}"
                                    placeholder="Inserisci matricola..."
                                    autocomplete="off"
                                    onkeypress="handleMatricolaKeypress(event, ${{originalIdx}})">
-                            <button class="btn-salva-sigillo" 
+                            <button class="btn-salva-sigillo"
                                     id="matricola-btn-${{originalIdx}}"
                                     onclick="salvaMatricola(${{originalIdx}})">
                                 💾 Salva
                             </button>
+                        </div>
+                        <div class="smart-test-row">
+                            <label class="smart-test-toggle" id="smart-test-toggle-${{originalIdx}}">
+                                <input type="checkbox"
+                                       id="smart-test-check-${{originalIdx}}"
+                                       onchange="toggleSmartTest(${{originalIdx}})">
+                                <span>⚠️ Smart Test negativo</span>
+                            </label>
+                            <input type="text"
+                                   class="smart-test-spiegazione"
+                                   id="smart-test-spieg-${{originalIdx}}"
+                                   placeholder="Spiegazione (opzionale)..."
+                                   autocomplete="off">
                         </div>
                         <div class="sigilli-card-status" id="matricola-status-${{originalIdx}}"></div>
                     </div>
@@ -3737,27 +3811,48 @@ def genera_js_gestionale():
             }}
         }}
         
+        function toggleSmartTest(idx) {{
+            const check = document.getElementById(`smart-test-check-${{idx}}`);
+            const label = document.getElementById(`smart-test-toggle-${{idx}}`);
+            const spieg = document.getElementById(`smart-test-spieg-${{idx}}`);
+            if (!check || !spieg || !label) return;
+            if (check.checked) {{
+                label.classList.add('checked');
+                spieg.classList.add('visible');
+            }} else {{
+                label.classList.remove('checked');
+                spieg.classList.remove('visible');
+            }}
+        }}
+
         async function salvaMatricola(idx) {{
             const card = document.getElementById(`matricola-card-${{idx}}`);
             const input = document.getElementById(`matricola-input-${{idx}}`);
             const btn = document.getElementById(`matricola-btn-${{idx}}`);
             const status = document.getElementById(`matricola-status-${{idx}}`);
-            
+            const smartCheck = document.getElementById(`smart-test-check-${{idx}}`);
+            const smartSpieg = document.getElementById(`smart-test-spieg-${{idx}}`);
+
             const matricola = input.value.trim();
             if (!matricola) {{
                 status.className = 'sigilli-card-status visible error';
                 status.textContent = '⚠️ Inserisci una matricola';
                 return;
             }}
-            
+
+            const smartNegativo = !!(smartCheck && smartCheck.checked);
+            const smartSpiegazione = smartSpieg ? smartSpieg.value.trim() : '';
+
             const eneltel = card.dataset.eneltel;
-            
+
             // Loading state
             btn.disabled = true;
             input.disabled = true;
+            if (smartCheck) smartCheck.disabled = true;
+            if (smartSpieg) smartSpieg.disabled = true;
             status.className = 'sigilli-card-status visible loading';
             status.textContent = '⏳ Salvataggio...';
-            
+
             let _mLcl = undefined;
             try {{
                 const _c = matricoleData.find(cc => cc.eneltel === eneltel) ||
@@ -3766,44 +3861,73 @@ def genera_js_gestionale():
             }} catch (e) {{ /* ignora */ }}
 
             try {{
-                const _body = {{ matricola: matricola }};
+                const _body = {{
+                    matricola: matricola,
+                    smart_test_negativo: smartNegativo,
+                    smart_test_spiegazione: smartSpiegazione,
+                }};
                 if (_mLcl !== undefined) _body._anchor_lcl = _mLcl;
                 const response = await fetch(`${{API_BASE}}/api/matricola/${{eneltel}}`, {{
                     method: 'PUT',
                     headers: {{ 'Content-Type': 'application/json' }},
                     body: JSON.stringify(_body)
                 }});
-                
+
                 const result = await response.json();
-                
+
                 if (response.ok && result.success) {{
                     // RIMUOVI dalla lista dati PRIMA di toccare il DOM
                     matricoleData = matricoleData.filter(c => c.eneltel !== eneltel);
-                    
+
                     // Aggiorna contatori (riacquisisci nodi dal DOM)
                     const countEl = document.getElementById('sigilliCount');
                     if (countEl) countEl.textContent = `(${{matricoleData.length}} da completare)`;
                     const tabCountEl = document.getElementById('tabMatricoleCount');
                     if (tabCountEl) tabCountEl.textContent = matricoleData.length;
-                    
+
                     // Riacquisisci i nodi DOM (potrebbero essere stati ricreati)
                     const card2 = document.getElementById(`matricola-card-${{idx}}`);
+                    const input2 = document.getElementById(`matricola-input-${{idx}}`);
+                    const btn2 = document.getElementById(`matricola-btn-${{idx}}`);
+                    const status2 = document.getElementById(`matricola-status-${{idx}}`);
+
                     if (card2) {{
-                        const status2 = document.getElementById(`matricola-status-${{idx}}`);
                         if (status2) {{
                             status2.className = 'sigilli-card-status visible success';
-                            status2.textContent = '✅ Matricola salvata!';
+                            const stMsg = result.smart_test ? ` (SMART TEST: ${{result.smart_test}})` : '';
+                            status2.textContent = '✅ Matricola salvata!' + stMsg;
                         }}
                         card2.classList.add('completato');
+
+                        if (input2) {{
+                            input2.value = matricola;
+                            input2.disabled = true;
+                        }}
+                        if (btn2) btn2.style.display = 'none';
+
+                        let editBtn = document.getElementById(`matricola-edit-${{idx}}`);
+                        if (!editBtn && input2) {{
+                            editBtn = document.createElement('button');
+                            editBtn.id = `matricola-edit-${{idx}}`;
+                            editBtn.className = 'btn-modifica-sigillo';
+                            editBtn.innerHTML = '✏️ Modifica';
+                            editBtn.onclick = function() {{ modificaMatricola(idx); }};
+                            input2.parentNode.appendChild(editBtn);
+                        }}
+
                         focusNextInput(card2, 'matricola-input');
                     }}
-                    
+
                 }} else {{
                     const btn2 = document.getElementById(`matricola-btn-${{idx}}`);
                     const input2 = document.getElementById(`matricola-input-${{idx}}`);
                     const status2 = document.getElementById(`matricola-status-${{idx}}`);
+                    const smartCheck2 = document.getElementById(`smart-test-check-${{idx}}`);
+                    const smartSpieg2 = document.getElementById(`smart-test-spieg-${{idx}}`);
                     if (btn2) btn2.disabled = false;
                     if (input2) input2.disabled = false;
+                    if (smartCheck2) smartCheck2.disabled = false;
+                    if (smartSpieg2) smartSpieg2.disabled = false;
                     if (status2) {{
                         status2.className = 'sigilli-card-status visible error';
                         status2.textContent = '❌ ' + (result.error || 'Errore sconosciuto');
@@ -3813,13 +3937,41 @@ def genera_js_gestionale():
                 const btn2 = document.getElementById(`matricola-btn-${{idx}}`);
                 const input2 = document.getElementById(`matricola-input-${{idx}}`);
                 const status2 = document.getElementById(`matricola-status-${{idx}}`);
+                const smartCheck2 = document.getElementById(`smart-test-check-${{idx}}`);
+                const smartSpieg2 = document.getElementById(`smart-test-spieg-${{idx}}`);
                 if (btn2) btn2.disabled = false;
                 if (input2) input2.disabled = false;
+                if (smartCheck2) smartCheck2.disabled = false;
+                if (smartSpieg2) smartSpieg2.disabled = false;
                 if (status2) {{
                     status2.className = 'sigilli-card-status visible error';
                     status2.textContent = '❌ Errore di connessione: ' + err.message;
                 }}
             }}
+        }}
+
+        function modificaMatricola(idx) {{
+            const card = document.getElementById(`matricola-card-${{idx}}`);
+            const input = document.getElementById(`matricola-input-${{idx}}`);
+            const btn = document.getElementById(`matricola-btn-${{idx}}`);
+            const editBtn = document.getElementById(`matricola-edit-${{idx}}`);
+            const status = document.getElementById(`matricola-status-${{idx}}`);
+            const smartCheck = document.getElementById(`smart-test-check-${{idx}}`);
+            const smartSpieg = document.getElementById(`smart-test-spieg-${{idx}}`);
+
+            if (input) input.disabled = false;
+            if (btn) {{ btn.style.display = ''; btn.disabled = false; }}
+            if (card) card.classList.remove('completato');
+            if (editBtn) editBtn.style.display = 'none';
+            if (smartCheck) smartCheck.disabled = false;
+            if (smartSpieg) smartSpieg.disabled = false;
+
+            if (status) {{
+                status.className = 'sigilli-card-status';
+                status.textContent = '';
+            }}
+
+            if (input) {{ input.focus(); input.select(); }}
         }}
         
         function modificaSigillo(idx) {{

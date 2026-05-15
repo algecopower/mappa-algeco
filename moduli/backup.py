@@ -378,27 +378,123 @@ def elimina_backup(filename: str) -> dict:
         }
 
 
+def _percorso_backup_db(data: date = None) -> str:
+    """Percorso del file di backup .db per la data indicata."""
+    if data is None:
+        data = date.today()
+    cartella = os.path.dirname(_percorso_backup(data))
+    return os.path.join(cartella, f'state_{data.isoformat()}.db')
+
+
+def esegui_backup_db(data: date = None, forza: bool = False,
+                     mantieni_ultimi: int = 7) -> dict:
+    """Snapshot consistente del DB SQLite locale via VACUUM INTO.
+
+    VACUUM INTO crea una copia transactional/atomica del DB sotto carico
+    (non serve stop del processo). Richiede SQLite 3.27+.
+
+    Args:
+        data: data del backup (default: oggi)
+        forza: se True, sovrascrive un backup esistente per la stessa data
+        mantieni_ultimi: dopo il nuovo backup, mantieni solo gli ultimi N file
+            (default 7 = una settimana di rolling backup)
+
+    Returns:
+        dict {success, file, dimensione_mb, skipped?, message?}
+    """
+    if data is None:
+        data = date.today()
+    try:
+        _assicura_cartella_backup()
+        percorso = _percorso_backup_db(data)
+
+        if not forza and os.path.exists(percorso):
+            return {'success': True, 'file': percorso, 'skipped': True,
+                    'message': f'Backup DB già presente per {data.isoformat()}'}
+
+        # Per sovrascrivere, VACUUM INTO non gestisce overwrite: rimuoviamo prima.
+        if os.path.exists(percorso):
+            os.remove(percorso)
+
+        from moduli import db as _db
+        conn = _db.get_conn()
+        # Path quotato per SQLite (singoli apici, escape se necessario).
+        safe_path = percorso.replace("'", "''")
+        conn.execute(f"VACUUM INTO '{safe_path}'")
+
+        dim_mb = round(os.path.getsize(percorso) / (1024 * 1024), 2)
+        print(f"[BACKUP-DB] ✅ Snapshot salvato: {percorso} ({dim_mb} MB)")
+
+        # Rotation: mantieni solo gli ultimi N file state_*.db
+        rimossi = _rotate_backup_db(percorso, mantieni_ultimi)
+
+        return {
+            'success': True,
+            'file': percorso,
+            'dimensione_mb': dim_mb,
+            'rotated_removed': rimossi,
+        }
+    except Exception as e:
+        print(f"[BACKUP-DB] ❌ Errore: {e}")
+        traceback.print_exc()
+        return {'success': False, 'message': str(e), 'file': None}
+
+
+def _rotate_backup_db(percorso_corrente: str, mantieni: int) -> int:
+    """Cancella i backup .db più vecchi mantenendone solo `mantieni`.
+    Ritorna il numero di file rimossi.
+    """
+    if mantieni <= 0:
+        return 0
+    cartella = os.path.dirname(percorso_corrente)
+    if not os.path.isdir(cartella):
+        return 0
+    files = sorted(
+        (f for f in os.listdir(cartella)
+         if f.startswith('state_') and f.endswith('.db')),
+        reverse=True,
+    )
+    da_eliminare = files[mantieni:]
+    n = 0
+    for f in da_eliminare:
+        try:
+            os.remove(os.path.join(cartella, f))
+            n += 1
+        except OSError as e:
+            print(f"[BACKUP-DB] ⚠️ impossibile rimuovere {f}: {e}")
+    if n:
+        print(f"[BACKUP-DB] 🧹 rotation: {n} backup .db vecchi rimossi")
+    return n
+
+
 def backup_periodico_auto():
     """
     Funzione da chiamare periodicamente (es. ad ogni sync).
     - Se è il primo del mese, pulisce i backup vecchi
-    - Esegue il backup per oggi (se non già fatto)
+    - Esegue il backup JSON per oggi (se non già fatto)
+    - Esegue lo snapshot DB SQLite per oggi (rotation: ultimi 7)
     """
     try:
         # 1. Pulizia fine mese (se è il primo del mese)
         risultato_pulizia = pulisci_backup_fine_mese()
         if risultato_pulizia.get('cleaned'):
             print(f"[BACKUP] 🧹 Pulizia mensile: {risultato_pulizia.get('files_removed', 0)} file rimossi")
-        
-        # 2. Backup giornaliero (se non già fatto)
+
+        # 2. Backup JSON giornaliero (se non già fatto)
         risultato = esegui_backup()
         if risultato.get('skipped'):
-            # Backup già presente, non fare nulla (silenzioso)
-            pass
+            pass  # già presente, silenzioso
         elif risultato.get('success'):
             print(f"[BACKUP] ✅ Backup giornaliero completato")
         else:
             print(f"[BACKUP] ⚠️ Backup fallito: {risultato.get('message')}")
-            
+
+        # 3. Snapshot DB SQLite (recovery in caso di corruzione)
+        risultato_db = esegui_backup_db()
+        if risultato_db.get('skipped'):
+            pass
+        elif not risultato_db.get('success'):
+            print(f"[BACKUP-DB] ⚠️ Snapshot DB fallito: {risultato_db.get('message')}")
+
     except Exception as e:
         print(f"[BACKUP] ❌ Errore backup periodico: {e}")

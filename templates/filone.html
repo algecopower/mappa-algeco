@@ -158,6 +158,107 @@
         }
         .search-input::placeholder { color: var(--text-muted); }
 
+        /* TAB BAR — multiple independent views of the same file */
+        .tabbar {
+            display: flex;
+            align-items: stretch;
+            background: var(--bg-header);
+            border-bottom: 1px solid var(--border);
+            padding: 0 8px;
+            gap: 2px;
+            flex-shrink: 0;
+            overflow-x: auto;
+            overflow-y: hidden;
+            scrollbar-width: thin;
+        }
+        .tabbar::-webkit-scrollbar { height: 4px; }
+        .tabbar::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 2px; }
+        .tabbar-tabs {
+            display: flex;
+            align-items: stretch;
+            gap: 2px;
+            min-width: 0;
+        }
+        .tabitem {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 8px 6px 12px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-bottom: none;
+            border-radius: 6px 6px 0 0;
+            font-size: 0.82em;
+            color: var(--text-muted);
+            cursor: pointer;
+            white-space: nowrap;
+            max-width: 220px;
+            position: relative;
+            top: 1px;
+            transition: background 0.12s, color 0.12s, border-color 0.12s;
+            user-select: none;
+        }
+        .tabitem:hover { background: var(--bg-cell-hover); color: var(--text); }
+        .tabitem.active {
+            background: var(--bg-body);
+            color: var(--primary);
+            border-color: var(--border);
+            border-bottom: 1px solid var(--bg-body);
+            font-weight: 600;
+            top: 1px;
+            z-index: 2;
+        }
+        .tabitem.active .tabitem-name { color: var(--primary); }
+        .tabitem-dirty {
+            color: var(--warning);
+            font-size: 0.9em;
+            margin-right: -2px;
+        }
+        .tabitem-name {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 160px;
+        }
+        .tabitem-name[contenteditable="true"] {
+            outline: 1px solid var(--primary);
+            background: var(--bg-input);
+            color: var(--text);
+            padding: 0 3px;
+            border-radius: 3px;
+            cursor: text;
+        }
+        .tabitem-close {
+            border: none;
+            background: transparent;
+            color: var(--text-muted);
+            font-size: 1.1em;
+            line-height: 1;
+            padding: 1px 5px;
+            border-radius: 3px;
+            cursor: pointer;
+            opacity: 0.6;
+        }
+        .tabitem-close:hover {
+            background: var(--danger);
+            color: #fff;
+            opacity: 1;
+        }
+        .tabitem.active .tabitem-close { opacity: 0.85; }
+        .tabbar-new {
+            border: none;
+            background: transparent;
+            color: var(--text-muted);
+            font-size: 1.2em;
+            line-height: 1;
+            padding: 4px 10px;
+            cursor: pointer;
+            border-radius: 4px;
+            margin: 4px 0 4px 4px;
+            flex-shrink: 0;
+            align-self: center;
+        }
+        .tabbar-new:hover { background: var(--bg-cell-hover); color: var(--primary); }
+
         /* GRID AREA */
         .grid-wrap {
             flex: 1;
@@ -1317,6 +1418,11 @@
         </div>
     </div>
 
+    <div class="tabbar" id="tabBar" style="display:none">
+        <div class="tabbar-tabs" id="tabBarTabs"></div>
+        <button class="tabbar-new" id="tabBarNew" onclick="tabNew()" title="Nuovo tab: apre una vista indipendente con filtri/ordinamento/ricerca separati">&#x2795;</button>
+    </div>
+
     <div class="grid-wrap" id="gridWrap">
         <div class="loading-overlay" id="loadingOverlay">
             <div style="text-align:center">
@@ -1615,6 +1721,332 @@ let activeRows = new Map(); // visIdx -> DOM node
 let rowIndex = {};
 
 // ============================================================
+// MULTI-TAB STATE — viste indipendenti dello stesso file
+// Per-tab: filtri, sort, ricerca, colonne (larghezza/ordine/nascoste),
+// selezione, scroll. Condiviso: dati, pending, undo/redo, formati.
+// ============================================================
+let _tabsState = [];
+let _activeTabId = null;
+let _tabsInited = false;
+let _tabsPersistTimer = null;
+const _TABS_KEY = 'filone_tabs_v1';
+
+function _genTabId() {
+    return 't_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
+}
+
+function _activeTab() {
+    if (!_tabsInited) return null;
+    for (var i = 0; i < _tabsState.length; i++) {
+        if (_tabsState[i].id === _activeTabId) return _tabsState[i];
+    }
+    return null;
+}
+
+function _tabSnapshotActive() {
+    var t = _activeTab();
+    if (!t) return;
+    var cfs = {};
+    for (var cn in colFilters) cfs[cn] = Array.from(colFilters[cn]);
+    t.colFilters = cfs;
+    t.dateRangeFilters = JSON.parse(JSON.stringify(dateRangeFilters || {}));
+    t.colorFilterCol = colorFilterCol || '';
+    t.colorFilterColor = colorFilterColor || '';
+    t.podFilterSet = podFilterSet ? Array.from(podFilterSet) : null;
+    t.vlFilterCol = vlFilterCol || '';
+    t.sortCol = sortCol;
+    t.sortDir = sortDir;
+    var gsInp = qs('#globalSearch');
+    t.globalSearch = gsInp ? gsInp.value : '';
+    t.hiddenCols = Array.from(hiddenCols);
+    t.colOrder = colOrder.slice();
+    t.colWidths = colWidths.slice();
+    t.selRow = selRow;
+    t.selCol = selCol;
+    var gs = qs('#gridScroll');
+    if (gs) {
+        t.scrollTop = gs.scrollTop;
+        t.scrollLeft = gs.scrollLeft;
+    }
+}
+
+function _tabApply(t, opts) {
+    opts = opts || {};
+    // Filtri/ricerca/sort
+    colFilters = {};
+    if (t.colFilters) {
+        for (var cn in t.colFilters) colFilters[cn] = new Set(t.colFilters[cn]);
+    }
+    dateRangeFilters = t.dateRangeFilters ? JSON.parse(JSON.stringify(t.dateRangeFilters)) : {};
+    colorFilterCol = t.colorFilterCol || '';
+    colorFilterColor = t.colorFilterColor || '';
+    podFilterSet = (t.podFilterSet && t.podFilterSet.length) ? new Set(t.podFilterSet) : null;
+    vlFilterCol = t.vlFilterCol || '';
+    sortCol = (typeof t.sortCol === 'number') ? t.sortCol : -1;
+    sortDir = t.sortDir || 'asc';
+    var gsInp = qs('#globalSearch');
+    if (gsInp) gsInp.value = t.globalSearch || '';
+
+    // Layout colonne — solo se compatibile con gli header attuali
+    if (Array.isArray(t.hiddenCols)) {
+        hiddenCols = new Set(t.hiddenCols.filter(function(c){ return c >= 0 && c < headers.length; }));
+    } else {
+        hiddenCols = new Set();
+    }
+    if (Array.isArray(t.colOrder) && t.colOrder.length === headers.length) {
+        var check = t.colOrder.slice().sort(function(a,b){return a-b;});
+        var valid = true;
+        for (var i = 0; i < check.length; i++) { if (check[i] !== i) { valid = false; break; } }
+        if (valid) { colOrder = t.colOrder.slice(); rebuildColOrderMap(); }
+    }
+    if (Array.isArray(t.colWidths) && t.colWidths.length === headers.length) {
+        colWidths = t.colWidths.slice();
+    }
+
+    // Selezione (range multi-cella non viene persistito, solo cella singola)
+    selRow = (typeof t.selRow === 'number') ? t.selRow : -1;
+    selCol = (typeof t.selCol === 'number') ? t.selCol : -1;
+    selAnchorRow = selRow; selAnchorCol = selCol;
+    selRange = null;
+
+    applyHiddenCols();
+    if (!opts.skipRender) {
+        updateHiddenColsBtn();
+        buildHeader();
+        applyFilters();
+        var gs = qs('#gridScroll');
+        if (gs) {
+            if (typeof t.scrollTop === 'number') gs.scrollTop = t.scrollTop;
+            if (typeof t.scrollLeft === 'number') gs.scrollLeft = t.scrollLeft;
+        }
+    }
+}
+
+function _tabsPersistImmediate() {
+    if (_tabsPersistTimer) { clearTimeout(_tabsPersistTimer); _tabsPersistTimer = null; }
+    if (!_tabsInited) return;
+    try {
+        _tabSnapshotActive();
+        var payload = { v: 1, active: _activeTabId, tabs: _tabsState };
+        localStorage.setItem(_TABS_KEY, JSON.stringify(payload));
+    } catch (e) {}
+}
+
+function _tabsPersist() {
+    if (!_tabsInited) return;
+    if (_tabsPersistTimer) clearTimeout(_tabsPersistTimer);
+    _tabsPersistTimer = setTimeout(_tabsPersistImmediate, 300);
+}
+
+function _tabsInit() {
+    var loaded = null;
+    try {
+        var s = localStorage.getItem(_TABS_KEY);
+        if (s) loaded = JSON.parse(s);
+    } catch (e) {}
+
+    if (loaded && Array.isArray(loaded.tabs) && loaded.tabs.length > 0) {
+        _tabsState = loaded.tabs;
+        for (var i = 0; i < _tabsState.length; i++) {
+            if (!_tabsState[i].id) _tabsState[i].id = _genTabId();
+            if (!_tabsState[i].name) _tabsState[i].name = 'Vista ' + (i + 1);
+        }
+        _activeTabId = null;
+        for (var j = 0; j < _tabsState.length; j++) {
+            if (_tabsState[j].id === loaded.active) { _activeTabId = loaded.active; break; }
+        }
+        if (!_activeTabId) _activeTabId = _tabsState[0].id;
+        _tabsInited = true;
+        _tabApply(_activeTab(), { skipRender: true });
+    } else {
+        _tabsState = [{
+            id: _genTabId(),
+            name: 'Vista 1',
+            colFilters: {},
+            dateRangeFilters: {},
+            colorFilterCol: '',
+            colorFilterColor: '',
+            podFilterSet: null,
+            vlFilterCol: '',
+            sortCol: -1,
+            sortDir: 'asc',
+            globalSearch: '',
+            hiddenCols: Array.from(hiddenCols),
+            colOrder: colOrder.slice(),
+            colWidths: colWidths.slice(),
+            selRow: -1, selCol: -1,
+            scrollTop: 0, scrollLeft: 0
+        }];
+        _activeTabId = _tabsState[0].id;
+        _tabsInited = true;
+    }
+    _tabsRender();
+    var bar = qs('#tabBar');
+    if (bar) bar.style.display = 'flex';
+}
+
+function _tabIsDirty(t) {
+    if (!t) return false;
+    if (t.colFilters && Object.keys(t.colFilters).length > 0) return true;
+    if (t.dateRangeFilters && Object.keys(t.dateRangeFilters).length > 0) return true;
+    if (t.colorFilterCol) return true;
+    if (t.podFilterSet && t.podFilterSet.length > 0) return true;
+    if (typeof t.sortCol === 'number' && t.sortCol >= 0) return true;
+    if (t.globalSearch) return true;
+    if (t.hiddenCols && t.hiddenCols.length > 0) return true;
+    return false;
+}
+
+function _tabsRender() {
+    var container = qs('#tabBarTabs');
+    if (!container) return;
+    // Snapshot prima di renderizzare per avere stato dirty aggiornato
+    if (_activeTab()) _tabSnapshotActive();
+    var html = '';
+    var canClose = _tabsState.length > 1;
+    for (var i = 0; i < _tabsState.length; i++) {
+        var t = _tabsState[i];
+        var isActive = (t.id === _activeTabId);
+        var dirty = _tabIsDirty(t);
+        var title = t.name + (dirty ? ' — filtri/ordine attivi' : '') + ' (doppio click per rinominare)';
+        html += '<div class="tabitem' + (isActive ? ' active' : '') + '"' +
+                ' data-tab-id="' + esc(t.id) + '"' +
+                ' onclick="tabSwitch(this.dataset.tabId)"' +
+                ' ondblclick="tabBeginRename(this.dataset.tabId, event)"' +
+                ' title="' + esc(title) + '">';
+        if (dirty) html += '<span class="tabitem-dirty" title="Filtri/ordine attivi">&#x25CF;</span>';
+        html += '<span class="tabitem-name" data-tab-id="' + esc(t.id) + '">' + esc(t.name) + '</span>';
+        if (canClose) {
+            html += '<button class="tabitem-close" title="Chiudi tab" onclick="event.stopPropagation(); tabClose(this.parentNode.dataset.tabId)">&times;</button>';
+        }
+        html += '</div>';
+    }
+    container.innerHTML = html;
+}
+
+function tabSwitch(id) {
+    if (!_tabsInited) return;
+    if (id === _activeTabId) return;
+    _tabSnapshotActive();
+    var target = null;
+    for (var i = 0; i < _tabsState.length; i++) {
+        if (_tabsState[i].id === id) { target = _tabsState[i]; break; }
+    }
+    if (!target) return;
+    _activeTabId = id;
+    _tabApply(target);
+    _tabsRender();
+    _tabsPersistImmediate();
+}
+
+function _tabNextName() {
+    var used = {};
+    for (var i = 0; i < _tabsState.length; i++) {
+        var m = _tabsState[i].name.match(/^Vista (\d+)$/);
+        if (m) used[parseInt(m[1], 10)] = true;
+    }
+    var n = 1;
+    while (used[n]) n++;
+    return 'Vista ' + n;
+}
+
+function tabNew() {
+    if (!_tabsInited) return;
+    _tabSnapshotActive();
+    var src = _activeTab();
+    var newTab = {
+        id: _genTabId(),
+        name: _tabNextName(),
+        colFilters: {},
+        dateRangeFilters: {},
+        colorFilterCol: '',
+        colorFilterColor: '',
+        podFilterSet: null,
+        vlFilterCol: '',
+        sortCol: -1,
+        sortDir: 'asc',
+        globalSearch: '',
+        hiddenCols: src ? src.hiddenCols.slice() : Array.from(hiddenCols),
+        colOrder: src ? src.colOrder.slice() : colOrder.slice(),
+        colWidths: src ? src.colWidths.slice() : colWidths.slice(),
+        selRow: -1, selCol: -1,
+        scrollTop: 0, scrollLeft: 0
+    };
+    _tabsState.push(newTab);
+    _activeTabId = newTab.id;
+    _tabApply(newTab);
+    _tabsRender();
+    _tabsPersistImmediate();
+}
+
+function tabClose(id) {
+    if (!_tabsInited) return;
+    if (_tabsState.length <= 1) return;
+    var idx = -1;
+    for (var i = 0; i < _tabsState.length; i++) {
+        if (_tabsState[i].id === id) { idx = i; break; }
+    }
+    if (idx < 0) return;
+    var t = _tabsState[idx];
+    if (_tabIsDirty(t)) {
+        if (!confirm('Chiudere il tab "' + t.name + '"? Filtri/ordinamento andranno persi.')) return;
+    }
+    var wasActive = (id === _activeTabId);
+    _tabsState.splice(idx, 1);
+    if (wasActive) {
+        var newActive = _tabsState[Math.min(idx, _tabsState.length - 1)];
+        _activeTabId = newActive.id;
+        _tabApply(newActive);
+    }
+    _tabsRender();
+    _tabsPersistImmediate();
+}
+
+function tabBeginRename(id, ev) {
+    if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+    var span = document.querySelector('.tabitem-name[data-tab-id="' + id + '"]');
+    if (!span) return;
+    span.contentEditable = 'true';
+    span.focus();
+    try {
+        var range = document.createRange();
+        range.selectNodeContents(span);
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+    } catch (e) {}
+    var done = false;
+    function finish(commit) {
+        if (done) return; done = true;
+        span.contentEditable = 'false';
+        var newName = (span.textContent || '').trim().slice(0, 50);
+        if (commit && newName) {
+            for (var i = 0; i < _tabsState.length; i++) {
+                if (_tabsState[i].id === id) { _tabsState[i].name = newName; break; }
+            }
+            _tabsPersistImmediate();
+        }
+        _tabsRender();
+        span.removeEventListener('blur', onBlur);
+        span.removeEventListener('keydown', onKey);
+    }
+    function onBlur() { finish(true); }
+    function onKey(e) {
+        if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+        else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+    }
+    span.addEventListener('blur', onBlur);
+    span.addEventListener('keydown', onKey);
+}
+
+// Persiste subito alla chiusura della pagina
+window.addEventListener('beforeunload', function() {
+    if (_tabsInited) {
+        try { _tabsPersistImmediate(); } catch (e) {}
+    }
+});
+
+// ============================================================
 // INIT
 // ============================================================
 document.addEventListener('DOMContentLoaded', loadData);
@@ -1642,6 +2074,10 @@ async function loadData() {
         initColOrder();
         loadHiddenCols();
         applyHiddenCols();
+        // Multi-tab: inizializza la lista di tab. Se esiste uno stato salvato
+        // sovrascrive i globali con quelli del tab attivo (compatibili con
+        // gli header attuali); altrimenti crea "Vista 1" dai valori legacy.
+        _tabsInit();
         buildHeader();
         applyFilters();
         updateHiddenColsBtn();
@@ -1886,6 +2322,7 @@ function initColWidths() {
 
 function saveColWidths() {
     try { localStorage.setItem('filone_col_widths', JSON.stringify(colWidths)); } catch(e) {}
+    if (typeof _tabsPersist === 'function') _tabsPersist();
 }
 function loadColWidths() {
     try {
@@ -1915,6 +2352,7 @@ function rebuildColOrderMap() {
 }
 function saveColOrder() {
     try { localStorage.setItem('filone_col_order', JSON.stringify(colOrder)); } catch(e) {}
+    if (typeof _tabsPersist === 'function') _tabsPersist();
 }
 function loadColOrder() {
     try {
@@ -1928,6 +2366,7 @@ function loadColOrder() {
 // ============================================================
 function saveHiddenCols() {
     try { localStorage.setItem('filone_hidden_cols', JSON.stringify(Array.from(hiddenCols))); } catch(e) {}
+    if (typeof _tabsPersist === 'function') _tabsPersist();
 }
 function loadHiddenCols() {
     try {
@@ -2357,6 +2796,11 @@ function applyFilters() {
     renderVisible(true);
     updateStatus();
     updateActiveFilterBadges();
+    // Sync stato per-tab (filtri/sort/ricerca) + aggiorna dirty dot
+    if (typeof _tabsRender === 'function' && _tabsInited) {
+        _tabsRender();
+        _tabsPersist();
+    }
 }
 
 function getDisplayVal(row, colName) {
@@ -2588,6 +3032,7 @@ qs('#gridScroll').addEventListener('scroll', function() {
         renderVisible(false);
         scrollRaf = 0;
     });
+    if (typeof _tabsPersist === 'function') _tabsPersist();
 }, { passive: true });
 
 var resizeRaf = 0;
@@ -2735,6 +3180,7 @@ function selectCell(rn, ci, noRedraw) {
 
     if (!noRedraw) renderVisible(true);
     updateFormatToolbarState();
+    if (typeof _tabsPersist === 'function') _tabsPersist();
 }
 
 function extendSelection(rn, ci) {

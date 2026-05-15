@@ -1002,14 +1002,12 @@ _ADMIN_HTML = r"""
 
       <div class="form-row">
         <div class="form-group">
-          <label>Orario inizio (minuti da 00:00)</label>
-          <input name="ora_inizio_giornata" type="number" required value="480">
-          <div class="help">480 = 8:00, 540 = 9:00</div>
+          <label>Orario inizio giornata</label>
+          <input name="ora_inizio_giornata" type="time" required value="08:00">
         </div>
         <div class="form-group">
-          <label>Orario fine (minuti da 00:00)</label>
-          <input name="ora_fine_giornata" type="number" required value="1020">
-          <div class="help">1020 = 17:00</div>
+          <label>Orario fine giornata</label>
+          <input name="ora_fine_giornata" type="time" required value="17:00">
         </div>
       </div>
 
@@ -1129,6 +1127,22 @@ async function elimina(slug) {
 
 let editingSlug = null;  // null = create mode, slug = edit mode
 
+// Conversioni HH:MM <-> minuti da 00:00 (formato richiesto dal backend)
+function minutiToHHMM(min) {
+  if (min == null || min === '') return '';
+  const m = parseInt(min);
+  if (isNaN(m)) return '';
+  const h = Math.floor(m / 60);
+  const mm = m % 60;
+  return `${String(h).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
+}
+function hhmmToMinuti(s) {
+  if (!s) return null;
+  const m = /^(\d{1,2}):(\d{2})$/.exec(s.trim());
+  if (!m) return null;
+  return parseInt(m[1]) * 60 + parseInt(m[2]);
+}
+
 function apriFormAggiungi() {
   editingSlug = null;
   document.getElementById('modalTitle').textContent = 'Aggiungi provincia';
@@ -1157,8 +1171,8 @@ function apriFormModifica(p) {
   form.querySelector('[name=deposito_nome]').value = d.Nome || '';
   form.querySelector('[name=deposito_lat]').value = d.Lat != null ? d.Lat : '';
   form.querySelector('[name=deposito_lon]').value = d.Lon != null ? d.Lon : '';
-  form.querySelector('[name=ora_inizio_giornata]').value = p.ora_inizio_giornata != null ? p.ora_inizio_giornata : 480;
-  form.querySelector('[name=ora_fine_giornata]').value = p.ora_fine_giornata != null ? p.ora_fine_giornata : 1020;
+  form.querySelector('[name=ora_inizio_giornata]').value = minutiToHHMM(p.ora_inizio_giornata != null ? p.ora_inizio_giornata : 480);
+  form.querySelector('[name=ora_fine_giornata]').value = minutiToHHMM(p.ora_fine_giornata != null ? p.ora_fine_giornata : 1020);
   form.querySelector('[name=usa_localita_come_comune]').checked = !!p.usa_localita_come_comune;
   form.querySelector('[name=porta]').value = p.porta != null ? p.porta : '';
   document.getElementById('probe-result').innerHTML = '';
@@ -1235,8 +1249,8 @@ async function submitForm(ev) {
       Lat: parseFloat(fd.get('deposito_lat')),
       Lon: parseFloat(fd.get('deposito_lon')),
     },
-    ora_inizio_giornata: parseInt(fd.get('ora_inizio_giornata')),
-    ora_fine_giornata: parseInt(fd.get('ora_fine_giornata')),
+    ora_inizio_giornata: hhmmToMinuti(fd.get('ora_inizio_giornata')),
+    ora_fine_giornata: hhmmToMinuti(fd.get('ora_fine_giornata')),
     usa_localita_come_comune: fd.get('usa_localita_come_comune') === 'on',
   };
   const porta = fd.get('porta');

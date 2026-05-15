@@ -187,19 +187,68 @@ def _login_url():
     return '/login'  # fallback
 
 
+_FORBIDDEN_HTML = """<!DOCTYPE html>
+<html lang="it"><head><meta charset="UTF-8"><title>Accesso non autorizzato</title>
+<style>
+  body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+          background: #f5f6f8; color: #1f2329; display: flex; align-items: center;
+          justify-content: center; min-height: 100vh; margin: 0; }}
+  .card {{ background: white; border-radius: 12px; padding: 40px 48px; max-width: 480px;
+           box-shadow: 0 4px 24px rgba(0,0,0,.08); text-align: center; }}
+  .icon {{ font-size: 56px; margin-bottom: 8px; }}
+  h1 {{ margin: 0 0 8px; font-size: 22px; }}
+  p {{ color: #6b7280; font-size: 14px; line-height: 1.6; }}
+  .badge {{ display: inline-block; background: #fee2e2; color: #991b1b; padding: 2px 10px;
+            border-radius: 12px; font-size: 12px; font-weight: 600; margin: 0 4px; }}
+  .actions {{ margin-top: 24px; }}
+  a.btn {{ display: inline-block; background: #2563eb; color: white; padding: 10px 20px;
+           text-decoration: none; border-radius: 6px; font-size: 14px; font-weight: 500; }}
+  a.btn:hover {{ background: #1d4ed8; }}
+</style>
+</head><body>
+<div class="card">
+  <div class="icon">🔒</div>
+  <h1>Accesso non autorizzato</h1>
+  <p>Questa pagina è riservata agli amministratori del sistema.<br>
+     Stai accedendo come <span class="badge">{username}</span>
+     con ruolo <span class="badge">{ruolo}</span>.</p>
+  <p>Se pensi sia un errore, chiedi a un amministratore di promuovere il tuo account.</p>
+  <div class="actions">
+    <a class="btn" href="{back_url}">← Torna alla mappa</a>
+  </div>
+</div></body></html>"""
+
+
 def _require_admin_or_redirect():
-    """Ritorna None se admin, altrimenti una Response (redirect o 401/403)."""
+    """Ritorna None se admin, altrimenti una Response (redirect o 401/403).
+
+    UX path:
+      - Non autenticato + richiesta API → 401 JSON
+      - Non autenticato + richiesta HTML → redirect a login
+      - Autenticato ma non admin + API → 403 JSON
+      - Autenticato ma non admin + HTML → 403 con pagina HTML user-friendly
+    """
     user = _validate_session()
     if not user:
         if request.path.startswith('/api/'):
             return jsonify({'error': 'Autenticazione richiesta'}), 401
         return redirect(_login_url())
     if user.get('ruolo') != 'admin':
-        return jsonify({
-            'error': 'Permessi insufficienti',
-            'utente': user.get('username'),
-            'ruolo': user.get('ruolo'),
-        }), 403
+        if request.path.startswith('/api/'):
+            return jsonify({
+                'error': 'Permessi insufficienti',
+                'utente': user.get('username'),
+                'ruolo': user.get('ruolo'),
+            }), 403
+        # Pagina HTML user-friendly per non-admin
+        slug, cfg = _backend_up_per_validazione()
+        back_url = f"https://{cfg['sottodominio']}/" if (cfg and cfg.get('sottodominio')) else '/'
+        html = _FORBIDDEN_HTML.format(
+            username=(user.get('username') or '').replace('<', '&lt;'),
+            ruolo=(user.get('ruolo') or 'user').replace('<', '&lt;'),
+            back_url=back_url,
+        )
+        return Response(html, status=403, mimetype='text/html')
     return None
 
 

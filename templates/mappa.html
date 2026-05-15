@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2">
+    <title>Mappa Contatori - {{ provincia }}</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/tour.css">
+    <link rel="stylesheet" href="/static/mappa.css?v={{ timestamp }}">
+    <style>
+        /* CSS dinamico (sidebar gestionale + UI verifica indirizzi) */
+        {{ css_gestionale|safe }}
+        {{ css_verifica_indirizzi|safe }}
+    </style>
+</head>
+<body data-theme="dark">
+    <script>
+        // Applica tema salvato immediatamente
+        var st = localStorage.getItem('algeco_theme');
+        if (st) document.body.setAttribute('data-theme', st);
+    </script>
+    <div class="page-loading-overlay" id="pageLoadingOverlay">
+        <div class="page-loading-spinner"></div>
+        <div class="page-loading-text">Caricamento mappa...</div>
+        <div class="page-loading-sub">{{ provincia }}</div>
+    </div>
+    <div class="container">
+        <div class="sidebar" id="sidebar">
+            <div class="header">
+                <div class="header-top">
+                    <div>
+                        <h1>🗺️ Mappa Contatori</h1>
+                        <p>{{ provincia }} - <span id="updateTime">{{ timestamp[6:8] }}/{{ timestamp[4:6] }}/{{ timestamp[0:4] }} {{ timestamp[8:10] }}:{{ timestamp[10:12] }}</span></p>
+                    </div>
+                </div>
+                <div class="toggles">
+                    <button class="toggle-btn active" id="viewToggle" onclick="toggleView()">🗺️ Zone</button>
+                    <button class="toggle-btn" id="themeToggle" onclick="toggleTheme()">🌙 Tema</button>
+                    <button class="toggle-btn" id="searchModeToggle" onclick="toggleAdvancedSearchModal()">🔍 Ricerca Utente</button>
+                    <button class="toggle-btn" id="addressSearchToggle" onclick="toggleAddressSearchModal()">📍 Cerca Indirizzo</button>
+                    <button class="toggle-btn" id="refreshBtn" onclick="refreshDati()" title="Aggiorna dati">🔄</button>
+                    <button class="toggle-btn" onclick="AlgecoTour.start(true)" title="Guida interattiva">❓ Guida</button>
+                    <button class="btn-planning-mode" id="btnPlanningMode" onclick="enterPlanningMode()" title="Modalità Pianificazione">📋 Pianifica</button>
+                </div>
+            </div>
+            
+            <!-- Planning Mode Header -->
+            <div class="planning-header" id="planningHeader">
+                <h2>📋 Pianificazione</h2>
+                <span id="planningBadge" style="font-size: 0.72rem; color: var(--text-muted);">0 schedulabili</span>
+                <button class="btn-icon" onclick="AlgecoTour.start(true)" title="Guida pianificazione" style="margin-left: auto; font-size: 12px; padding: 2px 6px; background: none; border: 1px solid var(--border-color, #334155); border-radius: 5px; color: var(--text-muted); cursor: pointer;">❓</button>
+                <button class="btn-exit-planning" onclick="exitPlanningMode()">✕ Esci</button>
+            </div>
+            
+            <!-- Planning Filters -->
+            <div class="planning-filters" id="planningFilters">
+                <!-- Toggle schedulabili/pianificati -->
+                <div class="planning-filter-section">
+                    <div class="planning-filter-chips" style="gap: 10px; justify-content: center; padding: 4px 0;">
+                        <label class="planning-toggle-label" style="display:flex;align-items:center;gap:4px;cursor:pointer;user-select:none;">
+                            <input type="checkbox" id="planShowSchedulabili" checked onchange="applyPlanningFilters()">
+                            <span>📋 Schedulabili</span>
+                        </label>
+                        <label class="planning-toggle-label" style="display:flex;align-items:center;gap:4px;cursor:pointer;user-select:none;">
+                            <input type="checkbox" id="planShowPianificati" checked onchange="onPlanTogglePianificati()">
+                            <span>📅 Pianificati</span>
+                        </label>
+                    </div>
+                </div>
+                <!-- Sezione filtri comuni -->
+                <div class="planning-filter-section">
+                    <div class="planning-filter-grid">
+                        <label>👤 Nome</label>
+                        <input type="text" id="planFilterNome" placeholder="Cerca nominativo..." autocomplete="off" oninput="applyPlanningFilters()">
+                        <label>🗺️ Zona</label>
+                        <select id="planFilterZona" onchange="onPlanZonaChange()"><option value="">Tutte le zone</option></select>
+                        <label>🏘️ Comune</label>
+                        <select id="planFilterComune" onchange="applyPlanningFilters()"><option value="">Tutti i comuni</option></select>
+                        <label>📞 Telefono</label>
+                        <div class="planning-filter-chips">
+                            <span class="planning-filter-chip active" data-plan-tel="tutti" onclick="setPlanFilterTel('tutti')">Tutti</span>
+                            <span class="planning-filter-chip" data-plan-tel="con" onclick="setPlanFilterTel('con')">Con ☎️</span>
+                            <span class="planning-filter-chip" data-plan-tel="senza" onclick="setPlanFilterTel('senza')">Senza</span>
+                        </div>
+                        <label>⚡ Tipologia</label>
+                        <select id="planFilterTipologia" onchange="applyPlanningFilters()"><option value="">Tutte le tipologie</option></select>
+                        <label>📍 Posizione</label>
+                        <select id="planFilterPosizione" onchange="applyPlanningFilters()"><option value="">Tutte le posizioni</option></select>
+                        <label>🏷️ LCL</label>
+                        <select id="planFilterLCL" onchange="onPlanLCLChange()"><option value="">Tutti LCL</option></select>
+                    </div>
+                </div>
+                <!-- Sezione filtri pianificati -->
+                <div class="planning-filter-section" id="planFiltersPianificatiSection">
+                    <div class="planning-filter-section-title pian">📅 Filtri pianificati</div>
+                    <div class="planning-filter-grid">
+                        <label>📅 Data</label>
+                        <select id="planFilterData" onchange="applyPlanningFilters()"><option value="">Tutte le date</option></select>
+                        <label>👷 Operatore</label>
+                        <select id="planFilterOperatore" onchange="applyPlanningFilters()"><option value="">Tutti gli operatori</option></select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="planning-stats" id="planningStatsRow">
+                <span id="planningFilteredCount">Filtrati: <strong>0</strong></span>
+                <span id="planningSelectedCount">Selezionati: <strong>0</strong></span>
+            </div>
+            
+            <!-- Selection Toolbar -->
+            <div class="planning-selection-bar" id="planningSelBar">
+                <div class="planning-sel-tools">
+                    <button id="btnSelSingle" onclick="startSelectionMode('single')" title="Selezione singola (clicca marker)">👆</button>
+                    <button id="btnSelRect" onclick="startSelectionMode('rect')" title="Selezione rettangolo">▭</button>
+                    <button id="btnSelLasso" onclick="startSelectionMode('lasso')" title="Selezione libera">✂</button>
+                    <button id="btnSelAll" onclick="selectAllVisible()" title="Seleziona tutti">☑</button>
+                    <button id="btnSelNone" onclick="deselectAll()" title="Deseleziona tutti">☐</button>
+                </div>
+                <span class="planning-sel-count" id="planSelCount"><strong>0</strong> sel.</span>
+                <button class="btn-assign-bulk" id="btnAssignBulk" onclick="openBulkAssignModal()" disabled>📅 Assegna</button>
+            </div>
+
+            <div class="breadcrumb" id="breadcrumb">
+                <button class="btn-back" onclick="tornaAlleZone()" title="Torna alle zone">←</button>
+                <span class="breadcrumb-text" id="breadcrumbText"></span>
+                <div class="date-navigation" id="dateNavigation">
+                    <button class="btn-date-nav" id="btnPrevDate" onclick="navigateDate(-1)" title="Data precedente">◀</button>
+                    <button class="btn-date-current" id="btnCurrentDate" onclick="openDatePicker()" title="Seleziona data"><span id="currentDateText"></span></button>
+                    <button class="btn-date-nav" id="btnNextDate" onclick="navigateDate(1)" title="Data successiva">▶</button>
+                </div>
+            </div>
+            
+            <div class="filters">
+                <div class="search-row">
+                    <div class="search-box">
+                        <input type="text" id="searchInput" placeholder="🔍 Cerca..." autocomplete="off">
+                        <button class="search-clear" id="searchClear" onclick="clearSearch()">✕</button>
+                    </div>
+                    <div class="lcl-filter">
+                        <select id="lclFilter" onchange="applicaFiltri()">
+                            <option value="">🏷️ Tutti LCL</option>
+                            {{ lcl_options_html|safe }}
+                        </select>
+                    </div>
+                </div>
+                <div class="detail-filters" id="detailFilters" style="display: none;">
+                    <div class="detail-operatore-container">
+                        <div class="detail-operatore-trigger" id="detailOperatoreTrigger" onclick="toggleDetailOperatoreDropdown()">👥 Tutti gli operatori</div>
+                        <div class="detail-operatore-dropdown" id="detailOperatoreDropdown"></div>
+                    </div>
+                </div>
+                <div class="search-row" id="dataFilterRow" style="margin-top: 10px;">
+                    <div class="search-box">
+                        <select id="dataFilter" onchange="onDataFilterChange()">
+                            <option value="">📅 Tutte le date</option>
+                        </select>
+                    </div>
+                    <div class="operatore-filter-container" id="operatoreFilterContainer">
+                        <div class="operatore-multi-trigger" id="operatoreMultiTrigger" onclick="toggleOperatoreDropdown()">👥 Tutti gli operatori</div>
+                        <div class="operatore-multi-dropdown" id="operatoreMultiDropdown"></div>
+                    </div>
+                </div>
+                <!-- schedulabili panel rimosso: si accede dalla pianificazione -->
+
+                <!-- Advanced Search Panel -->
+                <div class="advanced-search-panel" id="advancedSearchPanel">
+                    <div class="advanced-search-grid">
+                        <div class="advanced-search-field">
+                            <label>👤 Nominativo</label>
+                            <input type="text" id="searchNominativo" placeholder="Es: Mario Rossi" autocomplete="off">
+                        </div>
+                        <div class="advanced-search-field">
+                            <label>⚡ POD</label>
+                            <input type="text" id="searchPod" placeholder="Es: IT001E..." autocomplete="off">
+                        </div>
+                        <div class="advanced-search-field">
+                            <label>🔢 Eneltel</label>
+                            <input type="text" id="searchEneltel" placeholder="Es: 12345678" autocomplete="off">
+                        </div>
+                        <div class="advanced-search-field">
+                            <label>🏘️ Comune</label>
+                            <input type="text" id="searchComune" placeholder="Es: Torino" autocomplete="off">
+                        </div>
+                        <div class="advanced-search-field">
+                            <label>📍 Via</label>
+                            <input type="text" id="searchVia" placeholder="Es: Via Roma" autocomplete="off">
+                        </div>
+                        <div class="advanced-search-field">
+                            <label>📱 Telefono</label>
+                            <input type="text" id="searchTelefono" placeholder="Es: 3331234567" autocomplete="off">
+                        </div>
+                    </div>
+                    <div class="advanced-search-actions">
+                        <button class="btn-clear-advanced" onclick="clearAdvancedSearch()">🗑️ Pulisci</button>
+                        <button class="btn-apply-advanced" onclick="applicaRicercaAvanzata()">🔍 Cerca</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="results" id="results"></div>
+            
+            <div class="stats-bar" id="statsBar">
+                <div class="stat-item">
+                    <div class="stat-value" id="statZone">0</div>
+                    <div class="stat-label">Zone</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="statContatori">0</div>
+                    <div class="stat-label">Contatori</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="statAppuntamenti">0</div>
+                    <div class="stat-label">Appuntamenti</div>
+                </div>
+            </div>
+        </div>
+        
+        <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()">◀</button>
+        <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="toggleSidebar()"></div>
+
+        <div id="map"></div>
+
+        <!-- Zoom Slider -->
+        <div class="zoom-slider-container" id="zoomSliderContainer">
+            <span class="zoom-label" id="zoomOut" title="Zoom out">−</span>
+            <input type="range" id="zoomSlider" min="5" max="19" step="0.25" value="10">
+            <span class="zoom-label" id="zoomIn" title="Zoom in">+</span>
+            <span class="zoom-value" id="zoomValue">10.0x</span>
+        </div>
+    </div>
+
+    <!-- Bulk Assign Modal (Planning Mode) -->
+    <div class="bulk-assign-overlay" id="bulkAssignOverlay" onclick="if(event.target===this) closeBulkAssignModal()">
+        <div class="bulk-assign-modal">
+            <h3>📅 Assegna Data e Operatore</h3>
+            <p style="font-size: 0.82rem; color: var(--text-muted); margin: 0 0 16px 0;" id="bulkAssignCount">0 contatori selezionati</p>
+            <div class="bulk-assign-field">
+                <label>📅 Data Pianificata</label>
+                <input type="date" id="bulkAssignData">
+            </div>
+            <div class="bulk-assign-field">
+                <label>👷 Operatore</label>
+                <select id="bulkAssignOperatore">
+                    <option value="">— Nessuno (non modificare) —</option>
+                </select>
+            </div>
+            <div class="bulk-assign-actions">
+                <button class="btn-cancel" onclick="closeBulkAssignModal()">Annulla</button>
+                <button class="btn-confirm" id="btnBulkConfirm" onclick="executeBulkAssign()">✅ Assegna</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="update-indicator" id="updateIndicator">🔄 Aggiornamento...</div>
+    <div class="mappa-toast" id="mappaToast"></div>
+
+    <!-- Print Button -->
+    <button class="print-button" id="printButton" onclick="openPrintPreview()">
+        🖨️ Stampa Mappa
+    </button>
+
+    <!-- Print Tappe Button -->
+    <button class="print-tappe-button hidden" id="printTappeButton" onclick="stampaTappe()">
+        📋 Stampa Tappe
+    </button>
+
+    <!-- Gestionale Button -->
+    <button class="gestionale-fab" id="gestionaleFab" onclick="toggleGestionalePanel()" title="Strumenti Gestionale">
+        ⚙️
+    </button>
+
+    <!-- Gestionale Panel -->
+    <div class="gestionale-panel" id="gestionalePanel">
+        <div class="gestionale-panel-header">
+            <div class="gestionale-panel-title">⚙️ Gestionale</div>
+            <button class="gestionale-panel-close" onclick="toggleGestionalePanel()">✕</button>
+        </div>
+        <div class="gestionale-panel-body">
+            <button class="gestionale-panel-btn gp-btn-lettere" onclick="toggleGestionalePanel(); toggleOrariLettereModal()">
+                <span class="gp-btn-icon">✉️</span>
+                <span class="gp-btn-text">Orari Lettere</span>
+                <span class="gp-btn-desc">Genera fasce orarie e scrivi nel FILONE</span>
+            </button>
+            <button class="gestionale-panel-btn gp-btn-BOXBEAT" onclick="toggleGestionalePanel(); apriModalBOXBEAT()">
+                <span class="gp-btn-icon">📦</span>
+                <span class="gp-btn-text">Carica Installato</span>
+                <span class="gp-btn-desc">Importa file BOXBEAT con esiti</span>
+            </button>
+            <button class="gestionale-panel-btn gp-btn-sigilli" onclick="toggleGestionalePanel(); apriVistaSigilli()">
+                <span class="gp-btn-icon">🔐</span>
+                <span class="gp-btn-text">Sigilli / Matricole</span>
+                <span class="gp-btn-desc">Inserisci sigilli e matricole installate</span>
+            </button>
+            <button class="gestionale-panel-btn gp-btn-sigilli" onclick="toggleGestionalePanel(); apriModalVerificaIndirizzi()">
+                <span class="gp-btn-icon">🔍</span>
+                <span class="gp-btn-text">Verifica Indirizzi</span>
+                <span class="gp-btn-desc">Confronta vie e civici con l'anagrafe nazionale</span>
+            </button>
+            <a href="/distinte" target="_blank" class="gestionale-panel-btn gp-btn-distinte" style="text-decoration:none;">
+                <span class="gp-btn-icon">📋</span>
+                <span class="gp-btn-text">Gestione PDF E-Distribuzione</span>
+                <span class="gp-btn-desc">Distinte e Moduli Maxy</span>
+            </a>
+            <a href="/calendario" target="_blank" class="gestionale-panel-btn gp-btn-distinte" style="text-decoration:none;">
+                <span class="gp-btn-icon">📅</span>
+                <span class="gp-btn-text">Calendario Attività</span>
+                <span class="gp-btn-desc">Gestisci attività condivise tra utenti</span>
+            </a>
+            <a href="/filone" target="_blank" class="gestionale-panel-btn gp-btn-distinte" style="text-decoration:none;">
+                <span class="gp-btn-icon">📊</span>
+                <span class="gp-btn-text">Vista Excel Filone</span>
+                <span class="gp-btn-desc">Modifica il filone come un foglio di calcolo</span>
+            </a>
+            <a href="/dashboard" target="_blank" class="gestionale-panel-btn gp-btn-distinte" style="text-decoration:none;">
+                <span class="gp-btn-icon">📈</span>
+                <span class="gp-btn-text">Dashboard</span>
+                <span class="gp-btn-desc">Statistiche, report operatori e riepilogo operativo</span>
+            </a>
+            <button class="gestionale-panel-btn gp-btn-backup" onclick="toggleGestionalePanel(); apriModalBackup()">
+                <span class="gp-btn-icon">💾</span>
+                <span class="gp-btn-text">Backup / Ripristino</span>
+                <span class="gp-btn-desc">Backup giornaliero e ripristino FILONE</span>
+            </button>
+            <button class="gestionale-panel-btn gp-btn-lettere" onclick="toggleGestionalePanel(); apriImpostazioni()">
+                <span class="gp-btn-icon">🔧</span>
+                <span class="gp-btn-text">Impostazioni</span>
+                <span class="gp-btn-desc">Configura operatori, deposito, percorsi e date</span>
+            </button>
+            <button class="gestionale-panel-btn gp-btn-logout" onclick="effettuaLogout()" style="border-top: 1px solid var(--border); margin-top: 2px; padding-top: 8px;">
+                <span class="gp-btn-icon">🚪</span>
+                <span class="gp-btn-text">Disconnetti</span>
+                <span class="gp-btn-desc">Esci dall'account corrente</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Print Preview Modal -->
+    <div class="print-preview-modal" id="printPreviewModal" onclick="if(event.target === this) closePrintPreview()">
+        <div class="print-preview-content">
+            <div class="print-preview-header">
+                <div class="print-preview-title">🖨️ Anteprima Stampa - <span id="printPreviewInfo"></span></div>
+                <div class="print-preview-actions">
+                    <select id="printTecnicoFilter" onchange="onPrintTecnicoChange()" style="padding: 10px 16px; border: 2px solid #e9ecef; border-radius: 8px; font-size: 14px; font-weight: 500; background: white; cursor: pointer; min-width: 180px;">
+                        <option value="">👥 Tutti i tecnici</option>
+                    </select>
+                    <button class="btn-print-cancel" onclick="closePrintPreview()">✕ Chiudi</button>
+                    <button class="btn-print-confirm" onclick="executePrint()">🖨️ Stampa</button>
+                </div>
+            </div>
+            <div class="print-preview-map">
+                <div id="printMap"></div>
+                <svg id="printLabelLines" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 999;"></svg>
+                <!-- Print Zoom Slider -->
+                <div class="zoom-slider-container print-zoom-slider" id="printZoomSliderContainer">
+                    <span class="zoom-label" id="printZoomOut" title="Zoom out">−</span>
+                    <input type="range" id="printZoomSlider" min="5" max="19" step="0.25" value="14">
+                    <span class="zoom-label" id="printZoomIn" title="Zoom in">+</span>
+                    <span class="zoom-value" id="printZoomValue">14.0x</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Date Picker Modal -->
+    <div class="date-picker-modal" id="datePickerModal" onclick="if(event.target === this) closeDatePicker()">
+        <div class="date-picker-content">
+            <div class="date-picker-header">
+                <div class="date-picker-title">📅 Seleziona Data</div>
+                <button class="date-picker-close" onclick="closeDatePicker()">✕</button>
+            </div>
+            <div class="date-list-picker" id="dateListPicker"></div>
+        </div>
+    </div>
+
+    <!-- Orari Lettere Modal -->
+    <div class="orari-lettere-modal" id="orariLettereModal" onclick="if(event.target === this) toggleOrariLettereModal()">
+        <div class="orari-lettere-content">
+            <div class="orari-lettere-header">
+                <div class="orari-lettere-title">✉️ Genera Orari Lettere</div>
+                <button class="orari-lettere-close" onclick="toggleOrariLettereModal()">✕</button>
+            </div>
+            <div class="orari-lettere-form">
+                <div>
+                    <label>📅 Data inizio</label>
+                    <input type="date" id="orariLettereDa">
+                </div>
+                <div>
+                    <label>📅 Data fine</label>
+                    <input type="date" id="orariLettereA">
+                </div>
+                <div>
+                    <label>🔢 Tappe per fascia</label>
+                    <div style="margin-top:6px;">
+                        <label style="display:inline-flex;align-items:center;cursor:pointer;margin-right:16px;font-weight:normal;">
+                            <input type="radio" name="tappeFasciaMode" value="auto" checked onchange="document.getElementById('orariLettereTappeFascia').disabled=true;" style="margin-right:4px;"> 🧠 Auto (distribuisci uniformemente)
+                        </label>
+                        <label style="display:inline-flex;align-items:center;cursor:pointer;font-weight:normal;">
+                            <input type="radio" name="tappeFasciaMode" value="manuale" onchange="document.getElementById('orariLettereTappeFascia').disabled=false;" style="margin-right:4px;"> ✍️ Manuale:
+                            <input type="number" id="orariLettereTappeFascia" min="1" max="20" value="4" disabled style="width:60px;margin-left:6px;">
+                        </label>
+                    </div>
+                    <small style="display:block;color:#666;margin-top:4px;"><b>Auto</b>: per ogni tecnico/giorno distribuisce i contatori su tutte le 6 fasce in modo uniforme (minimo 4).<br><b>Manuale</b>: usa un numero fisso di contatori per fascia (uguale per tutti).</small>
+                </div>
+                <div class="orari-lettere-info">
+                    ℹ️ Calcola le fasce orarie in base al percorso ottimizzato e le scrive nel FILONE.<br>
+                    <strong>Non sovrascrive</strong> celle già compilate.
+                </div>
+                <button class="orari-lettere-btn" id="orariLettereGenera" onclick="generaOrariLettere()">
+                    🚀 Genera e scrivi nel FILONE
+                </button>
+                <div class="orari-lettere-result" id="orariLettereResult"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Advanced Search Modal -->
+    <div class="pin-modal" id="advancedSearchModal" onclick="if(event.target === this) toggleAdvancedSearchModal()">
+        <div class="pin-modal-content">
+            <div class="pin-modal-header">
+                <div class="pin-modal-title">🔍 Ricerca Utente</div>
+                <button class="pin-modal-close" onclick="toggleAdvancedSearchModal()">✕</button>
+            </div>
+
+            <div class="advanced-search-grid">
+                <div class="advanced-search-field">
+                    <label>👤 Nominativo</label>
+                    <input type="text" id="modalSearchNominativo" placeholder="Es: Mario Rossi" autocomplete="off">
+                </div>
+                <div class="advanced-search-field">
+                    <label>⚡ POD</label>
+                    <input type="text" id="modalSearchPod" placeholder="Es: IT001E..." autocomplete="off">
+                </div>
+                <div class="advanced-search-field">
+                    <label>🔢 Eneltel</label>
+                    <input type="text" id="modalSearchEneltel" placeholder="Es: 12345678" autocomplete="off">
+                </div>
+                <div class="advanced-search-field">
+                    <label>🏘️ Comune</label>
+                    <input type="text" id="modalSearchComune" placeholder="Es: Roma" autocomplete="off">
+                </div>
+                <div class="advanced-search-field">
+                    <label>📍 Via</label>
+                    <input type="text" id="modalSearchVia" placeholder="Es: Via Roma" autocomplete="off">
+                </div>
+                <div class="advanced-search-field">
+                    <label>📱 Telefono</label>
+                    <input type="text" id="modalSearchTelefono" placeholder="Es: 3331234567" autocomplete="off">
+                </div>
+            </div>
+
+            <div class="advanced-search-actions">
+                <button class="btn-clear-advanced" onclick="clearModalAdvancedSearch()">🗑️ Pulisci</button>
+                <button class="btn-apply-advanced" onclick="applyModalAdvancedSearch()">🔍 Cerca</button>
+            </div>
+
+            <div class="pin-search-results" id="modalSearchResults"></div>
+        </div>
+    </div>
+
+    <!-- Address Search Modal -->
+    <div class="pin-modal" id="addressSearchModal" onclick="if(event.target === this) toggleAddressSearchModal()">
+        <div class="pin-modal-content">
+            <div class="pin-modal-header">
+                <div class="pin-modal-title">📍 Cerca Indirizzo sulla Mappa</div>
+                <button class="pin-modal-close" onclick="toggleAddressSearchModal()">✕</button>
+            </div>
+
+            <div class="address-search-container">
+                <div class="advanced-search-field" style="width: 100%;">
+                    <label>🏠 Indirizzo completo</label>
+                    <input type="text" id="addressSearchInput" placeholder="Es: Via Roma 15, Torino" autocomplete="off" onkeypress="if(event.key === 'Enter') searchAddress()">
+                </div>
+                <div class="address-search-hint">
+                    Inserisci via, numero civico e comune. Es: "Via Garibaldi 10, Moncalieri"
+                </div>
+            </div>
+
+            <div class="advanced-search-actions">
+                <button class="btn-clear-advanced" onclick="clearAddressSearch()">🗑️ Pulisci</button>
+                <button class="btn-apply-advanced" onclick="searchAddress()">🔍 Cerca</button>
+            </div>
+
+            <div class="address-search-results" id="addressSearchResults"></div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div class="settings-modal" id="settingsModal" onclick="if(event.target === this) chiudiImpostazioni()">
+        <div class="settings-content">
+            <div class="settings-header">
+                <div class="settings-title">🔧 Impostazioni</div>
+                <button class="settings-close" onclick="chiudiImpostazioni()">✕</button>
+            </div>
+            <div class="settings-tabs">
+                <button class="settings-tab active" data-tab="operatori" onclick="switchSettingsTab('operatori')">👥 Operatori</button>
+                <button class="settings-tab" data-tab="deposito" onclick="switchSettingsTab('deposito')">🏢 Deposito</button>
+                <button class="settings-tab" data-tab="percorso" onclick="switchSettingsTab('percorso')">🛣️ Percorso</button>
+                <button class="settings-tab" data-tab="date" onclick="switchSettingsTab('date')">📅 Date</button>
+                <button class="settings-tab" data-tab="colonne" onclick="switchSettingsTab('colonne')">📋 Colonne</button>
+                <button class="settings-tab" data-tab="sync" onclick="switchSettingsTab('sync')">🔄 Sync</button>
+                <button class="settings-tab settings-tab-admin" data-tab="utenti" onclick="switchSettingsTab('utenti')" id="tabUtentiBtn" style="display:none">🔑 Utenti</button>
+            </div>
+            <div class="settings-body">
+                <div class="settings-loading-overlay" id="settingsLoadingOverlay">
+                    <div class="settings-spinner"></div>
+                    <div class="settings-loading-text">Caricamento impostazioni...</div>
+                </div>
+                <div id="settingsStatus" class="settings-status"></div>
+
+                <!-- Tab: Operatori -->
+                <div class="settings-section active" id="settingsTab_operatori">
+                    <h3>Gestione Operatori</h3>
+                    <table class="settings-operators-table" id="settingsOperatorsTable">
+                        <thead>
+                            <tr>
+                                <th>Matricola</th>
+                                <th>Nome Display</th>
+                                <th>Colore</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="settingsOperatorsBody"></tbody>
+                    </table>
+                    <button class="settings-btn-add" onclick="aggiungiOperatore()">
+                        ➕ Aggiungi operatore
+                    </button>
+                </div>
+
+                <!-- Tab: Deposito -->
+                <div class="settings-section" id="settingsTab_deposito">
+                    <h3>Coordinate Deposito</h3>
+                    <div class="settings-field">
+                        <label>Nome deposito</label>
+                        <input type="text" id="settings_deposito_nome">
+                    </div>
+                    <div class="settings-field-row">
+                        <div class="settings-field">
+                            <label>Latitudine</label>
+                            <input type="number" step="0.0000001" id="settings_deposito_lat">
+                        </div>
+                        <div class="settings-field">
+                            <label>Longitudine</label>
+                            <input type="number" step="0.0000001" id="settings_deposito_lon">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab: Percorso -->
+                <div class="settings-section" id="settingsTab_percorso">
+                    <h3>Parametri Calcolo Percorso</h3>
+                    <div class="settings-field-row">
+                        <div class="settings-field">
+                            <label>Velocità media (km/h)</label>
+                            <input type="number" min="1" max="130" id="settings_velocita">
+                        </div>
+                        <div class="settings-field">
+                            <label>Tempo intervento (min)</label>
+                            <input type="number" min="1" max="120" id="settings_tempo_intervento">
+                        </div>
+                    </div>
+                    <div class="settings-field-row">
+                        <div class="settings-field">
+                            <label>Ora inizio giornata</label>
+                            <input type="text" placeholder="es. 8:00 o 9:00" id="settings_ora_inizio">
+                        </div>
+                        <div class="settings-field">
+                            <label>Ora fine giornata</label>
+                            <input type="text" placeholder="es. 17:00 o 18:00" id="settings_ora_fine">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab: Date -->
+                <div class="settings-section" id="settingsTab_date">
+                    <h3>Intervallo Date Filone</h3>
+                    <div class="settings-field-row">
+                        <div class="settings-field">
+                            <label>Data inizio</label>
+                            <input type="date" id="settings_data_inizio">
+                        </div>
+                        <div class="settings-field">
+                            <label>Data fine</label>
+                            <input type="date" id="settings_data_fine">
+                            <label style="display:inline-flex;align-items:center;gap:6px;margin-top:6px;cursor:pointer;font-size:13px;font-weight:normal;">
+                                <input type="checkbox" id="settings_data_fine_illimitata" onchange="toggleDataFineIllimitata(this.checked)">
+                                ♾️ Illimitata (fino all'ultima data disponibile)
+                            </label>
+                        </div>
+                    </div>
+                    <p style="font-size: 12px; color: var(--text-secondary); margin-top: 8px;">
+                        Verranno caricati solo i contatori con data programmata in questo intervallo.
+                    </p>
+                </div>
+
+                <!-- Tab: Colonne -->
+                <div class="settings-section" id="settingsTab_colonne">
+                    <h3>Mappatura Colonne Filone</h3>
+                    <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px;">
+                        
+                    </p>Associa le colonne del foglio Google ai campi utilizzati dal programma.
+                    <div class="settings-colonne-info" id="colonneInfoLegend">
+                        <span>✅ Trovata automaticamente</span>
+                        <span>🔵 Mappata manualmente</span>
+                        <span>⚠️ Non trovata</span>
+                    </div>
+                    <div id="colonneTableContainer">
+                    </div>
+                    <button class="settings-btn-reset-colonne" onclick="resetMappaturaColonne()" id="btnResetColonne" style="display:none;">
+                        🔄 Ripristina mappatura predefinita
+                    </button>
+                </div>
+
+                <!-- Tab: Sync -->
+                <div class="settings-section" id="settingsTab_sync">
+                    <h3>Sincronizzazione Dati</h3>
+                    <div class="settings-field">
+                        <label>Intervallo sincronizzazione (secondi)</label>
+                        <input type="number" min="30" max="3600" id="settings_intervallo_sync">
+                    </div>
+                    <p style="font-size: 12px; color: var(--text-secondary); margin-top: 8px;">
+                        Ogni quanti secondi il server controlla modifiche sul foglio Google. Minimo 30s, consigliato 180s.
+                    </p>
+                </div>
+
+                <!-- Tab: Utenti (solo admin) -->
+                <div class="settings-section" id="settingsTab_utenti">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                        <h3 style="margin:0">Gestione Account</h3>
+                        <button class="settings-btn-add" onclick="mostraFormNuovoUtente()">➕ Nuovo utente</button>
+                    </div>
+
+                    <!-- Form creazione nuovo utente (nascosto di default) -->
+                    <div id="formNuovoUtente" style="display:none; background:var(--bg-secondary); border-radius:10px; padding:14px; margin-bottom:14px; border:1px solid var(--border);">
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                            <div class="settings-field" style="margin-bottom:0">
+                                <label>Username</label>
+                                <input type="text" id="nuovoUtente_username" placeholder="es: mario" autocomplete="off">
+                            </div>
+                            <div class="settings-field" style="margin-bottom:0">
+                                <label>Password (vuoto = auto)</label>
+                                <input type="text" id="nuovoUtente_password" placeholder="min 8 caratteri" autocomplete="new-password">
+                            </div>
+                        </div>
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px;">
+                            <div class="settings-field" style="margin-bottom:0">
+                                <label>Ruolo</label>
+                                <select id="nuovoUtente_ruolo">
+                                    <option value="user">User</option>
+                                    <option value="admin">Admin</option>
+                                </select>
+                            </div>
+                            <div class="settings-field" style="margin-bottom:0">
+                                <label>Province</label>
+                                <div id="nuovoUtente_province" style="display:flex; gap:10px; align-items:center; height:36px;"></div>
+                            </div>
+                        </div>
+                        <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:12px;">
+                            <button class="settings-btn-cancel" style="padding:6px 14px; font-size:13px;" onclick="nascondiFormNuovoUtente()">Annulla</button>
+                            <button class="settings-btn-save" style="padding:6px 14px; font-size:13px;" onclick="creaNuovoUtente()">✅ Crea</button>
+                        </div>
+                    </div>
+
+                    <!-- Password generata -->
+                    <div id="passwordGenerataBox" style="display:none; background:var(--bg-secondary); border-radius:10px; padding:14px; margin-bottom:14px; border:2px solid #f39c12;">
+                        <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                            <span style="font-size:18px;">🔐</span>
+                            <strong>Password generata per <span id="passwordGenerataUser"></span></strong>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <code id="passwordGenerataValue" style="font-size:16px; background:var(--bg-primary); padding:6px 12px; border-radius:6px; letter-spacing:1px; flex:1; user-select:all;"></code>
+                            <button onclick="copiaPasswordGenerata()" style="padding:6px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg-secondary); cursor:pointer; font-size:14px;" title="Copia">📋</button>
+                        </div>
+                        <p style="font-size:11px; color:var(--text-secondary); margin-top:6px;">⚠️ Salva questa password, non sarà più visibile!</p>
+                    </div>
+
+                    <div id="adminUsersStatus" class="settings-status"></div>
+
+                    <!-- Tabella utenti -->
+                    <div id="adminUsersTableContainer">
+                        <div style="text-align:center; padding:20px; color:var(--text-secondary);">Caricamento...</div>
+                    </div>
+                </div>
+            </div>
+            <div class="settings-footer">
+                <button class="settings-btn-cancel" onclick="chiudiImpostazioni()">Annulla</button>
+                <button class="settings-btn-save" id="settingsBtnSave" onclick="salvaImpostazioni()">💾 Salva e Sincronizza</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Blob iniezione dati Python (config + EMBEDDED data per fallback file://)
+        window.__MAPPA_INIT__ = {
+            provincia: "{{ provincia_lower }}",
+            refresh_interval: {{ refresh_interval }},
+            data_fine: "{{ data_fine }}",
+            embedded_data: {
+                zone: {{ zone_json|safe }},
+                contatori: {{ contatori_json|safe }},
+                rotte: {{ rotte_json|safe }},
+                lcl_list: {{ lcl_json|safe }},
+                timestamp: "{{ timestamp }}"
+            },
+            embedded_config: {
+                deposito: {{ deposito_json|safe }},
+                coloriTecnici: {{ colori_tecnici_json|safe }},
+                matricoleVip: {{ matricole_vip_json|safe }},
+                operatoriDict: {{ operatori_dict_json|safe }},
+                oraInizioGiornata: {{ ora_inizio_giornata }},
+                oraFineGiornata: {{ ora_fine_giornata }},
+                provincia: "{{ provincia }}"
+            }
+        };
+    </script>
+    <script src="/static/mappa.js?v={{ timestamp }}"></script>
+    <script>
+        // JS dinamico (sidebar gestionale + UI verifica indirizzi)
+        {{ js_gestionale|safe }}
+        {{ js_verifica_indirizzi|safe }}
+    </script>
+    
+    <!-- Modali Gestionale -->
+    {{ html_gestionale|safe }}
+    {{ html_verifica_indirizzi|safe }}
+<script src="/static/bacheca.js?v=2"></script>
+<script src="/static/tour.js"></script>
+<script>
+(function() {
+    // Identifica utente per chiave localStorage
+    fetch('/api/user').then(r => r.json()).then(d => {
+        if (d.authenticated && d.user) {
+            var tag = document.createElement('div');
+            tag.style.display = 'none';
+            tag.setAttribute('data-tour-user', d.user.username);
+            document.body.appendChild(tag);
+        }
+        initMappaTour();
+    }).catch(() => initMappaTour());
+
+    function initMappaTour() {
+        AlgecoTour.init({
+            page: 'mappa',
+            delay: 2000,
+            steps: [
+                {
+                    target: '#sidebar',
+                    title: 'Barra laterale',
+                    icon: '📋',
+                    body: 'Qui trovi l&#39;elenco delle <b>zone</b> (o comuni) con i contatori raggruppati. Ogni scheda mostra le date pianificate con il numero di contatori. <b>Clicca su una data</b> per entrare nel dettaglio e vedere i punti dei tecnici sulla mappa.',
+                    position: 'right'
+                },
+                {
+                    target: '#viewToggle',
+                    title: 'Vista Zone / Comuni',
+                    icon: '🗺️',
+                    body: 'Alterna tra la <b>vista per zone geografiche</b> e la <b>vista per comuni</b>. In entrambe le viste puoi cliccare su una data per vedere il percorso dei tecnici.',
+                    position: 'bottom'
+                },
+                {
+                    target: '#searchInput',
+                    title: 'Ricerca zone',
+                    icon: '🔍',
+                    body: 'Filtra le <b>zone o i comuni</b> per nome nella lista laterale. Attenzione: questa barra cerca solo tra le zone/comuni, <b>non tra i singoli contatori</b>. Per cercare un utente specifico (per nome, POD, Eneltel ecc.) usa il pulsante <i>Ricerca Utente</i>.',
+                    position: 'bottom'
+                },
+                {
+                    target: '#searchModeToggle',
+                    title: 'Pulsante Ricerca Utente',
+                    icon: '👤',
+                    body: 'Questo pulsante apre la <b>ricerca globale</b> tra tutti i contatori. A differenza della barra di ricerca qui sopra (che filtra solo zone/comuni), questo cerca per <b>singolo utente</b>.',
+                    position: 'bottom'
+                },
+                {
+                    target: '#advancedSearchModal .pin-modal-content',
+                    title: 'Ricerca Utente (globale)',
+                    icon: '🔍',
+                    body: 'Ecco il pannello: puoi cercare per <b>nominativo, POD, Eneltel, comune, via o telefono</b>. I risultati mostrano fino a 10 contatori; cliccandone uno, la mappa si centra su di esso e ne apre il dettaglio.',
+                    position: 'right',
+                    onEnter: function(api) {
+                        var m = document.getElementById('advancedSearchModal');
+                        if (m) { m.classList.add('visible'); api.elevate(m); }
+                    },
+                    onLeave: function() {
+                        var m = document.getElementById('advancedSearchModal');
+                        if (m) m.classList.remove('visible');
+                    }
+                },
+                {
+                    target: '#addressSearchToggle',
+                    title: 'Pulsante Cerca Indirizzo',
+                    icon: '📍',
+                    body: 'Questo pulsante apre la ricerca per <b>indirizzo</b>. Utile quando un contatore non ha coordinate GPS.',
+                    position: 'bottom'
+                },
+                {
+                    target: '#addressSearchModal .pin-modal-content',
+                    title: 'Cerca Indirizzo',
+                    icon: '📍',
+                    body: 'Inserisci un indirizzo completo (es. &quot;Via Roma 15, Torino&quot;) e la mappa si centra su quel punto, piazzando un <b>segnaposto temporaneo</b>.',
+                    position: 'right',
+                    onEnter: function(api) {
+                        var m = document.getElementById('addressSearchModal');
+                        if (m) { m.classList.add('visible'); api.elevate(m); }
+                    },
+                    onLeave: function() {
+                        var m = document.getElementById('addressSearchModal');
+                        if (m) m.classList.remove('visible');
+                    }
+                },
+                {
+                    target: '#themeToggle',
+                    title: 'Tema chiaro / scuro',
+                    icon: '🌙',
+                    body: 'Cambia tra il <b>tema scuro</b> (predefinito) e il <b>tema chiaro</b>. La preferenza viene salvata e mantenuta su tutte le pagine.',
+                    position: 'bottom'
+                },
+                {
+                    target: '#lclFilter',
+                    title: 'Filtro sotto-lotto',
+                    icon: '🏷️',
+                    body: 'Filtra i contatori per <b>sotto-lotto (LCL)</b>. Utile per concentrarsi su un&#39;area specifica del filone.',
+                    position: 'bottom'
+                },
+                {
+                    target: '#dataFilterRow',
+                    title: 'Filtro data e operatori',
+                    icon: '📅',
+                    body: 'Seleziona una <b>data specifica</b> dal menu per vedere solo i contatori pianificati quel giorno. Una volta scelta la data, puoi filtrare per <b>uno o pi\u00f9 operatori</b> per visualizzare i loro percorsi sulla mappa.<br><br>\U0001f4a1 <b>Ordinamento percorso</b>: i contatori vengono ordinati automaticamente per ottimizzare il tragitto, minimizzando le distanze tra una tappa e l&#39;altra.',
+                    position: 'bottom',
+                    enterDelay: 600,
+                    onEnter: function() {
+                        var sel = document.getElementById('dataFilter');
+                        if (sel && sel.options.length > 1) {
+                            sel.value = sel.options[1].value;
+                            if (typeof onDataFilterChange === 'function') onDataFilterChange();
+                        }
+                    }
+                },
+                {
+                    target: '#map',
+                    title: 'Mappa interattiva',
+                    icon: '🗺️',
+                    body: 'I marker sono <b>colorati in base al tecnico</b> assegnato (ogni operatore ha un colore diverso, non indicano lo stato del contatore).<br><br>\U0001f449 <b>Clicca su un marker</b> per aprire il popup con tutti i dettagli: nome, indirizzo, POD, Eneltel, telefono, orari lettera, note e tempi di percorrenza dal punto precedente.',
+                    position: 'left',
+                    enterDelay: 800,
+                    onEnter: function(api) {
+                        if (typeof markers !== 'undefined' && markers.length > 0) {
+                            var m = markers.find(function(mk) { return mk.getPopup && mk.getPopup(); });
+                            if (m) {
+                                window._tourMarker = m;
+                                map.setView(m.getLatLng(), 15, { animate: true });
+                                setTimeout(function() {
+                                    m.openPopup();
+                                    setTimeout(function() { api.elevate('.leaflet-popup'); }, 100);
+                                }, 400);
+                            }
+                        }
+                    },
+                    onLeave: function() {
+                        if (typeof map !== 'undefined') map.closePopup();
+                    }
+                },
+                {
+                    target: '#fullscreenEditModal .fullscreen-edit-container',
+                    title: 'Modifica contatore',
+                    icon: '✏️',
+                    body: 'Ecco la <b>scheda di modifica</b>: qui puoi cambiare stato, note posizione, note appuntamento, telefono e altri campi del contatore. Le modifiche vengono salvate premendo il pulsante in basso.<br><br>Per aprirla, clicca <b>✏️ Modifica</b> dal popup di un marker.',
+                    position: 'left',
+                    enterDelay: 500,
+                    onEnter: function(api) {
+                        if (window._tourMarker && window._tourMarker.contatore) {
+                            var en = window._tourMarker.contatore.eneltel;
+                            if (typeof apriVistaModifica === 'function') apriVistaModifica(en);
+                            var m = document.getElementById('fullscreenEditModal');
+                            if (m) api.elevate(m);
+                        }
+                    },
+                    onLeave: function() {
+                        if (typeof chiudiVistaModifica === 'function') chiudiVistaModifica();
+                        delete window._tourMarker;
+                        var sel = document.getElementById('dataFilter');
+                        if (sel) { sel.value = ''; if (typeof onDataFilterChange === 'function') onDataFilterChange(); }
+                    }
+                },
+                {
+                    target: '#btnPlanningMode',
+                    title: 'Modalit\u00e0 pianificazione',
+                    icon: '📋',
+                    body: 'Attiva la <b>modalit\u00e0 pianificazione</b> per assegnare date e operatori a pi\u00f9 contatori contemporaneamente. Puoi selezionarli uno ad uno, con il <b>rettangolo</b> o con il <b>lazo</b>, poi assegnarli in blocco.',
+                    position: 'bottom'
+                },
+                {
+                    target: '#statsBar',
+                    title: 'Barra statistiche',
+                    icon: '📊',
+                    body: 'In fondo trovi il conteggio rapido di <b>zone, contatori totali e appuntamenti</b> del giorno.',
+                    position: 'top'
+                },
+                {
+                    target: '#gestionaleFab',
+                    title: 'Pannello strumenti',
+                    icon: '⚙️',
+                    body: 'Da questo pulsante accedi a tutti gli <b>strumenti extra</b>: orari lettere, caricamento installato, sigilli, distinte PDF, calendario, vista filone Excel e dashboard. Puoi anche gestire backup e impostazioni.',
+                    position: 'left'
+                }
+            ]
+        });
+    }
+})();
+
+    function initPlanningTour() {
+        AlgecoTour.init({
+            page: 'pianificazione',
+            delay: 300,
+            steps: [
+                {
+                    target: '#planningHeader',
+                    title: 'Modalit\u00e0 Pianificazione',
+                    icon: '📋',
+                    body: 'Sei entrato nella <b>modalit\u00e0 pianificazione</b>. Da qui puoi selezionare contatori sulla mappa e assegnare loro <b>date e operatori</b> in blocco. Per uscire, premi la <b>X</b> in alto a destra.',
+                    position: 'right'
+                },
+                {
+                    target: '#planningFilters',
+                    title: 'Filtri di pianificazione',
+                    icon: '🔍',
+                    body: 'Usa questi filtri per restringere i contatori visibili: per <b>nome, zona, comune, tipologia, posizione, LCL</b>. Puoi anche scegliere di mostrare solo i <b>schedulabili</b> (non ancora pianificati) o i <b>pianificati</b> (gi\u00e0 con data assegnata).',
+                    position: 'right'
+                },
+                {
+                    target: '#planningStatsRow',
+                    title: 'Contatori filtrati e selezionati',
+                    icon: '📊',
+                    body: 'Qui vedi quanti contatori corrispondono ai filtri attivi e quanti ne hai <b>selezionati</b>. La selezione \u00e8 il primo passo per l&#39;assegnazione.',
+                    position: 'right'
+                },
+                {
+                    target: '#planningSelBar',
+                    title: 'Strumenti di selezione',
+                    icon: '🎯',
+                    body: 'Tre modalit\u00e0 di selezione:<br><b>☝️ Singolo</b> \u2013 clicca un marker alla volta<br><b>▭ Rettangolo</b> \u2013 trascina un&#39;area rettangolare<br><b>〰️ Lazo</b> \u2013 disegna a mano libera un&#39;area<br><br>Puoi anche usare <b>Sel. tutti</b> per selezionare tutti i contatori filtrati, o <b>Deseleziona</b> per azzerare.',
+                    position: 'right'
+                },
+                {
+                    target: '#btnAssignBulk',
+                    title: 'Assegnazione in blocco',
+                    icon: '📅',
+                    body: 'Dopo aver selezionato uno o pi\u00f9 contatori, premi questo pulsante per aprire il pannello di <b>assegnazione</b>: scegli <b>data</b> e <b>operatore</b>, poi conferma. Tutti i contatori selezionati verranno pianificati in un colpo solo.',
+                    position: 'right'
+                },
+                {
+                    target: '#map',
+                    title: 'Mappa di pianificazione',
+                    icon: '🗺️',
+                    body: 'Sulla mappa vedi i contatori come marker: quelli <b>azzurri/ciano</b> sono schedulabili (senza data), quelli <b>colorati</b> sono gi\u00e0 pianificati. Clicca su un marker o usa rettangolo/lazo per selezionarli \u2013 diventano evidenziati quando selezionati.',
+                    position: 'left'
+                }
+            ]
+        });
+    }
+</script>
+</body>
+</html>

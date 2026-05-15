@@ -117,28 +117,46 @@ def main():
         log.error("Colonna Eneltel non trovata")
         sys.exit(2)
 
-    # Snapshot Sheets → {eneltel_key: {chiave_interna: valore_normalizzato}}
+    # Schema v2: PK composta (eneltel_key, lcl). Lo snapshot DEVE usare
+    # (eneltel_key, lcl) come chiave, altrimenti i contatori multi-LCL
+    # (esp. Pavia) generano falsi positivi: due righe diverse stesso eneltel
+    # ma lcl diverso → una sola sopravvive nel dict, confronto sbagliato.
+    lcl_col_idx = None
+    for i, name in enumerate(headers):
+        if name and internal_lookup.get(name.strip().lower()) == 'lcl':
+            lcl_col_idx = i
+            break
+
+    # Snapshot Sheets → {(eneltel_key, lcl): {chiave_interna: valore}}
     sheets_snap = {}
     for row in body:
         if eneltel_col_idx >= len(row):
             continue
         ek = db.normalize_eneltel(row[eneltel_col_idx])
-        if not ek or ek in sheets_snap:
-            continue  # duplicati ignorati nella validazione (loggati altrove)
+        if not ek:
+            continue
+        lcl_val = ''
+        if lcl_col_idx is not None and lcl_col_idx < len(row):
+            lcl_val = str(row[lcl_col_idx] or '').strip()
+        key = (ek, lcl_val)
+        if key in sheets_snap:
+            continue  # duplicato vero (stesso eneltel+lcl): loggato altrove
         record = {}
         for idx, chiave in field_map.items():
             if idx < len(row):
                 record[chiave] = _norm_for_compare(row[idx], chiave)
-        sheets_snap[ek] = record
+        sheets_snap[key] = record
 
-    # Snapshot DB → stesso schema
+    # Snapshot DB → stesso schema (key = (eneltel_key, lcl))
     db_snap = {}
     for r in db.dump_filone():
         ek = r['eneltel_key']
+        lcl_val = str(r.get('lcl') or '')
+        key = (ek, lcl_val)
         record = {}
         for chiave in db.COLONNE_NOTE:
             record[chiave] = _norm_for_compare(r.get(chiave), chiave)
-        db_snap[ek] = record
+        db_snap[key] = record
 
     # Diff
     only_in_sheets = sorted(set(sheets_snap) - set(db_snap))
@@ -146,9 +164,10 @@ def main():
     in_both = set(sheets_snap) & set(db_snap)
 
     field_diffs = []
-    for ek in in_both:
-        s = sheets_snap[ek]
-        d = db_snap[ek]
+    for key in in_both:
+        ek, lcl_val = key
+        s = sheets_snap[key]
+        d = db_snap[key]
         for chiave in db.COLONNE_NOTE:
             if chiave not in s:
                 continue
@@ -157,6 +176,7 @@ def main():
             if sv != dv:
                 field_diffs.append({
                     'eneltel_key': ek,
+                    'lcl': lcl_val,
                     'campo': chiave,
                     'sheets': sv,
                     'db': dv,
@@ -166,15 +186,19 @@ def main():
         if len(field_diffs) >= args.max_diffs:
             break
 
+    # Le chiavi sono tuple — serializza per JSON
+    only_in_sheets_json = [{'eneltel_key': ek, 'lcl': lcl} for ek, lcl in only_in_sheets]
+    only_in_db_json = [{'eneltel_key': ek, 'lcl': lcl} for ek, lcl in only_in_db]
+
     n_diffs = len(only_in_sheets) + len(only_in_db) + len(field_diffs)
 
     report = {
         'timestamp': datetime.datetime.now().isoformat(),
         'sheets_rows': len(sheets_snap),
         'db_rows': len(db_snap),
-        'only_in_sheets': only_in_sheets[:50],
+        'only_in_sheets': only_in_sheets_json[:50],
         'only_in_sheets_count': len(only_in_sheets),
-        'only_in_db': only_in_db[:50],
+        'only_in_db': only_in_db_json[:50],
         'only_in_db_count': len(only_in_db),
         'field_diffs': field_diffs,
         'field_diffs_count': len(field_diffs),

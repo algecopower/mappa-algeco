@@ -933,6 +933,305 @@ def warmup_format_cache():
         logger.warning(f"[Filone] warmup_format_cache fallito: {e}")
 
 
+# ===========================================================================
+# NOTE CELLA (pop-up tipo Sheets "note") — sync bidirezionale con Google
+# Sheets. Una nota e' un testo libero associato a (riga, colonna), separato
+# dal valore della cella. Pattern identico a quello dei formati: cache locale
+# stale-while-revalidate + delta in scrittura.
+# ===========================================================================
+_NOTES_CACHE_TTL_SECONDS = 60
+_notes_cache_lock = threading.Lock()
+_notes_cache_running = False
+
+
+def _notes_cache_path():
+    p = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), '..',
+        'cache', f'cache_note_{PROVINCIA_ATTIVA.lower()}.json'
+    )
+    return os.path.normpath(p)
+
+
+def _notes_cache_age(cached):
+    if not cached:
+        return None
+    upd = cached.get('updated')
+    if not upd:
+        return None
+    try:
+        ts = datetime.fromisoformat(upd)
+    except (TypeError, ValueError):
+        return None
+    return (datetime.now() - ts).total_seconds()
+
+
+def _read_sheet_notes(ws):
+    """
+    Legge le note delle celle dal Google Sheets API.
+    Restituisce {"row:colName": "testo nota"} per le sole celle con nota
+    non vuota.
+    """
+    notes = {}
+    try:
+        spreadsheet = ws.spreadsheet
+        sheet_data = _sheets_retry(
+            spreadsheet.fetch_sheet_metadata,
+            params={
+                'includeGridData': True,
+                'ranges': f"'{ws.title}'",
+                'fields': 'sheets.data.rowData.values.note',
+            }
+        )
+        sheets = sheet_data.get('sheets', [])
+        if not sheets:
+            return notes
+        grid_data = sheets[0].get('data', [])
+        if not grid_data:
+            return notes
+        row_data_list = grid_data[0].get('rowData', [])
+        headers = get_headers()
+
+        # Riga 0 = header; iteriamo le righe dati.
+        for row_idx in range(1, len(row_data_list)):
+            row_data = row_data_list[row_idx]
+            values = row_data.get('values', [])
+            row_num = row_idx + 1
+            for col_idx, cell_data in enumerate(values):
+                if col_idx >= len(headers):
+                    break
+                note = cell_data.get('note')
+                if note:
+                    notes[f"{row_num}:{headers[col_idx]}"] = note
+    except Exception as e:
+        logger.warning(f"[Filone] Impossibile leggere note Sheets: {e}")
+    return notes
+
+
+def _trigger_notes_cache_refresh():
+    global _notes_cache_running
+    with _notes_cache_lock:
+        if _notes_cache_running:
+            return
+        _notes_cache_running = True
+    import threading as _th
+    t = _th.Thread(target=_refresh_notes_cache_bg, daemon=True)
+    t.start()
+
+
+def _refresh_notes_cache_bg():
+    global _notes_cache_running
+    try:
+        ws = get_worksheet()
+        notes = _read_sheet_notes(ws)
+        cache_file = _notes_cache_path()
+        os.makedirs(os.path.dirname(cache_file), exist_ok=True)
+        json_write(cache_file, {
+            'notes': notes,
+            'updated': datetime.now().isoformat(),
+            'partial': False,
+        })
+        logger.info(f"[Filone] Cache note aggiornata: {len(notes)} celle con nota")
+    except Exception as e:
+        logger.warning(f"[Filone] Errore refresh cache note: {e}")
+    finally:
+        with _notes_cache_lock:
+            _notes_cache_running = False
+
+
+def warmup_notes_cache():
+    """Hook avvio server: pre-popola la cache note se mancante o stale."""
+    try:
+        cache_file = _notes_cache_path()
+        cached = json_read(cache_file, default=None)
+        age = _notes_cache_age(cached) if cached is not None else None
+        if cached is None or cached.get('partial') or age is None or age > _NOTES_CACHE_TTL_SECONDS:
+            _trigger_notes_cache_refresh()
+    except Exception as e:
+        logger.warning(f"[Filone] warmup_notes_cache fallito: {e}")
+
+
+@bp.route('/api/filone/notes')
+@login_required
+def get_filone_notes():
+    """Serve le note dalla cache (stale-while-revalidate)."""
+    try:
+        cache_file = _notes_cache_path()
+        cached = json_read(cache_file, default=None)
+        if cached is not None:
+            age = _notes_cache_age(cached)
+            is_partial = bool(cached.get('partial'))
+            if is_partial or age is None or age > _NOTES_CACHE_TTL_SECONDS:
+                _trigger_notes_cache_refresh()
+            return jsonify({
+                'notes': cached.get('notes', {}),
+                'cached': True,
+                'partial': is_partial,
+                'age_seconds': age,
+                'updated': cached.get('updated'),
+            })
+        _trigger_notes_cache_refresh()
+        return jsonify({'notes': {}, 'cached': False, 'loading': True})
+    except Exception as e:
+        return _api_error(e, 'caricamento note')
+
+
+@bp.route('/api/filone/notes/version')
+@login_required
+def get_filone_notes_version():
+    try:
+        cached = json_read(_notes_cache_path(), default=None)
+        if cached is None:
+            return jsonify({'updated': None, 'partial': True, 'age_seconds': None})
+        return jsonify({
+            'updated': cached.get('updated'),
+            'partial': bool(cached.get('partial')),
+            'age_seconds': _notes_cache_age(cached),
+        })
+    except Exception as e:
+        return _api_error(e, 'lettura version note')
+
+
+@bp.route('/api/filone/notes/refresh', methods=['POST'])
+@login_required
+def refresh_filone_notes():
+    try:
+        _trigger_notes_cache_refresh()
+        return jsonify({'ok': True, 'message': 'Sincronizzazione note avviata'})
+    except Exception as e:
+        return _api_error(e, 'sync note')
+
+
+@bp.route('/api/filone/notes', methods=['PUT'])
+@login_required
+def update_filone_notes():
+    """
+    Aggiorna le note delle celle su Sheets.
+    Body: {"notes": {"row:colName": "testo", ...}, "cleared": ["row:colName", ...]}
+    """
+    try:
+        body = request.json
+        if not body:
+            return jsonify({'error': 'Nessun dato'}), 400
+
+        upd = body.get('notes', {}) or {}
+        cleared = body.get('cleared', []) or []
+
+        unknown_cols = set()
+        batch_len = 0
+
+        # Header freschi sotto il write-lock per evitare colonne sbagliate se
+        # qualcuno ha appena editato la struttura del foglio.
+        with _gsheets_write_lock:
+            header_map = force_refresh_headers()
+            ws = get_worksheet()
+            sheet_id = ws.id
+            requests_list = []
+
+            def _build_note_request(row_num, col_name, note_text):
+                col_idx = header_map.get(col_name)
+                if col_idx is None:
+                    unknown_cols.add(col_name)
+                    return None
+                if row_num < 2:
+                    return None
+                return {
+                    'updateCells': {
+                        'range': {
+                            'sheetId': sheet_id,
+                            'startRowIndex': row_num - 1,
+                            'endRowIndex': row_num,
+                            'startColumnIndex': col_idx - 1,
+                            'endColumnIndex': col_idx,
+                        },
+                        # Sheets API: una nota vuota equivale a rimuoverla.
+                        'rows': [{'values': [{'note': note_text or ''}]}],
+                        'fields': 'note',
+                    }
+                }
+
+            for key, text in upd.items():
+                parts = key.split(':', 1)
+                if len(parts) != 2:
+                    continue
+                try:
+                    row_num = int(parts[0])
+                except ValueError:
+                    continue
+                req = _build_note_request(row_num, parts[1], (text or '').strip())
+                if req:
+                    requests_list.append(req)
+
+            for key in cleared:
+                parts = key.split(':', 1)
+                if len(parts) != 2:
+                    continue
+                try:
+                    row_num = int(parts[0])
+                except ValueError:
+                    continue
+                req = _build_note_request(row_num, parts[1], '')
+                if req:
+                    requests_list.append(req)
+
+            if unknown_cols:
+                logger.warning(
+                    f"[Filone Notes] Colonne non trovate (note saltate): {sorted(unknown_cols)}"
+                )
+
+            if requests_list:
+                batch_len = len(requests_list)
+                CHUNK = 500
+                for i in range(0, len(requests_list), CHUNK):
+                    _sheets_retry(
+                        ws.client.batch_update,
+                        ws.spreadsheet_id,
+                        {'requests': requests_list[i:i + CHUNK]},
+                    )
+
+        # Aggiorna cache locale (delta), marcando partial=True se la cache non
+        # esisteva ancora — il refresh completo riallineera' tutto.
+        cache_file = _notes_cache_path()
+        cache_existed = os.path.exists(cache_file)
+        try:
+            os.makedirs(os.path.dirname(cache_file), exist_ok=True)
+            cached = json_read(cache_file, default={})
+            current = cached.get('notes', {}) or {}
+            for key, text in upd.items():
+                clean = (text or '').strip()
+                if clean:
+                    current[key] = clean
+                elif key in current:
+                    del current[key]
+            for key in cleared:
+                if key in current:
+                    del current[key]
+            cached['notes'] = current
+            cached['updated'] = datetime.now().isoformat()
+            if not cache_existed or cached.get('partial'):
+                cached['partial'] = True
+            json_write(cache_file, cached)
+        except Exception as ce:
+            logger.warning(f"[Filone] Errore aggiornamento cache note: {ce}")
+
+        try:
+            if not cache_existed:
+                _trigger_notes_cache_refresh()
+        except Exception:
+            pass
+
+        username = _get_username()
+        logger.info(f"[Filone] Note aggiornate da {username}: {batch_len} celle")
+
+        return jsonify({
+            'ok': True,
+            'updated': batch_len,
+            'colonne_ignorate': sorted(unknown_cols),
+        })
+
+    except Exception as e:
+        return _api_error(e, 'aggiornamento note')
+
+
 def _sheets_color_to_hex(color_obj):
     """Converte un oggetto colore Sheets API {red, green, blue} in #rrggbb."""
     if not color_obj:

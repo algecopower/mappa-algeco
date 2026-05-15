@@ -2001,6 +2001,13 @@ if __name__ == '__main__':
         warmup_format_cache()
     except Exception as e:
         logger.warning(f"⚠️ Warmup cache formattazione fallito: {e}")
+
+    # Warmup cache note filone
+    try:
+        from routes.contatori import warmup_notes_cache
+        warmup_notes_cache()
+    except Exception as e:
+        logger.warning(f"⚠️ Warmup cache note fallito: {e}")
     
     # Pulizia boxbeat completati vecchi (> 7 giorni) per evitare accumulo
     try:

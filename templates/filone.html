@@ -259,6 +259,104 @@
         }
         .tabbar-new:hover { background: var(--bg-cell-hover); color: var(--primary); }
 
+        /* NOTE CELLA — stile Sheets: triangolino in alto a destra + popup */
+        .vc.has-note { position: relative; }
+        .vc.has-note::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 0;
+            height: 0;
+            border-style: solid;
+            border-width: 0 7px 7px 0;
+            border-color: transparent #f59e0b transparent transparent;
+            pointer-events: none;
+        }
+        .note-popup-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.45);
+            z-index: 1500;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+        .note-popup-overlay.show { display: flex; }
+        .note-popup {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            box-shadow: 0 12px 32px var(--shadow);
+            width: 440px;
+            max-width: 92vw;
+            padding: 16px 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .note-popup h3 {
+            margin: 0;
+            font-size: 1em;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .note-popup-meta {
+            font-size: 0.8em;
+            color: var(--text-muted);
+        }
+        .note-popup-meta strong { color: var(--text); }
+        .note-popup textarea {
+            width: 100%;
+            min-height: 110px;
+            box-sizing: border-box;
+            background: var(--bg-input);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 8px;
+            font-family: inherit;
+            font-size: 0.92em;
+            resize: vertical;
+            outline: none;
+        }
+        .note-popup textarea:focus { border-color: var(--primary); }
+        .note-popup-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 6px;
+            margin-top: 4px;
+        }
+        .note-popup-actions .spacer { flex: 1; }
+        /* Tooltip on hover che mostra il testo della nota — alternativa "rich"
+           al title nativo. Posizionato via JS sotto/sopra la cella. */
+        .note-tip {
+            position: fixed;
+            z-index: 1400;
+            background: var(--bg-dark);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-left: 3px solid #f59e0b;
+            border-radius: 6px;
+            padding: 8px 10px;
+            font-size: 0.85em;
+            line-height: 1.35;
+            max-width: 320px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            box-shadow: 0 6px 16px var(--shadow);
+            pointer-events: none;
+            display: none;
+        }
+        .note-tip.show { display: block; }
+        .note-tip .note-tip-hdr {
+            color: var(--text-muted);
+            font-size: 0.85em;
+            margin-bottom: 4px;
+        }
+
         /* GRID AREA */
         .grid-wrap {
             flex: 1;
@@ -1406,6 +1504,7 @@
             </div>
             <div class="toolbar-sep"></div>
             <button class="tb" id="btnAggiungiNota" onclick="aggiungiNotaFilone()" title="Aggiungi nota con data (DD/MM) in testa alla cella selezionata">&#x1F4DD; Nota</button>
+            <button class="tb" id="btnCellNote" onclick="openCellNotePopup()" title="Pop-up nota sulla cella selezionata (stile Google Sheets, sync bidirezionale)">&#x1F4AC; Commento</button>
             <button class="tb" id="btnCellHistory" onclick="showCellHistoryForSelection()" title="Mostra storico modifiche della cella selezionata">&#x1F4DC; Storico</button>
             <div class="toolbar-sep"></div>
             <button class="tb" id="btnHiddenCols" onclick="openColManager()" title="Gestione colonne">&#x2630; Colonne</button>
@@ -1449,6 +1548,23 @@
 
     <div class="toast" id="toast"></div>
     <div class="fpop" id="filterPopup"></div>
+
+    <!-- Pop-up nota cella (stile Sheets) -->
+    <div class="note-popup-overlay" id="notePopupOverlay" onclick="if(event.target===this)closeCellNotePopup()">
+        <div class="note-popup" role="dialog" aria-modal="true">
+            <h3>&#x1F4AC; Commento cella</h3>
+            <div class="note-popup-meta" id="notePopupMeta"></div>
+            <textarea id="notePopupText" placeholder="Scrivi qui il commento... (Ctrl+Invio per salvare, Esc per annullare)"></textarea>
+            <div class="note-popup-actions">
+                <button class="tb danger" id="notePopupDelete" onclick="deleteCellNote()" style="display:none">&#x1F5D1; Elimina</button>
+                <span class="spacer"></span>
+                <button class="tb" onclick="closeCellNotePopup()">Annulla</button>
+                <button class="tb primary" onclick="saveCellNote()">&#x1F4BE; Salva</button>
+            </div>
+        </div>
+    </div>
+    <div class="note-tip" id="noteTip"></div>
+
     <div class="colmgr-overlay" id="colmgrOverlay" onclick="closeColManager()"></div>
     <div class="colmgr" id="colmgrPanel">
         <div class="colmgr-hdr">
@@ -2044,6 +2160,10 @@ window.addEventListener('beforeunload', function() {
     if (_tabsInited) {
         try { _tabsPersistImmediate(); } catch (e) {}
     }
+    // Flush ultimo stato note in localStorage (il sync HTTP non parte se la
+    // tab si chiude; al prossimo load le pending vengono pushate).
+    try { if (typeof _persistNotesSyncState === 'function') _persistNotesSyncState(); } catch (e) {}
+    try { if (typeof _persistNotesLocalCache === 'function') _persistNotesLocalCache(); } catch (e) {}
 });
 
 // ============================================================
@@ -2095,6 +2215,17 @@ async function loadData() {
         }
         // Carica anche le regole condizionali da Sheets (silent: niente toast).
         _loadCondFormatsFromSheets(true);
+
+        // Note cella (pop-up Sheets): cache locale come fallback immediato,
+        // poi flush degli eventuali pending pre-reload, poi pull dal server.
+        _loadNotesLocalCache();
+        _loadNotesSyncState();
+        if (Object.keys(_notesDirty).length > 0 || _notesCleared.length > 0) {
+            _syncNotesToServer().finally(function() { _loadNotesFromServer(); });
+        } else {
+            _loadNotesFromServer();
+        }
+        _startNotesPolling();
     } catch (e) {
         qs('.loading-overlay div').innerHTML = '&#x274C; ' + esc(e.message) + '<br><button onclick="loadData()" style="margin-top:10px;padding:6px 16px;cursor:pointer">Riprova</button>';
     }
@@ -3019,6 +3150,12 @@ function fillRow(node, row, visIdx) {
         if (fnrMatchSet.size > 0 && fnrMatchSet.has(row._row + ':' + i)) {
             cls += ' find-match';
             if (fnrCurrentIdx >= 0 && fnrMatches[fnrCurrentIdx] && fnrMatches[fnrCurrentIdx].rn === row._row && fnrMatches[fnrCurrentIdx].ci === i) cls += ' find-current';
+        }
+        // Pop-up nota cella (stile Sheets): triangolino in corner se presente
+        var _note = cellNotes[row._row + ':' + cn];
+        if (_note) {
+            cls += ' has-note';
+            cell.title = (cell.title ? cell.title + '\n\n' : '') + '💬 Commento: ' + _note;
         }
         cell.className = cls;
     }
@@ -5175,6 +5312,317 @@ async function _syncFormatsToServer() {
         }
     }
 }
+
+// ============================================================
+// NOTE CELLA (pop-up tipo Sheets) \u2014 stato locale + sync bidirezionale
+// con il foglio Google Sheets. Una nota \u00E8 un testo libero associato a
+// (riga, colonna), distinto dal valore della cella.
+// ============================================================
+let cellNotes = {};         // "row:colName" -> "testo nota" (testo non vuoto)
+let _notesDirty = {};       // chiavi modificate localmente, da pushare
+let _notesCleared = [];     // chiavi rimosse localmente, da pushare
+let _notesSyncing = false;
+let _notesSyncTimer = null;
+let _notePopupKey = null;   // chiave "row:colName" in editing nel popup
+
+function _noteKey(rn, colName) { return rn + ':' + colName; }
+
+function getCellNote(rn, colName) {
+    return cellNotes[_noteKey(rn, colName)] || '';
+}
+
+function _persistNotesLocalCache() {
+    try { localStorage.setItem('filone_cell_notes', JSON.stringify(cellNotes)); } catch (e) {}
+}
+function _persistNotesSyncState() {
+    try {
+        localStorage.setItem('filone_notes_dirty', JSON.stringify(_notesDirty));
+        localStorage.setItem('filone_notes_cleared', JSON.stringify(_notesCleared));
+    } catch (e) {}
+}
+function _loadNotesLocalCache() {
+    try {
+        var s = localStorage.getItem('filone_cell_notes');
+        if (s) cellNotes = JSON.parse(s) || {};
+    } catch (e) { cellNotes = {}; }
+}
+function _loadNotesSyncState() {
+    try {
+        var d = localStorage.getItem('filone_notes_dirty');
+        if (d) _notesDirty = JSON.parse(d) || {};
+    } catch (e) { _notesDirty = {}; }
+    try {
+        var c = localStorage.getItem('filone_notes_cleared');
+        if (c) _notesCleared = JSON.parse(c) || [];
+    } catch (e) { _notesCleared = []; }
+}
+
+async function _loadNotesFromServer() {
+    try {
+        var r = await fetch('/api/filone/notes?_=' + Date.now());
+        if (!r.ok) return;
+        var d = await r.json();
+        if (!d || !d.notes) return;
+        // I pending locali (_notesDirty / _notesCleared) NON vengono sovrascritti:
+        // sono modifiche che l'utente sta ancora pushando.
+        var dirtyKeys = _notesDirty || {};
+        var clearedSet = {};
+        for (var i = 0; i < _notesCleared.length; i++) clearedSet[_notesCleared[i]] = true;
+        var merged = {};
+        for (var k in d.notes) {
+            if (clearedSet[k]) continue;
+            if (dirtyKeys[k]) { merged[k] = cellNotes[k] || ''; continue; }
+            merged[k] = d.notes[k];
+        }
+        // Preserva anche le chiavi dirty che non esistono ancora sul server
+        for (var dk in dirtyKeys) {
+            if (cellNotes[dk]) merged[dk] = cellNotes[dk];
+        }
+        cellNotes = merged;
+        _persistNotesLocalCache();
+        renderVisible(true);
+        if (_notePopupKey && _notePopupOpen()) {
+            // Aggiorna textarea se il popup \u00E8 aperto sulla cella appena sincronizzata
+            var pk = _notePopupKey;
+            if (!dirtyKeys[pk]) {
+                var ta = qs('#notePopupText');
+                if (ta && ta.value !== (cellNotes[pk] || '')) {
+                    // Non sovrascrivere se l'utente sta scrivendo in questo momento
+                    if (document.activeElement !== ta) ta.value = cellNotes[pk] || '';
+                }
+            }
+        }
+        if (d.partial) {
+            // Cache parziale: ritenta a breve per riallinearsi
+            setTimeout(_loadNotesFromServer, 5000);
+        }
+    } catch (e) {}
+}
+
+// Polling continuo per recepire note inserite/modificate direttamente su Sheets
+var _notesPollTimer = null;
+var _notesInitialUpdated = null;
+function _startNotesPolling() {
+    if (_notesPollTimer) return;
+    _notesPollTimer = setInterval(_pollNotesRefresh, 30000); // 30s
+}
+async function _pollNotesRefresh() {
+    try {
+        var r = await fetch('/api/filone/notes/version?_=' + Date.now());
+        if (!r.ok) return;
+        var v = await r.json();
+        if (v.updated && v.updated !== _notesInitialUpdated) {
+            _notesInitialUpdated = v.updated;
+            await _loadNotesFromServer();
+        }
+    } catch (e) {}
+}
+
+function _scheduleNotesSync() {
+    clearTimeout(_notesSyncTimer);
+    _notesSyncTimer = setTimeout(_syncNotesToServer, 400);
+}
+
+async function _syncNotesToServer() {
+    if (_notesSyncing) { _scheduleNotesSync(); return; }
+    var dirtyKeys = Object.keys(_notesDirty);
+    var clearedKeys = _notesCleared.slice();
+    if (dirtyKeys.length === 0 && clearedKeys.length === 0) return;
+
+    _notesSyncing = true;
+    var body = {};
+    var snapshot = {};
+    if (dirtyKeys.length > 0) {
+        var notesPayload = {};
+        for (var i = 0; i < dirtyKeys.length; i++) {
+            var k = dirtyKeys[i];
+            var v = cellNotes[k] || '';
+            snapshot[k] = v;
+            if (v) {
+                notesPayload[k] = v;
+            } else {
+                // testo vuoto -> trattalo come clear
+                if (clearedKeys.indexOf(k) < 0) clearedKeys.push(k);
+            }
+        }
+        if (Object.keys(notesPayload).length > 0) body.notes = notesPayload;
+    }
+    if (clearedKeys.length > 0) body.cleared = clearedKeys;
+
+    try {
+        var r = await fetch('/api/filone/notes', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        if (r.ok) {
+            // Pulisci dirty SOLO per le chiavi il cui contenuto non \u00E8 cambiato
+            // mentre il PUT era in volo (idem pattern formats).
+            for (var i = 0; i < dirtyKeys.length; i++) {
+                var dk = dirtyKeys[i];
+                if (_notesDirty[dk] && (cellNotes[dk] || '') === snapshot[dk]) {
+                    delete _notesDirty[dk];
+                }
+            }
+            for (var j = 0; j < clearedKeys.length; j++) {
+                var ck = clearedKeys[j];
+                if (!cellNotes[ck]) {
+                    var idx = _notesCleared.indexOf(ck);
+                    if (idx >= 0) _notesCleared.splice(idx, 1);
+                }
+            }
+            _persistNotesSyncState();
+            _persistNotesLocalCache();
+        } else {
+            toast('\u274C Errore sincronizzazione note', 'error');
+        }
+    } catch (e) {
+        toast('\u274C Errore rete sincronizzazione note', 'error');
+    } finally {
+        _notesSyncing = false;
+        if (Object.keys(_notesDirty).length > 0 || _notesCleared.length > 0) {
+            _scheduleNotesSync();
+        }
+    }
+}
+
+function setCellNote(rn, colName, text) {
+    var key = _noteKey(rn, colName);
+    var clean = (text || '').trim();
+    if (clean) {
+        cellNotes[key] = clean;
+        _notesDirty[key] = true;
+        var ci = _notesCleared.indexOf(key);
+        if (ci >= 0) _notesCleared.splice(ci, 1);
+    } else {
+        clearCellNote(rn, colName);
+        return;
+    }
+    _persistNotesLocalCache();
+    _persistNotesSyncState();
+    _scheduleNotesSync();
+    renderVisible(true);
+}
+
+function clearCellNote(rn, colName) {
+    var key = _noteKey(rn, colName);
+    var had = !!cellNotes[key];
+    delete cellNotes[key];
+    delete _notesDirty[key];
+    if (had && _notesCleared.indexOf(key) < 0) _notesCleared.push(key);
+    _persistNotesLocalCache();
+    _persistNotesSyncState();
+    _scheduleNotesSync();
+    renderVisible(true);
+}
+
+// ----- Popup edit -----
+function _notePopupOpen() {
+    return qs('#notePopupOverlay').classList.contains('show');
+}
+
+function openCellNotePopup() {
+    if (selRow < 0 || selCol < 0) { toast('Seleziona prima una cella', 'warning'); return; }
+    var cn = headers[selCol];
+    var rn = selRow;
+    var key = _noteKey(rn, cn);
+    _notePopupKey = key;
+    var current = cellNotes[key] || '';
+    qs('#notePopupMeta').innerHTML = 'Cella: <strong>' + esc(cn) + '</strong> &middot; Riga <strong>' + rn + '</strong>';
+    var ta = qs('#notePopupText');
+    ta.value = current;
+    qs('#notePopupDelete').style.display = current ? '' : 'none';
+    qs('#notePopupOverlay').classList.add('show');
+    setTimeout(function() { ta.focus(); ta.select(); }, 50);
+}
+
+function closeCellNotePopup() {
+    qs('#notePopupOverlay').classList.remove('show');
+    _notePopupKey = null;
+}
+
+function saveCellNote() {
+    if (!_notePopupKey) { closeCellNotePopup(); return; }
+    var parts = _notePopupKey.split(':');
+    var rn = parseInt(parts[0], 10);
+    var cn = parts.slice(1).join(':');
+    var text = qs('#notePopupText').value;
+    setCellNote(rn, cn, text);
+    closeCellNotePopup();
+    toast(text.trim() ? '\uD83D\uDCAC Commento salvato' : '\uD83D\uDDD1 Commento rimosso', 'success');
+}
+
+function deleteCellNote() {
+    if (!_notePopupKey) { closeCellNotePopup(); return; }
+    var parts = _notePopupKey.split(':');
+    var rn = parseInt(parts[0], 10);
+    var cn = parts.slice(1).join(':');
+    clearCellNote(rn, cn);
+    closeCellNotePopup();
+    toast('\uD83D\uDDD1 Commento eliminato', 'success');
+}
+
+// Shortcut da popup: Ctrl/Cmd+Invio salva, Esc chiude
+(function() {
+    var ta = qs('#notePopupText');
+    if (!ta) return;
+    ta.addEventListener('keydown', function(e) {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+            e.preventDefault();
+            saveCellNote();
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            closeCellNotePopup();
+        }
+    });
+})();
+
+// Tooltip on hover che mostra l'anteprima della nota \u2014 pi\u00F9 ricco del title nativo.
+(function() {
+    var tip = qs('#noteTip');
+    var body = qs('#gridBody');
+    if (!tip || !body) return;
+    var hideTimer = null;
+
+    function findNoteCell(target) {
+        var el = target;
+        while (el && el !== body) {
+            if (el.classList && el.classList.contains('vc') && el.classList.contains('has-note')) return el;
+            el = el.parentNode;
+        }
+        return null;
+    }
+
+    body.addEventListener('mouseover', function(e) {
+        var cell = findNoteCell(e.target);
+        if (!cell) return;
+        var rn = parseInt(cell.parentNode.dataset.rn, 10);
+        var ci = parseInt(cell.dataset.ci, 10);
+        if (isNaN(rn) || isNaN(ci)) return;
+        var note = getCellNote(rn, headers[ci]);
+        if (!note) return;
+        clearTimeout(hideTimer);
+        var rect = cell.getBoundingClientRect();
+        tip.innerHTML = '<div class="note-tip-hdr">&#x1F4AC; Commento</div>' + esc(note).replace(/\n/g, '<br>');
+        tip.classList.add('show');
+        // Posiziona sotto la cella; se sfora a destra/basso ribalta
+        var tipW = 320, tipH = 80;
+        var x = rect.left;
+        var y = rect.bottom + 4;
+        if (x + tipW > window.innerWidth - 8) x = window.innerWidth - tipW - 8;
+        if (y + tipH > window.innerHeight - 8) y = rect.top - tipH - 4;
+        tip.style.left = Math.max(8, x) + 'px';
+        tip.style.top = Math.max(8, y) + 'px';
+    });
+
+    body.addEventListener('mouseout', function(e) {
+        var cell = findNoteCell(e.target);
+        if (!cell) return;
+        // Nascondi dopo un piccolo delay per evitare flicker tra celle adiacenti
+        clearTimeout(hideTimer);
+        hideTimer = setTimeout(function() { tip.classList.remove('show'); }, 80);
+    });
+})();
 
 function getSelectedCellKeys() {
     var keys = [];

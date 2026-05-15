@@ -223,10 +223,21 @@ def pull_once(values=None):
                 if chiave == 'eneltel':
                     continue  # è la PK, non la salvo come campo
                 if chiave and chiave in db.COLONNE_NOTE:
-                    typed_values[chiave] = _coerce_value(remote_val, chiave)
+                    new_typed = _coerce_value(remote_val, chiave)
+                    typed_values[chiave] = new_typed
                     if existing is not None:
                         old = existing[chiave] if chiave in existing.keys() else None
-                        if str(old or '') != str(remote_val or ''):
+                        # Per le colonne REAL (lat/lon) confronto numerico:
+                        # Sheets restituisce le decimali con la virgola (locale
+                        # italiano), il DB le ha come float (notazione punto).
+                        # Senza coercion il confronto stringa segnerebbe
+                        # sempre un falso "cambio remoto" ad ogni pull.
+                        if chiave in db._COLONNE_REAL:
+                            old_typed = _coerce_value(old, chiave)
+                            changed = old_typed != new_typed
+                        else:
+                            changed = str(old or '') != str(remote_val or '')
+                        if changed:
                             db.audit(
                                 conn,
                                 eneltel_key=eneltel_key,

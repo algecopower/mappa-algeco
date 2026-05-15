@@ -1458,6 +1458,62 @@ def api_admin_db_dump_columns():
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
+@app.route('/api/admin/db-action', methods=['POST'])
+@admin_required
+def api_admin_db_action():
+    """Esegue una action manuale sulla provincia corrente.
+
+    Body: { "action": "drain" | "sync" | "snapshot-db" | "validate" }
+    """
+    try:
+        body = request.get_json(silent=True) or {}
+        action = (body.get('action') or '').strip()
+
+        if action == 'drain':
+            from moduli import sync_engine as _se
+            _se.trigger_drain_now()
+            return jsonify({'success': True, 'action': action,
+                            'message': 'Drainer risvegliato; controlla i log nei prossimi 30s.'})
+
+        if action == 'sync':
+            # Risveglia il sync_loop completo
+            try:
+                _sync_needed.set()
+                return jsonify({'success': True, 'action': action,
+                                'message': 'Sync_loop risvegliato; aggiornamento entro pochi secondi.'})
+            except NameError:
+                return jsonify({'success': False, 'message': '_sync_needed non disponibile'}), 500
+
+        if action == 'snapshot-db':
+            from moduli.backup import esegui_backup_db
+            res = esegui_backup_db(forza=True)
+            return jsonify({'success': res.get('success', False), 'action': action, **res})
+
+        if action == 'validate':
+            import subprocess
+            try:
+                r = subprocess.run(
+                    [sys.executable, os.path.join(SCRIPT_DIR, 'tools', 'validate_shadow.py'),
+                     '--quiet', '--report-dir',
+                     os.path.join(SCRIPT_DIR, 'data', PROVINCIA_ATTIVA.lower(), 'shadow_reports')],
+                    cwd=SCRIPT_DIR, env={**os.environ, 'PROVINCIA': PROVINCIA_ATTIVA},
+                    capture_output=True, text=True, timeout=120,
+                )
+                return jsonify({
+                    'success': r.returncode == 0,
+                    'action': action,
+                    'returncode': r.returncode,
+                    'output': (r.stdout + r.stderr)[-2000:],
+                })
+            except subprocess.TimeoutExpired:
+                return jsonify({'success': False, 'message': 'validator timeout (>2min)'}), 504
+
+        return jsonify({'success': False, 'message': f"action sconosciuta: {action!r}"}), 400
+    except Exception as e:
+        logger.exception('[admin] errore /api/admin/db-action')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 @app.route('/api/admin/db-dump/anomalies', methods=['GET'])
 @admin_required
 def api_admin_db_dump_anomalies():

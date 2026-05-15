@@ -576,8 +576,93 @@ def _admin_dispatch(path):
     m = re.match(r'^api/provinces/([A-Z0-9_]+)/bootstrap$', p)
     if m and method == 'POST':
         return _admin_check() or _admin_bootstrap(m.group(1))
+    if p == 'api/health-overview' and method == 'GET':
+        return _admin_check() or _admin_health_overview()
+    m = re.match(r'^api/provinces/([A-Z0-9_]+)/db-action$', p)
+    if m and method == 'POST':
+        return _admin_check() or _admin_db_action(m.group(1))
+    m = re.match(r'^api/provinces/([A-Z0-9_]+)/dump-eneltel/(.+)$', p)
+    if m and method == 'GET':
+        return _admin_check() or _admin_dump_eneltel(m.group(1), m.group(2))
 
     return jsonify({'error': 'admin endpoint non trovato', 'path': p}), 404
+
+
+# ============================================================================
+# ADMIN — Health overview + actions on-demand + inspector eneltel
+# ============================================================================
+def _proxy_admin_to_backend(slug, path, method='GET', body=None, timeout=130):
+    """Forward request admin verso il backend della provincia, preservando
+    cookie sessione (per @admin_required nel backend)."""
+    try:
+        province = carica_province()
+    except Exception as e:
+        return None, jsonify({'error': f'lettura provinces.json: {e}'}), 500
+    slug = slug.upper()
+    if slug not in province:
+        return None, jsonify({'error': f'provincia {slug} non trovata'}), 404
+    cfg = province[slug]
+    if pm.stato().get(slug) != 'running':
+        return None, jsonify({'error': f'backend {slug} non in esecuzione',
+                              'stato': pm.stato().get(slug, 'stopped')}), 503
+    url = f'http://127.0.0.1:{cfg["porta"]}{path}'
+    headers = {'Cookie': request.headers.get('Cookie', '')}
+    try:
+        r = requests.request(method, url, headers=headers, json=body, timeout=timeout)
+    except requests.RequestException as e:
+        return None, jsonify({'error': f'backend non raggiungibile: {e}'}), 502
+    return r, None, None
+
+
+def _admin_health_overview():
+    """Aggrega health di tutte le province up: stats + integrity + warnings."""
+    try:
+        province = carica_province()
+    except Exception as e:
+        return jsonify({'error': f'lettura provinces.json: {e}'}), 500
+    out = []
+    cookie = request.headers.get('Cookie', '')
+    for slug, cfg in province.items():
+        item = {'slug': slug, 'nome': cfg.get('nome', slug), 'stato': pm.stato().get(slug, 'stopped')}
+        if item['stato'] != 'running':
+            item['reachable'] = False
+            out.append(item)
+            continue
+        try:
+            r = requests.get(
+                f'http://127.0.0.1:{cfg["porta"]}/api/admin/db-stats',
+                headers={'Cookie': cookie}, timeout=5,
+            )
+            item['reachable'] = (r.status_code == 200)
+            if r.status_code == 200:
+                data = r.json()
+                item['stats'] = data.get('stats', {})
+                item['integrity'] = data.get('integrity', 'unknown')
+                item['health'] = data.get('health', {})
+        except requests.RequestException as e:
+            item['reachable'] = False
+            item['error'] = str(e)
+        out.append(item)
+    return jsonify({'province': out})
+
+
+def _admin_db_action(slug):
+    body = request.get_json(silent=True) or {}
+    r, err_resp, err_code = _proxy_admin_to_backend(
+        slug, '/api/admin/db-action', method='POST', body=body, timeout=130,
+    )
+    if r is None:
+        return err_resp, err_code
+    return (r.text, r.status_code, {'Content-Type': r.headers.get('Content-Type', 'application/json')})
+
+
+def _admin_dump_eneltel(slug, eneltel):
+    r, err_resp, err_code = _proxy_admin_to_backend(
+        slug, f'/api/admin/db-dump/eneltel/{eneltel}', method='GET', timeout=15,
+    )
+    if r is None:
+        return err_resp, err_code
+    return (r.text, r.status_code, {'Content-Type': r.headers.get('Content-Type', 'application/json')})
 
 
 # ============================================================================
@@ -917,434 +1002,18 @@ def _admin_lifecycle(slug, action):
 
 
 # ============================================================================
-# ADMIN UI (inline HTML — single-file admin app)
+# ADMIN UI (template HTML caricato da templates_router/admin.html)
 # ============================================================================
-_ADMIN_HTML = r"""
-<!DOCTYPE html>
-<html lang="it">
-<head>
-<meta charset="UTF-8">
-<title>Mappa Algeco — Gestione Province</title>
-<style>
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; background: #f5f6f8; color: #1f2329; }
-  header { background: #1f2937; color: white; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 4px rgba(0,0,0,.1); }
-  header h1 { margin: 0; font-size: 18px; font-weight: 600; }
-  header .user { font-size: 13px; opacity: .8; }
-  main { max-width: 1100px; margin: 24px auto; padding: 0 16px; }
-  .toolbar { display: flex; gap: 8px; margin-bottom: 16px; align-items: center; flex-wrap: wrap; }
-  .btn { background: #2563eb; color: white; border: 0; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500; }
-  .btn:hover { background: #1d4ed8; }
-  .btn.secondary { background: #6b7280; }
-  .btn.secondary:hover { background: #4b5563; }
-  .btn.danger { background: #dc2626; }
-  .btn.danger:hover { background: #b91c1c; }
-  .btn.success { background: #059669; }
-  .btn.success:hover { background: #047857; }
-  .btn:disabled { opacity: .5; cursor: not-allowed; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
-  .card { background: white; border-radius: 8px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
-  .card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-  .card-title { font-size: 16px; font-weight: 600; }
-  .badge { padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
-  .badge.running { background: #d1fae5; color: #065f46; }
-  .badge.stopped { background: #fee2e2; color: #991b1b; }
-  .badge.unknown { background: #e5e7eb; color: #4b5563; }
-  .field { font-size: 13px; color: #6b7280; margin: 4px 0; }
-  .field strong { color: #1f2329; font-weight: 500; }
-  .actions { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
-  .actions .btn { padding: 5px 10px; font-size: 12px; }
-  .modal { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: none; align-items: center; justify-content: center; z-index: 100; }
-  .modal.open { display: flex; }
-  .modal-content { background: white; border-radius: 8px; padding: 24px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto; }
-  .modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-  .modal-head h2 { margin: 0; font-size: 18px; }
-  .close { background: transparent; border: 0; font-size: 24px; cursor: pointer; color: #6b7280; }
-  .form-group { margin-bottom: 14px; }
-  .form-group label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 4px; color: #374151; }
-  .form-group input, .form-group select { width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 14px; box-sizing: border-box; }
-  .form-group input:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, .1); }
-  .form-row { display: flex; gap: 12px; }
-  .form-row .form-group { flex: 1; }
-  .help { font-size: 11px; color: #6b7280; margin-top: 2px; }
-  .toast { position: fixed; bottom: 24px; right: 24px; background: #1f2937; color: white; padding: 12px 18px; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,.2); z-index: 200; transform: translateY(20px); opacity: 0; transition: all .2s; max-width: 400px; font-size: 13px; }
-  .toast.show { transform: translateY(0); opacity: 1; }
-  .toast.error { background: #dc2626; }
-  .empty { text-align: center; padding: 60px 20px; color: #6b7280; }
-  .empty h2 { margin-bottom: 8px; color: #1f2329; }
-</style>
-</head>
-<body>
-<header>
-  <h1>🗺️  Mappa Algeco — Gestione Province</h1>
-  <div class="user" id="user-info">…</div>
-</header>
-<main>
-  <div class="toolbar">
-    <button class="btn" onclick="apriFormAggiungi()">➕ Aggiungi provincia</button>
-    <button class="btn secondary" onclick="caricaProvince()">🔄 Aggiorna</button>
-  </div>
-  <div id="grid" class="grid"></div>
-  <div id="empty" class="empty" style="display:none">
-    <h2>Nessuna provincia configurata</h2>
-    <p>Clicca "Aggiungi provincia" per crearne una.</p>
-  </div>
-</main>
-
-<!-- Modal Aggiungi / Modifica -->
-<div class="modal" id="modalAggiungi">
-  <div class="modal-content">
-    <div class="modal-head">
-      <h2 id="modalTitle">Aggiungi provincia</h2>
-      <button class="close" onclick="chiudiModal()">&times;</button>
-    </div>
-    <form id="formAggiungi" onsubmit="submitForm(event)">
-      <div class="form-row">
-        <div class="form-group">
-          <label>Slug (codice interno)</label>
-          <input name="slug" required pattern="[A-Za-z][A-Za-z0-9_]{1,30}" placeholder="es. LECCO" oninput="onSlugChange(this)">
-          <div class="help">Maiuscole, lettere+numeri+underscore. Sarà la chiave nel JSON.</div>
-        </div>
-        <div class="form-group">
-          <label>Nome leggibile</label>
-          <input name="nome" required placeholder="es. Lecco">
-        </div>
-      </div>
-
-      <div class="form-group">
-        <label>Sottodominio</label>
-        <input name="sottodominio" required placeholder="lecco.mappa-algeco.com">
-        <div class="help">Crea il record DNS corrispondente in Cloudflare.</div>
-      </div>
-
-      <div class="form-row">
-        <div class="form-group">
-          <label>ID Google Sheet</label>
-          <input name="id_foglio" required placeholder="1ABCdef...">
-          <div class="help">URL del foglio: docs.google.com/spreadsheets/d/<b>ID</b>/edit</div>
-        </div>
-        <div class="form-group">
-          <label>GID scheda</label>
-          <input name="gid_scheda" type="number" required placeholder="0">
-          <div class="help">Visibile nell'URL come #gid=…</div>
-        </div>
-      </div>
-
-      <div class="form-group">
-        <button type="button" class="btn secondary" onclick="verificaFoglio()">🔍 Verifica foglio</button>
-        <div id="probe-result" style="margin-top: 8px;"></div>
-      </div>
-
-      <div class="form-group">
-        <label>Deposito — Nome</label>
-        <input name="deposito_nome" required placeholder="DEPOSITO X">
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Latitudine</label>
-          <input name="deposito_lat" type="number" step="any" required placeholder="45.0">
-        </div>
-        <div class="form-group">
-          <label>Longitudine</label>
-          <input name="deposito_lon" type="number" step="any" required placeholder="9.0">
-        </div>
-      </div>
-
-      <div class="form-row">
-        <div class="form-group">
-          <label>Orario inizio giornata</label>
-          <input name="ora_inizio_giornata" type="time" required value="08:00">
-        </div>
-        <div class="form-group">
-          <label>Orario fine giornata</label>
-          <input name="ora_fine_giornata" type="time" required value="17:00">
-        </div>
-      </div>
-
-      <div class="form-group">
-        <label><input type="checkbox" name="usa_localita_come_comune"> Usa "Località" come Comune (raggruppamento zone)</label>
-        <div class="help">Attiva se il foglio non ha la colonna Comune popolata e va usata Località.</div>
-      </div>
-
-      <div class="form-row">
-        <div class="form-group">
-          <label>Porta (auto se vuoto)</label>
-          <input name="porta" type="number" placeholder="auto">
-        </div>
-      </div>
-
-      <div style="display:flex; gap:8px; justify-content:flex-end; margin-top: 20px;">
-        <button type="button" class="btn secondary" onclick="chiudiModal()">Annulla</button>
-        <button type="submit" class="btn" id="submitBtn">Crea provincia</button>
-      </div>
-    </form>
-  </div>
-</div>
-
-<div class="toast" id="toast"></div>
-
-<script>
-const toastEl = document.getElementById('toast');
-function toast(msg, isError) {
-  toastEl.textContent = msg;
-  toastEl.classList.toggle('error', !!isError);
-  toastEl.classList.add('show');
-  clearTimeout(toast._t);
-  toast._t = setTimeout(() => toastEl.classList.remove('show'), 4000);
-}
-
-async function api(method, url, body) {
-  const opts = { method, headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin' };
-  if (body) opts.body = JSON.stringify(body);
-  const r = await fetch(url, opts);
-  let data;
-  try { data = await r.json(); } catch { data = {}; }
-  if (!r.ok) throw new Error(data.error || r.statusText);
-  return data;
-}
-
-async function caricaProvince() {
-  try {
-    const { province } = await api('GET', '/api/provinces');
-    rendiGrid(province);
-  } catch (e) {
-    toast('Errore caricamento province: ' + e.message, true);
-  }
-}
-
-function rendiGrid(province) {
-  const grid = document.getElementById('grid');
-  const empty = document.getElementById('empty');
-  grid.innerHTML = '';
-  if (!province.length) { empty.style.display = ''; return; }
-  empty.style.display = 'none';
-  for (const p of province) {
-    const card = document.createElement('div');
-    card.className = 'card';
-    const stato = p.stato || 'unknown';
-    const badgeClass = stato === 'running' ? 'running' : (stato.startsWith('exited') ? 'stopped' : 'unknown');
-    card.innerHTML = `
-      <div class="card-head">
-        <div class="card-title">${escapeHtml(p.nome)} <small style="color:#9ca3af;font-weight:400;">(${escapeHtml(p.slug)})</small></div>
-        <span class="badge ${badgeClass}">${stato}</span>
-      </div>
-      <div class="field"><strong>URL:</strong> ${escapeHtml(p.sottodominio || '—')}</div>
-      <div class="field"><strong>Porta:</strong> ${p.porta}</div>
-      <div class="field"><strong>ID Foglio:</strong> <span style="font-family:monospace;font-size:11px;">${escapeHtml((p.id_foglio || '').slice(0, 20))}…</span></div>
-      <div class="field"><strong>Deposito:</strong> ${escapeHtml(p.deposito && p.deposito.Nome || '—')}</div>
-      <div class="actions">
-        ${!p.db_exists
-          ? `<button class="btn success" onclick="bootstrap('${p.slug}')">📥 Inizializza DB</button>`
-          : (stato === 'running'
-              ? `<button class="btn secondary" onclick="azione('${p.slug}','restart')">🔄 Riavvia</button>
-                 <button class="btn danger" onclick="azione('${p.slug}','stop')">⏸ Ferma</button>`
-              : `<button class="btn success" onclick="azione('${p.slug}','start')">▶ Avvia</button>`
-            )
-        }
-        <button class="btn secondary" onclick="apriFormModifica(${JSON.stringify(p).replace(/"/g,'&quot;')})">✏️ Modifica</button>
-        <button class="btn danger" onclick="elimina('${p.slug}')">🗑️ Elimina</button>
-      </div>
-      ${!p.db_exists ? '<div class="help" style="margin-top:8px;color:#dc2626;">⚠️ DB non ancora inizializzato. Clicca "Inizializza DB" per il primo pull dal foglio.</div>' : ''}
-    `;
-    grid.appendChild(card);
-  }
-}
-
-function escapeHtml(s) {
-  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
-
-async function azione(slug, action) {
-  try {
-    await api('POST', `/api/provinces/${slug}/${action}`);
-    toast(`${slug}: ${action} OK`);
-    setTimeout(caricaProvince, 1000);
-  } catch (e) {
-    toast(`Errore ${action}: ${e.message}`, true);
-  }
-}
-
-async function elimina(slug) {
-  if (!confirm(`Eliminare la provincia ${slug}? Il processo viene fermato e l'entry rimossa da provinces.json. La cartella data/${slug.toLowerCase()}/ verrà conservata.`)) return;
-  try {
-    const r = await api('DELETE', `/api/provinces/${slug}`);
-    toast(`${slug} eliminato. ${r.note || ''}`);
-    caricaProvince();
-  } catch (e) {
-    toast('Errore eliminazione: ' + e.message, true);
-  }
-}
-
-let editingSlug = null;  // null = create mode, slug = edit mode
-
-// Conversioni HH:MM <-> minuti da 00:00 (formato richiesto dal backend)
-function minutiToHHMM(min) {
-  if (min == null || min === '') return '';
-  const m = parseInt(min);
-  if (isNaN(m)) return '';
-  const h = Math.floor(m / 60);
-  const mm = m % 60;
-  return `${String(h).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
-}
-function hhmmToMinuti(s) {
-  if (!s) return null;
-  const m = /^(\d{1,2}):(\d{2})$/.exec(s.trim());
-  if (!m) return null;
-  return parseInt(m[1]) * 60 + parseInt(m[2]);
-}
-
-function apriFormAggiungi() {
-  editingSlug = null;
-  document.getElementById('modalTitle').textContent = 'Aggiungi provincia';
-  document.getElementById('submitBtn').textContent = 'Crea provincia';
-  const form = document.getElementById('formAggiungi');
-  form.reset();
-  form.querySelector('[name=slug]').readOnly = false;
-  document.getElementById('probe-result').innerHTML = '';
-  document.getElementById('modalAggiungi').classList.add('open');
-}
-
-function apriFormModifica(p) {
-  editingSlug = p.slug;
-  document.getElementById('modalTitle').textContent = `Modifica ${p.nome} (${p.slug})`;
-  document.getElementById('submitBtn').textContent = 'Salva modifiche';
-  const form = document.getElementById('formAggiungi');
-  form.reset();
-  // Pre-fill
-  form.querySelector('[name=slug]').value = p.slug;
-  form.querySelector('[name=slug]').readOnly = true;  // slug non modificabile
-  form.querySelector('[name=nome]').value = p.nome || '';
-  form.querySelector('[name=sottodominio]').value = p.sottodominio || '';
-  form.querySelector('[name=id_foglio]').value = p.id_foglio || '';
-  form.querySelector('[name=gid_scheda]').value = p.gid_scheda != null ? p.gid_scheda : '';
-  const d = p.deposito || {};
-  form.querySelector('[name=deposito_nome]').value = d.Nome || '';
-  form.querySelector('[name=deposito_lat]').value = d.Lat != null ? d.Lat : '';
-  form.querySelector('[name=deposito_lon]').value = d.Lon != null ? d.Lon : '';
-  form.querySelector('[name=ora_inizio_giornata]').value = minutiToHHMM(p.ora_inizio_giornata != null ? p.ora_inizio_giornata : 480);
-  form.querySelector('[name=ora_fine_giornata]').value = minutiToHHMM(p.ora_fine_giornata != null ? p.ora_fine_giornata : 1020);
-  form.querySelector('[name=usa_localita_come_comune]').checked = !!p.usa_localita_come_comune;
-  form.querySelector('[name=porta]').value = p.porta != null ? p.porta : '';
-  document.getElementById('probe-result').innerHTML = '';
-  document.getElementById('modalAggiungi').classList.add('open');
-}
-
-function chiudiModal() {
-  document.getElementById('modalAggiungi').classList.remove('open');
-  document.getElementById('formAggiungi').reset();
-  document.querySelector('[name=slug]').readOnly = false;
-  editingSlug = null;
-}
-function onSlugChange(input) {
-  if (editingSlug) return;  // in edit mode lo slug non cambia
-  const slug = input.value.trim().toLowerCase();
-  if (slug && !input._editedSub) {
-    document.querySelector('[name=sottodominio]').value = `${slug}.mappa-algeco.com`;
-  }
-}
-document.querySelector('[name=sottodominio]').addEventListener('input', e => e.target._editedSub = true);
-
-async function verificaFoglio() {
-  const id_foglio = document.querySelector('[name=id_foglio]').value.trim();
-  const gid_scheda = document.querySelector('[name=gid_scheda]').value.trim();
-  const out = document.getElementById('probe-result');
-  if (!id_foglio) { out.innerHTML = '<span style="color:#dc2626">Inserisci prima l\'ID del foglio.</span>'; return; }
-  out.innerHTML = '<span style="color:#6b7280">⏳ Verifica in corso...</span>';
-  try {
-    const r = await api('POST', '/api/probe-sheet', { id_foglio, gid_scheda: gid_scheda || null });
-    let html = `<div style="background:#d1fae5;color:#065f46;padding:8px;border-radius:4px;font-size:13px;">
-      ✅ Foglio trovato: <b>${escapeHtml(r.foglio)}</b> / scheda <b>${escapeHtml(r.sheet_name)}</b> (${r.n_colonne} colonne)
-    </div>`;
-    if (r.missing_critici && r.missing_critici.length) {
-      html += `<div style="background:#fee2e2;color:#991b1b;padding:8px;border-radius:4px;font-size:13px;margin-top:6px;">
-        ⚠️ Colonne critiche non trovate: <b>${r.missing_critici.join(', ')}</b><br>
-        Dovrai mappare manualmente queste colonne nelle Impostazioni dopo aver avviato la provincia.
-      </div>`;
-    }
-    // Mostra mapping dedotto compattamente
-    const mapped = Object.entries(r.suggested_mapping || {}).filter(([k,v]) => v).map(([k,v]) => `${k}→${v}`);
-    if (mapped.length) {
-      html += `<details style="margin-top:6px;font-size:12px;color:#4b5563;"><summary>Mapping dedotto (${mapped.length})</summary>
-        <div style="font-family:monospace;padding:6px 0;line-height:1.5;">${escapeHtml(mapped.join(' · '))}</div></details>`;
-    }
-    out.innerHTML = html;
-  } catch (e) {
-    out.innerHTML = `<div style="background:#fee2e2;color:#991b1b;padding:8px;border-radius:4px;font-size:13px;">❌ ${escapeHtml(e.message)}</div>`;
-  }
-}
-
-async function bootstrap(slug) {
-  if (!confirm(`Inizializzare il DB locale per ${slug}? Questa operazione scarica TUTTI i contatori dal foglio Google e popola data/${slug.toLowerCase()}/state.db. Può richiedere 30-60 secondi per fogli grandi.`)) return;
-  toast(`⏳ Inizializzazione DB ${slug} in corso (può richiedere 30-60s)...`);
-  try {
-    const r = await api('POST', `/api/provinces/${slug}/bootstrap`);
-    toast(`✅ DB ${slug} inizializzato. Ora clicca "Avvia".`);
-    setTimeout(caricaProvince, 500);
-  } catch (e) {
-    toast('Errore bootstrap: ' + e.message, true);
-  }
-}
-
-async function submitForm(ev) {
-  ev.preventDefault();
-  const f = ev.target;
-  const fd = new FormData(f);
-  const body = {
-    nome: fd.get('nome'),
-    sottodominio: fd.get('sottodominio'),
-    id_foglio: fd.get('id_foglio'),
-    gid_scheda: parseInt(fd.get('gid_scheda')) || 0,
-    deposito: {
-      Nome: fd.get('deposito_nome'),
-      Lat: parseFloat(fd.get('deposito_lat')),
-      Lon: parseFloat(fd.get('deposito_lon')),
-    },
-    ora_inizio_giornata: hhmmToMinuti(fd.get('ora_inizio_giornata')),
-    ora_fine_giornata: hhmmToMinuti(fd.get('ora_fine_giornata')),
-    usa_localita_come_comune: fd.get('usa_localita_come_comune') === 'on',
-  };
-  const porta = fd.get('porta');
-  if (porta) body.porta = parseInt(porta);
-
-  try {
-    if (editingSlug) {
-      // EDIT
-      const r = await api('PUT', `/api/provinces/${editingSlug}`, body);
-      let msg = `Provincia ${r.slug} aggiornata.`;
-      if (r.campi_cambiati && r.campi_cambiati.length) {
-        msg += ` Campi: ${r.campi_cambiati.join(', ')}.`;
-      }
-      if (r.backend_riavviato) {
-        msg += ' Backend riavviato.';
-      }
-      toast(msg);
-    } else {
-      // CREATE
-      body.slug = fd.get('slug').toUpperCase();
-      const r = await api('POST', '/api/provinces', body);
-      toast(`Provincia ${r.slug} creata sulla porta ${r.cfg.porta}. Clicca "Inizializza DB" e poi "Avvia".`);
-    }
-    chiudiModal();
-    caricaProvince();
-  } catch (e) {
-    toast('Errore: ' + e.message, true);
-  }
-}
-
-// Mostra utente loggato (se la response include user-data via /api/status o altro)
-fetch('/api/status', { credentials: 'same-origin' })
-  .then(r => r.ok ? r.json() : null)
-  .catch(() => null);
-document.getElementById('user-info').textContent = 'Admin';
-
-caricaProvince();
-</script>
-</body>
-</html>
-"""
+_ADMIN_TEMPLATE_PATH = os.path.join(SCRIPT_DIR, 'templates_router', 'admin.html')
 
 
 def _admin_render_ui():
-    return Response(_ADMIN_HTML, mimetype='text/html')
+    try:
+        with open(_ADMIN_TEMPLATE_PATH, 'r', encoding='utf-8') as f:
+            html = f.read()
+    except OSError as e:
+        return Response(f'admin.html non trovato: {e}', status=500, mimetype='text/plain')
+    return Response(html, mimetype='text/html')
 
 
 @app.route('/_router/health')

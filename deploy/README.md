@@ -66,18 +66,38 @@ curl -s http://127.0.0.1:5050/_router/health | jq
 curl -s -H "Host: torino.mappa-algeco.com" http://127.0.0.1:5050/login | head -3
 ```
 
-## Rollback (se qualcosa va storto)
+## Servizi systemd attivi (post-migrazione)
 
-Il vecchio `mappa.service` esiste ancora ma è disabilitato. Per rollback:
+Solo due unit sono attive in produzione:
+- `mappa-algeco-router.service` — supervisor router + backend per provincia
+- `cloudflared-tunnel.service` — tunnel Cloudflare
 
 ```bash
+systemctl status mappa-algeco-router cloudflared-tunnel
+systemctl restart mappa-algeco-router    # comando "normale" di restart
+```
+
+⚠️ **NON usare** `systemctl restart mappa` né `systemctl restart mappa-algeco`:
+quei due unit file esistono ancora sotto `/etc/systemd/system/` ma sono
+**rinominati con suffisso `.disabled`** così systemd non li vede:
+- `mappa.service.disabled` (vecchio launcher monolitico)
+- `mappa-algeco.service.disabled` (variante mai usata)
+
+I file restano come reference per eventuale rollback (vedi sezione sotto).
+
+## Rollback (se qualcosa va storto)
+
+```bash
+# 1. Stop nuovo stack
 systemctl stop mappa-algeco-router cloudflared-tunnel
 systemctl disable mappa-algeco-router cloudflared-tunnel
 
-# Ripristina cloudflared config legacy (path-per-host)
+# 2. Ripristina cloudflared config legacy (path-per-host)
 cp /etc/cloudflared/config.yml.pre-router-bak /etc/cloudflared/config.yml
 
-# Riavvia il vecchio service (riavvia anche cloudflared come suo subprocess)
+# 3. Riattiva il vecchio unit
+mv /etc/systemd/system/mappa.service.disabled /etc/systemd/system/mappa.service
+systemctl daemon-reload
 systemctl enable mappa.service
 systemctl start mappa.service
 ```

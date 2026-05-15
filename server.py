@@ -1382,6 +1382,100 @@ def api_admin_db_pending():
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
+# ============================================================================
+# ADMIN — Dump DB (equivalenti web dei flag CLI di tools/dump_db.py)
+# ============================================================================
+@app.route('/api/admin/db-dump/eneltel/<eneltel>', methods=['GET'])
+@admin_required
+def api_admin_db_dump_eneltel(eneltel):
+    """Dettagli completi su una riga: filone + filone_extra + pending + audit."""
+    try:
+        from moduli import db as _db
+        conn = _db.get_conn()
+        ek = _db.normalize_eneltel(eneltel)
+        # Tutte le righe di filone per quell'eneltel (multi-LCL su Pavia)
+        rows_filone = [dict(r) for r in conn.execute(
+            'SELECT * FROM filone WHERE eneltel_key=? ORDER BY sheets_row',
+            (ek,),
+        ).fetchall()]
+        rows_extra = [dict(r) for r in conn.execute(
+            'SELECT * FROM filone_extra WHERE eneltel_key=? ORDER BY lcl, column_name',
+            (ek,),
+        ).fetchall()]
+        rows_pending = [dict(r) for r in conn.execute(
+            'SELECT * FROM pending_writes WHERE eneltel_key=? ORDER BY id DESC LIMIT 100',
+            (ek,),
+        ).fetchall()]
+        rows_audit = [dict(r) for r in conn.execute(
+            'SELECT * FROM audit_log WHERE eneltel_key=? ORDER BY ts DESC LIMIT 50',
+            (ek,),
+        ).fetchall()]
+        return jsonify({
+            'success': True,
+            'eneltel_key': ek,
+            'filone': rows_filone,
+            'filone_extra': rows_extra,
+            'pending_writes_recenti': rows_pending,
+            'audit_log_recenti': rows_audit,
+        })
+    except Exception as e:
+        logger.exception('[admin] errore /api/admin/db-dump/eneltel')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/admin/db-dump/conflicts', methods=['GET'])
+@admin_required
+def api_admin_db_dump_conflicts():
+    """Ultimi conflitti `local_wins` rilevati dal pull engine."""
+    try:
+        from moduli import db as _db
+        conn = _db.get_conn()
+        limit = min(int(request.args.get('limit', 50)), 500)
+        rows = [dict(r) for r in conn.execute(
+            "SELECT * FROM audit_log WHERE source='conflict_local_wins' "
+            "ORDER BY ts DESC LIMIT ?",
+            (limit,),
+        ).fetchall()]
+        return jsonify({'success': True, 'count': len(rows), 'conflicts': rows})
+    except Exception as e:
+        logger.exception('[admin] errore /api/admin/db-dump/conflicts')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/admin/db-dump/columns', methods=['GET'])
+@admin_required
+def api_admin_db_dump_columns():
+    """Column registry: mappatura nome colonna foglio → chiave interna."""
+    try:
+        from moduli import db as _db
+        conn = _db.get_conn()
+        rows = [dict(r) for r in conn.execute(
+            'SELECT * FROM column_registry ORDER BY last_index'
+        ).fetchall()]
+        return jsonify({'success': True, 'count': len(rows), 'columns': rows})
+    except Exception as e:
+        logger.exception('[admin] errore /api/admin/db-dump/columns')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/admin/db-dump/anomalies', methods=['GET'])
+@admin_required
+def api_admin_db_dump_anomalies():
+    """Anomalie rilevate dal pull engine (righe senza eneltel, ecc.)."""
+    try:
+        from moduli import db as _db
+        conn = _db.get_conn()
+        limit = min(int(request.args.get('limit', 100)), 500)
+        rows = [dict(r) for r in conn.execute(
+            'SELECT * FROM filone_anomalies ORDER BY ts DESC LIMIT ?',
+            (limit,),
+        ).fetchall()]
+        return jsonify({'success': True, 'count': len(rows), 'anomalies': rows})
+    except Exception as e:
+        logger.exception('[admin] errore /api/admin/db-dump/anomalies')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 # File statici dalla cartella data/
 @app.route('/data/<path:filename>')
 @login_required

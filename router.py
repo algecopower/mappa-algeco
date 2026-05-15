@@ -512,6 +512,8 @@ def _admin_dispatch(path):
     m = re.match(r'^api/provinces/([A-Z0-9_]+)$', p)
     if m and method == 'DELETE':
         return _admin_check() or _admin_delete_province(m.group(1))
+    if m and method == 'PUT':
+        return _admin_check() or _admin_update_province(m.group(1))
     m = re.match(r'^api/provinces/([A-Z0-9_]+)/(start|stop|restart)$', p)
     if m and method == 'POST':
         return _admin_check() or _admin_lifecycle(m.group(1), m.group(2))
@@ -731,6 +733,95 @@ def _admin_create_province():
     return jsonify({'ok': True, 'slug': slug, 'cfg': cfg}), 201
 
 
+def _admin_update_province(slug):
+    """PUT /api/provinces/<slug> — aggiorna config strutturale di una provincia.
+
+    Slug NON modificabile (è chiave primaria). Tutto il resto sì.
+    Se il backend è running e cambia un campo strutturale (porta, id_foglio,
+    gid_scheda, deposito, orari, sottodominio, file_mappa), viene auto-riavviato
+    per applicare la modifica.
+    """
+    slug = slug.upper()
+    body = request.get_json(silent=True) or {}
+    try:
+        province = carica_province()
+    except Exception as e:
+        return jsonify({'error': f'lettura provinces.json fallita: {e}'}), 500
+    if slug not in province:
+        return jsonify({'error': f'provincia {slug} non trovata'}), 404
+
+    current = dict(province[slug])
+    aggiornato = dict(current)
+
+    # Campi merge-abili: copia se presenti nel body
+    for k in ('nome', 'id_foglio', 'sottodominio', 'file_mappa'):
+        if k in body:
+            aggiornato[k] = body[k]
+    for k in ('gid_scheda', 'ora_inizio_giornata', 'ora_fine_giornata', 'porta'):
+        if k in body and body[k] is not None and body[k] != '':
+            try:
+                aggiornato[k] = int(body[k])
+            except (ValueError, TypeError):
+                return jsonify({'error': f"campo '{k}' deve essere intero"}), 400
+    if 'usa_localita_come_comune' in body:
+        if body['usa_localita_come_comune']:
+            aggiornato['usa_localita_come_comune'] = True
+        else:
+            aggiornato.pop('usa_localita_come_comune', None)
+    if 'deposito' in body and isinstance(body['deposito'], dict):
+        dep = dict(current.get('deposito', {}))
+        dep.update({k: v for k, v in body['deposito'].items() if v is not None})
+        # normalizza Lat/Lon come float
+        for k in ('Lat', 'Lon'):
+            if k in dep:
+                try:
+                    dep[k] = float(dep[k])
+                except (ValueError, TypeError):
+                    return jsonify({'error': f"deposito.{k} deve essere numerico"}), 400
+        aggiornato['deposito'] = dep
+    for k in ('operatori_vip', 'colori_operatori', 'operatori_dict'):
+        if k in body:
+            aggiornato[k] = body[k]
+
+    # Controllo conflitti porta
+    if aggiornato.get('porta') != current.get('porta'):
+        nuova_porta = aggiornato.get('porta')
+        for altro_slug, altro_cfg in province.items():
+            if altro_slug == slug:
+                continue
+            if int(altro_cfg.get('porta', 0)) == int(nuova_porta or 0):
+                return jsonify({'error': f"porta {nuova_porta} già usata da {altro_slug}"}), 409
+
+    # Rileva se serve riavviare il backend
+    STRUTTURALI = {'porta', 'id_foglio', 'gid_scheda', 'sottodominio', 'file_mappa',
+                   'deposito', 'ora_inizio_giornata', 'ora_fine_giornata',
+                   'operatori_vip', 'operatori_dict', 'colori_operatori',
+                   'usa_localita_come_comune'}
+    cambi = [k for k in STRUTTURALI if aggiornato.get(k) != current.get(k)]
+
+    province[slug] = aggiornato
+    salva_province(province)
+    log.info(f"[admin] {slug} aggiornata. Campi cambiati: {cambi or 'nessuno strutturale'}")
+
+    backend_riavviato = False
+    if cambi and pm.stato().get(slug) == 'running':
+        log.info(f"[admin] {slug}: cambi strutturali → auto-restart")
+        pm.termina_provincia(slug)
+        porta = int(aggiornato.get('porta', 0))
+        if porta:
+            pm._aspetta_porta_libera(porta, timeout=15)
+        pm.avvia_provincia(slug, aggiornato)
+        backend_riavviato = True
+
+    return jsonify({
+        'ok': True,
+        'slug': slug,
+        'cfg': aggiornato,
+        'campi_cambiati': cambi,
+        'backend_riavviato': backend_riavviato,
+    })
+
+
 def _admin_delete_province(slug):
     slug = slug.upper()
     try:
@@ -850,14 +941,14 @@ _ADMIN_HTML = r"""
   </div>
 </main>
 
-<!-- Modal Aggiungi -->
+<!-- Modal Aggiungi / Modifica -->
 <div class="modal" id="modalAggiungi">
   <div class="modal-content">
     <div class="modal-head">
-      <h2>Aggiungi provincia</h2>
+      <h2 id="modalTitle">Aggiungi provincia</h2>
       <button class="close" onclick="chiudiModal()">&times;</button>
     </div>
-    <form id="formAggiungi" onsubmit="submitAggiungi(event)">
+    <form id="formAggiungi" onsubmit="submitForm(event)">
       <div class="form-row">
         <div class="form-group">
           <label>Slug (codice interno)</label>
@@ -936,7 +1027,7 @@ _ADMIN_HTML = r"""
 
       <div style="display:flex; gap:8px; justify-content:flex-end; margin-top: 20px;">
         <button type="button" class="btn secondary" onclick="chiudiModal()">Annulla</button>
-        <button type="submit" class="btn">Crea provincia</button>
+        <button type="submit" class="btn" id="submitBtn">Crea provincia</button>
       </div>
     </form>
   </div>
@@ -1002,6 +1093,7 @@ function rendiGrid(province) {
               : `<button class="btn success" onclick="azione('${p.slug}','start')">▶ Avvia</button>`
             )
         }
+        <button class="btn secondary" onclick="apriFormModifica(${JSON.stringify(p).replace(/"/g,'&quot;')})">✏️ Modifica</button>
         <button class="btn danger" onclick="elimina('${p.slug}')">🗑️ Elimina</button>
       </div>
       ${!p.db_exists ? '<div class="help" style="margin-top:8px;color:#dc2626;">⚠️ DB non ancora inizializzato. Clicca "Inizializza DB" per il primo pull dal foglio.</div>' : ''}
@@ -1035,14 +1127,52 @@ async function elimina(slug) {
   }
 }
 
+let editingSlug = null;  // null = create mode, slug = edit mode
+
 function apriFormAggiungi() {
+  editingSlug = null;
+  document.getElementById('modalTitle').textContent = 'Aggiungi provincia';
+  document.getElementById('submitBtn').textContent = 'Crea provincia';
+  const form = document.getElementById('formAggiungi');
+  form.reset();
+  form.querySelector('[name=slug]').readOnly = false;
+  document.getElementById('probe-result').innerHTML = '';
   document.getElementById('modalAggiungi').classList.add('open');
 }
+
+function apriFormModifica(p) {
+  editingSlug = p.slug;
+  document.getElementById('modalTitle').textContent = `Modifica ${p.nome} (${p.slug})`;
+  document.getElementById('submitBtn').textContent = 'Salva modifiche';
+  const form = document.getElementById('formAggiungi');
+  form.reset();
+  // Pre-fill
+  form.querySelector('[name=slug]').value = p.slug;
+  form.querySelector('[name=slug]').readOnly = true;  // slug non modificabile
+  form.querySelector('[name=nome]').value = p.nome || '';
+  form.querySelector('[name=sottodominio]').value = p.sottodominio || '';
+  form.querySelector('[name=id_foglio]').value = p.id_foglio || '';
+  form.querySelector('[name=gid_scheda]').value = p.gid_scheda != null ? p.gid_scheda : '';
+  const d = p.deposito || {};
+  form.querySelector('[name=deposito_nome]').value = d.Nome || '';
+  form.querySelector('[name=deposito_lat]').value = d.Lat != null ? d.Lat : '';
+  form.querySelector('[name=deposito_lon]').value = d.Lon != null ? d.Lon : '';
+  form.querySelector('[name=ora_inizio_giornata]').value = p.ora_inizio_giornata != null ? p.ora_inizio_giornata : 480;
+  form.querySelector('[name=ora_fine_giornata]').value = p.ora_fine_giornata != null ? p.ora_fine_giornata : 1020;
+  form.querySelector('[name=usa_localita_come_comune]').checked = !!p.usa_localita_come_comune;
+  form.querySelector('[name=porta]').value = p.porta != null ? p.porta : '';
+  document.getElementById('probe-result').innerHTML = '';
+  document.getElementById('modalAggiungi').classList.add('open');
+}
+
 function chiudiModal() {
   document.getElementById('modalAggiungi').classList.remove('open');
   document.getElementById('formAggiungi').reset();
+  document.querySelector('[name=slug]').readOnly = false;
+  editingSlug = null;
 }
 function onSlugChange(input) {
+  if (editingSlug) return;  // in edit mode lo slug non cambia
   const slug = input.value.trim().toLowerCase();
   if (slug && !input._editedSub) {
     document.querySelector('[name=sottodominio]').value = `${slug}.mappa-algeco.com`;
@@ -1091,12 +1221,11 @@ async function bootstrap(slug) {
   }
 }
 
-async function submitAggiungi(ev) {
+async function submitForm(ev) {
   ev.preventDefault();
   const f = ev.target;
   const fd = new FormData(f);
   const body = {
-    slug: fd.get('slug').toUpperCase(),
     nome: fd.get('nome'),
     sottodominio: fd.get('sottodominio'),
     id_foglio: fd.get('id_foglio'),
@@ -1112,13 +1241,29 @@ async function submitAggiungi(ev) {
   };
   const porta = fd.get('porta');
   if (porta) body.porta = parseInt(porta);
+
   try {
-    const r = await api('POST', '/api/provinces', body);
-    toast(`Provincia ${r.slug} creata sulla porta ${r.cfg.porta}. Clicca "Avvia" per partire.`);
+    if (editingSlug) {
+      // EDIT
+      const r = await api('PUT', `/api/provinces/${editingSlug}`, body);
+      let msg = `Provincia ${r.slug} aggiornata.`;
+      if (r.campi_cambiati && r.campi_cambiati.length) {
+        msg += ` Campi: ${r.campi_cambiati.join(', ')}.`;
+      }
+      if (r.backend_riavviato) {
+        msg += ' Backend riavviato.';
+      }
+      toast(msg);
+    } else {
+      // CREATE
+      body.slug = fd.get('slug').toUpperCase();
+      const r = await api('POST', '/api/provinces', body);
+      toast(`Provincia ${r.slug} creata sulla porta ${r.cfg.porta}. Clicca "Inizializza DB" e poi "Avvia".`);
+    }
     chiudiModal();
     caricaProvince();
   } catch (e) {
-    toast('Errore creazione: ' + e.message, true);
+    toast('Errore: ' + e.message, true);
   }
 }
 

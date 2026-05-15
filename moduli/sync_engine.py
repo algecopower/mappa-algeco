@@ -467,6 +467,50 @@ def trigger_drain_now():
     _drain_wakeup.set()
 
 
+_BACKLOG_WARN_THRESHOLD = 500   # pending in stato 'pending'/'in_flight'
+_BACKLOG_ATTEMPTS_WARN = 10     # attempts cumulati su una singola pending
+_backlog_alerting_state = {'last_warn_ts': 0, 'last_warn_size': 0}
+
+
+def _check_backlog_health(conn):
+    """Logga warning se il backlog pending è anormalmente grande o ha
+    pending con troppi tentativi falliti (drainer in difficoltà o Sheets down).
+
+    Throttle: ripete il warning solo se sono passati >5 minuti dall'ultimo
+    O se il backlog è cresciuto significativamente (>20%).
+    """
+    import time as _time
+    row = conn.execute(
+        "SELECT COUNT(*) AS n, MAX(attempts) AS max_att "
+        "FROM pending_writes WHERE state IN ('pending','in_flight')"
+    ).fetchone()
+    n = row['n'] or 0
+    max_att = row['max_att'] or 0
+    now = int(_time.time())
+
+    issues = []
+    if n >= _BACKLOG_WARN_THRESHOLD:
+        issues.append(f"backlog={n} (soglia {_BACKLOG_WARN_THRESHOLD})")
+    if max_att >= _BACKLOG_ATTEMPTS_WARN:
+        issues.append(f"max_attempts={max_att} (soglia {_BACKLOG_ATTEMPTS_WARN})")
+
+    if not issues:
+        _backlog_alerting_state['last_warn_size'] = 0  # reset al rientro
+        return
+
+    last_ts = _backlog_alerting_state['last_warn_ts']
+    last_size = _backlog_alerting_state['last_warn_size']
+    repeat = (now - last_ts) > 300 or (n > last_size * 1.2 if last_size else True)
+    if repeat:
+        logger.warning(
+            f"[drain] ⚠️ BACKLOG ANOMALO: {', '.join(issues)}. "
+            f"Verifica /api/admin/db-pending. Possibili cause: Sheets API down, "
+            f"quota esaurita, colonne mancanti."
+        )
+        _backlog_alerting_state['last_warn_ts'] = now
+        _backlog_alerting_state['last_warn_size'] = n
+
+
 def _drain_loop():
     """Loop daemon che drena pending_writes verso Sheets."""
     interval = _cfg('DRAIN_INTERVAL_SECONDI', 10)
@@ -476,6 +520,11 @@ def _drain_loop():
             res = drain_once()
             if res.get('drained') or res.get('quarantined'):
                 logger.info(f"[drain] {res}")
+            # Check backlog health (warning se anormale)
+            try:
+                _check_backlog_health(db.get_conn())
+            except Exception:
+                logger.exception("[drain] errore check_backlog_health")
         except Exception:
             logger.exception("[drain] errore nel ciclo")
 
@@ -485,10 +534,59 @@ def _drain_loop():
     logger.info("[drain] worker fermato")
 
 
+def _check_sheet_substitution():
+    """Verifica che il foglio configurato corrisponda a quello con cui il DB
+    è stato bootstrappato. Se diverso, blocca i workers e logga un errore
+    esplicito: ricostruzione manuale necessaria (tools/migrate_to_sqlite.py).
+
+    Casi che intercetta:
+      - Admin edita `id_foglio` di una provincia esistente da UI router
+      - Manual edit di `provinces.json` per puntare a un foglio diverso
+      - Sostituzione del backend Google Sheet
+    Senza questo check, il drainer pusherebbe le pending del vecchio foglio
+    sul nuovo, e il pull marcherebbe come 'orphan' tutte le righe pre-esistenti.
+
+    Ritorna True se OK (procedi con workers), False se mismatch.
+    """
+    try:
+        from config import ID_FOGLIO_GOOGLE
+    except ImportError:
+        logger.warning("[sync_engine] config.ID_FOGLIO_GOOGLE non disponibile, skip check")
+        return True
+
+    stored = db.sync_state_get('last_sheet_id')
+    if not stored:
+        # Mai bootstrappato (caso fresco): salva il valore corrente e procedi.
+        # Se è il primo avvio post-migrate_to_sqlite, il tool ha già salvato il
+        # valore. Qui copriamo il caso di DB pre-existente senza marker.
+        db.sync_state_set('last_sheet_id', ID_FOGLIO_GOOGLE)
+        logger.info(f"[sync_engine] last_sheet_id inizializzato a {ID_FOGLIO_GOOGLE}")
+        return True
+
+    if stored == ID_FOGLIO_GOOGLE:
+        return True
+
+    logger.error("=" * 70)
+    logger.error("[sync_engine] ⛔ SHEET SUBSTITUTION RILEVATA — workers NON avviati")
+    logger.error(f"  Foglio bootstrappato nel DB: {stored}")
+    logger.error(f"  Foglio attualmente configurato: {ID_FOGLIO_GOOGLE}")
+    logger.error("  Il DB locale contiene dati del foglio precedente. Avviare drainer")
+    logger.error("  e pull engine ora corromperebbe entrambi i fogli.")
+    logger.error("  Soluzione: scegli una delle due opzioni:")
+    logger.error("    a) Ripristina id_foglio precedente in provinces.json")
+    logger.error("    b) Ricostruisci il DB dal nuovo foglio:")
+    logger.error("       PROVINCIA=XXX ./venv/bin/python tools/migrate_to_sqlite.py --reset")
+    logger.error("=" * 70)
+    return False
+
+
 def start_workers():
     """Avvia i worker daemon. Chiamato da server.py al boot.
 
     Idempotente: chiamate ripetute non avviano worker duplicati.
+    Esegue check anti-substitution prima di avviare: se il foglio configurato
+    non corrisponde a quello bootstrappato nel DB, blocca i workers e logga
+    un errore esplicito (vedi _check_sheet_substitution).
     """
     global _workers_started
     if _workers_started:
@@ -505,9 +603,11 @@ def start_workers():
     else:
         logger.info(f"[sync_engine] DB integrity OK: {db.stats()}")
 
-    # In Fase 1 (shadow) il drainer non ha nulla da fare (le route scrivono
-    # direttamente su Sheets), ma lasciamo il loop attivo per coprire eventuali
-    # pending creati con `initial_state='pending'` (es. test, futura Fase 2).
+    # Anti-substitution: blocca se il foglio configurato non è quello bootstrappato.
+    if not _check_sheet_substitution():
+        logger.error("[sync_engine] workers NON avviati per sheet substitution")
+        return
+
     t = threading.Thread(target=_drain_loop, daemon=True, name='db-drain')
     t.start()
 

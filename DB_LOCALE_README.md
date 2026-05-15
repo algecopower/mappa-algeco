@@ -1,26 +1,28 @@
 # Architettura sync DB locale ↔ Google Sheets
 
-Refactor completato in aprile-maggio 2026. Il programma non scrive più
-direttamente su Google Sheets ad ogni POST utente: tutte le modifiche
-passano da un DB SQLite locale, e un worker asincrono le propaga su Sheets
-in batch.
+Refactor completato in aprile-maggio 2026 in 3 fasi:
+1. **Shadow-write** (validation): DB popolato in parallelo, scritture ancora dirette a Sheets.
+2. **Primary mode**: DB diventa source of truth, drainer asincrono pusha su Sheets.
+3. **Cleanup**: eliminati i path legacy. Oggi esiste solo il path DB-first.
 
 ## Modalità di funzionamento
 
-Controllata da `USE_DB_BACKEND` in [config.py](config.py#L364) (env var omonima):
+Controllata da `USE_DB_BACKEND` in [config.py](config.py) (env var omonima):
 
 | Valore | Comportamento |
 |---|---|
-| `primary` (default, attuale) | DB = source of truth. Route → DB → drainer → Sheets. |
-| `shadow` | DB popolato in parallelo, ma scritture utente vanno ancora direttamente su Sheets (fallback Fase 1, conservato per emergency rollback). |
-| `off` | Layer DB disabilitato. Comportamento "pre-refactor". |
+| `primary` (default, unico path attivo) | DB = source of truth. Route → DB → drainer → Sheets. |
+| `off` | Kill-switch d'emergenza: drainer e pull NON partono. Le route scrivono comunque nel DB (le pending si accumulano). |
 
-Per rollback immediato in caso di problemi:
+> Dopo la Fase 3 il path `shadow` è stato rimosso dal codice. Per rollback
+> emergenziale a un comportamento pre-refactor occorre `git checkout` di un
+> commit precedente alla Fase 3 (es. `0809e3c`).
 
+Per fermare temporaneamente il drainer senza fermare l'app:
 ```bash
-sudo systemctl edit mappa.service
-# Aggiungi: Environment="USE_DB_BACKEND=shadow"
-sudo systemctl restart mappa.service
+sudo systemctl edit mappa-algeco-router.service
+# Aggiungi: Environment="USE_DB_BACKEND=off"
+sudo systemctl restart mappa-algeco-router
 ```
 
 ## Flusso operativo (primary mode)
@@ -94,8 +96,8 @@ File: `data/{provincia}/state.db` (SQLite + WAL). Schema in [moduli/db.py](modul
 
 | Tabella | Contenuto |
 |---|---|
-| `filone` | Una riga per contatore, indicizzata per `eneltel_key`. ~30 colonne tipizzate (pod, nominativo, comune, data_pianificata, operatore, lat/lon, ecc.) + meta (row_hash, last_remote_pull_ts, sheets_row, is_orphan). |
-| `filone_extra` | Colonne del foglio non mappate alle ~30 note (es. `Mot. Rich.`, `MID`, `ZTL`). Key-value `(eneltel_key, column_name) → value`. |
+| `filone` | Una riga per contatore. **PK composta `(eneltel_key, lcl)`** (schema v2, per supportare i casi multi-LCL di Pavia). ~30 colonne tipizzate (pod, nominativo, comune, data_pianificata, operatore, lat/lon, ecc.) + meta (row_hash, last_remote_pull_ts, sheets_row, is_orphan). |
+| `filone_extra` | Colonne del foglio non mappate alle ~30 note (es. `Mot. Rich.`, `MID`, `ZTL`). Key-value `(eneltel_key, lcl, column_name) → value`. |
 | `pending_writes` | Coda di scritture da pushare su Sheets. Stati: `pending` / `in_flight` / `done` / `quarantined` / `failed`. `UNIQUE INDEX` parziale su `(eneltel_key, column_name)` con `state IN ('pending','in_flight')` per coalesce. |
 | `audit_log` | Storico di ogni modifica. `source` ∈ {`local`, `remote`, `bootstrap`, `conflict_local_wins`, `quarantine`}. |
 | `column_registry` | Mappatura nome colonna foglio → chiave interna, aggiornata ad ogni pull. |
@@ -149,19 +151,25 @@ $PY tools/archive_audit_log.py --apply
 
 | File | Quando | Cosa fa |
 |---|---|---|
-| `/etc/cron.d/mappa-algeco-shadow-validator` | Ogni notte: Torino 03:00, Pavia 03:30 | Confronta DB ↔ Sheets cella per cella, salva report JSON in `data/{prov}/shadow_reports/` |
+| `/etc/cron.d/mappa-algeco-shadow-validator` | Ogni notte: Torino 03:00, Pavia 03:30 | Confronta DB ↔ Sheets cella per cella (usando PK composta `(eneltel,lcl)`), salva report JSON in `data/{prov}/shadow_reports/` |
 | `/etc/cron.d/mappa-algeco-audit-archive` | 1° del mese: Torino 04:00, Pavia 04:15 | Archivia `audit_log` > 180 giorni in `backup/{prov}/audit_log_archive_YYYY-MM.jsonl.gz` |
+| `/etc/cron.d/mappa-algeco-cleanup-pendings` | 1° del mese: Torino 05:00, Pavia 05:15 | Cancella `pending_writes` in stato `done` > 30 giorni (info conservata in audit_log) |
+
+Backup giornaliero del DB:
+- `backup/{prov}/state_YYYY-MM-DD.db` (snapshot via `VACUUM INTO`, rotation: ultimi 7)
+- Eseguito da `backup_periodico_auto()` nel sync_loop (stessa cadenza dei backup JSON)
 
 Log:
-- `/var/log/mappa-shadow-torino.log` / `/var/log/mappa-shadow-pavia.log`
-- `/var/log/mappa-audit-archive-torino.log` / `/var/log/mappa-audit-archive-pavia.log`
+- `/var/log/mappa-shadow-{torino,pavia}.log`
+- `/var/log/mappa-audit-archive-{torino,pavia}.log`
+- `/var/log/mappa-cleanup-pendings-{torino,pavia}.log`
 
 ## Endpoint admin
 
 | Endpoint | Cosa fa |
 |---|---|
-| `GET /api/admin/db-stats` | Stats live del DB locale (equivalente a `dump_db.py`). |
-| `GET /api/admin/db-pending?state=pending` | Lista pending in volo o per stato. Parametri: `state`, `limit`. |
+| `GET /api/admin/db-stats` | Stats live del DB locale + `health.warnings` se backlog ≥ 500 o `max_attempts` ≥ 10. |
+| `GET /api/admin/db-pending?state=pending` | Lista pending per stato. Parametri: `state`, `limit`. |
 
 ## Tassonomia delle modifiche
 
@@ -201,16 +209,18 @@ In totale: **~5-7 chiamate API/min** sotto carico tipico (60 era il punto di rot
 
 | File | Ruolo |
 |---|---|
-| [moduli/db.py](moduli/db.py) | Schema SQLite, connection thread-local, `record_local_change`, `shadow_record_batch`, `find_eneltel_by_pod`, `canonical_column_name`, `audit`, ecc. |
-| [moduli/sync_engine.py](moduli/sync_engine.py) | `pull_once` (Sheets→DB) e `drain_once` (DB→Sheets). Worker daemon. |
+| [moduli/db.py](moduli/db.py) | Schema SQLite v2, connection thread-local, `record_local_change`, `find_eneltel_by_pod`, `canonical_column_name`, `dump_filone_as_rows`, `audit`, migrations. |
+| [moduli/sync_engine.py](moduli/sync_engine.py) | `pull_once` (Sheets→DB) e `drain_once` (DB→Sheets). Worker daemon + check anti sheet-substitution + alert backlog. |
 | [moduli/data_loader.py](moduli/data_loader.py) | `_apply_pending_to_values` (overlay pending sui raw values), `mark_data_changed`. |
 | [moduli/mappa_data_patcher.py](moduli/mappa_data_patcher.py) | Patch in-place di `mappa_data.json` per soft edit. |
-| [moduli/shared.py](moduli/shared.py) | `safe_batch_update_by_name` (API canonica + branch `primary`), `_route_to_db_primary`, `find_row_by_eneltel/pod` (DB-aware in primary), hook nelle funzioni appuntamento. |
-| [server.py](server.py) | `trigger_sync_after_edit` (prova patch in-place → fallback sync_loop), `_shadow_db_pull` nel `_do_sincronizza_dati`, init worker drainer, endpoint admin. |
-| [tools/migrate_to_sqlite.py](tools/migrate_to_sqlite.py) | Bootstrap iniziale (idempotente). |
-| [tools/validate_shadow.py](tools/validate_shadow.py) | Validatore notturno DB↔Sheets. |
+| [moduli/shared.py](moduli/shared.py) | `safe_batch_update_by_name` (API canonica, route → `_route_to_db_primary`; drainer usa `_force_sheets=True`), helper di lookup row leggono solo dal DB. |
+| [moduli/backup.py](moduli/backup.py) | Backup giornaliero JSON + snapshot DB rotativo (`esegui_backup_db`). |
+| [server.py](server.py) | `trigger_sync_after_edit` (prova patch in-place → fallback sync_loop), `_shadow_db_pull`, init drainer, endpoint admin (`db-stats`, `db-pending`). |
+| [tools/migrate_to_sqlite.py](tools/migrate_to_sqlite.py) | Bootstrap iniziale (idempotente). Aggiorna `last_sheet_id` in `sync_state`. |
+| [tools/validate_shadow.py](tools/validate_shadow.py) | Validatore notturno DB↔Sheets (PK composta v2). |
 | [tools/dump_db.py](tools/dump_db.py) | Diagnostica CLI. |
-| [tools/cleanup_quarantined.py](tools/cleanup_quarantined.py) | Pulizia pending obsolete. |
+| [tools/cleanup_quarantined.py](tools/cleanup_quarantined.py) | Pulizia pending quarantined obsolete. |
+| [tools/cleanup_done_pendings.py](tools/cleanup_done_pendings.py) | Cancellazione mensile delle pending `done` vecchie. |
 | [tools/archive_audit_log.py](tools/archive_audit_log.py) | Archiviazione mensile audit_log. |
 
 ## Troubleshooting rapido
@@ -230,6 +240,16 @@ In totale: **~5-7 chiamate API/min** sotto carico tipico (60 era il punto di rot
 - Se `field_diffs`: indagare se sono modifiche esterne ancora pending (cache 30s) o un vero bug.
 
 **Problema**: Sheets diventa fuori sync grave o DB corrotto.
-- `cat data/{prov}/state.db | sqlite3 -batch ":memory:" 'PRAGMA integrity_check;'` (richiede sqlite3 CLI).
-- Rollback in modalità shadow (vedi sopra).
+- `PRAGMA integrity_check` via `$PY tools/dump_db.py` (mostra anche `integrity` nella sezione stats).
+- Restore da snapshot: `cp backup/{prov}/state_YYYY-MM-DD.db data/{prov}/state.db` (poi restart router).
 - Worst case: `$PY tools/migrate_to_sqlite.py --reset` ricostruisce il DB da Sheets.
+
+**Problema**: messaggio "⛔ SHEET SUBSTITUTION RILEVATA" nei log a startup.
+- Significa che `provinces.json` punta a un foglio diverso da quello con cui il DB è stato bootstrappato. Il drainer e il pull NON partono per evitare corruzione.
+- Soluzione (a) ripristina `id_foglio` originale in `provinces.json` e riavvia.
+- Soluzione (b) accetta il cambio: `PROVINCIA=XXX $PY tools/migrate_to_sqlite.py --reset` (ricostruisce DB dal nuovo foglio).
+
+**Problema**: warning "BACKLOG ANOMALO" nei log del drainer.
+- Indica che il `pending_writes` è > 500 entries oppure una pending ha > 10 tentativi falliti.
+- Possibili cause: Sheets API down (quota o 503), colonne mancanti sul foglio, ancora persa.
+- Verifica `GET /api/admin/db-pending?state=pending` o `$PY tools/dump_db.py --pending`.

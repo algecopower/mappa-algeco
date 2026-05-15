@@ -1324,14 +1324,34 @@ def api_admin_set_role(username):
 @app.route('/api/admin/db-stats', methods=['GET'])
 @admin_required
 def api_admin_db_stats():
-    """Statistiche del DB locale SQLite (Fase 1+ refactor sync Sheets)."""
+    """Statistiche del DB locale SQLite + valutazione health del backlog."""
     try:
         from moduli import db as _db
+        stats = _db.stats()
+        # Health: rileva backlog anormale e max_attempts elevato
+        conn = _db.get_conn()
+        row = conn.execute(
+            "SELECT COUNT(*) AS n, MAX(attempts) AS max_att "
+            "FROM pending_writes WHERE state IN ('pending','in_flight')"
+        ).fetchone()
+        backlog = row['n'] or 0
+        max_attempts = row['max_att'] or 0
+        warnings = []
+        if backlog >= 500:
+            warnings.append(f'Backlog pending anomalo: {backlog} (soglia 500)')
+        if max_attempts >= 10:
+            warnings.append(f'Pending con {max_attempts} tentativi falliti (soglia 10)')
         return jsonify({
             'success': True,
             'use_db_backend': USE_DB_BACKEND,
-            'stats': _db.stats(),
+            'stats': stats,
             'integrity': _db.integrity_check(),
+            'health': {
+                'backlog': backlog,
+                'max_attempts': max_attempts,
+                'warnings': warnings,
+                'ok': not warnings,
+            },
         })
     except Exception as e:
         logger.exception('[admin] errore /api/admin/db-stats')

@@ -119,84 +119,54 @@ def _format_row_to_contatore(data):
 @bp.route('/api/contatore/<eneltel>')
 @login_required
 def get_contatore(eneltel):
-    """Ottiene i dati di un contatore.
-
-    In primary mode (Fase 2) legge dal DB locale + applica pending in volo,
-    così la UI vede subito i valori che l'utente ha appena salvato senza
-    aspettare il drainer (~10-30s).
-    """
-    from config import USE_DB_BACKEND as _USE_DB
-    if _USE_DB == 'primary':
-        from moduli import db as _db
-        ek = _db.normalize_eneltel(eneltel)
-        # LCL opzionale come query param per disambiguare righe duplicate.
-        # Default: prima riga (sheets_row più basso).
-        lcl_arg = request.args.get('lcl')
-        local = _db.get_filone_row(ek, lcl=lcl_arg)
-        if not local:
-            return jsonify({'error': f'ENELTEL {eneltel} non trovato'}), 404
-        row_lcl = local.get('lcl') or ''
-
-        conn = _db.get_conn()
-        col_rows = conn.execute(
-            'SELECT column_name, chiave_interna FROM column_registry '
-            'ORDER BY last_index'
-        ).fetchall()
-        data = {}
-        for cr in col_rows:
-            col_sheet = cr['column_name']
-            chiave = cr['chiave_interna']
-            if chiave in _db.COLONNE_NOTE:
-                val = local.get(chiave, '') or ''
-            elif chiave == 'eneltel':
-                val = local.get('eneltel_key', '') or ''
-            else:
-                ev = conn.execute(
-                    "SELECT value FROM filone_extra WHERE eneltel_key=? AND COALESCE(lcl,'')=? AND column_name=?",
-                    (ek, row_lcl, col_sheet),
-                ).fetchone()
-                val = (ev['value'] if ev else '') or ''
-            data[col_sheet] = val
-
-        # Pending in volo per la specifica (eneltel, lcl)
-        pending_rows = conn.execute(
-            "SELECT column_name, new_value FROM pending_writes "
-            "WHERE eneltel_key=? AND COALESCE(lcl,'')=? AND state IN ('pending','in_flight')",
-            (ek, row_lcl),
-        ).fetchall()
-        for pr in pending_rows:
-            data[pr['column_name']] = pr['new_value'] or ''
-
-        return jsonify({
-            'eneltel': eneltel,
-            'row': local.get('sheets_row'),
-            'lcl': row_lcl,
-            'data': data,
-            'contatore': _format_row_to_contatore(data),
-        })
-
-    # Path SHADOW/OFF: legge da Sheets (originale)
-    row = find_row_by_eneltel(eneltel)
-    if row is None:
+    """Ottiene i dati di un contatore dal DB locale + pending in volo."""
+    from moduli import db as _db
+    ek = _db.normalize_eneltel(eneltel)
+    # LCL opzionale come query param per disambiguare righe duplicate
+    # (Pavia multi-LCL). Default: prima riga (sheets_row più basso).
+    lcl_arg = request.args.get('lcl')
+    local = _db.get_filone_row(ek, lcl=lcl_arg)
+    if not local:
         return jsonify({'error': f'ENELTEL {eneltel} non trovato'}), 404
+    row_lcl = local.get('lcl') or ''
 
-    ws = get_worksheet()
-    row_data = ws.row_values(row)
-
-    # Costruisci dict con headers
-    _headers = get_headers()
+    conn = _db.get_conn()
+    col_rows = conn.execute(
+        'SELECT column_name, chiave_interna FROM column_registry '
+        'ORDER BY last_index'
+    ).fetchall()
     data = {}
-    for i, h in enumerate(_headers):
-        if i < len(row_data):
-            data[h] = row_data[i]
+    for cr in col_rows:
+        col_sheet = cr['column_name']
+        chiave = cr['chiave_interna']
+        if chiave in _db.COLONNE_NOTE:
+            val = local.get(chiave, '') or ''
+        elif chiave == 'eneltel':
+            val = local.get('eneltel_key', '') or ''
         else:
-            data[h] = ''
+            ev = conn.execute(
+                "SELECT value FROM filone_extra WHERE eneltel_key=? AND COALESCE(lcl,'')=? AND column_name=?",
+                (ek, row_lcl, col_sheet),
+            ).fetchone()
+            val = (ev['value'] if ev else '') or ''
+        data[col_sheet] = val
+
+    # Pending in volo per la specifica (eneltel, lcl): mostrano subito le
+    # modifiche utente prima che il drainer pushi su Sheets.
+    pending_rows = conn.execute(
+        "SELECT column_name, new_value FROM pending_writes "
+        "WHERE eneltel_key=? AND COALESCE(lcl,'')=? AND state IN ('pending','in_flight')",
+        (ek, row_lcl),
+    ).fetchall()
+    for pr in pending_rows:
+        data[pr['column_name']] = pr['new_value'] or ''
 
     return jsonify({
         'eneltel': eneltel,
-        'row': row,
+        'row': local.get('sheets_row'),
+        'lcl': row_lcl,
         'data': data,
-        'contatore': _format_row_to_contatore(data)
+        'contatore': _format_row_to_contatore(data),
     })
 
 
@@ -217,19 +187,13 @@ def update_contatore(eneltel):
         campi_ammessi = CAMPI_MODIFICABILI.get(PROVINCIA_ATTIVA, {})
         col_names = list(campi_ammessi.values())
 
-        # Debug: mostra headers disponibili. In primary mode usiamo il
-        # column_registry del DB per evitare una read Sheets inutile.
-        from config import USE_DB_BACKEND as _USE_DB
-        if _USE_DB == 'primary':
-            from moduli import db as _db
-            conn = _db.get_conn()
-            registry_rows = conn.execute(
-                'SELECT column_name FROM column_registry ORDER BY last_index'
-            ).fetchall()
-            _header_map = {r['column_name']: i + 1 for i, r in enumerate(registry_rows)}
-        else:
-            get_worksheet()  # Assicura che _header_map sia popolato
-            _header_map = get_header_map()
+        # Header map letta dal column_registry del DB (no chiamate Sheets).
+        from moduli import db as _db
+        conn = _db.get_conn()
+        registry_rows = conn.execute(
+            'SELECT column_name FROM column_registry ORDER BY last_index'
+        ).fetchall()
+        _header_map = {r['column_name']: i + 1 for i, r in enumerate(registry_rows)}
         logger.info(f"📋 Headers disponibili: {list(_header_map.keys())}")
         logger.info(f"📝 Campi ricevuti dal client: {fields}")
         logger.info(f"📝 Colonne ammesse dalla config: {col_names}")
@@ -248,53 +212,37 @@ def update_contatore(eneltel):
         if not fields_validi:
             return jsonify({'error': 'Nessun campo valido da aggiornare'}), 400
 
-        # Leggi i valori precedenti per lo storico
+        # Leggi i valori precedenti dal DB locale per lo storico.
         row_num = find_row_by_eneltel(eneltel)
         old_values = {}
         if row_num:
-            if _USE_DB == 'primary':
-                # Read dal DB locale identificando la riga via (eneltel, lcl).
-                try:
-                    from moduli import db as _db
-                    ek = _db.normalize_eneltel(eneltel)
-                    local = _db.get_filone_row(ek, lcl=anchor_lcl) or {}
-                    row_lcl = local.get('lcl') or ''
-                    conn = _db.get_conn()
-                    pending_overlay = {
-                        r['column_name']: r['new_value']
-                        for r in conn.execute(
-                            "SELECT column_name, new_value FROM pending_writes "
-                            "WHERE eneltel_key=? AND COALESCE(lcl,'')=? AND state IN ('pending','in_flight')",
-                            (ek, row_lcl),
-                        ).fetchall()
-                    }
-                    for col_name in fields_validi:
-                        if col_name in pending_overlay:
-                            old_values[col_name] = pending_overlay[col_name] or ''
+            try:
+                ek = _db.normalize_eneltel(eneltel)
+                local = _db.get_filone_row(ek, lcl=anchor_lcl) or {}
+                row_lcl = local.get('lcl') or ''
+                pending_overlay = {
+                    r['column_name']: r['new_value']
+                    for r in conn.execute(
+                        "SELECT column_name, new_value FROM pending_writes "
+                        "WHERE eneltel_key=? AND COALESCE(lcl,'')=? AND state IN ('pending','in_flight')",
+                        (ek, row_lcl),
+                    ).fetchall()
+                }
+                for col_name in fields_validi:
+                    if col_name in pending_overlay:
+                        old_values[col_name] = pending_overlay[col_name] or ''
+                    else:
+                        chiave = _db.column_to_internal_key(conn, col_name)
+                        if chiave and chiave in _db.COLONNE_NOTE:
+                            old_values[col_name] = local.get(chiave, '') or ''
                         else:
-                            chiave = _db.column_to_internal_key(conn, col_name)
-                            if chiave and chiave in _db.COLONNE_NOTE:
-                                old_values[col_name] = local.get(chiave, '') or ''
-                            else:
-                                ev = conn.execute(
-                                    "SELECT value FROM filone_extra WHERE eneltel_key=? AND COALESCE(lcl,'')=? AND column_name=?",
-                                    (ek, row_lcl, col_name),
-                                ).fetchone()
-                                old_values[col_name] = (ev['value'] if ev else '') or ''
-                except Exception as e:
-                    logger.warning(f"[CellLog] Errore lettura old_values da DB: {e}")
-            else:
-                try:
-                    ws = get_worksheet()
-                    row_data = ws.row_values(row_num)
-                    for col_name in fields_validi:
-                        col_idx = _header_map.get(col_name)
-                        if col_idx and col_idx <= len(row_data):
-                            old_values[col_name] = row_data[col_idx - 1]
-                        else:
-                            old_values[col_name] = ''
-                except Exception as e:
-                    logger.warning(f"[CellLog] Errore lettura valori precedenti: {e}")
+                            ev = conn.execute(
+                                "SELECT value FROM filone_extra WHERE eneltel_key=? AND COALESCE(lcl,'')=? AND column_name=?",
+                                (ek, row_lcl, col_name),
+                            ).fetchone()
+                            old_values[col_name] = (ev['value'] if ev else '') or ''
+            except Exception as e:
+                logger.warning(f"[CellLog] Errore lettura old_values da DB: {e}")
 
         success, msg = update_row_fields(eneltel, fields_validi, lcl=anchor_lcl)
 
@@ -681,58 +629,21 @@ def remove_appuntamento(eneltel):
 @bp.route('/api/filone')
 @login_required
 def get_filone():
-    """
-    Restituisce tutti i dati del FILONE per la vista Excel.
+    """Restituisce tutti i dati del FILONE per la vista Excel.
 
-    In primary mode (Fase 2) legge direttamente dal DB locale: zero finestre
-    di staleness, niente race condition con il cache Sheets/drainer. Il DB è
-    fonte di verità e il drainer asincrono si occupa di pushare verso Sheets.
-
-    In shadow/off legge dal cache Sheets in memoria (comportamento legacy).
+    Legge direttamente dal DB locale: zero finestre di staleness, niente race
+    condition con il cache Sheets/drainer. Il DB è fonte di verità e il
+    drainer asincrono si occupa di pushare verso Sheets.
     """
     try:
-        from config import USE_DB_BACKEND as _USE_DB
-
-        if _USE_DB == 'primary':
-            from moduli import db as _db
-            headers, data = _db.dump_filone_as_rows()
-            if headers:
-                return jsonify({
-                    'headers': headers,
-                    'data': data,
-                    'total': len(data),
-                    'protectedCols': COLONNE_PROTETTE_FILONE.get(PROVINCIA_ATTIVA, []),
-                })
-            # DB vuoto (es. primo avvio prima del bootstrap pull): fallback a Sheets
-            logger.warning("[primary] dump_filone_as_rows vuoto, fallback al cache Sheets")
-
-        # Path legacy (shadow/off o fallback)
-        all_data = get_all_values_cached()
-
-        if _USE_DB == 'primary' and all_data:
-            try:
-                from moduli.data_loader import _apply_pending_to_values
-                all_data = _apply_pending_to_values(all_data)
-            except Exception as _e:
-                logger.warning(f"[primary] overlay pending fallito su /api/filone: {_e}")
-
-        headers = all_data[0] if all_data else []
-        rows = all_data[1:] if len(all_data) > 1 else []
-
-        data = []
-        for i, row in enumerate(rows, start=2):  # +2 perché riga 1 è header
-            row_dict = {'_row': i}
-            for j, h in enumerate(headers):
-                row_dict[h] = row[j] if j < len(row) else ''
-            data.append(row_dict)
-
+        from moduli import db as _db
+        headers, data = _db.dump_filone_as_rows()
         return jsonify({
             'headers': headers,
             'data': data,
-            'total': len(rows),
+            'total': len(data),
             'protectedCols': COLONNE_PROTETTE_FILONE.get(PROVINCIA_ATTIVA, []),
         })
-
     except Exception as e:
         return _api_error(e, 'caricamento filone')
 
@@ -2043,101 +1954,88 @@ def download_excel_lettere(filename):
 # CELL CHANGE LOG — storico modifiche celle filone
 # ============================================================
 
-_cell_log_lock = threading.Lock()
-_CELL_LOG_MAX = 50000  # max entries nel file di log
-
-def _get_cell_log_path():
-    return os.path.join('data', PROVINCIA_ATTIVA.lower(), 'cell_log.json')
-
-def _load_cell_log():
-    path = _get_cell_log_path()
-    return json_read(path, default=[])
-
-def _save_cell_log(log_data):
-    path = _get_cell_log_path()
-    # Tronca se troppo grande
-    if len(log_data) > _CELL_LOG_MAX:
-        log_data = log_data[-_CELL_LOG_MAX:]
-    json_write(path, log_data)
-
-
 @bp.route('/api/filone/log', methods=['POST'])
 @login_required
 def save_cell_log():
-    """Registra le modifiche alle celle del filone.
+    """No-op: l'audit ora è registrato automaticamente in `audit_log` del DB
+    al momento del `db.record_local_change()` dentro le route di scrittura.
 
-    Body JSON: { "changes": [ { "row": 42, "col": "NOTE APP", "old": "...", "new": "..." }, ... ] }
+    L'endpoint resta per retro-compatibilità con il frontend filone.html che
+    invia ancora i changes — la response è 200 e basta, niente viene scritto
+    su file.
     """
     try:
-        data = request.json
-        if not data or 'changes' not in data:
-            return jsonify({'error': 'Formato non valido'}), 400
-
-        changes = data['changes']
-        if not isinstance(changes, list) or not changes:
-            return jsonify({'ok': True, 'logged': 0})
-
-        username = _get_username()
-        ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
-        entries = []
-        for c in changes:
-            row = c.get('row')
-            col = c.get('col', '')
-            old_val = c.get('old', '')
-            new_val = c.get('new', '')
-            if row is None or not col:
-                continue
-            entries.append({
-                'ts': ts,
-                'user': username,
-                'row': int(row),
-                'col': str(col),
-                'old': str(old_val)[:500],
-                'new': str(new_val)[:500],
-            })
-
-        if entries:
-            with _cell_log_lock:
-                log = _load_cell_log()
-                log.extend(entries)
-                _save_cell_log(log)
-
-        return jsonify({'ok': True, 'logged': len(entries)})
+        data = request.json or {}
+        changes = data.get('changes', [])
+        return jsonify({'ok': True, 'logged': len(changes), 'note': 'audit handled by DB'})
     except Exception as e:
-        logger.warning(f"[CellLog] Errore salvataggio log: {e}")
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 @bp.route('/api/filone/log', methods=['GET'])
 @login_required
 def get_cell_log():
-    """Restituisce lo storico modifiche per una cella specifica o tutte.
+    """Restituisce lo storico modifiche per una cella specifica.
+
+    Legge da `audit_log` del DB locale (fonte di verità unica dalla Fase 3).
+    Risolve `row` (sheets_row del foglio) → `eneltel_key` tramite la tabella
+    `filone`.
 
     Query params:
-      - row (int, opzionale): filtra per riga
-      - col (str, opzionale): filtra per colonna
-      - limit (int, default 50): max risultati
+      - row (int, opzionale): filtra per riga del foglio
+      - col (str, opzionale): filtra per nome colonna
+      - limit (int, default 50, max 200): numero massimo di risultati
     """
     try:
+        from moduli import db as _db
         row_filter = request.args.get('row', type=int)
-        col_filter = request.args.get('col', '')
-        limit = request.args.get('limit', 50, type=int)
-        limit = min(limit, 200)
+        col_filter = request.args.get('col', '').strip()
+        limit = min(request.args.get('limit', 50, type=int), 200)
 
-        with _cell_log_lock:
-            log = _load_cell_log()
+        conn = _db.get_conn()
 
-        # Filtra
+        # Risolvi row → eneltel_key (può ritornare multipli se schema v2 multi-LCL)
+        eneltel_keys = []
+        if row_filter is not None:
+            cur = conn.execute(
+                "SELECT eneltel_key FROM filone WHERE sheets_row=?",
+                (row_filter,),
+            )
+            eneltel_keys = [r['eneltel_key'] for r in cur.fetchall()]
+            if not eneltel_keys:
+                return jsonify({'history': []})
+
+        # Query audit_log con filtri
+        sql = "SELECT ts, eneltel_key, column_name, old_value, new_value, user, source FROM audit_log"
+        params = []
+        conds = []
+        if eneltel_keys:
+            placeholders = ','.join('?' * len(eneltel_keys))
+            conds.append(f"eneltel_key IN ({placeholders})")
+            params.extend(eneltel_keys)
+        if col_filter:
+            conds.append("LOWER(column_name)=LOWER(?)")
+            params.append(col_filter)
+        # Solo le modifiche con valore reale cambiato (filtra rumore audit duplicati)
+        conds.append("(old_value IS NOT new_value)")
+        conds.append("source IN ('local','remote','conflict_local_wins')")
+        if conds:
+            sql += " WHERE " + " AND ".join(conds)
+        sql += " ORDER BY ts DESC LIMIT ?"
+        params.append(limit)
+
         results = []
-        for entry in reversed(log):  # più recenti prima
-            if row_filter is not None and entry.get('row') != row_filter:
-                continue
-            if col_filter and entry.get('col') != col_filter:
-                continue
-            results.append(entry)
-            if len(results) >= limit:
-                break
+        for r in conn.execute(sql, params):
+            ts_str = datetime.fromtimestamp(r['ts']).strftime('%Y-%m-%d %H:%M:%S')
+            results.append({
+                'ts': ts_str,
+                'user': r['user'] or '',
+                'row': row_filter,  # preservato per il frontend
+                'col': r['column_name'] or '',
+                'old': r['old_value'] or '',
+                'new': r['new_value'] or '',
+                'source': r['source'],
+            })
 
         return jsonify({'history': results})
     except Exception as e:

@@ -377,21 +377,13 @@ def carica_dati_google_sheets(force=False):
     # così sync_engine.pull_once() riusa lo stesso dump invece di scaricare
     # il foglio una seconda volta (doppia letture = quota 429).
     #
-    # In primary mode (Fase 2) ignoriamo `force=True`: i valori utente vivono
-    # nel DB locale e vengono applicati in-memory da _apply_pending_to_values,
-    # quindi non c'è bisogno di forzare un download Sheets ad ogni POST utente.
-    # La cache TTL 30s scade da sola al sync periodico (180s).
-    effective_force = force
-    try:
-        from config import USE_DB_BACKEND as _USE_DB_PRE
-        if _USE_DB_PRE == 'primary':
-            effective_force = False
-    except ImportError:
-        pass
-
+    # Ignoriamo `force=True`: i valori utente vivono nel DB locale e vengono
+    # applicati in-memory da _apply_pending_to_values, quindi non c'è bisogno
+    # di forzare un download Sheets ad ogni POST utente. La cache TTL 30s
+    # scade da sola al sync periodico (180s).
     try:
         from . import shared as _shared
-        values = _shared.get_all_values_cached(force=effective_force)
+        values = _shared.get_all_values_cached(force=False)
     except Exception:
         # Fallback al path legacy se shared non è disponibile
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -400,19 +392,12 @@ def carica_dati_google_sheets(force=False):
         sheet = client.open_by_key(ID_FOGLIO_GOOGLE).get_worksheet_by_id(GID_SCHEDA)
         values = sheet.get_all_values()
 
-    # ================================================================
-    # FASE 2: applica le pending_writes del DB locale al raw values.
-    # Le scritture utente vivono nel DB ma potrebbero NON essere ancora
-    # state pushate su Sheets dal drainer (~10-30s di ritardo). Per non
-    # mostrare uno stato vecchio in UI, sovrascriviamo i valori cella
-    # con quelli del DB prima del processing.
-    # ================================================================
-    try:
-        from config import USE_DB_BACKEND as _USE_DB
-    except ImportError:
-        _USE_DB = 'shadow'
-    if _USE_DB == 'primary':
-        values = _apply_pending_to_values(values)
+    # Applica le pending_writes del DB locale ai raw values. Le scritture
+    # utente vivono nel DB ma potrebbero NON essere ancora state pushate su
+    # Sheets dal drainer (~10-30s di ritardo). Per non mostrare uno stato
+    # vecchio in UI, sovrascriviamo i valori cella con quelli del DB prima
+    # del processing.
+    values = _apply_pending_to_values(values)
 
     # ================================================================
     # HASH-BASED CHANGE DETECTION

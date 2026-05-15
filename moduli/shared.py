@@ -105,7 +105,6 @@ def _reset_sheets_client():
 def invalidate_values_cache():
     """Invalida la cache dei valori del foglio (dopo scritture).
 
-    In modalità 'primary' (Fase 2):
       - Cache shared INVALIDATA → il prossimo `get_all_values_cached`
         scaricherà Sheets fresh (dove il drainer ha appena pushato).
       - `_dl_cached_df` NON invalidato → evita falso positivo "primo sync"
@@ -113,33 +112,14 @@ def invalidate_values_cache():
       - `_dl_cached_raw_hash` azzerato → forza il sync a riprocessare il
         DataFrame e rigenerare `mappa_data.json` anche se i raw values
         risultassero "uguali" al precedente snapshot.
-
-    In modalità 'shadow'/'off' invalida tutto come da comportamento legacy.
     """
-    try:
-        from config import USE_DB_BACKEND as _USE_DB
-    except ImportError:
-        _USE_DB = 'shadow'
-
     global _cached_all_values, _cached_all_values_ts
     with _values_cache_lock:
         _cached_all_values = None
         _cached_all_values_ts = 0
-
-    if _USE_DB == 'primary':
-        # Forza riprocessing al prossimo sync senza invalidare il DataFrame
-        # (così il confronto strutturale resta affidabile).
-        try:
-            from .data_loader import mark_data_changed
-            mark_data_changed()
-        except ImportError:
-            pass
-        return
-
-    # Path SHADOW/OFF: invalidazione completa
     try:
-        from .data_loader import invalidate_data_cache
-        invalidate_data_cache()
+        from .data_loader import mark_data_changed
+        mark_data_changed()
     except ImportError:
         pass
 
@@ -418,14 +398,8 @@ def safe_batch_update_by_name(items, *, anchor_col=None, anchor_normalize='upper
     # _force_sheets=True (drainer) bypassa il branch primary.
     # ────────────────────────────────────────────────────────────────────────
     if not _force_sheets:
-        try:
-            from config import USE_DB_BACKEND as _USE_DB
-        except ImportError:
-            _USE_DB = 'shadow'
-
-        if _USE_DB == 'primary':
-            return _route_to_db_primary(items, anchor_col=anchor_col,
-                                        anchor_normalize=anchor_normalize)
+        return _route_to_db_primary(items, anchor_col=anchor_col,
+                                    anchor_normalize=anchor_normalize)
 
     invalid_cols = set()
     lost_anchors = []
@@ -536,26 +510,6 @@ def safe_batch_update_by_name(items, *, anchor_col=None, anchor_normalize='upper
                 chunk = gspread_updates[i:i + CHUNK]
                 _sheets_retry(ws.batch_update, chunk)
                 n_written += len(chunk)
-
-        # 5. Shadow-mirror sul DB locale (Fase 1): registra in audit + filone
-        # le scritture appena andate a buon fine. Errori assorbiti.
-        if gspread_updates:
-            try:
-                from . import db as _db  # late import: evita cicli
-                anchor_keys_lost = {(la.get('row'), la.get('col')) for la in lost_anchors}
-                effective_items = [
-                    it for it in items
-                    if it.get('col') not in invalid_cols
-                    and (it.get('row'), it.get('col')) not in anchor_keys_lost
-                ]
-                _db.shadow_record_batch(
-                    effective_items,
-                    anchor_col=anchor_col,
-                    user=_safe_username(),
-                    origin='safe_batch_update_by_name',
-                )
-            except Exception as _e:
-                logger.warning(f"[shadow] hook safe_batch_update_by_name fallito (assorbito): {_e}")
 
     invalidate_values_cache()
 
@@ -929,60 +883,24 @@ def verify_row_eneltel(row_num, expected_eneltel):
 def find_row_by_eneltel(eneltel):
     """Trova la riga corrispondente a un ENELTEL (1-based) o None.
 
-    In modalità 'primary' (Fase 2) legge il sheets_row dal DB locale → 0
-    chiamate Sheets. In modalità 'shadow'/'off' usa il path originale.
+    Legge da DB locale: zero chiamate Sheets.
     """
-    try:
-        from config import USE_DB_BACKEND as _USE_DB
-    except ImportError:
-        _USE_DB = 'shadow'
-    if _USE_DB == 'primary':
-        from . import db as _db
-        local = _db.get_filone_row(eneltel)
-        return local.get('sheets_row') if local else None
-
-    ws = get_worksheet()
-    col_eneltel = _get_col_index('eneltel', fresh=True)
-    if col_eneltel is None:
-        return None
-
-    eneltel_norm = str(eneltel).lstrip('0')
-    col_values = _sheets_retry(ws.col_values, col_eneltel)
-    for i, val in enumerate(col_values[1:], start=2):
-        if str(val).lstrip('0') == eneltel_norm:
-            return i
-    return None
+    from . import db as _db
+    local = _db.get_filone_row(eneltel)
+    return local.get('sheets_row') if local else None
 
 
 def find_row_by_pod(pod):
     """Trova la riga corrispondente a un POD (1-based) o None.
 
-    In modalità 'primary' (Fase 2) legge il sheets_row dal DB locale → 0
-    chiamate Sheets.
+    Legge da DB locale: zero chiamate Sheets.
     """
-    try:
-        from config import USE_DB_BACKEND as _USE_DB
-    except ImportError:
-        _USE_DB = 'shadow'
-    if _USE_DB == 'primary':
-        from . import db as _db
-        ek = _db.find_eneltel_by_pod(pod)
-        if not ek:
-            return None
-        local = _db.get_filone_row(ek)
-        return local.get('sheets_row') if local else None
-
-    ws = get_worksheet()
-    col_pod = _get_col_index('pod', fresh=True)
-    if col_pod is None:
+    from . import db as _db
+    ek = _db.find_eneltel_by_pod(pod)
+    if not ek:
         return None
-
-    pod_norm = str(pod).strip().upper()
-    col_values = _sheets_retry(ws.col_values, col_pod)
-    for i, val in enumerate(col_values[1:], start=2):
-        if str(val).strip().upper() == pod_norm:
-            return i
-    return None
+    local = _db.get_filone_row(ek)
+    return local.get('sheets_row') if local else None
 
 
 # ============================================================================
@@ -1245,148 +1163,17 @@ def _imposta_appuntamento_su_filone(row, orario, data_app='', note_extra='',
     """
     nuova_nota = ''
     nota_app = f"APP {orario}"
-
-    # Branch FASE 2: DB-only
-    try:
-        from config import USE_DB_BACKEND as _USE_DB
-    except ImportError:
-        _USE_DB = 'shadow'
-    if _USE_DB == 'primary':
-        return _imposta_appuntamento_db_primary(
-            row, orario, nota_app, data_app=data_app, note_extra=note_extra,
-            origine=origine, pod_override=pod_override,
-            eneltel_override=eneltel_override, nota_corrente=nota_corrente,
-            lcl=lcl,
-        )
-
-    with _gsheets_write_lock:
-        # Refresh atomico — il nome colonna note può anche non essere cambiato,
-        # ma vogliamo essere certi della sua POSIZIONE attuale.
-        force_refresh_headers()
-        col_note = _get_colonna_note()
-        if col_note not in _header_map:
-            raise ValueError(f'Colonna {col_note} non trovata')
-        col = _header_map[col_note]
-
-        ws = get_worksheet()
-        nota_attuale = nota_corrente if nota_corrente is not None else (ws.cell(row, col).value or '')
-
-        if 'APP' in nota_attuale.upper():
-            nota_attuale = re.sub(
-                r'APP\s*\d{1,2}[:.]\d{2}(?:\s*[-/]\s*\d{1,2}[:.]\d{2})?',
-                '', nota_attuale, flags=re.IGNORECASE
-            )
-            nota_attuale = nota_attuale.strip(' /|-')
-
-        nuova_nota = f"{nota_app} // {nota_attuale}" if nota_attuale else nota_app
-        ws.update_cell(row, col, nuova_nota)
-
-        # Shadow-mirror sul DB locale (Fase 1)
-        try:
-            from . import db as _db
-            ek = eneltel_override
-            if not ek:
-                cd = _callbacks['extract_contatore_data'](row)
-                ek = cd.get('eneltel') or cd.get('Eneltel') or ''
-            if not ek and pod_override:
-                ek = _db.find_eneltel_by_pod(pod_override)
-            if not ek:
-                ek = _db.find_eneltel_by_sheets_row(row)
-            if ek:
-                _db.shadow_record_single(
-                    ek, {col_note: nuova_nota},
-                    user=_safe_username(),
-                    origin='_imposta_appuntamento_su_filone',
-                )
-        except Exception as _e:
-            logger.warning(f"[shadow] hook _imposta_appuntamento fallito: {_e}")
-    invalidate_values_cache()
-
-    # Auto-crea promemoria Appuntamento
-    try:
-        contatore_data = _callbacks['extract_contatore_data'](row)
-        username = _get_username()
-        data_bb = data_app if data_app else contatore_data.get('data_pianificata', '') or datetime.now().strftime('%Y-%m-%d')
-        pod_val = pod_override or contatore_data.get('pod', '')
-        eneltel_val = eneltel_override or contatore_data.get('eneltel', '')
-
-        _callbacks['crea_promemoria_boxbeat'](
-            data_appuntamento=data_bb, ora_appuntamento=orario,
-            pod=pod_val, eneltel=eneltel_val,
-            nominativo=contatore_data.get('nominativo', ''),
-            via=contatore_data.get('via', ''), civico=contatore_data.get('civico', ''),
-            comune=contatore_data.get('comune', ''), note=note_extra,
-            provincia=PROVINCIA_ATTIVA, creato_da=username, origine=origine,
-            data_pianificata=contatore_data.get('data_pianificata', '')
-        )
-        _callbacks['registra_appuntamento_excel'](
-            data_appuntamento=data_bb, orario=orario,
-            pod=pod_val, eneltel=eneltel_val,
-            nominativo=contatore_data.get('nominativo', ''),
-            via=contatore_data.get('via', ''), civico=contatore_data.get('civico', ''),
-            comune=contatore_data.get('comune', ''), note=note_extra,
-            origine=origine,
-            data_pianificata=contatore_data.get('data_pianificata', ''),
-            creato_da=username,
-            provincia=PROVINCIA_ATTIVA
-        )
-        _callbacks['sse_notify_all']('calendario_update', {'azione': 'boxbeat_creato'})
-    except Exception as bb_err:
-        logger.error(f"[Appuntamento] Errore auto-creazione promemoria: {bb_err}")
-
-    _callbacks['trigger_sync_after_edit']()
-    return {'nota_app': nota_app, 'nuova_nota': nuova_nota}
+    return _imposta_appuntamento_db_primary(
+        row, orario, nota_app, data_app=data_app, note_extra=note_extra,
+        origine=origine, pod_override=pod_override,
+        eneltel_override=eneltel_override, nota_corrente=nota_corrente,
+        lcl=lcl,
+    )
 
 
 def _rimuovi_appuntamento_da_filone(row, nota_corrente=None, lcl=None):
     """Logica condivisa per rimuovere appuntamento da una riga del filone."""
-    nuova_nota = ''
-
-    # Branch FASE 2: DB-only
-    try:
-        from config import USE_DB_BACKEND as _USE_DB
-    except ImportError:
-        _USE_DB = 'shadow'
-    if _USE_DB == 'primary':
-        return _rimuovi_appuntamento_db_primary(row, nota_corrente=nota_corrente, lcl=lcl)
-
-    with _gsheets_write_lock:
-        force_refresh_headers()
-        col_note = _get_colonna_note()
-        if col_note not in _header_map:
-            raise ValueError(f'Colonna {col_note} non trovata')
-        col = _header_map[col_note]
-
-        ws = get_worksheet()
-        nota_attuale = nota_corrente if nota_corrente is not None else (ws.cell(row, col).value or '')
-
-        nuova_nota = re.sub(
-            r'APP\s*\d{1,2}[:.]\d{2}(?:\s*[-/]\s*\d{1,2}[:.]\d{2})?',
-            '', nota_attuale, flags=re.IGNORECASE
-        )
-        nuova_nota = re.sub(r'\s*//\s*', ' // ', nuova_nota).strip(' /|-')
-        nuova_nota = re.sub(r'^//\s*|\s*//\s*$', '', nuova_nota).strip()
-        ws.update_cell(row, col, nuova_nota)
-
-        # Shadow-mirror sul DB locale (Fase 1)
-        try:
-            from . import db as _db
-            cd = _callbacks['extract_contatore_data'](row)
-            ek = cd.get('eneltel') or cd.get('Eneltel') or ''
-            if not ek:
-                ek = _db.find_eneltel_by_sheets_row(row)
-            if ek:
-                _db.shadow_record_single(
-                    ek, {col_note: nuova_nota},
-                    user=_safe_username(),
-                    origin='_rimuovi_appuntamento_da_filone',
-                )
-        except Exception as _e:
-            logger.warning(f"[shadow] hook _rimuovi_appuntamento fallito: {_e}")
-    invalidate_values_cache()
-
-    _callbacks['trigger_sync_after_edit']()
-    return {'nuova_nota': nuova_nota}
+    return _rimuovi_appuntamento_db_primary(row, nota_corrente=nota_corrente, lcl=lcl)
 
 
 # ============================================================================

@@ -997,98 +997,36 @@ def salva_nota_distinte():
         if not pod:
             return jsonify({'error': 'POD mancante'}), 400
 
-        # Branch FASE 2: DB-only (no chiamate Sheets nel path di scrittura)
-        from config import USE_DB_BACKEND as _USE_DB
-        if _USE_DB == 'primary':
-            from moduli import db as _db
-            ek = _db.find_eneltel_by_pod(pod)
-            if not ek:
-                return jsonify({'error': f'POD {pod} non trovato'}), 404
-            local = _db.get_filone_row(ek) or {}
-            nota_attuale = local.get('note_appuntamento') or ''
-            if sovrascrivere:
-                nuova_nota = nota
-            elif not nota:
-                nuova_nota = nota_attuale
-            elif not nota_attuale:
-                nuova_nota = nota
-            elif nota not in nota_attuale:
-                nuova_nota = f"{nota_attuale} // {nota}"
-            else:
-                nuova_nota = nota_attuale
+        # DB-only: no chiamate Sheets nel path di scrittura. Il drainer pusha.
+        from moduli import db as _db
+        ek = _db.find_eneltel_by_pod(pod)
+        if not ek:
+            return jsonify({'error': f'POD {pod} non trovato'}), 404
+        local = _db.get_filone_row(ek) or {}
+        nota_attuale = local.get('note_appuntamento') or ''
+        if sovrascrivere:
+            nuova_nota = nota
+        elif not nota:
+            nuova_nota = nota_attuale
+        elif not nota_attuale:
+            nuova_nota = nota
+        elif nota not in nota_attuale:
+            nuova_nota = f"{nota_attuale} // {nota}"
+        else:
+            nuova_nota = nota_attuale
 
-            col_note_name = _get_colonna_note()  # nome colonna sul foglio
-            _db.record_local_change(
-                ek, {col_note_name: nuova_nota},
-                origin='distinte_salva_nota',
-                initial_state='pending',
-            )
-            try:
-                from moduli import sync_engine as _se
-                _se.trigger_drain_now()
-            except Exception:
-                pass
-            return jsonify({'success': True, 'nota': nuova_nota})
-
-        # Path SHADOW (Fase 1) — invariato
-        nuova_nota = ''
-        with _gsheets_write_lock:
-            header_map = force_refresh_headers()
-            col_note = _get_colonna_note()
-            if col_note not in header_map:
-                return jsonify({'error': f'Colonna {col_note} non trovata'}), 400
-
-            # Risolvi POD anchor su header freschi e trova la riga.
-            pod_anchor_col = _resolve_anchor_col_name('pod')
-            if pod_anchor_col is None:
-                return jsonify({'error': 'Colonna POD non trovata'}), 400
-            ws = get_worksheet()
-            pod_col_idx = header_map[pod_anchor_col]
-            pod_values = _sheets_retry(ws.col_values, pod_col_idx)
-            row = None
-            for i, v in enumerate(pod_values[1:], start=2):
-                if str(v).strip().upper() == pod:
-                    row = i
-                    break
-            if row is None:
-                return jsonify({'error': f'POD {pod} non trovato'}), 404
-
-            col = header_map[col_note]
-            nota_attuale = _sheets_retry(ws.cell, row, col).value or ''
-
-            if sovrascrivere:
-                nuova_nota = nota
-            else:
-                if not nota:
-                    nuova_nota = nota_attuale
-                elif not nota_attuale:
-                    nuova_nota = nota
-                else:
-                    if nota not in nota_attuale:
-                        nuova_nota = f"{nota_attuale} // {nota}"
-                    else:
-                        nuova_nota = nota_attuale
-
-            _sheets_retry(ws.update_cell, row, col, nuova_nota)
-
-            # Shadow-mirror sul DB locale (Fase 1)
-            try:
-                from moduli import db as _db
-                ek = _db.find_eneltel_by_pod(pod)
-                if ek:
-                    _db.shadow_record_single(
-                        ek, {col_note: nuova_nota},
-                        origin='distinte_salva_nota',
-                    )
-            except Exception as _shadow_err:
-                logger.warning(f"[shadow] hook distinte/salva-nota fallito: {_shadow_err}")
-
-            invalidate_values_cache()
-
-        return jsonify({
-            'success': True,
-            'nota': nuova_nota
-        })
+        col_note_name = _get_colonna_note()  # nome colonna sul foglio
+        _db.record_local_change(
+            ek, {col_note_name: nuova_nota},
+            origin='distinte_salva_nota',
+            initial_state='pending',
+        )
+        try:
+            from moduli import sync_engine as _se
+            _se.trigger_drain_now()
+        except Exception:
+            pass
+        return jsonify({'success': True, 'nota': nuova_nota})
 
     except Exception as e:
         return _api_error(e, 'salvataggio nota distinte')

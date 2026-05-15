@@ -868,18 +868,41 @@ def api_login():
         return jsonify({'success': False, 'message': message}), 401
 
 
+def _delete_all_session_cookies(resp):
+    """Cancella esplicitamente il cookie sessione su TUTTI i possibili domini.
+
+    Necessario dopo l'introduzione di SESSION_COOKIE_DOMAIN=.mappa-algeco.com:
+    chi era loggato prima del cambio ha un cookie host-scoped (es.
+    Domain=torino.mappa-algeco.com) che `session.clear()` non rimuove perché
+    Flask scrive solo sul Domain configurato corrente.
+
+    Mandiamo Set-Cookie con expires=0 sia su host che su parent domain così il
+    browser scarta entrambe le varianti.
+    """
+    cookie_name = app.config.get('SESSION_COOKIE_NAME', 'session')
+    # Variante host-scoped (cookie storici, senza Domain attribute)
+    resp.delete_cookie(cookie_name, path='/')
+    # Variante con Domain configurato (cookie nuovi, cross-subdomain)
+    cfg_domain = app.config.get('SESSION_COOKIE_DOMAIN')
+    if cfg_domain:
+        resp.delete_cookie(cookie_name, path='/', domain=cfg_domain)
+    return resp
+
+
 @app.route('/api/logout', methods=['POST'])
 def api_logout():
     """Endpoint API per il logout."""
     session.clear()
-    return jsonify({'success': True, 'message': 'Logout effettuato'})
+    return _delete_all_session_cookies(
+        jsonify({'success': True, 'message': 'Logout effettuato'})
+    )
 
 
 @app.route('/logout')
 def logout_redirect():
     """Logout e redirect al login."""
     session.clear()
-    return redirect(url_for('login_page'))
+    return _delete_all_session_cookies(redirect(url_for('login_page')))
 
 
 @app.route('/api/user')

@@ -226,12 +226,23 @@ class ProcessManager:
                 log.info(f"[{slug}] ✅ backend ready su porta {cfg['porta']}")
 
     def avvia_provincia(self, slug, cfg):
-        """Spawna un singolo backend. Idempotente: non rispawna se già vivo."""
+        """Spawna un singolo backend. Idempotente: non rispawna se già vivo.
+
+        Prima di spawnare aspetta che la porta sia bindabile: dopo un restart
+        sistemico (systemctl restart) i backend del vecchio router muoiono ma
+        il kernel può tenere il socket in TIME_WAIT per qualche secondo. Senza
+        il wait il nuovo backend fallirebbe il bind con "Address already in use".
+        """
         with self._lock:
             existing = self._proc.get(slug)
             if existing and existing.poll() is None:
                 log.info(f"[{slug}] backend già attivo (pid={existing.pid}), skip")
                 return existing
+
+            porta = int(cfg.get('porta', 0))
+            if porta and not self._aspetta_porta_libera(porta, timeout=15):
+                log.warning(f"[{slug}] porta {porta} ancora occupata dopo 15s, "
+                            f"spawn tentato comunque (potrebbe fallire)")
 
             env = os.environ.copy()
             env['PROVINCIA'] = slug.upper()
@@ -299,6 +310,9 @@ class ProcessManager:
                 if slug in province:
                     log.info(f"[{slug}] auto-restart…")
                     self._proc.pop(slug, None)
+                    porta = int(province[slug].get('porta', 0))
+                    if porta:
+                        self._aspetta_porta_libera(porta, timeout=10)
                     self.avvia_provincia(slug, province[slug])
 
     @staticmethod
@@ -318,6 +332,29 @@ class ProcessManager:
             except (OSError, socket.timeout):
                 pass
             time.sleep(0.5)
+        return False
+
+    @staticmethod
+    def _aspetta_porta_libera(porta, timeout=15):
+        """Attende che la porta sia bindabile (post-terminate dei backend).
+
+        Dopo un SIGTERM/SIGKILL del backend il kernel può tenere il socket in
+        TIME_WAIT / CLOSE_WAIT per qualche secondo. Tentiamo il bind: se ci
+        riusciamo la porta è davvero libera. Ritorna True se libera entro
+        timeout, False altrimenti.
+        """
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            try:
+                # Test bind: se ci riesce, la porta è disponibile per il prossimo bind.
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                s.bind(('0.0.0.0', porta))
+                s.close()
+                return True
+            except OSError:
+                pass
+            time.sleep(0.3)
         return False
 
 
@@ -727,6 +764,12 @@ def _admin_lifecycle(slug, action):
         pm.termina_provincia(slug)
     elif action == 'restart':
         pm.termina_provincia(slug)
+        # Aspetta che la porta sia davvero libera (post SIGTERM/SIGKILL il
+        # kernel può tenerla in TIME_WAIT per qualche secondo).
+        porta = int(cfg.get('porta', 0))
+        if porta and not pm._aspetta_porta_libera(porta, timeout=15):
+            log.warning(f"[admin] {slug}: porta {porta} ancora occupata dopo 15s, "
+                        f"tento spawn comunque")
         pm.avvia_provincia(slug, cfg)
 
     log.info(f"[admin] {slug}: {action}")

@@ -1212,6 +1212,25 @@ def genera_html_interattivo(df, filename, calendario, zone, comune_to_zona, cent
             .container {{ flex-direction: column; }}
             .sidebar {{ width: 100%; height: 50%; }}
             #map {{ height: 50%; }}
+            .header {{ padding: 12px; }}
+            .header h1 {{ font-size: 1.2em; }}
+            .header p {{ font-size: 0.8em; }}
+            .search-box {{ padding: 10px 12px; }}
+            .search-box input {{ padding: 10px 14px; font-size: 15px; }}
+            .results {{ padding: 8px; }}
+            .result-card {{ padding: 12px; }}
+            .zona-stats {{ flex-wrap: wrap; gap: 8px; }}
+        }}
+        @media (max-width: 480px) {{
+            .sidebar {{ height: 55%; }}
+            #map {{ height: 45%; }}
+            .legend {{ font-size: 11px; padding: 8px 10px; max-height: 140px; }}
+        }}
+
+        /* iOS Safari mobile fix: previeni auto-zoom su focus input <16px */
+        @media (max-width: 600px) {{
+            input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+            select, textarea {{ font-size: 16px; }}
         }}
     </style>
 </head>

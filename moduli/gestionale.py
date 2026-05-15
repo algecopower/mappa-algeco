@@ -1075,6 +1075,14 @@ def genera_css_gestionale():
             .fullscreen-edit-grid {
                 grid-template-columns: 1fr;
             }
+            .fullscreen-edit-container { padding: 12px; }
+            .fullscreen-edit-title { font-size: 1.1em; }
+            .fullscreen-edit-eneltel { font-size: 0.65em; }
+            .fullscreen-edit-footer { flex-direction: column; padding: 14px; bottom: 10px; }
+            .btn-fullscreen-save, .btn-fullscreen-cancel { width: 100%; padding: 12px 16px; font-size: 0.95em; }
+            .fullscreen-field-input,
+            .fullscreen-field-textarea,
+            .fullscreen-field-select { padding: 10px 12px; font-size: 0.9em; }
         }
         
         .fullscreen-field {
@@ -1624,6 +1632,12 @@ def genera_css_gestionale():
             background: rgba(52, 152, 219, 0.15);
             color: #3498db;
             border: 1px solid rgba(52, 152, 219, 0.3);
+        }
+
+        /* iOS Safari mobile fix: previeni auto-zoom su focus input <16px */
+        @media (max-width: 600px) {
+            input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+            select, textarea { font-size: 16px; }
         }
     '''
 

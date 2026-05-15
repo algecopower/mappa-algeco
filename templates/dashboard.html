@@ -366,13 +366,30 @@
         }
         @media (max-width: 600px) {
             .container { padding: 12px; }
-            header { padding: 16px 18px; }
-            .kpi-row { grid-template-columns: 1fr 1fr; }
+            header { padding: 16px 18px; padding-left: 60px; }
+            .kpi-row { grid-template-columns: 1fr 1fr; gap: 10px; }
+            .kpi-card { padding: 14px; }
+            .kpi-value { font-size: 1.7em; }
             .op-grid { grid-template-columns: 1fr; }
-            .welcome-banner { flex-direction: column; }
+            .welcome-banner { flex-direction: column; padding: 14px 16px; }
             .report-filter { flex-direction: column; align-items: stretch; }
-            .header-left h1 { font-size: 1.2em; }
-            header { padding-left: 60px; }
+            .header-left h1 { font-size: 1.15em; }
+            .panel { padding: 16px; }
+            .row-2, .row-3 { gap: 14px; margin-bottom: 14px; }
+            .bar-label { width: 90px; font-size: 0.74em; }
+            .rp-tbl { font-size: 0.78em; }
+            .rp-tbl th, .rp-tbl td { padding: 6px 6px; }
+            .toast { left: 12px; right: 12px; bottom: 12px; text-align: center; }
+        }
+        @media (max-width: 420px) {
+            .kpi-row { grid-template-columns: 1fr; }
+            .week-chart { height: 100px; gap: 5px; }
+            .week-lbl { font-size: 0.62em; }
+        }
+        /* Tabelle scrollabili orizzontalmente su mobile */
+        @media (max-width: 768px) {
+            .panel { overflow-x: auto; }
+            .rp-tbl { min-width: 480px; }
         }
 
         /* ---- Report integrato ---- */
@@ -394,6 +411,12 @@
         .rp-tbl tr:hover { background: rgba(37,211,102,0.03); }
         [data-theme="light"] .report-filter { background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
         [data-theme="light"] .rp-tbl th { background: #f0f4f0; color: #333; }
+
+        /* iOS Safari mobile fix: previeni auto-zoom su focus input <16px */
+        @media (max-width: 600px) {
+            input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+            select, textarea { font-size: 16px; }
+        }
     </style>
 </head>
 <body>

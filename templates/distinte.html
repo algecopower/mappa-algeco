@@ -1336,19 +1336,42 @@
 
         /* Responsive */
         @media (max-width: 768px) {
+            .container { padding: 12px; }
+            header { padding: 14px; flex-direction: column; align-items: flex-start; }
+            header h1 { font-size: 1.1em; }
+            .upload-section { padding: 18px 14px; }
+            .upload-section i { font-size: 2.2em; }
             .contacts-grid {
                 grid-template-columns: 1fr;
             }
-            
             .filters {
                 flex-direction: column;
                 align-items: stretch;
+                padding: 12px;
+                gap: 8px;
             }
-            
+            .filters label { padding: 8px 12px; font-size: 0.85em; }
             .stats {
                 margin-left: 0;
                 justify-content: center;
+                flex-wrap: wrap;
+                gap: 8px;
             }
+            .stat-item { padding: 6px 10px; font-size: 0.82em; }
+            .contact-card { padding: 12px; }
+            .modal { width: 96%; max-height: 92vh; border-radius: 10px; }
+            .modal-header, .modal-body, .modal-footer { padding: 14px; }
+            .modal-footer { flex-direction: column-reverse; }
+            .modal-footer .btn { width: 100%; justify-content: center; }
+            .template-tabs { font-size: 0.85em; }
+            .appuntamento-row { flex-direction: column; gap: 6px; }
+            .bulk-email-modal .modal { max-height: 96vh; }
+        }
+        @media (max-width: 480px) {
+            .btn { padding: 8px 14px; font-size: 13px; }
+            .provincia-badge { padding: 4px 10px; font-size: 0.8em; }
+            .file-chip { font-size: 0.82em; }
+            header h1 { font-size: 1em; gap: 6px; }
         }
 
         /* Empty state */
@@ -1608,6 +1631,12 @@
         .ai-count-badge {
             display: inline-block; padding: 2px 8px; border-radius: 10px;
             font-size: 0.8em; font-weight: 600; background: var(--bg-dark); color: var(--text-muted);
+        }
+
+        /* iOS Safari mobile fix: previeni auto-zoom su focus input <16px */
+        @media (max-width: 600px) {
+            input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+            select, textarea { font-size: 16px; }
         }
     </style>
 </head>

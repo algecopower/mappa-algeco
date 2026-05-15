@@ -464,6 +464,40 @@
     vertical-align: middle;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ---- Responsive ---- */
+  @media (max-width: 768px) {
+    header.app-header { padding: 10px 14px; flex-wrap: wrap; gap: 8px; }
+    .app-header h1 { font-size: 15px; }
+    .app-header .meta { font-size: 12px; gap: 8px; flex-wrap: wrap; }
+    main { padding: 14px 12px 28px; }
+    .health-bar { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; padding: 10px; }
+    .health-card .value { font-size: 16px; }
+    .grid { grid-template-columns: 1fr; gap: 12px; }
+    .toolbar input.search-eneltel { width: 100%; flex: 1 1 100%; }
+    .toolbar { gap: 6px; }
+    .form-row { flex-direction: column; gap: 0; }
+    .modal { padding: 10px; align-items: flex-start; padding-top: 20px; }
+    .modal-content { padding: 18px; max-height: 95vh; }
+    .modal-head h2 { font-size: 15px; }
+    .toast { left: 12px; right: 12px; bottom: 12px; max-width: none; }
+    .actions { gap: 5px; }
+    .actions .btn { font-size: 11px; padding: 5px 8px; }
+    .inspector-section { overflow-x: auto; }
+    .inspector-table { min-width: 480px; }
+  }
+  @media (max-width: 420px) {
+    .health-bar { grid-template-columns: 1fr 1fr; }
+    .card { padding: 12px; }
+    .field { flex-direction: column; gap: 0; }
+    .field .k { min-width: 0; }
+  }
+
+  /* iOS Safari mobile fix: previeni auto-zoom su focus input <16px */
+  @media (max-width: 600px) {
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+    select, textarea { font-size: 16px; }
+  }
 </style>
 </head>
 <body>

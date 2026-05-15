@@ -410,8 +410,18 @@ var CSS = `
 }
 
 /* Responsive */
+@media (max-width: 768px) {
+    .bacheca-fab {
+        width: 44px;
+        height: 44px;
+        right: 10px;
+        bottom: 64px;
+        font-size: 18px;
+    }
+    .bacheca-panel { bottom: 118px; }
+}
 @media (max-width: 600px) {
-    .bacheca-panel { width: calc(100vw - 20px); right: 10px; bottom: 120px; }
+    .bacheca-panel { width: calc(100vw - 20px); right: 10px; bottom: 118px; }
     .bacheca-modal { width: 96vw; }
 }
 `;

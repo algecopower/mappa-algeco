@@ -1253,13 +1253,32 @@
         @media (max-width: 768px) {
             .container { padding: 12px; }
             header { padding: 16px; flex-direction: column; align-items: flex-start; }
+            header h1 { font-size: 1.2em; }
+            .header-actions { width: 100%; justify-content: flex-start; }
             .stats-row { grid-template-columns: repeat(2, 1fr); }
+            .stat-card .stat-value { font-size: 1.4em; }
             .calendar-grid .day { min-height: 50px; padding: 4px; }
             .calendar-grid .day .day-event { display: none; }
             .calendar-grid .day .more-events { display: none; }
             .form-row, .form-row-3 { grid-template-columns: 1fr; }
             .attivita-actions { opacity: 1; }
-            .modal-content { padding: 20px; }
+            .modal-content { padding: 20px; max-width: 100%; }
+            .tabs-bar, .filters-bar { gap: 6px; }
+            .tab-btn { padding: 7px 12px; font-size: 0.82em; }
+            .filter-btn { padding: 5px 10px; font-size: 0.75em; }
+            .selection-toolbar { left: 12px; right: 12px; transform: translateY(100px); padding: 10px 14px; gap: 8px; flex-wrap: wrap; }
+            .selection-toolbar.visible { transform: translateY(0); }
+            .selection-toolbar .sel-count { min-width: 0; flex: 1 1 100%; }
+        }
+        @media (max-width: 480px) {
+            .stats-row { grid-template-columns: 1fr 1fr; gap: 8px; }
+            .stat-card { padding: 10px; }
+            .stat-card .stat-value { font-size: 1.2em; }
+            .calendar-grid { gap: 2px; }
+            .calendar-grid .day { min-height: 40px; padding: 2px; font-size: 0.75em; }
+            .calendar-grid .day-label { font-size: 0.7em; }
+            .modal-content { padding: 16px; border-radius: 12px; }
+            .attivita-card { padding: 12px; }
         }
 
         /* Multi-select mode */
@@ -1402,6 +1421,12 @@
 
         [data-theme="light"] .selection-toolbar .sel-btn.sel-all:hover {
             background: #e0e0e0;
+        }
+
+        /* iOS Safari mobile fix: previeni auto-zoom su focus input <16px */
+        @media (max-width: 600px) {
+            input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+            select, textarea { font-size: 16px; }
         }
     </style>
 </head>

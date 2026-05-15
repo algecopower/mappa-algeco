@@ -1409,6 +1409,23 @@
             font-family: inherit;
         }
 
+        /* Ribbon toggle (visibile solo su mobile) */
+        .ribbon-toggle {
+            display: none;
+            padding: 5px 12px;
+            border: 1px solid var(--border);
+            border-radius: 5px;
+            background: var(--bg-card);
+            color: var(--text);
+            font-size: 0.82em;
+            cursor: pointer;
+            align-items: center;
+            gap: 5px;
+            white-space: nowrap;
+        }
+        .ribbon-toggle:hover { border-color: var(--primary); }
+        .ribbon-toggle.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
         @media (max-width: 768px) {
             .toolbar { flex-wrap: wrap; gap: 6px; padding: 6px 10px; }
             .search-box { min-width: 140px; flex: 1; }
@@ -1416,6 +1433,44 @@
             .fmt-bar { display: none; }
             .vl-panel { width: 98vw; }
             .vl-config { flex-direction: column; }
+            .toolbar-title { font-size: 0.95em; }
+            .toolbar-info { font-size: 0.75em; }
+            .tb { padding: 6px 10px; font-size: 0.78em; }
+            .cell-log-panel { width: 98vw; max-height: 90vh; }
+            .cell-log-table { font-size: 0.72em; }
+            .cell-log-table th, .cell-log-table td { padding: 4px 5px; }
+
+            /* Ribbon collassabile */
+            .ribbon-toggle { display: inline-flex; }
+            .toolbar-spacer { display: none; }
+            .toolbar-filters {
+                display: none;
+                order: 98;
+                width: 100%;
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+            .toolbar-actions {
+                display: none;
+                order: 99;
+                width: 100%;
+                flex-wrap: wrap;
+                gap: 6px;
+                padding-top: 8px;
+                margin-top: 4px;
+                border-top: 1px solid var(--border);
+            }
+            .toolbar.expanded .toolbar-filters,
+            .toolbar.expanded .toolbar-actions { display: flex; }
+        }
+        @media (max-width: 480px) {
+            .toolbar { padding: 6px 8px; gap: 5px; }
+            .toolbar-title { font-size: 0.9em; }
+            .toolbar-sep { display: none; }
+            .search-box { min-width: 0; width: 100%; flex: 1 1 100%; order: 5; }
+            .ribbon-toggle { order: 4; }
+            .tb { padding: 5px 8px; font-size: 0.74em; }
+            .vl-panel { width: 100vw; height: 100vh; max-height: 100vh; border-radius: 0; }
         }
 
         /* Cell History Log */
@@ -1461,6 +1516,12 @@
         .cell-log-user { font-weight: 600; color: var(--info); white-space: nowrap; }
         .cell-log-old { color: var(--danger); }
         .cell-log-new { color: var(--success); font-weight: 500; }
+
+        /* iOS Safari mobile fix: previeni auto-zoom su focus input <16px */
+        @media (max-width: 600px) {
+            input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+            select, textarea { font-size: 16px; }
+        }
     </style>
 </head>
 <body>
@@ -1473,6 +1534,9 @@
             <span style="color:var(--text-muted);font-size:0.85em">&#x1F50D;</span>
             <input type="text" class="search-input" id="globalSearch" placeholder="Cerca ovunque..." autocomplete="off">
         </div>
+        <button class="ribbon-toggle" id="ribbonToggle" onclick="toggleRibbon()" title="Mostra/nascondi strumenti">
+            &#x2630; Strumenti
+        </button>
         <div class="toolbar-spacer"></div>
         <div class="toolbar-filters">
             <span id="activeFilters"></span>
@@ -7325,6 +7389,15 @@ function vlExcelClear() {
     }
 })();
 
+// Toggle ribbon strumenti su mobile
+function toggleRibbon() {
+    var tb = qs('.toolbar');
+    var btn = qs('#ribbonToggle');
+    if (!tb || !btn) return;
+    tb.classList.toggle('expanded');
+    btn.classList.toggle('active');
+}
+
 // Refresh manuale dal bottone toolbar
 async function manualRefresh() {
     var btn = qs('#btnRefresh');
@@ -7340,7 +7413,7 @@ async function manualRefresh() {
     }
 }
 </script>
-<script src="/static/bacheca.js"></script>
+<script src="/static/bacheca.js?v=2"></script>
 <link rel="stylesheet" href="/static/tour.css">
 <script src="/static/tour.js"></script>
 <script>

@@ -895,7 +895,12 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             border-radius: 10px;
             font-size: 1em;
             width: 100%;
+            max-width: 100%;
+            min-width: 0;
             box-sizing: border-box;
+            -webkit-appearance: none;
+            appearance: none;
+            font-family: inherit;
         }}
 
         .orari-lettere-form input[type="date"]:focus {{
@@ -2625,20 +2630,80 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             color: var(--text-secondary);
         }}
 
-        /* Responsive */
+        /* Responsive — mobile: sidebar diventa drawer overlay da sinistra */
         @media (max-width: 900px) {{
-            .container {{ flex-direction: column; }}
-            .sidebar {{ width: 100%; height: 50%; }}
-            .sidebar.collapsed {{ height: 0; }}
-            #map {{ height: 50%; }}
-            .sidebar-toggle {{
-                left: 50%;
-                top: auto;
-                bottom: 50%;
-                transform: translateX(-50%);
-                border-radius: 8px 8px 0 0;
-                padding: 8px 15px;
+            .container {{ flex-direction: row; }}
+            .sidebar {{
+                position: fixed;
+                top: 0; bottom: 0; left: 0;
+                width: min(360px, 92vw);
+                height: 100vh; max-height: 100vh;
+                z-index: 2000;
+                transform: translateX(0);
+                transition: transform 0.28s ease;
+                box-shadow: 4px 0 24px rgba(0,0,0,0.5);
             }}
+            .sidebar.collapsed {{
+                transform: translateX(-100%);
+                width: min(360px, 92vw); height: 100vh;
+                overflow: hidden;
+            }}
+            #map {{ width: 100%; height: 100vh; flex: 1; }}
+            .sidebar-toggle {{
+                position: fixed;
+                top: 10px; left: 10px;
+                bottom: auto;
+                transform: none;
+                border-radius: 8px;
+                padding: 9px 13px;
+                z-index: 2001;
+                font-size: 15px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+            }}
+            .sidebar.collapsed + .sidebar-toggle,
+            .sidebar-toggle.moved {{
+                left: 10px; top: 10px; bottom: auto;
+            }}
+            .sidebar-backdrop {{
+                display: none;
+                position: fixed; inset: 0;
+                background: rgba(0,0,0,0.5);
+                z-index: 1999;
+            }}
+            .sidebar-backdrop.visible {{ display: block; }}
+            /* Su mobile evitiamo che overlay e elementi mappa si pestino i piedi */
+            .stats-bar {{ display: none; }}
+            .zoom-slider-container {{ display: none; }}
+            .header {{ padding: 8px 10px 8px 56px; }}
+            .header h1 {{ font-size: 1em; }}
+            .header p {{ font-size: 0.7em; }}
+            .toggle-btn {{ padding: 5px 10px; font-size: 0.72em; }}
+        }}
+        @media (max-width: 480px) {{
+            .toggle-btn {{ padding: 6px 11px; font-size: 0.7em; }}
+            .header-top {{ flex-wrap: wrap; gap: 6px; }}
+            .sidebar {{ width: 100vw; max-width: 100vw; }}
+            .sidebar.collapsed {{ width: 100vw; }}
+        }}
+
+        /* Modal mobile fluidity */
+        @media (max-width: 600px) {{
+            .popup-content {{ min-width: 0; max-width: 86vw; }}
+            .bulk-assign-modal {{ padding: 16px; width: 100%; max-width: 94vw; border-radius: 14px; }}
+            .bulk-assign-modal h3 {{ font-size: 1em; }}
+            .bulk-assign-actions {{ flex-direction: column-reverse; gap: 8px; }}
+            .bulk-assign-actions button {{ width: 100%; padding: 12px; }}
+            .print-preview-content {{ width: 100%; height: 100%; border-radius: 0; }}
+            .print-preview-header {{ padding: 10px 12px; flex-wrap: wrap; gap: 8px; }}
+            .print-preview-title {{ font-size: 1em; }}
+            .print-preview-actions {{ width: 100%; flex-wrap: wrap; gap: 6px; }}
+            .print-preview-actions button {{ flex: 1 1 auto; padding: 9px 12px; font-size: 13px; }}
+            .advanced-search-grid {{ grid-template-columns: 1fr; }}
+            .advanced-search-panel.visible {{ max-height: 60vh; }}
+            .orari-lettere-modal {{ padding: 12px; }}
+            .orari-lettere-content {{ padding: 18px; width: 100%; max-width: 94vw; box-sizing: border-box; }}
+            .orari-lettere-title {{ font-size: 1.1em; }}
+            .orari-lettere-form input[type="date"] {{ padding: 10px 12px; }}
         }}
 
         /* Print Button */
@@ -4345,6 +4410,12 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
             background: rgba(6,182,212,0.2);
             border-color: #06b6d4;
         }}
+
+        /* iOS Safari mobile fix: previeni auto-zoom su focus input <16px */
+        @media (max-width: 600px) {{
+            input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+            select, textarea {{ font-size: 16px; }}
+        }}
     </style>
 </head>
 <body data-theme="dark">
@@ -4550,6 +4621,7 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         </div>
         
         <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()">◀</button>
+        <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="toggleSidebar()"></div>
 
         <div id="map"></div>
 
@@ -6254,11 +6326,43 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         function toggleSidebar() {{
             const sidebar = document.getElementById('sidebar');
             const toggle = document.getElementById('sidebarToggle');
+            const backdrop = document.getElementById('sidebarBackdrop');
             sidebar.classList.toggle('collapsed');
             toggle.classList.toggle('moved');
-            toggle.textContent = sidebar.classList.contains('collapsed') ? '▶' : '◀';
+            const isCollapsed = sidebar.classList.contains('collapsed');
+            toggle.textContent = isCollapsed ? '▶' : '◀';
+            if (backdrop) {{
+                // Backdrop visibile solo su mobile quando sidebar è aperta
+                if (!isCollapsed && window.matchMedia('(max-width: 900px)').matches) {{
+                    backdrop.classList.add('visible');
+                }} else {{
+                    backdrop.classList.remove('visible');
+                }}
+            }}
             setTimeout(() => map.invalidateSize(), 350);
         }}
+
+        // Su mobile la sidebar parte chiusa (mappa full-screen di default)
+        (function initSidebarMobile() {{
+            function applyMobileState() {{
+                const sidebar = document.getElementById('sidebar');
+                const toggle = document.getElementById('sidebarToggle');
+                const backdrop = document.getElementById('sidebarBackdrop');
+                if (!sidebar || !toggle) return;
+                const isMobile = window.matchMedia('(max-width: 900px)').matches;
+                if (isMobile && !sidebar.classList.contains('collapsed')) {{
+                    sidebar.classList.add('collapsed');
+                    toggle.classList.add('moved');
+                    toggle.textContent = '▶';
+                    if (backdrop) backdrop.classList.remove('visible');
+                }}
+            }}
+            if (document.readyState === 'loading') {{
+                document.addEventListener('DOMContentLoaded', applyMobileState);
+            }} else {{
+                applyMobileState();
+            }}
+        }})();
 
         function toggleSearchMode() {{
             advancedSearchMode = !advancedSearchMode;
@@ -14142,7 +14246,7 @@ function riordinaPerFasciaOraria() {{
     <!-- Modali Gestionale -->
     {genera_html_gestionale()}
     {genera_html_verifica_indirizzi()}
-<script src="/static/bacheca.js"></script>
+<script src="/static/bacheca.js?v=2"></script>
 <script src="/static/tour.js"></script>
 <script>
 (function() {{

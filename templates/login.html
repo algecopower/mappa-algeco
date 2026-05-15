@@ -273,6 +273,24 @@
         .rate-limit-message.show {
             display: block;
         }
+
+        @media (max-width: 480px) {
+            body { padding: 12px; align-items: flex-start; padding-top: 24px; }
+            .login-container { padding: 30px 22px; border-radius: 16px; }
+            .logo-icon { width: 64px; height: 64px; border-radius: 16px; }
+            .logo-icon svg { width: 36px; height: 36px; }
+            .logo h1 { font-size: 22px; }
+            .form-group { margin-bottom: 18px; }
+            .form-group input { padding: 13px 13px 13px 44px; font-size: 16px; }
+            .input-wrapper svg { left: 12px; width: 18px; height: 18px; }
+            .btn-login { padding: 14px; font-size: 15px; letter-spacing: 0.5px; }
+        }
+
+        /* iOS Safari mobile fix: previeni auto-zoom su focus input <16px */
+        @media (max-width: 600px) {
+            input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+            select, textarea { font-size: 16px; }
+        }
     </style>
 </head>
 <body>

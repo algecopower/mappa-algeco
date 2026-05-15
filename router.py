@@ -188,13 +188,16 @@ def _login_url():
 
 
 _FORBIDDEN_HTML = """<!DOCTYPE html>
-<html lang="it"><head><meta charset="UTF-8"><title>Accesso non autorizzato</title>
+<html lang="it"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Accesso non autorizzato</title>
 <style>
   body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
           background: #f5f6f8; color: #1f2329; display: flex; align-items: center;
-          justify-content: center; min-height: 100vh; margin: 0; }}
+          justify-content: center; min-height: 100vh; margin: 0; padding: 16px; }}
   .card {{ background: white; border-radius: 12px; padding: 40px 48px; max-width: 480px;
-           box-shadow: 0 4px 24px rgba(0,0,0,.08); text-align: center; }}
+           width: 100%; box-shadow: 0 4px 24px rgba(0,0,0,.08); text-align: center; }}
+  @media (max-width: 480px) {{ .card {{ padding: 28px 22px; }} h1 {{ font-size: 18px; }} }}
   .icon {{ font-size: 56px; margin-bottom: 8px; }}
   h1 {{ margin: 0 0 8px; font-size: 22px; }}
   p {{ color: #6b7280; font-size: 14px; line-height: 1.6; }}

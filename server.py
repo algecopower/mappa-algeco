@@ -929,8 +929,9 @@ def api_current_user():
 @app.route('/')
 @login_required
 def serve_index():
-    """Serve la mappa HTML (richiede autenticazione)."""
-    return send_file(os.path.join('templates', f'mappa_{PROVINCIA_ATTIVA.lower()}.html'))
+    """Serve la mappa HTML renderizzata al volo dall'ultima cache di sync."""
+    from moduli.mappa_html import render_mappa_corrente
+    return Response(render_mappa_corrente(), mimetype='text/html; charset=utf-8')
 
 
 @app.route('/api/events')
@@ -1192,7 +1193,7 @@ def update_settings():
                 from moduli.data_loader import carica_dati_google_sheets
                 df_cached = carica_dati_google_sheets(force=False)
                 if df_cached is not None:
-                    genera_mappa_html(df_cached, _last_report, _last_risultato_zone, filename=FILE_MAPPA)
+                    genera_mappa_html(df_cached, _last_report, _last_risultato_zone)
                     html_regen_ok = True
                     logger.info("[SETTINGS] HTML rigenerato sincronicamente con dati in cache")
             except Exception as e_html:
@@ -1624,7 +1625,6 @@ from config import (
     DEPOSITO,
     FILE_CACHE_DISTANZE,
     FILE_CACHE_HASH,
-    FILE_MAPPA,
     INTERVALLO_SYNC_SECONDI,
     USE_DB_BACKEND,
 )
@@ -1697,7 +1697,7 @@ def _do_sincronizza_dati():
             logger.info("[SYNC] 📝 Modifiche cosmetiche — light sync (riuso percorsi/zone in cache)")
 
             # Rigenera solo i dati contatori nel JSON + HTML, riusando percorsi e zone
-            genera_mappa_html(df, _last_report, _last_risultato_zone, filename=FILE_MAPPA)
+            genera_mappa_html(df, _last_report, _last_risultato_zone)
 
             elapsed = time_module.time() - start_loop
             logger.info(f"✅ Light sync completato in {elapsed:.1f}s")
@@ -1728,7 +1728,7 @@ def _do_sincronizza_dati():
 
         # Genera mappa HTML
         logger.info("🌐 Generazione mappa HTML...")
-        genera_mappa_html(df, report, risultato_zone, filename=FILE_MAPPA)
+        genera_mappa_html(df, report, risultato_zone)
 
         # Salva per riuso nel light sync
         _last_report = report

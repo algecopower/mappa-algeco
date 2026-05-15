@@ -14,7 +14,6 @@ Funzionalità:
 import json
 import logging
 import os
-import tempfile
 from datetime import datetime
 from collections import defaultdict
 
@@ -81,52 +80,54 @@ def _normalizza_ora_app(valore):
     return s
 
 
+# Cache module-level dei dati pronti per il render Jinja della mappa.
+# Popolata da genera_mappa_html() ad ogni sync; letta da render_mappa_corrente().
+_cached_render_inputs = None
+
+
 def genera_mappa_html(df, report, risultato_zone, filename=None):
     """
-    Genera mappa HTML interattiva completa.
-    Genera anche file JSON separati per ottimizzare i refresh.
+    Aggiorna i dati della mappa (JSON su disco + cache render in memoria).
+    Il parametro `filename` è accettato per retrocompatibilità ma ignorato:
+    l'HTML non viene più scritto su disco — viene renderizzato al volo dalla
+    route Flask via render_mappa_corrente().
     """
-    if filename is None:
-        filename = os.path.join("templates", f"mappa_{PROVINCIA_ATTIVA.lower()}.html")
+    global _cached_render_inputs
 
-    # Prepara dati
     zone_data = prepara_dati_zone(risultato_zone)
     contatori_data = prepara_dati_contatori(df, report)
     rotte_data = prepara_rotte_per_data(report)
 
-    # Estrai tutti gli LCL unici
     lcl_list = sorted(set(c['lcl'] for c in contatori_data if c['lcl']))
-
-    # Genera timestamp UNICO per JSON e HTML (alla fine del sync)
     timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
-    
-    # Salva JSON separati (per refresh ottimizzato via fetch)
+
+    # JSON su disco: servono al frontend per il refresh via fetch (SSE)
     salva_config_statica()
     salva_dati_json(zone_data, contatori_data, rotte_data, lcl_list, timestamp)
 
-    # Genera HTML (con dati embedded per retrocompatibilità file://)
-    html = genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timestamp)
+    # Cache per render_mappa_corrente() (route Flask /)
+    _cached_render_inputs = {
+        'zone_data': zone_data,
+        'contatori_data': contatori_data,
+        'rotte_data': rotte_data,
+        'lcl_list': lcl_list,
+        'timestamp': timestamp,
+    }
 
-    # Salva atomicamente (temp file + os.replace)
-    os.makedirs(os.path.dirname(filename) or '.', exist_ok=True)
-    content = html.encode('utf-8', errors='replace').decode('utf-8')
-    dirpath = os.path.dirname(filename) or '.'
-    fd, tmp_path = tempfile.mkstemp(dir=dirpath, prefix='.tmp_mappa_', suffix='.html')
-    try:
-        with os.fdopen(fd, 'w', encoding='utf-8') as f:
-            f.write(content)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp_path, filename)
-    except Exception:
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
-        raise
+    logger.info("✅ Mappa aggiornata (cache render + JSON su disco)")
+    return None
 
-    logger.info(f"✅ Mappa HTML salvata: {filename}")
-    return filename
+
+def render_mappa_corrente():
+    """
+    Ritorna l'HTML della mappa renderizzato con l'ultima cache di sync.
+    Se la cache è vuota (server appena avviato, sync non ancora completato),
+    rende uno scheletro vuoto: il JS frontend caricherà i dati via fetch.
+    """
+    if _cached_render_inputs is None:
+        timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+        return genera_html_completo([], [], {}, [], timestamp=timestamp)
+    return genera_html_completo(**_cached_render_inputs)
 
 
 def prepara_dati_zone(risultato_zone):

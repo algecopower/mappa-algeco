@@ -471,11 +471,11 @@
 <header class="app-header">
   <div class="brand">
     <h1>🗺️  Mappa Algeco</h1>
-    <span class="meta">Gestione Province</span>
+    <span class="meta">Pannello amministrazione</span>
   </div>
   <div class="meta">
     <span id="userInfo">…</span>
-    <button class="theme-toggle" onclick="toggleTheme()" title="Cambia tema">🌙</button>
+    <button class="theme-toggle" onclick="toggleTheme()" title="Cambia tema chiaro/scuro">🌙</button>
   </div>
 </header>
 
@@ -486,11 +486,11 @@
   <!-- Toolbar -->
   <div class="toolbar">
     <button class="btn" onclick="apriFormAggiungi()">➕ Aggiungi provincia</button>
-    <button class="btn secondary" onclick="caricaTutto()">🔄 Aggiorna</button>
+    <button class="btn secondary" onclick="caricaTutto()" title="Ricarica la pagina con i dati più recenti">🔄 Aggiorna pagina</button>
     <div style="flex:1"></div>
-    <select id="searchProvSel" class="search-prov-select" title="Provincia per ricerca eneltel"></select>
-    <input id="searchEneltel" class="search-eneltel" type="text" placeholder="Cerca eneltel…">
-    <button class="btn secondary" onclick="ispezionaEneltel()">🔍 Ispeziona</button>
+    <select id="searchProvSel" class="search-prov-select" title="Provincia in cui cercare"></select>
+    <input id="searchEneltel" class="search-eneltel" type="text" placeholder="Cerca un contatore per codice Eneltel…">
+    <button class="btn secondary" onclick="ispezionaEneltel()" title="Mostra dettagli del contatore (dati, modifiche, storico)">🔍 Cerca</button>
   </div>
 
   <!-- Grid province -->
@@ -511,51 +511,53 @@
     <form id="formAggiungi" onsubmit="submitForm(event)">
       <div class="form-row">
         <div class="form-group">
-          <label>Slug (codice interno)</label>
+          <label>Codice provincia</label>
           <input name="slug" required pattern="[A-Za-z][A-Za-z0-9_]{1,30}" placeholder="es. LECCO" oninput="onSlugChange(this)">
-          <div class="help">Maiuscole, lettere+numeri+underscore. Chiave nel JSON.</div>
+          <div class="help">Codice breve in maiuscolo (es. LECCO, NOVARA). Identifica la provincia internamente.</div>
         </div>
         <div class="form-group">
-          <label>Nome leggibile</label>
+          <label>Nome visualizzato</label>
           <input name="nome" required placeholder="es. Lecco">
+          <div class="help">Come appare nei menu del programma.</div>
         </div>
       </div>
 
       <div class="form-group">
-        <label>Sottodominio</label>
+        <label>Indirizzo web</label>
         <input name="sottodominio" required placeholder="lecco.mappa-algeco.com">
-        <div class="help">Il wildcard DNS *.mappa-algeco.com lo cattura automaticamente.</div>
+        <div class="help">Il programma sarà accessibile a questo indirizzo. Cloudflare gestisce automaticamente i nuovi sottodomini.</div>
       </div>
 
       <div class="form-row">
         <div class="form-group">
-          <label>ID Google Sheet</label>
+          <label>ID del foglio Google</label>
           <input name="id_foglio" required placeholder="1ABCdef...">
-          <div class="help">URL: docs.google.com/spreadsheets/d/<b>ID</b>/edit</div>
+          <div class="help">Si trova nell'URL del foglio: docs.google.com/spreadsheets/d/<b>ID</b>/edit</div>
         </div>
         <div class="form-group">
-          <label>GID scheda</label>
+          <label>ID della scheda</label>
           <input name="gid_scheda" type="number" required placeholder="0">
-          <div class="help">Visibile nell'URL come #gid=…</div>
+          <div class="help">Si trova nell'URL come <b>#gid=…</b> (in fondo)</div>
         </div>
       </div>
 
       <div class="form-group">
-        <button type="button" class="btn secondary" onclick="verificaFoglio()">🔍 Verifica foglio</button>
+        <button type="button" class="btn secondary" onclick="verificaFoglio()" title="Controlla che il foglio sia raggiungibile e mostra le colonne trovate">🔍 Controlla il foglio</button>
         <div id="probe-result"></div>
       </div>
 
       <div class="form-group">
         <label>Deposito — Nome</label>
         <input name="deposito_nome" required placeholder="DEPOSITO X">
+        <div class="help">Punto di partenza dei tecnici (es. DEPOSITO VOLPIANO).</div>
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label>Latitudine</label>
+          <label>Latitudine deposito</label>
           <input name="deposito_lat" type="number" step="any" required placeholder="45.0">
         </div>
         <div class="form-group">
-          <label>Longitudine</label>
+          <label>Longitudine deposito</label>
           <input name="deposito_lon" type="number" step="any" required placeholder="9.0">
         </div>
       </div>
@@ -573,15 +575,16 @@
 
       <div class="form-group">
         <label style="display:flex; align-items:center; gap:8px; text-transform:none; font-size:13px;">
-          <input type="checkbox" name="usa_localita_come_comune" style="width:auto;"> Usa "Località" come Comune (raggruppamento zone)
+          <input type="checkbox" name="usa_localita_come_comune" style="width:auto;"> Usa la colonna "Località" al posto di "Comune"
         </label>
-        <div class="help">Attiva se il foglio non ha la colonna Comune popolata.</div>
+        <div class="help">Attiva solo se sul foglio la colonna "Comune" è vuota e usi "Località" per raggruppare le zone.</div>
       </div>
 
       <div class="form-row">
         <div class="form-group">
-          <label>Porta (auto se vuoto)</label>
-          <input name="porta" type="number" placeholder="auto">
+          <label>Porta interna (lascia vuoto per default)</label>
+          <input name="porta" type="number" placeholder="automatica">
+          <div class="help">Tecnico: il sistema sceglie da solo se vuoto.</div>
         </div>
         <div class="form-group"></div>
       </div>
@@ -598,7 +601,7 @@
 <div class="modal" id="modalInspector">
   <div class="modal-content wide">
     <div class="modal-head">
-      <h2 id="inspectorTitle">Ispezione eneltel</h2>
+      <h2 id="inspectorTitle">Dettagli contatore</h2>
       <button class="close" onclick="chiudiInspector()">&times;</button>
     </div>
     <div id="inspectorBody">…</div>
@@ -700,24 +703,24 @@ function rendiHealth(prov) {
   const integrityClass = totIntegrityOk ? 'ok' : 'alert';
   bar.innerHTML = `
     <div class="health-card ok">
-      <span class="label">Province attive</span>
+      <span class="label">Province online</span>
       <span class="value">${totRunning} / ${prov.length}</span>
-      <span class="detail">${prov.length === totRunning ? 'tutte in esecuzione' : (prov.length - totRunning) + ' ferme'}</span>
+      <span class="detail">${prov.length === totRunning ? 'tutte funzionanti' : (prov.length - totRunning) + ' non funzionanti'}</span>
     </div>
     <div class="health-card ${issuesClass}">
-      <span class="label">Backlog pending</span>
+      <span class="label">Modifiche in coda</span>
       <span class="value">${totBacklog}</span>
-      <span class="detail">${totWarnings > 0 ? totWarnings + ' warning attivi' : 'tutto sotto controllo'}</span>
+      <span class="detail">${totWarnings > 0 ? '⚠️ ' + totWarnings + ' avvisi' : 'salvataggio fluido'}</span>
     </div>
     <div class="health-card ${integrityClass}">
-      <span class="label">Integrità DB</span>
+      <span class="label">Stato archivio dati</span>
       <span class="value">${totIntegrityOk ? '✓ OK' : '✗ Errore'}</span>
-      <span class="detail">${totIntegrityOk ? 'tutti i DB sani' : 'verifica logs'}</span>
+      <span class="detail">${totIntegrityOk ? 'nessun problema rilevato' : 'controllare i log'}</span>
     </div>
     <div class="health-card ok">
-      <span class="label">Router</span>
-      <span class="value">⚡ UP</span>
-      <span class="detail">multi-tenant attivo</span>
+      <span class="label">Sistema</span>
+      <span class="value">⚡ Online</span>
+      <span class="detail">tutto attivo</span>
     </div>
   `;
 }
@@ -756,20 +759,26 @@ function rendiGrid(province) {
     const badgeClass = stato === 'running' ? 'running' : (stato.startsWith('exited') ? 'stopped' : 'unknown');
     const dbNotInit = !p.db_exists;
 
+    // Etichetta stato in italiano
+    let statoLabel = stato;
+    if (stato === 'running') statoLabel = 'Attiva';
+    else if (stato === 'stopped') statoLabel = 'Ferma';
+    else if (stato.startsWith('exited')) statoLabel = 'Errore';
+
     let actionsHtml = '';
     if (dbNotInit) {
-      actionsHtml = `<button class="btn success" onclick="bootstrap('${p.slug}')">📥 Inizializza DB</button>`;
+      actionsHtml = `<button class="btn success" onclick="bootstrap('${p.slug}')" title="Scarica per la prima volta tutti i contatori dal foglio Google">📥 Carica dati iniziali</button>`;
     } else if (stato === 'running') {
       actionsHtml = `
-        <button class="btn secondary" onclick="azione('${p.slug}','restart')">🔄 Riavvia</button>
-        <button class="btn danger" onclick="azione('${p.slug}','stop')">⏸ Ferma</button>
-        <button class="btn warn" onclick="dbAction('${p.slug}','sync')" title="Forza sync da Sheets">⚡ Sync</button>
-        <button class="btn warn" onclick="dbAction('${p.slug}','drain')" title="Forza drain verso Sheets">🚰 Drain</button>
-        <button class="btn warn" onclick="dbAction('${p.slug}','snapshot-db')" title="Snapshot DB ora">📸 Backup</button>
-        <button class="btn warn" onclick="dbAction('${p.slug}','validate')" title="Verifica DB↔Sheets">🔬 Verify</button>
+        <button class="btn secondary" onclick="azione('${p.slug}','restart')" title="Riavvia il programma di questa provincia">🔄 Riavvia</button>
+        <button class="btn danger" onclick="azione('${p.slug}','stop')" title="Ferma il programma di questa provincia">⏸ Ferma</button>
+        <button class="btn warn" onclick="dbAction('${p.slug}','sync')" title="Rilegge subito i dati dal foglio Google">⬇️ Leggi dal foglio</button>
+        <button class="btn warn" onclick="dbAction('${p.slug}','drain')" title="Spinge subito le modifiche locali sul foglio Google">⬆️ Salva sul foglio</button>
+        <button class="btn warn" onclick="dbAction('${p.slug}','snapshot-db')" title="Crea una copia di sicurezza dei dati locali">💾 Backup</button>
+        <button class="btn warn" onclick="dbAction('${p.slug}','validate')" title="Controlla che i dati locali corrispondano al foglio Google">✓ Verifica dati</button>
       `;
     } else {
-      actionsHtml = `<button class="btn success" onclick="azione('${p.slug}','start')">▶ Avvia</button>`;
+      actionsHtml = `<button class="btn success" onclick="azione('${p.slug}','start')" title="Avvia il programma di questa provincia">▶ Avvia</button>`;
     }
 
     card.innerHTML = `
@@ -778,18 +787,17 @@ function rendiGrid(province) {
           ${escapeHtml(p.nome)}
           <small>${escapeHtml(p.slug)}</small>
         </div>
-        <span class="badge ${badgeClass}">${stato}</span>
+        <span class="badge ${badgeClass}" title="${escapeHtml(stato)}">${statoLabel}</span>
       </div>
-      <div class="field"><span class="k">URL</span><span class="v">${escapeHtml(p.sottodominio || '—')}</span></div>
-      <div class="field"><span class="k">Porta</span><span class="v mono">${p.porta || '—'}</span></div>
-      <div class="field"><span class="k">Foglio</span><span class="v mono">${escapeHtml((p.id_foglio || '').slice(0, 18))}…</span></div>
+      <div class="field"><span class="k">Indirizzo</span><span class="v">${escapeHtml(p.sottodominio || '—')}</span></div>
+      <div class="field"><span class="k">Foglio Google</span><span class="v mono" title="${escapeHtml(p.id_foglio || '')}">${escapeHtml((p.id_foglio || '').slice(0, 18))}…</span></div>
       <div class="field"><span class="k">Deposito</span><span class="v">${escapeHtml(p.deposito && p.deposito.Nome || '—')}</span></div>
       <div class="actions">
         ${actionsHtml}
-        <button class="btn secondary" onclick='apriFormModifica(${JSON.stringify(p).replace(/'/g, "&apos;")})'>✏️ Modifica</button>
-        <button class="btn danger" onclick="elimina('${p.slug}')">🗑️</button>
+        <button class="btn secondary" onclick='apriFormModifica(${JSON.stringify(p).replace(/'/g, "&apos;")})' title="Modifica configurazione (foglio, deposito, orari…)">✏️ Modifica</button>
+        <button class="btn danger" onclick="elimina('${p.slug}')" title="Elimina la provincia">🗑️</button>
       </div>
-      ${dbNotInit ? '<div class="alert-banner">⚠️ DB non ancora inizializzato. Clicca "Inizializza DB" per il primo pull dal foglio.</div>' : ''}
+      ${dbNotInit ? '<div class="alert-banner">⚠️ Dati non ancora caricati dal foglio. Clicca "Carica dati iniziali" per la prima sincronizzazione.</div>' : ''}
     `;
     grid.appendChild(card);
   }
@@ -810,18 +818,18 @@ async function azione(slug, action) {
 
 async function dbAction(slug, action) {
   const labels = {
-    'sync': 'sync forzato',
-    'drain': 'drain forzato',
-    'snapshot-db': 'snapshot DB',
-    'validate': 'validator',
+    'sync': 'Lettura dal foglio',
+    'drain': 'Salvataggio sul foglio',
+    'snapshot-db': 'Backup dati',
+    'validate': 'Verifica integrità',
   };
   toast(`${slug}: ${labels[action]} in corso…`);
   try {
     const r = await api('POST', `/api/provinces/${slug}/db-action`, { action });
     if (r.success) {
-      toast(`${slug}: ${labels[action]} completato. ${r.message || ''}`, 'success');
+      toast(`${slug}: ${labels[action]} completata. ${r.message || ''}`, 'success');
     } else {
-      toast(`${slug}: ${labels[action]} fallito. ${r.message || ''}`, 'error');
+      toast(`${slug}: ${labels[action]} fallita. ${r.message || ''}`, 'error');
     }
     setTimeout(caricaHealth, 800);
   } catch (e) {
@@ -830,19 +838,19 @@ async function dbAction(slug, action) {
 }
 
 async function bootstrap(slug) {
-  if (!confirm(`Inizializzare il DB locale per ${slug}? Scarica TUTTI i contatori dal foglio Google e popola il DB. Può richiedere 30-60s.`)) return;
-  toast(`⏳ Inizializzazione DB ${slug} in corso…`);
+  if (!confirm(`Caricare per la prima volta tutti i dati di ${slug} dal foglio Google? L'operazione può richiedere 30-60 secondi.`)) return;
+  toast(`⏳ Caricamento dati ${slug} in corso (30-60s)…`);
   try {
     await api('POST', `/api/provinces/${slug}/bootstrap`);
-    toast(`✅ DB ${slug} inizializzato. Ora "Avvia".`, 'success');
+    toast(`✅ Dati ${slug} caricati. Ora puoi avviare la provincia.`, 'success');
     setTimeout(caricaTutto, 800);
   } catch (e) {
-    toast('Errore bootstrap: ' + e.message, 'error');
+    toast('Errore caricamento dati: ' + e.message, 'error');
   }
 }
 
 async function elimina(slug) {
-  if (!confirm(`Eliminare la provincia ${slug}?\nIl processo viene fermato e l'entry rimossa da provinces.json.\nLa cartella data/${slug.toLowerCase()}/ verrà conservata.`)) return;
+  if (!confirm(`Eliminare la provincia ${slug}?\nIl programma viene fermato e la provincia rimossa dalla lista.\nI dati locali (cartella data/${slug.toLowerCase()}/) restano salvati come precauzione.`)) return;
   try {
     const r = await api('DELETE', `/api/provinces/${slug}`);
     toast(`${slug} eliminato. ${r.note || ''}`, 'success');
@@ -911,17 +919,17 @@ async function verificaFoglio() {
   const id_foglio = document.querySelector('[name=id_foglio]').value.trim();
   const gid_scheda = document.querySelector('[name=gid_scheda]').value.trim();
   const out = document.getElementById('probe-result');
-  if (!id_foglio) { out.innerHTML = '<div class="probe-box error">Inserisci prima l\'ID del foglio.</div>'; return; }
-  out.innerHTML = '<div class="probe-box"><span class="spinner"></span> Verifica in corso…</div>';
+  if (!id_foglio) { out.innerHTML = '<div class="probe-box error">Inserisci prima l\'ID del foglio Google.</div>'; return; }
+  out.innerHTML = '<div class="probe-box"><span class="spinner"></span> Controllo in corso…</div>';
   try {
     const r = await api('POST', '/api/probe-sheet', { id_foglio, gid_scheda: gid_scheda || null });
-    let html = `<div class="probe-box ok">✅ Foglio: <b>${escapeHtml(r.foglio)}</b> / scheda <b>${escapeHtml(r.sheet_name)}</b> (${r.n_colonne} colonne)`;
+    let html = `<div class="probe-box ok">✅ Foglio trovato: <b>${escapeHtml(r.foglio)}</b> — scheda <b>${escapeHtml(r.sheet_name)}</b> (${r.n_colonne} colonne)`;
     if (r.missing_critici && r.missing_critici.length) {
-      html += `<div class="probe-box error" style="margin-top:6px;">⚠️ Colonne critiche mancanti: <b>${r.missing_critici.join(', ')}</b><br>Dovrai mappare manualmente dopo l'avvio.</div>`;
+      html += `<div class="probe-box error" style="margin-top:6px;">⚠️ Mancano colonne essenziali: <b>${r.missing_critici.join(', ')}</b><br>Andranno mappate manualmente nelle impostazioni della provincia dopo l'avvio.</div>`;
     }
     const mapped = Object.entries(r.suggested_mapping || {}).filter(([k,v]) => v).map(([k,v]) => `${k}→${v}`);
     if (mapped.length) {
-      html += `<details><summary>Mapping dedotto (${mapped.length} colonne)</summary><div class="map-list">${escapeHtml(mapped.join(' · '))}</div></details>`;
+      html += `<details><summary>Colonne riconosciute automaticamente (${mapped.length})</summary><div class="map-list">${escapeHtml(mapped.join(' · '))}</div></details>`;
     }
     html += '</div>';
     out.innerHTML = html;
@@ -960,7 +968,7 @@ async function submitForm(ev) {
     } else {
       body.slug = fd.get('slug').toUpperCase();
       const r = await api('POST', '/api/provinces', body);
-      toast(`Provincia ${r.slug} creata sulla porta ${r.cfg.porta}. Inizializza DB, poi Avvia.`, 'success');
+      toast(`Provincia ${r.slug} creata. Ora clicca "📥 Carica dati iniziali" e poi "▶ Avvia".`, 'success');
     }
     chiudiModal();
     caricaTutto();
@@ -975,10 +983,10 @@ async function submitForm(ev) {
 async function ispezionaEneltel() {
   const slug = document.getElementById('searchProvSel').value;
   const ek = document.getElementById('searchEneltel').value.trim().toUpperCase();
-  if (!slug || !ek) { toast('Seleziona provincia e inserisci eneltel', 'error'); return; }
+  if (!slug || !ek) { toast('Seleziona una provincia e inserisci il codice Eneltel', 'error'); return; }
 
   const modal = document.getElementById('modalInspector');
-  document.getElementById('inspectorTitle').textContent = `Eneltel ${ek} (${slug})`;
+  document.getElementById('inspectorTitle').textContent = `Contatore ${ek} — ${slug}`;
   const body = document.getElementById('inspectorBody');
   body.innerHTML = '<div class="inspector-empty"><span class="spinner"></span> Caricamento…</div>';
   modal.classList.add('open');
@@ -991,16 +999,39 @@ async function ispezionaEneltel() {
   }
 }
 
+function _labelSorgente(s) {
+  // Traduzione friendly delle sorgenti audit_log
+  const map = {
+    'local': 'Dal programma',
+    'remote': 'Dal foglio',
+    'conflict_local_wins': 'Conflitto (vinto programma)',
+    'bootstrap': 'Caricamento iniziale',
+    'quarantine': 'Errore salvataggio',
+  };
+  return map[s] || s;
+}
+
+function _labelStatoPending(s) {
+  const map = {
+    'pending': 'In attesa',
+    'in_flight': 'In salvataggio',
+    'done': 'Completata',
+    'quarantined': 'Errore',
+    'failed': 'Fallita',
+  };
+  return map[s] || s;
+}
+
 function rendiInspector(data) {
   const body = document.getElementById('inspectorBody');
   if (!data.filone || !data.filone.length) {
-    body.innerHTML = '<div class="probe-box error">❌ Eneltel non trovato nel DB</div>';
+    body.innerHTML = '<div class="probe-box error">❌ Contatore non trovato nei dati locali</div>';
     return;
   }
   let html = '';
-  // Filone (può essere multi-LCL)
-  html += '<div class="inspector-section"><h3>Riga nel DB</h3>';
-  html += '<table class="inspector-table"><thead><tr><th>LCL</th><th>Sheets Row</th><th>POD</th><th>Nominativo</th><th>Comune</th><th>Operatore</th><th>Esito</th></tr></thead><tbody>';
+  // Dati attuali (può essere multi-LCL)
+  html += '<div class="inspector-section"><h3>Dati attuali del contatore</h3>';
+  html += '<table class="inspector-table"><thead><tr><th>LCL</th><th>Riga foglio</th><th>POD</th><th>Nominativo</th><th>Comune</th><th>Operatore</th><th>Esito</th></tr></thead><tbody>';
   for (const r of data.filone) {
     html += `<tr>
       <td class="mono">${escapeHtml(r.lcl || '—')}</td>
@@ -1014,18 +1045,18 @@ function rendiInspector(data) {
   }
   html += '</tbody></table></div>';
 
-  // Pending in volo
+  // Modifiche in attesa di salvataggio sul foglio
   const pendingVivi = (data.pending_writes_recenti || []).filter(p => p.state === 'pending' || p.state === 'in_flight');
-  html += '<div class="inspector-section"><h3>Pending in volo (' + pendingVivi.length + ')</h3>';
+  html += '<div class="inspector-section"><h3>Modifiche in attesa di salvataggio sul foglio (' + pendingVivi.length + ')</h3>';
   if (pendingVivi.length === 0) {
-    html += '<div class="inspector-empty">Nessuna scrittura pendente</div>';
+    html += '<div class="inspector-empty">Nessuna modifica in coda. Tutto già sincronizzato col foglio Google.</div>';
   } else {
-    html += '<table class="inspector-table"><thead><tr><th>Colonna</th><th>Nuovo valore</th><th>Stato</th><th>Tentativi</th><th>Errore</th></tr></thead><tbody>';
+    html += '<table class="inspector-table"><thead><tr><th>Campo</th><th>Nuovo valore</th><th>Stato</th><th>Tentativi</th><th>Errore</th></tr></thead><tbody>';
     for (const p of pendingVivi) {
       html += `<tr>
         <td>${escapeHtml(p.column_name)}</td>
         <td class="mono">${escapeHtml((p.new_value || '').slice(0, 60))}</td>
-        <td><span class="badge ${p.state === 'in_flight' ? 'running' : 'unknown'}">${p.state}</span></td>
+        <td><span class="badge ${p.state === 'in_flight' ? 'running' : 'unknown'}">${_labelStatoPending(p.state)}</span></td>
         <td>${p.attempts}</td>
         <td>${escapeHtml(p.last_error || '—')}</td>
       </tr>`;
@@ -1033,13 +1064,13 @@ function rendiInspector(data) {
     html += '</tbody></table></div>';
   }
 
-  // Audit log
+  // Cronologia modifiche
   const audits = (data.audit_log_recenti || []).slice(0, 15);
-  html += '<div class="inspector-section"><h3>Ultime modifiche (audit_log)</h3>';
+  html += '<div class="inspector-section"><h3>Cronologia modifiche recenti</h3>';
   if (!audits.length) {
-    html += '<div class="inspector-empty">Nessuna modifica registrata</div>';
+    html += '<div class="inspector-empty">Nessuna modifica registrata per questo contatore.</div>';
   } else {
-    html += '<table class="inspector-table"><thead><tr><th>Data</th><th>Colonna</th><th>Da</th><th>A</th><th>Sorgente</th><th>User</th></tr></thead><tbody>';
+    html += '<table class="inspector-table"><thead><tr><th>Data</th><th>Campo</th><th>Prima</th><th>Dopo</th><th>Origine</th><th>Utente</th></tr></thead><tbody>';
     for (const a of audits) {
       const dt = new Date(a.ts * 1000).toLocaleString('it-IT');
       html += `<tr>
@@ -1047,7 +1078,7 @@ function rendiInspector(data) {
         <td>${escapeHtml(a.column_name || '—')}</td>
         <td class="mono">${escapeHtml((a.old_value || '').slice(0, 30))}</td>
         <td class="mono">${escapeHtml((a.new_value || '').slice(0, 30))}</td>
-        <td>${escapeHtml(a.source)}</td>
+        <td>${escapeHtml(_labelSorgente(a.source))}</td>
         <td>${escapeHtml(a.user || '—')}</td>
       </tr>`;
     }

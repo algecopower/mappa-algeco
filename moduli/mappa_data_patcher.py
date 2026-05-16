@@ -221,8 +221,10 @@ def try_patch_inplace():
             n_patched += 1
         if n_patched == 0:
             return None
-        import time as _time
-        data['timestamp'] = int(_time.time() * 1000)
+        from datetime import datetime as _dt
+        # Stesso formato di salva_dati_json() in mappa_html.py: stringa
+        # YYYYMMDDHHMMSS attesa dal frontend (formatTimestamp).
+        data['timestamp'] = _dt.now().strftime('%Y%m%d%H%M%S')
         return data
 
     ok, result = _sj.json_modify(json_path, _modifier, separators=(',', ':'))

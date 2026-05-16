@@ -35,10 +35,20 @@ function getDisplayName(tec) {
 }
 let dataLoadMode = 'embedded'; // 'fetch' o 'embedded'
 
-// Converte timestamp YYYYMMDDHHMMSS in formato leggibile DD/MM/YYYY HH:MM
+// Converte timestamp YYYYMMDDHHMMSS in formato leggibile DD/MM/YYYY HH:MM.
+// Difensivo: se per qualche motivo arriva un numero (ms epoch da vecchi
+// patcher), lo formatta come Date locale.
 function formatTimestamp(ts) {
-    if (!ts || ts.length < 12) return 'N/A';
-    return `${ts.substring(6,8)}/${ts.substring(4,6)}/${ts.substring(0,4)} ${ts.substring(8,10)}:${ts.substring(10,12)}`;
+    if (ts == null) return 'N/A';
+    if (typeof ts === 'number') {
+        const d = new Date(ts);
+        if (isNaN(d.getTime())) return 'N/A';
+        const pad = n => String(n).padStart(2, '0');
+        return `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+    const s = String(ts);
+    if (s.length < 12) return 'N/A';
+    return `${s.substring(6,8)}/${s.substring(4,6)}/${s.substring(0,4)} ${s.substring(8,10)}:${s.substring(10,12)}`;
 }
 
 // Usa DATA_FINE dal config (importato dalla variabile Python)

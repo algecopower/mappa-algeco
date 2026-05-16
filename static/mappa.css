@@ -20,17 +20,17 @@
        per simulare lo spessore del vetro. Le variabili --panel-* sono
        usate dai container principali. I bottoni/input/celle restano
        solidi e usano i bg-* originali. */
-    --panel-blur: 18px;
-    --panel-saturate: 180%;
-    --panel-bg: rgba(22, 33, 62, 0.72);
-    --panel-bg-strong: rgba(15, 52, 96, 0.85);
-    --panel-tint: linear-gradient(135deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0) 55%);
-    --panel-border: 1px solid rgba(255, 255, 255, 0.14);
+    --panel-blur: 22px;
+    --panel-saturate: 200%;
+    --panel-bg: rgba(22, 33, 62, 0.50);
+    --panel-bg-strong: rgba(15, 52, 96, 0.62);
+    --panel-tint: linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0) 55%);
+    --panel-border: 1px solid rgba(255, 255, 255, 0.18);
     --panel-shadow:
         0 8px 32px rgba(0, 0, 0, 0.4),
-        inset 0 1px 0 rgba(255, 255, 255, 0.08);
-    --header-bg: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0) 60%), linear-gradient(135deg, rgba(15, 52, 96, 0.85) 0%, rgba(22, 33, 62, 0.7) 100%);
-    --sidebar-bg: linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0) 50%), linear-gradient(180deg, rgba(22, 33, 62, 0.78) 0%, rgba(26, 26, 46, 0.85) 100%);
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    --header-bg: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0) 60%), linear-gradient(135deg, rgba(15, 52, 96, 0.6) 0%, rgba(22, 33, 62, 0.45) 100%);
+    --sidebar-bg: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0) 50%), linear-gradient(180deg, rgba(22, 33, 62, 0.55) 0%, rgba(26, 26, 46, 0.65) 100%);
 }
 
 [data-theme="light"] {
@@ -45,15 +45,15 @@
     --border: #ddd;
     --shadow: rgba(0,0,0,0.1);
 
-    --panel-bg: rgba(255, 255, 255, 0.72);
-    --panel-bg-strong: rgba(255, 255, 255, 0.88);
-    --panel-tint: linear-gradient(135deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0) 55%);
-    --panel-border: 1px solid rgba(255, 255, 255, 0.4);
+    --panel-bg: rgba(255, 255, 255, 0.55);
+    --panel-bg-strong: rgba(255, 255, 255, 0.72);
+    --panel-tint: linear-gradient(135deg, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0) 55%);
+    --panel-border: 1px solid rgba(255, 255, 255, 0.5);
     --panel-shadow:
         0 8px 32px rgba(0, 0, 0, 0.12),
-        inset 0 1px 0 rgba(255, 255, 255, 0.6);
-    --header-bg: linear-gradient(135deg, rgba(255,255,255,0.5), rgba(255,255,255,0) 60%), linear-gradient(135deg, rgba(232, 232, 232, 0.82) 0%, rgba(255, 255, 255, 0.7) 100%);
-    --sidebar-bg: linear-gradient(135deg, rgba(255,255,255,0.4), rgba(255,255,255,0) 50%), linear-gradient(180deg, rgba(255, 255, 255, 0.78) 0%, rgba(245, 245, 245, 0.85) 100%);
+        inset 0 1px 0 rgba(255, 255, 255, 0.7);
+    --header-bg: linear-gradient(135deg, rgba(255,255,255,0.6), rgba(255,255,255,0) 60%), linear-gradient(135deg, rgba(232, 232, 232, 0.55) 0%, rgba(255, 255, 255, 0.45) 100%);
+    --sidebar-bg: linear-gradient(135deg, rgba(255,255,255,0.55), rgba(255,255,255,0) 50%), linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, rgba(245, 245, 245, 0.65) 100%);
 }
 
 /* Modalità "solido": disattiva blur, tinta acrilica e highlight.
@@ -93,10 +93,18 @@ body {
     transition: all 0.3s ease;
 }
 
-.container { display: flex; height: 100vh; }
+/* Mappa estesa a tutta la pagina + sidebar in overlay assoluto.
+   Necessario per il vero effetto acrilico: backdrop-filter ha bisogno
+   di pixel dietro l'elemento da campionare. Con la struttura side-by-side
+   (flex) la sidebar non aveva la mappa sotto, solo body uniforme. */
+.container { position: relative; height: 100vh; overflow: hidden; }
 
 /* Sidebar */
 .sidebar {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
     width: 370px;
     background: var(--sidebar-bg);
     backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
@@ -1576,9 +1584,13 @@ body {
     text-transform: uppercase;
 }
 
-/* Map */
+/* Map: occupa tutto il container, la sidebar è in overlay (vedi .sidebar). */
 #map {
-    flex: 1;
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
     background: var(--bg-primary);
     transition: all 0.3s ease;
 }

@@ -256,7 +256,7 @@ def genera_css_gestionale():
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.35);
+            background: var(--modal-overlay-bg);
             backdrop-filter: blur(8px);
             -webkit-backdrop-filter: blur(8px);
             z-index: 10000;
@@ -922,7 +922,7 @@ def genera_css_gestionale():
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.35);
+            background: var(--modal-overlay-bg);
             backdrop-filter: blur(8px);
             -webkit-backdrop-filter: blur(8px);
             z-index: 10001;

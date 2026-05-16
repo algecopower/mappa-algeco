@@ -17,8 +17,9 @@ def genera_css_verifica_indirizzi() -> str:
             display: none;
             position: fixed;
             inset: 0;
-            background: rgba(0, 0, 0, 0.7);
-            backdrop-filter: blur(3px);
+            background: var(--modal-overlay-bg-strong);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
             z-index: 10000;
             justify-content: center;
             align-items: center;
@@ -132,7 +133,7 @@ def genera_css_verifica_indirizzi() -> str:
             flex: 1;
             overflow-y: auto;
             padding: 0;
-            background: var(--bg-primary);
+            background: transparent;
         }
         .vi-empty {
             text-align: center;

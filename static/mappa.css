@@ -31,6 +31,11 @@
         inset 0 1px 0 rgba(255, 255, 255, 0.1);
     --header-bg: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0) 60%), linear-gradient(135deg, rgba(15, 52, 96, 0.6) 0%, rgba(22, 33, 62, 0.45) 100%);
     --sidebar-bg: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0) 50%), linear-gradient(180deg, rgba(22, 33, 62, 0.55) 0%, rgba(26, 26, 46, 0.65) 100%);
+    /* Sfondo dietro i modali (l'overlay scuro che attenua la mappa). In
+       dark è nero traslucido classico; in light usiamo bianco traslucido
+       per evitare il "grigio sporco" tipico di nero+mappa+bianco. */
+    --modal-overlay-bg: rgba(0, 0, 0, 0.35);
+    --modal-overlay-bg-strong: rgba(0, 0, 0, 0.5);
 }
 
 [data-theme="light"] {
@@ -45,15 +50,19 @@
     --border: #ddd;
     --shadow: rgba(0,0,0,0.1);
 
-    --panel-bg: rgba(255, 255, 255, 0.55);
-    --panel-bg-strong: rgba(255, 255, 255, 0.72);
-    --panel-tint: linear-gradient(135deg, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0) 55%);
-    --panel-border: 1px solid rgba(255, 255, 255, 0.5);
+    --panel-bg: rgba(255, 255, 255, 0.62);
+    --panel-bg-strong: rgba(255, 255, 255, 0.82);
+    --panel-tint: linear-gradient(135deg, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0) 55%);
+    --panel-border: 1px solid rgba(255, 255, 255, 0.55);
     --panel-shadow:
         0 8px 32px rgba(0, 0, 0, 0.12),
-        inset 0 1px 0 rgba(255, 255, 255, 0.7);
-    --header-bg: linear-gradient(135deg, rgba(255,255,255,0.6), rgba(255,255,255,0) 60%), linear-gradient(135deg, rgba(232, 232, 232, 0.55) 0%, rgba(255, 255, 255, 0.45) 100%);
-    --sidebar-bg: linear-gradient(135deg, rgba(255,255,255,0.55), rgba(255,255,255,0) 50%), linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, rgba(245, 245, 245, 0.65) 100%);
+        inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    --header-bg: linear-gradient(135deg, rgba(255,255,255,0.65), rgba(255,255,255,0) 60%), linear-gradient(135deg, rgba(232, 232, 232, 0.6) 0%, rgba(255, 255, 255, 0.5) 100%);
+    --sidebar-bg: linear-gradient(135deg, rgba(255,255,255,0.6), rgba(255,255,255,0) 50%), linear-gradient(180deg, rgba(255, 255, 255, 0.62) 0%, rgba(245, 245, 245, 0.72) 100%);
+    /* In light: overlay bianco-traslucido invece di nero → niente "grigio
+       sporco" sotto le card che dovrebbero apparire bianco-vetro pulite. */
+    --modal-overlay-bg: rgba(255, 255, 255, 0.35);
+    --modal-overlay-bg-strong: rgba(255, 255, 255, 0.55);
 }
 
 /* Modalità "solido": disattiva blur, tinta acrilica e highlight.
@@ -69,6 +78,8 @@
     --panel-shadow: 0 4px 16px var(--shadow);
     --header-bg: linear-gradient(135deg, var(--bg-tertiary) 0%, var(--bg-secondary) 100%);
     --sidebar-bg: linear-gradient(180deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+    --modal-overlay-bg: rgba(0, 0, 0, 0.5);
+    --modal-overlay-bg-strong: rgba(0, 0, 0, 0.65);
 }
 
 /* Su mobile blur più leggero per non scaldare la GPU */
@@ -327,7 +338,7 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.35);
+    background: var(--modal-overlay-bg);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
     z-index: 10000;
@@ -347,7 +358,7 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.35);
+    background: var(--modal-overlay-bg);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
     z-index: 10000;
@@ -2014,7 +2025,7 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.35);
+    background: var(--modal-overlay-bg);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
     z-index: 10000;

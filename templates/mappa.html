@@ -423,46 +423,47 @@
     </div>
 
     <!-- Advanced Search Modal -->
-    <div class="pin-modal" id="advancedSearchModal" onclick="if(event.target === this) toggleAdvancedSearchModal()">
-        <div class="pin-modal-content">
-            <div class="pin-modal-header">
-                <div class="pin-modal-title">🔍 Ricerca Utente</div>
-                <button class="pin-modal-close" onclick="toggleAdvancedSearchModal()">✕</button>
+    <div class="ui-modal" id="advancedSearchModal">
+        <div class="ui-modal-content" style="max-width: 600px;">
+            <div class="ui-modal-header">
+                <h2 class="ui-modal-title">🔍 Ricerca Utente</h2>
+                <button class="ui-modal-close" type="button">×</button>
             </div>
+            <div class="ui-modal-body">
+                <div class="advanced-search-grid">
+                    <div class="advanced-search-field">
+                        <label>👤 Nominativo</label>
+                        <input type="text" id="modalSearchNominativo" placeholder="Es: Mario Rossi" autocomplete="off">
+                    </div>
+                    <div class="advanced-search-field">
+                        <label>⚡ POD</label>
+                        <input type="text" id="modalSearchPod" placeholder="Es: IT001E..." autocomplete="off">
+                    </div>
+                    <div class="advanced-search-field">
+                        <label>🔢 Eneltel</label>
+                        <input type="text" id="modalSearchEneltel" placeholder="Es: 12345678" autocomplete="off">
+                    </div>
+                    <div class="advanced-search-field">
+                        <label>🏘️ Comune</label>
+                        <input type="text" id="modalSearchComune" placeholder="Es: Roma" autocomplete="off">
+                    </div>
+                    <div class="advanced-search-field">
+                        <label>📍 Via</label>
+                        <input type="text" id="modalSearchVia" placeholder="Es: Via Roma" autocomplete="off">
+                    </div>
+                    <div class="advanced-search-field">
+                        <label>📱 Telefono</label>
+                        <input type="text" id="modalSearchTelefono" placeholder="Es: 3331234567" autocomplete="off">
+                    </div>
+                </div>
 
-            <div class="advanced-search-grid">
-                <div class="advanced-search-field">
-                    <label>👤 Nominativo</label>
-                    <input type="text" id="modalSearchNominativo" placeholder="Es: Mario Rossi" autocomplete="off">
+                <div class="advanced-search-actions">
+                    <button class="btn-clear-advanced" onclick="clearModalAdvancedSearch()">🗑️ Pulisci</button>
+                    <button class="btn-apply-advanced" onclick="applyModalAdvancedSearch()">🔍 Cerca</button>
                 </div>
-                <div class="advanced-search-field">
-                    <label>⚡ POD</label>
-                    <input type="text" id="modalSearchPod" placeholder="Es: IT001E..." autocomplete="off">
-                </div>
-                <div class="advanced-search-field">
-                    <label>🔢 Eneltel</label>
-                    <input type="text" id="modalSearchEneltel" placeholder="Es: 12345678" autocomplete="off">
-                </div>
-                <div class="advanced-search-field">
-                    <label>🏘️ Comune</label>
-                    <input type="text" id="modalSearchComune" placeholder="Es: Roma" autocomplete="off">
-                </div>
-                <div class="advanced-search-field">
-                    <label>📍 Via</label>
-                    <input type="text" id="modalSearchVia" placeholder="Es: Via Roma" autocomplete="off">
-                </div>
-                <div class="advanced-search-field">
-                    <label>📱 Telefono</label>
-                    <input type="text" id="modalSearchTelefono" placeholder="Es: 3331234567" autocomplete="off">
-                </div>
+
+                <div class="pin-search-results" id="modalSearchResults"></div>
             </div>
-
-            <div class="advanced-search-actions">
-                <button class="btn-clear-advanced" onclick="clearModalAdvancedSearch()">🗑️ Pulisci</button>
-                <button class="btn-apply-advanced" onclick="applyModalAdvancedSearch()">🔍 Cerca</button>
-            </div>
-
-            <div class="pin-search-results" id="modalSearchResults"></div>
         </div>
     </div>
 
@@ -780,7 +781,7 @@
                     position: 'bottom'
                 },
                 {
-                    target: '#advancedSearchModal .pin-modal-content',
+                    target: '#advancedSearchModal .ui-modal-content',
                     title: 'Ricerca Utente (globale)',
                     icon: '🔍',
                     body: 'Ecco il pannello: puoi cercare per <b>nominativo, POD, Eneltel, comune, via o telefono</b>. I risultati mostrano fino a 10 contatori; cliccandone uno, la mappa si centra su di esso e ne apre il dettaglio.',

@@ -1475,13 +1475,10 @@ function mostraRisultatiVuoti() {
 // PIN & DATE NAVIGATION
 // ============================================================
 function toggleAdvancedSearchModal() {
-    const modal = document.getElementById('advancedSearchModal');
-    const isOpening = !modal.classList.contains('visible');
-    modal.classList.toggle('visible');
-
-    if (isOpening) {
-        restoreAdvancedSearchData();
-    }
+    const id = 'advancedSearchModal';
+    const isOpening = !UiModal.isOpen(id);
+    UiModal.toggle(id);
+    if (isOpening) restoreAdvancedSearchData();
 }
 
 function clearModalAdvancedSearch() {

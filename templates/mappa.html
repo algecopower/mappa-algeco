@@ -239,23 +239,28 @@
     </div>
 
     <!-- Bulk Assign Modal (Planning Mode) -->
-    <div class="bulk-assign-overlay" id="bulkAssignOverlay" onclick="if(event.target===this) closeBulkAssignModal()">
-        <div class="bulk-assign-modal">
-            <h3>📅 Assegna Data e Operatore</h3>
-            <p style="font-size: 0.82rem; color: var(--text-muted); margin: 0 0 16px 0;" id="bulkAssignCount">0 contatori selezionati</p>
-            <div class="bulk-assign-field">
-                <label>📅 Data Pianificata</label>
-                <input type="date" id="bulkAssignData">
+    <div class="ui-modal" id="bulkAssignOverlay">
+        <div class="ui-modal-content" style="max-width: 420px;">
+            <div class="ui-modal-header">
+                <h2 class="ui-modal-title">📅 Assegna Data e Operatore</h2>
+                <button class="ui-modal-close" type="button">×</button>
             </div>
-            <div class="bulk-assign-field">
-                <label>👷 Operatore</label>
-                <select id="bulkAssignOperatore">
-                    <option value="">— Nessuno (non modificare) —</option>
-                </select>
-            </div>
-            <div class="bulk-assign-actions">
-                <button class="btn-cancel" onclick="closeBulkAssignModal()">Annulla</button>
-                <button class="btn-confirm" id="btnBulkConfirm" onclick="executeBulkAssign()">✅ Assegna</button>
+            <div class="ui-modal-body">
+                <p style="font-size: 0.82rem; color: var(--text-muted); margin: 0 0 16px 0;" id="bulkAssignCount">0 contatori selezionati</p>
+                <div class="bulk-assign-field">
+                    <label>📅 Data Pianificata</label>
+                    <input type="date" id="bulkAssignData">
+                </div>
+                <div class="bulk-assign-field">
+                    <label>👷 Operatore</label>
+                    <select id="bulkAssignOperatore">
+                        <option value="">— Nessuno (non modificare) —</option>
+                    </select>
+                </div>
+                <div class="bulk-assign-actions">
+                    <button class="btn-cancel" onclick="closeBulkAssignModal()">Annulla</button>
+                    <button class="btn-confirm" id="btnBulkConfirm" onclick="executeBulkAssign()">✅ Assegna</button>
+                </div>
             </div>
         </div>
     </div>
@@ -344,7 +349,7 @@
     </div>
 
     <!-- Print Preview Modal -->
-    <div class="print-preview-modal" id="printPreviewModal" onclick="if(event.target === this) closePrintPreview()">
+    <div class="ui-modal" id="printPreviewModal" data-no-backdrop-close>
         <div class="print-preview-content">
             <div class="print-preview-header">
                 <div class="print-preview-title">🖨️ Anteprima Stampa - <span id="printPreviewInfo"></span></div>
@@ -371,53 +376,57 @@
     </div>
 
     <!-- Date Picker Modal -->
-    <div class="date-picker-modal" id="datePickerModal" onclick="if(event.target === this) closeDatePicker()">
-        <div class="date-picker-content">
-            <div class="date-picker-header">
-                <div class="date-picker-title">📅 Seleziona Data</div>
-                <button class="date-picker-close" onclick="closeDatePicker()">✕</button>
+    <div class="ui-modal" id="datePickerModal">
+        <div class="ui-modal-content" style="max-width: 480px;">
+            <div class="ui-modal-header">
+                <h2 class="ui-modal-title">📅 Seleziona Data</h2>
+                <button class="ui-modal-close" type="button">×</button>
             </div>
-            <div class="date-list-picker" id="dateListPicker"></div>
+            <div class="ui-modal-body">
+                <div class="date-list-picker" id="dateListPicker"></div>
+            </div>
         </div>
     </div>
 
     <!-- Orari Lettere Modal -->
-    <div class="orari-lettere-modal" id="orariLettereModal" onclick="if(event.target === this) toggleOrariLettereModal()">
-        <div class="orari-lettere-content">
-            <div class="orari-lettere-header">
-                <div class="orari-lettere-title">✉️ Genera Orari Lettere</div>
-                <button class="orari-lettere-close" onclick="toggleOrariLettereModal()">✕</button>
+    <div class="ui-modal" id="orariLettereModal">
+        <div class="ui-modal-content" style="max-width: 600px;">
+            <div class="ui-modal-header">
+                <h2 class="ui-modal-title">✉️ Genera Orari Lettere</h2>
+                <button class="ui-modal-close" type="button">×</button>
             </div>
-            <div class="orari-lettere-form">
-                <div>
-                    <label>📅 Data inizio</label>
-                    <input type="date" id="orariLettereDa">
-                </div>
-                <div>
-                    <label>📅 Data fine</label>
-                    <input type="date" id="orariLettereA">
-                </div>
-                <div>
-                    <label>🔢 Tappe per fascia</label>
-                    <div style="margin-top:6px;">
-                        <label style="display:inline-flex;align-items:center;cursor:pointer;margin-right:16px;font-weight:normal;">
-                            <input type="radio" name="tappeFasciaMode" value="auto" checked onchange="document.getElementById('orariLettereTappeFascia').disabled=true;" style="margin-right:4px;"> 🧠 Auto (distribuisci uniformemente)
-                        </label>
-                        <label style="display:inline-flex;align-items:center;cursor:pointer;font-weight:normal;">
-                            <input type="radio" name="tappeFasciaMode" value="manuale" onchange="document.getElementById('orariLettereTappeFascia').disabled=false;" style="margin-right:4px;"> ✍️ Manuale:
-                            <input type="number" id="orariLettereTappeFascia" min="1" max="20" value="4" disabled style="width:60px;margin-left:6px;">
-                        </label>
+            <div class="ui-modal-body">
+                <div class="orari-lettere-form">
+                    <div>
+                        <label>📅 Data inizio</label>
+                        <input type="date" id="orariLettereDa">
                     </div>
-                    <small style="display:block;color:#666;margin-top:4px;"><b>Auto</b>: per ogni tecnico/giorno distribuisce i contatori su tutte le 6 fasce in modo uniforme (minimo 4).<br><b>Manuale</b>: usa un numero fisso di contatori per fascia (uguale per tutti).</small>
+                    <div>
+                        <label>📅 Data fine</label>
+                        <input type="date" id="orariLettereA">
+                    </div>
+                    <div>
+                        <label>🔢 Tappe per fascia</label>
+                        <div style="margin-top:6px;">
+                            <label style="display:inline-flex;align-items:center;cursor:pointer;margin-right:16px;font-weight:normal;">
+                                <input type="radio" name="tappeFasciaMode" value="auto" checked onchange="document.getElementById('orariLettereTappeFascia').disabled=true;" style="margin-right:4px;"> 🧠 Auto (distribuisci uniformemente)
+                            </label>
+                            <label style="display:inline-flex;align-items:center;cursor:pointer;font-weight:normal;">
+                                <input type="radio" name="tappeFasciaMode" value="manuale" onchange="document.getElementById('orariLettereTappeFascia').disabled=false;" style="margin-right:4px;"> ✍️ Manuale:
+                                <input type="number" id="orariLettereTappeFascia" min="1" max="20" value="4" disabled style="width:60px;margin-left:6px;">
+                            </label>
+                        </div>
+                        <small style="display:block;color:var(--text-muted);margin-top:4px;"><b>Auto</b>: per ogni tecnico/giorno distribuisce i contatori su tutte le 6 fasce in modo uniforme (minimo 4).<br><b>Manuale</b>: usa un numero fisso di contatori per fascia (uguale per tutti).</small>
+                    </div>
+                    <div class="orari-lettere-info">
+                        ℹ️ Calcola le fasce orarie in base al percorso ottimizzato e le scrive nel FILONE.<br>
+                        <strong>Non sovrascrive</strong> celle già compilate.
+                    </div>
+                    <button class="orari-lettere-btn" id="orariLettereGenera" onclick="generaOrariLettere()">
+                        🚀 Genera e scrivi nel FILONE
+                    </button>
+                    <div class="orari-lettere-result" id="orariLettereResult"></div>
                 </div>
-                <div class="orari-lettere-info">
-                    ℹ️ Calcola le fasce orarie in base al percorso ottimizzato e le scrive nel FILONE.<br>
-                    <strong>Non sovrascrive</strong> celle già compilate.
-                </div>
-                <button class="orari-lettere-btn" id="orariLettereGenera" onclick="generaOrariLettere()">
-                    🚀 Genera e scrivi nel FILONE
-                </button>
-                <div class="orari-lettere-result" id="orariLettereResult"></div>
             </div>
         </div>
     </div>
@@ -496,7 +505,7 @@
     </div>
 
     <!-- Settings Modal -->
-    <div class="settings-modal" id="settingsModal" onclick="if(event.target === this) chiudiImpostazioni()">
+    <div class="ui-modal" id="settingsModal">
         <div class="settings-content">
             <div class="settings-header">
                 <div class="settings-title">🔧 Impostazioni</div>

@@ -1830,7 +1830,7 @@ def genera_js_gestionale():
             status.textContent = '';
             
             // Mostra modal
-            document.getElementById('fullscreenEditModal').classList.add('visible');
+            UiModal.open('fullscreenEditModal');
             
             // Mostra/nascondi pulsante rimuovi appuntamento
             const btnRimuoviApp = document.getElementById('btnRimuoviAppuntamento');
@@ -2342,7 +2342,7 @@ def genera_js_gestionale():
         }}
         
         function chiudiVistaModifica() {{
-            document.getElementById('fullscreenEditModal').classList.remove('visible');
+            UiModal.close('fullscreenEditModal');
             currentFullscreenEneltel = null;
             // Reset appuntamento inline
             document.getElementById('fullscreenAppOrarioInizio').value = '09:00';
@@ -4211,7 +4211,7 @@ def genera_html_gestionale():
     
     return '''
         <!-- MODAL FULLSCREEN MODIFICA -->
-        <div id="fullscreenEditModal" class="fullscreen-edit-modal">
+        <div id="fullscreenEditModal" class="ui-modal ui-modal--fullscreen" data-no-backdrop-close data-no-escape-close>
             <div class="fullscreen-edit-container">
                 <div class="fullscreen-edit-header">
                     <div class="fullscreen-edit-title">

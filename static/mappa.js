@@ -1624,11 +1624,10 @@ document.addEventListener('click', function(e) {
 // GENERAZIONE ORARI LETTERE
 // ============================================================
 function toggleOrariLettereModal() {
-    const modal = document.getElementById('orariLettereModal');
-    modal.classList.toggle('visible');
-    
-    // Reset risultato quando si apre
-    if (modal.classList.contains('visible')) {
+    const id = 'orariLettereModal';
+    const isOpening = !UiModal.isOpen(id);
+    UiModal.toggle(id);
+    if (isOpening) {
         document.getElementById('orariLettereResult').style.display = 'none';
         document.getElementById('orariLettereGenera').disabled = false;
         document.getElementById('orariLettereGenera').textContent = '🚀 Genera e scrivi nel FILONE';
@@ -2247,12 +2246,11 @@ function openDatePicker() {
     }
 
     dateList.innerHTML = html;
-    modal.classList.add('visible');
+    UiModal.open(modal);
 }
 
 function closeDatePicker() {
-    const modal = document.getElementById('datePickerModal');
-    modal.classList.remove('visible');
+    UiModal.close('datePickerModal');
 }
 
 function selectDateFromPicker(data) {
@@ -6086,8 +6084,7 @@ function openPrintPreview() {
         return;
     }
 
-    const modal = document.getElementById('printPreviewModal');
-    modal.classList.add('visible');
+    UiModal.open('printPreviewModal');
 
     // Info stampa - mostra operatore e data
     const nomeOp = currentOperatore === 'TUTTI' ? 'Senza Operatore' : getDisplayName(currentOperatore);
@@ -6154,8 +6151,7 @@ function onPrintTecnicoChange() {
 }
 
 function closePrintPreview() {
-    const modal = document.getElementById('printPreviewModal');
-    modal.classList.remove('visible');
+    UiModal.close('printPreviewModal');
 
     // Pulizia aggressiva
     cleanupPrintLabels();
@@ -7324,7 +7320,7 @@ mostraPercorsoMultiOperatori = function(...args) {
 let settingsData = null;  // Cache dei dati settings caricati
 
 function apriImpostazioni() {
-    document.getElementById('settingsModal').classList.add('visible');
+    UiModal.open('settingsModal');
     // Mostra spinner di caricamento
     const overlay = document.getElementById('settingsLoadingOverlay');
     if (overlay) overlay.classList.remove('hidden');
@@ -7332,7 +7328,7 @@ function apriImpostazioni() {
 }
 
 function chiudiImpostazioni() {
-    document.getElementById('settingsModal').classList.remove('visible');
+    UiModal.close('settingsModal');
     document.getElementById('settingsStatus').className = 'settings-status';
     document.getElementById('settingsStatus').textContent = '';
 }
@@ -9040,11 +9036,11 @@ function openBulkAssignModal() {
     document.getElementById('bulkAssignCount').textContent = planSelectedEnteltels.size + ' contatori selezionati';
     document.getElementById('bulkAssignData').value = '';
     document.getElementById('bulkAssignOperatore').value = '';
-    document.getElementById('bulkAssignOverlay').classList.add('visible');
+    UiModal.open('bulkAssignOverlay');
 }
 
 function closeBulkAssignModal() {
-    document.getElementById('bulkAssignOverlay').classList.remove('visible');
+    UiModal.close('bulkAssignOverlay');
 }
 
 async function executeBulkAssign() {

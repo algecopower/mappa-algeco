@@ -533,19 +533,13 @@ if not IS_CHILD_PROCESS:
 # Da qui in poi: comportamento Flask normale per singola provincia
 
 import json
-import re
-import time
 import logging
 import queue
 import threading
 import socket
-import traceback as _traceback_mod
 from datetime import datetime
 from flask import Flask, request, jsonify, send_from_directory, send_file, make_response, Response, session, redirect, url_for
 from flask_cors import CORS
-import pandas as pd
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
 
 # ---------- Logging ----------
 _log_format = '%(asctime)s [%(levelname)s] %(message)s'
@@ -556,19 +550,13 @@ logger = logging.getLogger('mappa_algeco')
 from moduli.auth import (
     init_auth, login_required, admin_required, authenticate, load_users,
     create_user, delete_user, reset_password, toggle_user_active,
-    list_users, get_user_province, set_user_province, set_user_role,
+    list_users, set_user_province, set_user_role,
     PROVINCE_DISPONIBILI, RUOLI_DISPONIBILI
 )
 
 # Modulo calendario condiviso
 from moduli.calendario import (
-    get_attivita, crea_attivita, modifica_attivita,
-    completa_attivita, elimina_attivita, get_riepilogo,
-    CATEGORIE_VALIDE, COLORI_CATEGORIE,
-    crea_promemoria_boxbeat, get_promemoria_boxbeat_oggi,
-    get_riepilogo_boxbeat, get_user_promemoria_settings,
-    salva_user_promemoria_settings, registra_appuntamento_excel, genera_excel_boxbeat,
-    pulisci_boxbeat_completati
+    crea_promemoria_boxbeat, registra_appuntamento_excel, pulisci_boxbeat_completati
 )
 
 # Porta Flask (da variabile ambiente impostata dal launcher)
@@ -591,13 +579,8 @@ def verifica_osrm_flask():
     return False
 
 from config import (
-    ID_FOGLIO_GOOGLE,
-    GID_SCHEDA,
-    CREDENZIALI_JSON,
     PROVINCIA_ATTIVA,
     CAMPI_MODIFICABILI,
-    CAMPI_BOXBEAT,
-    COLONNE_SIGILLI,
     MATRICOLE_VIP,
 )
 
@@ -765,16 +748,9 @@ def sse_stream():
 # GOOGLE SHEETS + HELPER  fonte unica: moduli/shared.py
 # ============================================================================
 from moduli.shared import (
-    get_sheets_client, get_worksheet, get_header_map, get_headers,
-    _sheets_retry, _reset_sheets_client,
-    find_row_by_eneltel, find_row_by_pod,
-    update_cell, update_row_fields,
-    _trova_indice_colonna, _trova_indice_multi,
-    _get_colonna_note, _get_username,
-    _imposta_appuntamento_su_filone, _rimuovi_appuntamento_da_filone,
+    get_worksheet, get_headers,
     _api_error,
 )
-import moduli.shared as _shared
 
 
 # ============================================================================
@@ -1623,8 +1599,6 @@ from moduli import (
 )
 from config import (
     DEPOSITO,
-    FILE_CACHE_DISTANZE,
-    FILE_CACHE_HASH,
     INTERVALLO_SYNC_SECONDI,
     USE_DB_BACKEND,
 )
@@ -1678,7 +1652,7 @@ def _do_sincronizza_dati():
         # Carica dati (force=True → scarica sempre dal foglio nel sync periodico)
         df = carica_dati_google_sheets(force=True)
         if df is None:
-            logger.warning(f"[SYNC] ⚠️ Nessun dato caricato")
+            logger.warning("[SYNC] ⚠️ Nessun dato caricato")
             sse_notify_all('sync_complete', {'source': 'sync_failed'})
             return False
 
@@ -1988,7 +1962,7 @@ if __name__ == '__main__':
     
     logger.info("")
     logger.info(f"📍 Provincia: {PROVINCIA_ATTIVA}")
-    logger.info(f"📊 Modalità: PRODUZIONE")
+    logger.info("📊 Modalità: PRODUZIONE")
     logger.info(f"🌐 http://localhost:{FLASK_PORT}")
     logger.info("")
     

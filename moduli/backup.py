@@ -17,7 +17,7 @@ import traceback
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
-from .safe_json import json_read, json_write
+from .safe_json import json_read
 
 from config import (
     ID_FOGLIO_GOOGLE,
@@ -485,7 +485,7 @@ def backup_periodico_auto():
         if risultato.get('skipped'):
             pass  # già presente, silenzioso
         elif risultato.get('success'):
-            print(f"[BACKUP] ✅ Backup giornaliero completato")
+            print("[BACKUP] ✅ Backup giornaliero completato")
         else:
             print(f"[BACKUP] ⚠️ Backup fallito: {risultato.get('message')}")
 

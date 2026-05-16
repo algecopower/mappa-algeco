@@ -126,7 +126,7 @@ def calcola_matrice_distanze_osrm(punti, deposito, profile='car'):
         data = response.json()
         
         if data.get('code') == 'Ok':
-            n = len(coords)
+            len(coords)
             
             # Estrai matrice durate (in secondi -> converti in minuti)
             durate_raw = data.get('durations', [])
@@ -157,7 +157,7 @@ def calcola_matrice_distanze_osrm(punti, deposito, profile='car'):
     except requests.exceptions.RequestException as e:
         # Se errore 400 (troppe coordinate), usa fallback Haversine
         if '400' in str(e):
-            print(f"      ⚠️  OSRM ha rifiutato la richiesta, uso calcolo a blocchi")
+            print("      ⚠️  OSRM ha rifiutato la richiesta, uso calcolo a blocchi")
             return _calcola_matrice_osrm_a_blocchi(punti, deposito, profile)
         risultato['errore'] = f"Errore connessione: {str(e)}"
     except Exception as e:
@@ -266,7 +266,7 @@ def _calcola_matrice_osrm_a_blocchi(punti, deposito, profile='driving'):
                                 if d is not None:
                                     distanze[src_global][dst_global] = round(d / 1000, 2)
                                     
-            except Exception as e:
+            except Exception:
                 # Se fallisce un blocco, usa Haversine per quel blocco
                 for src_global in sources_idx:
                     for dst_global in destinations_idx:

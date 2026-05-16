@@ -13,9 +13,7 @@ La cache viene aggiornata automaticamente ogni 30 giorni.
 Se il download fallisce, usa la cache esistente o un fallback hardcoded.
 """
 import os
-import json
 import time
-import re
 import unicodedata
 import requests
 
@@ -68,7 +66,7 @@ def _scarica_comuni():
         Lista di dizionari con i dati dei comuni, o None se fallisce
     """
     try:
-        print(f"📥 Download database comuni italiani...")
+        print("📥 Download database comuni italiani...")
         resp = requests.get(_URL_COMUNI, timeout=_TIMEOUT_DOWNLOAD)
         resp.raise_for_status()
         comuni_raw = resp.json()
@@ -88,7 +86,7 @@ def _salva_cache(comuni_raw):
     if json_write(_FILE_CACHE, cache_data):
         print(f"💾 Cache salvata: {_FILE_CACHE}")
     else:
-        print(f"⚠️  Errore salvataggio cache")
+        print("⚠️  Errore salvataggio cache")
 
 
 def _carica_cache():

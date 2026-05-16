@@ -409,7 +409,7 @@ def carica_dati_google_sheets(force=False):
             _dl_cache_timestamp = _time_module.time()
             _dl_data_changed = False
             _dl_structural_change = False
-            logger.info(f"📊 Dati FILONE invariati (hash identico), skip processing")
+            logger.info("📊 Dati FILONE invariati (hash identico), skip processing")
             logger.info("=" * 60)
             return _dl_cached_df.copy()
 
@@ -604,7 +604,7 @@ def carica_dati_google_sheets(force=False):
         operatori_unici = df[df['TEC_K'] != 'TUTTI']['TEC_K'].nunique()
         logger.info(f"   👤 Operatori assegnati: {con_operatore} righe ({operatori_unici} matricole)")
     else:
-        logger.info(f"   👤 Modalità GENERICA (nessun operatore assegnato)")
+        logger.info("   👤 Modalità GENERICA (nessun operatore assegnato)")
     
     # Latitudine, Longitudine → Lat, Lon
     col_lat = trova_colonna(df, ['Latitudine', 'LATITUDINE', 'Lat', 'LAT'], chiave_mapping='latitudine')
@@ -815,7 +815,7 @@ def carica_dati_google_sheets(force=False):
     tutti_generici = tecnici_finali == ['TUTTI']
     
     if tutti_generici:
-        logger.info(f"   👤 Modalità: GENERICA (tutti i punti insieme)")
+        logger.info("   👤 Modalità: GENERICA (tutti i punti insieme)")
     else:
         tecnici_reali = [t for t in tecnici_finali if t != 'TUTTI']
         senza_operatore = (df['TEC_K'] == 'TUTTI').sum()

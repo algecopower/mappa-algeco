@@ -34,10 +34,10 @@ import socket
 import logging
 import subprocess
 import threading
-from urllib.parse import urlparse, quote
+from urllib.parse import quote
 
 import requests
-from flask import Flask, request, Response, jsonify, redirect, render_template_string
+from flask import Flask, request, Response, jsonify, redirect
 
 # ============================================================================
 # CONFIGURAZIONE

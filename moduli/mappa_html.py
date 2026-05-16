@@ -15,7 +15,6 @@ import json
 import logging
 import os
 from datetime import datetime
-from collections import defaultdict
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
@@ -41,7 +40,7 @@ from config import (
     ORA_FINE_GIORNATA
 )
 
-from .percorso import ordina_percorso, calcola_distanza_haversine
+from .percorso import ordina_percorso
 from .verifica_indirizzi_ui import (
     genera_css_verifica_indirizzi,
     genera_js_verifica_indirizzi,
@@ -50,8 +49,7 @@ from .verifica_indirizzi_ui import (
 from .gestionale import (
     genera_css_gestionale,
     genera_js_gestionale,
-    genera_html_gestionale,
-    genera_pulsanti_sidebar
+    genera_html_gestionale
 )
 from .zone_geografiche import is_valid_coordinate
 
@@ -149,7 +147,6 @@ def prepara_dati_zone(risultato_zone):
     zone_list = []
     for idx, (zona_nome, zona_info) in enumerate(zone.items()):
         date_info = []
-        lcl_set = set()
 
         if zona_nome in calendario:
             for data, d_info in sorted(calendario[zona_nome]['date'].items()):
@@ -200,7 +197,7 @@ def prepara_dati_contatori(df, report):
     Prepara dati contatori per JavaScript.
     Include l'ordine pre-calcolato dal Python usando OSRM per distanze reali.
     """
-    from datetime import datetime, timedelta
+    from datetime import datetime
 
     contatori = []
 
@@ -326,7 +323,6 @@ def calcola_ordine_percorsi(df):
         RuntimeError: se OSRM non è disponibile
     """
     import sys
-    import json
     import hashlib
     from datetime import datetime
     
@@ -392,12 +388,12 @@ def calcola_ordine_percorsi(df):
     cache = json_read(cache_file, default=None)
     if cache is not None:
         if cache.get('hash') == hash_str:
-            logger.info(f"   ✅ Ordine percorsi caricato da cache (dati invariati)")
+            logger.info("   ✅ Ordine percorsi caricato da cache (dati invariati)")
             return cache.get('ordine_map', {})
         else:
-            logger.info(f"   🔄 Dati modificati, ricalcolo ordine percorsi...")
+            logger.info("   🔄 Dati modificati, ricalcolo ordine percorsi...")
     else:
-        logger.info(f"   🆕 Prima esecuzione, calcolo ordine percorsi...")
+        logger.info("   🆕 Prima esecuzione, calcolo ordine percorsi...")
     
     # ================================================================
     # CALCOLO: Ordina ogni combinazione data/tecnico
@@ -439,9 +435,9 @@ def calcola_ordine_percorsi(df):
         'ordine_map': ordine_map,
         'timestamp': datetime.now().isoformat()
     }):
-        logger.warning(f"   ⚠️  Impossibile salvare cache")
+        logger.warning("   ⚠️  Impossibile salvare cache")
     else:
-        logger.info(f"   💾 Cache ordine percorsi salvata")
+        logger.info("   💾 Cache ordine percorsi salvata")
     
     return ordine_map
 

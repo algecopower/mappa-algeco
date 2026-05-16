@@ -5,12 +5,11 @@ Gestisce una lista di attività condivisa tra tutti gli utenti registrati.
 I dati vengono salvati in un file JSON persistente.
 """
 import os
-import json
 import uuid
 import threading
 from datetime import datetime
 
-from .safe_json import json_read, json_write, json_modify
+from .safe_json import json_read, json_write
 
 # Directory base per i dati
 SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

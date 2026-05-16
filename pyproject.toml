@@ -21,13 +21,10 @@ select = [
     "E9",  # syntax/runtime errors
     "W6",  # invalid escape sequences
 ]
-ignore = [
-    "F401",  # unused-import (~162 in legacy, ripulire gradualmente)
-    "F541",  # f-string-missing-placeholders (cosmetico)
-    "F841",  # unused-variable (tipicamente `_e` in except)
-    "F811",  # redefined-while-unused
-    "W605",  # invalid-escape-sequence (regex JS dentro f-string Python — vedi moduli/gestionale.py)
-]
+
+[tool.ruff.lint.per-file-ignores]
+# moduli/__init__.py contiene re-export intenzionali (API pubblica del package)
+"moduli/__init__.py" = ["F401"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

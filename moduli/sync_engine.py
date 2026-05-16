@@ -22,7 +22,6 @@ Entrambi i flussi sono callabili sia in modalità "one-shot" (per test e
 per integrazione col loop di sync esistente in server.py) sia in modalità
 "loop daemon" via `start_workers()`.
 """
-import os
 import time
 import logging
 import threading

@@ -4,7 +4,6 @@ Blueprint per le API PDF E-Distribuzione — gestione distinte e moduli maxy.
 """
 import os
 import re
-import json
 import imaplib
 import tempfile
 import logging
@@ -17,26 +16,20 @@ from email import encoders
 from email.utils import formataddr
 
 import gspread.utils
-from flask import Blueprint, request, jsonify, session, send_file
+from flask import Blueprint, request, jsonify, send_file
 
 from moduli.auth import login_required
 from moduli.safe_json import json_read, json_write
 from moduli.shared import (
-    get_worksheet, get_header_map, get_headers,
-    find_row_by_eneltel, find_row_by_pod,
+    get_worksheet, get_header_map, find_row_by_pod,
     build_pod_row_map, invalidate_values_cache,
     safe_batch_update_by_name, force_refresh_headers,
     _imposta_appuntamento_su_filone, _rimuovi_appuntamento_da_filone,
-    _api_error, _get_colonna_note, _get_username,
-    _trova_indice_multi, _resolve_anchor_col_name,
+    _api_error, _get_colonna_note, _trova_indice_multi, _resolve_anchor_col_name,
     _callbacks, _sheets_retry, _gsheets_write_lock,
 )
 from moduli.distinte_manager import (
-    parse_distinta_pdf,
-    parse_modulo_maxy_pdf,
     parse_pdf_auto,
-    rileva_tipo_pdf,
-    is_cellulare,
     classifica_contatti,
     confronta_con_filone,
 )
@@ -296,8 +289,7 @@ def _save_to_sent(smtp_settings, msg):
 
         if sent_folder:
             msg_bytes = msg.as_bytes()
-            import email.utils as _eu
-            date_time = imaplib.Time2Internaldate(time.time())
+            imaplib.Time2Internaldate(time.time())
             imap.append(sent_folder, '\\Seen', None, msg_bytes)
             logger.info(f"[IMAP] Email salvata in '{sent_folder}'")
         else:
@@ -444,7 +436,7 @@ def invia_email_prova():
         subject = _resolve_template_server(
             tmpl.get('subject', ''), fields,
             email_tecnico=email_tecnico
-        ) if tmpl.get('subject') else f'Sostituzione contatore - AZIENDA DI PROVA SRL'
+        ) if tmpl.get('subject') else 'Sostituzione contatore - AZIENDA DI PROVA SRL'
 
         subject = '[TEST] ' + subject
 

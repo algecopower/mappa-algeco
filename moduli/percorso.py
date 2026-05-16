@@ -17,7 +17,7 @@ import math
 import re
 import pandas as pd
 import requests
-from typing import List, Dict, Any, Tuple, Optional
+from typing import List, Dict, Tuple, Optional
 
 logger = logging.getLogger(__name__)
 

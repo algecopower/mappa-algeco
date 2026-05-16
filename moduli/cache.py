@@ -1,8 +1,6 @@
 """
 Sistema di cache per ottimizzare i ricalcoli.
 """
-import os
-import json
 import hashlib
 
 from config import FILE_CACHE_DISTANZE, FILE_CACHE_HASH
@@ -46,7 +44,7 @@ def salva_cache(cache_distanze, cache_hash):
     ok1 = json_write(FILE_CACHE_DISTANZE, cache_distanze, indent=2)
     ok2 = json_write(FILE_CACHE_HASH, cache_hash, indent=2)
     if not (ok1 and ok2):
-        print(f"⚠️ Errore salvataggio cache")
+        print("⚠️ Errore salvataggio cache")
 
 
 def pulisci_cache_vecchia(cache_distanze, cache_hash, giorni_da_mantenere=None):

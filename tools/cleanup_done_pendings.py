@@ -69,7 +69,7 @@ def main():
             (cutoff,),
         )
     print(f"✨ {res.rowcount} pending done cancellate fisicamente.")
-    print(f"   (info conservata in audit_log con source='local'/'remote')")
+    print("   (info conservata in audit_log con source='local'/'remote')")
 
 
 if __name__ == '__main__':

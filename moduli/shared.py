@@ -5,14 +5,11 @@ Stato condiviso e helper per la connessione a Google Sheets.
 Tutte le route Blueprint importano da qui anziché ridefinire
 get_worksheet(), find_row_by_*, _header_map, ecc.
 """
-import json
-import os
 import re
 import time
 import logging
 import threading
 import traceback as _traceback_mod
-from datetime import datetime
 
 import gspread
 from gspread.exceptions import APIError
@@ -1161,7 +1158,6 @@ def _imposta_appuntamento_su_filone(row, orario, data_app='', note_extra='',
     In modalità 'shadow' (Fase 1): path originale via ws.update_cell + hook
     shadow al DB.
     """
-    nuova_nota = ''
     nota_app = f"APP {orario}"
     return _imposta_appuntamento_db_primary(
         row, orario, nota_app, data_app=data_app, note_extra=note_extra,

@@ -5,7 +5,6 @@ Aggrega i dati dai backup giornalieri del filone.
 """
 import io
 import os
-import json
 import re
 import logging
 from datetime import datetime, date, timedelta

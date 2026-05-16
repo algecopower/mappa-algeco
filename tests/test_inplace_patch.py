@@ -9,7 +9,6 @@ Verifica:
 - Mapping db→json corretto (es. 'nominativo'→'cliente', 'indirizzo'→'via')
 """
 import json
-import os
 
 
 def _setup_filone_e_mappa(db, tmp_path, eneltel='42'):

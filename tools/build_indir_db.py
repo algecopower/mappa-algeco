@@ -326,7 +326,7 @@ def main() -> int:
 
     if os.path.exists(args.db) and not args.force:
         print(f"⚠️  Il DB esiste già: {args.db}")
-        print(f"   Usa --force per rigenerarlo.")
+        print("   Usa --force per rigenerarlo.")
         return 0
 
     os.makedirs(os.path.dirname(args.db), exist_ok=True)

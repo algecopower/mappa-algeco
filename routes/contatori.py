@@ -2,28 +2,21 @@
 """
 Blueprint: Contatori — gestione contatori, filone, orari lettere.
 """
-import json
 import logging
 import os
 import re
 import threading
 from datetime import datetime
 
-import gspread.utils
 from flask import Blueprint, request, jsonify, session, send_file
 
 from moduli.auth import login_required
-from moduli.safe_json import json_read, json_write, json_modify
+from moduli.safe_json import json_read, json_write
 from moduli.shared import (
     get_worksheet,
-    get_header_map,
     get_headers,
-    get_all_values_cached,
     invalidate_values_cache,
     find_row_by_eneltel,
-    find_row_by_pod,
-    verify_row_pod,
-    build_pod_row_map,
     update_row_fields,
     safe_batch_update_by_name,
     force_refresh_headers,
@@ -31,7 +24,6 @@ from moduli.shared import (
     _rimuovi_appuntamento_da_filone,
     _get_username,
     _api_error,
-    _trova_indice_multi,
     _resolve_anchor_col_name,
     _callbacks,
     _sheets_retry,
@@ -40,8 +32,6 @@ from moduli.shared import (
 from config import (
     PROVINCIA_ATTIVA,
     CAMPI_MODIFICABILI,
-    CAMPI_BOXBEAT,
-    COLONNE_SIGILLI,
     MATRICOLE_VIP,
     DEPOSITO,
     MAPPATURA_COLONNE,
@@ -1927,12 +1917,10 @@ def genera_orari_lettere():
     Solo se la cella è attualmente vuota.
     Associa i risultati per POD.
     """
-    import re as _re
     from moduli.percorso import ordina_percorso
     from moduli.fasce_orarie import assegna_fasce, formatta_fascia_oraria, FASCE_ORARIE
     from moduli.data_loader import carica_dati_google_sheets
     from genera_excel_lettere import genera_excel_lettere as _genera_excel
-    import math as _math
 
     data = request.get_json()
     if not data:
@@ -1957,7 +1945,7 @@ def genera_orari_lettere():
         return jsonify({'error': 'Specificare data_da e data_a'}), 400
 
     logger.info("=" * 60)
-    logger.info(f"📬 GENERAZIONE ORARI LETTERE")
+    logger.info("📬 GENERAZIONE ORARI LETTERE")
     logger.info(f"   Provincia: {PROVINCIA_ATTIVA}")
     logger.info(f"   Periodo: {data_da} → {data_a}")
     logger.info(f"   Tappe per fascia: {'AUTO (distribuzione uniforme)' if auto_mode else tappe_per_fascia_fisso}")
@@ -2124,7 +2112,7 @@ def genera_orari_lettere():
         # Genera anche il file Excel lettere
         file_excel = None
         try:
-            logger.info(f"📄 Generazione file Excel lettere...")
+            logger.info("📄 Generazione file Excel lettere...")
             file_excel = _genera_excel(df, date_da_elaborare, tappe_per_fascia='auto' if auto_mode else tappe_per_fascia_fisso)
             if file_excel:
                 logger.info(f"   ✅ Excel generato: {file_excel}")
@@ -2133,7 +2121,7 @@ def genera_orari_lettere():
 
         risultato = {
             'success': True,
-            'message': f'Orari lettere generati con successo',
+            'message': 'Orari lettere generati con successo',
             'dettagli': {
                 'periodo': f'{data_da} → {data_a}',
                 'giorni': len(date_da_elaborare),
@@ -2146,7 +2134,7 @@ def genera_orari_lettere():
             }
         }
 
-        logger.info(f"✅ Risultato:")
+        logger.info("✅ Risultato:")
         logger.info(f"      Scritti: {scritti}")
         logger.info(f"      Saltati (cella occupata): {saltati_occupati}")
         logger.info(f"      Non trovati nel range: {saltati_non_trovati}")

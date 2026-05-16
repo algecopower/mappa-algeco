@@ -451,6 +451,6 @@ if os.path.exists(_settings_file):
         if 'mappatura_colonne' in _user_settings:
             MAPPATURA_COLONNE = _user_settings['mappatura_colonne']
         
-        print(f"✅ Impostazioni personalizzate caricate da settings.json")
+        print("✅ Impostazioni personalizzate caricate da settings.json")
     except Exception as _e:
         print(f"⚠️  Errore caricamento settings.json: {_e}")

@@ -4,7 +4,6 @@ Route Dashboard — vista riepilogativa con statistiche operative.
 Legge i dati dal backup locale più recente (nessuna chiamata extra a Google Sheets).
 """
 import os
-import json
 import logging
 from datetime import datetime, date, timedelta
 from collections import Counter, defaultdict
@@ -82,7 +81,7 @@ def _calcola_statistiche_filone(backup: dict) -> dict:
     i_note = _col_index(headers, ['NOTE APP', 'NOTE_APP'])
     i_comune = _col_index(headers, ['Comune', 'COMUNE'])
     i_data_inst = _col_index(headers, ['Data Installazione', 'DATA INSTALLAZIONE'])
-    i_eneltel = _col_index(headers, ['Eneltel', 'ENELTEL'])
+    _col_index(headers, ['Eneltel', 'ENELTEL'])
 
     oggi = date.today().isoformat()
     domani = (date.today() + timedelta(days=1)).isoformat()

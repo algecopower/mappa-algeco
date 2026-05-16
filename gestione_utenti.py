@@ -27,12 +27,9 @@ from moduli.auth import (
     reset_password,
     list_users,
     toggle_user_active,
-    generate_password,
     get_user_province,
     set_user_province,
-    set_user_role,
-    PROVINCE_DISPONIBILI,
-    RUOLI_DISPONIBILI
+    PROVINCE_DISPONIBILI
 )
 
 

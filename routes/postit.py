@@ -3,7 +3,7 @@
 Blueprint per le route dei Post-it (promemoria sempre visibili).
 """
 import logging
-from flask import Blueprint, request, jsonify, session
+from flask import Blueprint, request, jsonify
 
 from moduli.auth import login_required
 from moduli.shared import _get_username, _api_error

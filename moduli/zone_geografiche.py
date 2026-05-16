@@ -5,9 +5,7 @@ Genera un calendario per zona per facilitare la gestione appuntamenti.
 """
 import math
 import logging
-import pandas as pd
 from collections import defaultdict
-from datetime import datetime
 
 from config import DEPOSITO, PROVINCIA_ATTIVA
 
@@ -187,8 +185,8 @@ def crea_cluster_zone_griglia(centroidi, dimensione_cella_km=8):
     # Trova bounds
     lats = [c['lat'] for c in centroidi.values()]
     lons = [c['lon'] for c in centroidi.values()]
-    min_lat, max_lat = min(lats), max(lats)
-    min_lon, max_lon = min(lons), max(lons)
+    min_lat, _max_lat = min(lats), max(lats)
+    min_lon, _max_lon = min(lons), max(lons)
 
     # Assegna ogni comune a una cella
     celle = defaultdict(list)
@@ -710,7 +708,7 @@ def assegna_nomi_zone(zone, centroidi, deposito):
 
     for z in zone_con_distanza:
         dir_base = z['direzione']
-        gruppo = zone_per_direzione[dir_base]
+        zone_per_direzione[dir_base]
 
         # Genera nome
         if len(z['comuni']) == 1:
@@ -873,8 +871,7 @@ def _genera_excel_zone(calendario, zone, filename):
     """Genera file Excel con calendario zone."""
     try:
         from openpyxl import Workbook
-        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-        from openpyxl.utils.dataframe import dataframe_to_rows
+        from openpyxl.styles import Font, PatternFill, Alignment
         
         wb = Workbook()
         
@@ -947,7 +944,7 @@ def _genera_excel_zone(calendario, zone, filename):
         for r in righe:
             # Colora righe alternate per data
             if r['data'] != data_precedente:
-                fill_color = "E6F2FF" if row % 4 < 2 else "FFFFFF"
+                "E6F2FF" if row % 4 < 2 else "FFFFFF"
                 data_precedente = r['data']
             
             ws2.cell(row=row, column=1, value=r['data'])

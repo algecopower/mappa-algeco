@@ -13,7 +13,6 @@ from flask import Blueprint, request, jsonify
 from moduli.auth import login_required
 from moduli.shared import (
     get_worksheet, get_header_map, find_row_by_eneltel,
-    invalidate_values_cache,
     safe_batch_update_by_name,
     _trova_indice_multi, _api_error, _resolve_anchor_col_name,
 )
@@ -189,7 +188,7 @@ def salva_sigillo(eneltel):
 
         if not res['success']:
             if res.get('invalid_cols'):
-                return jsonify({'error': f"Colonna SIGILLO non trovata sul foglio (rinominata?)"}), 400
+                return jsonify({'error': "Colonna SIGILLO non trovata sul foglio (rinominata?)"}), 400
             if res.get('lost_anchors'):
                 return jsonify({'error': f'ENELTEL {eneltel} non più presente nel foglio'}), 404
             return jsonify({'error': 'Scrittura non completata'}), 500

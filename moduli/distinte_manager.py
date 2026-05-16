@@ -438,7 +438,6 @@ def estrai_lavori_da_tabella(page) -> List[Dict]:
                 x_indirizzo_label = None
                 x_indirizzo_val = None
                 x_civico_label = None
-                x_civico_val = None
                 x_sepi_start = None
                 
                 for w in row_words:
@@ -448,7 +447,7 @@ def estrai_lavori_da_tabella(page) -> List[Dict]:
                         x_indirizzo_val = w['x1']  # I valori indirizzo iniziano dopo l'etichetta
                     elif txt == 'N°:':
                         x_civico_label = w['x0']
-                        x_civico_val = w['x1']
+                        w['x1']
                     elif txt in ('S.', 'P.', 'I.') and x_sepi_start is None:
                         x_sepi_start = w['x0']
                 
@@ -670,13 +669,12 @@ def estrai_dati_da_blocco_v2(blocco: str, num_lavoro: int, data_intervento: str)
         re.MULTILINE | re.IGNORECASE
     )
     
-    riga_tel_cap = None
     if tel_cap_comune_pattern:
         if tel_cap_comune_pattern.group(1):
             risultato['telefono'] = tel_cap_comune_pattern.group(1)
         risultato['cap'] = tel_cap_comune_pattern.group(2)
         risultato['comune'] = tel_cap_comune_pattern.group(3).strip().upper()
-        riga_tel_cap = tel_cap_comune_pattern.group(0)
+        tel_cap_comune_pattern.group(0)
     
     # ENELTEL (9 cifre + eventuale lettera A/B per fotovoltaici)
     # IMPORTANTE: cerchiamo DOPO la riga tel/cap/comune per evitare di
@@ -1219,7 +1217,7 @@ def confronta_con_filone(
                 'campo': 'Telefono',
                 'valore_distinta': valore_tel_distinta,
                 'valore_filone': valore_tel_filone,
-                'messaggio': f'Telefono presente su distinta ma mancante nel filone',
+                'messaggio': 'Telefono presente su distinta ma mancante nel filone',
                 'suggerisci_sovrascrittura': True,
                 'distinta': lavoro,
                 'filone': filone_data
@@ -1234,7 +1232,7 @@ def confronta_con_filone(
                 'campo': 'Telefono',
                 'valore_distinta': valore_tel_distinta,
                 'valore_filone': filone_info,
-                'messaggio': f'Numeri di telefono diversi tra distinta e filone',
+                'messaggio': 'Numeri di telefono diversi tra distinta e filone',
                 'suggerisci_sovrascrittura': True,
                 'distinta': lavoro,
                 'filone': filone_data

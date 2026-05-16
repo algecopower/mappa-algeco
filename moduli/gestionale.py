@@ -4,7 +4,7 @@ Modulo per generare il JavaScript del gestionale nella mappa.
 Contiene le funzioni per editing popup e upload BOXBEAT.
 """
 import json
-from config import CAMPI_MODIFICABILI, CAMPI_BOXBEAT, OPERATORI_DICT, PROVINCIA_ATTIVA
+from config import CAMPI_MODIFICABILI, OPERATORI_DICT, PROVINCIA_ATTIVA
 
 
 def genera_css_gestionale():
@@ -1883,9 +1883,9 @@ def genera_js_gestionale():
                     // Input date per data pianificazione
                     let dataFormatted = '';
                     if (valoreCurrent) {{
-                        if (/^\d{{4}}-\d{{2}}-\d{{2}}$/.test(valoreCurrent)) {{
+                        if (/^\\d{{4}}-\\d{{2}}-\\d{{2}}$/.test(valoreCurrent)) {{
                             dataFormatted = valoreCurrent;
-                        }} else if (/^\d{{2}}\/\d{{2}}\/\d{{4}}$/.test(valoreCurrent)) {{
+                        }} else if (/^\\d{{2}}\\/\\d{{2}}\\/\\d{{4}}$/.test(valoreCurrent)) {{
                             const parts = valoreCurrent.split('/');
                             dataFormatted = `${{parts[2]}}-${{parts[1]}}-${{parts[0]}}`;
                         }} else {{
@@ -2473,7 +2473,7 @@ def genera_js_gestionale():
                 let value = el.value;
                 
                 // Se è un campo data in formato YYYY-MM-DD, converti a DD/MM/YYYY per Google Sheets
-                if (el.type === 'date' && value && /^\d{{4}}-\d{{2}}-\d{{2}}$/.test(value)) {{
+                if (el.type === 'date' && value && /^\\d{{4}}-\\d{{2}}-\\d{{2}}$/.test(value)) {{
                     const parts = value.split('-');
                     value = `${{parts[2]}}/${{parts[1]}}/${{parts[0]}}`;
                 }}
@@ -2547,7 +2547,7 @@ def genera_js_gestionale():
                             contatori[idx].is_appuntamento = noteApp.includes('app');
                             
                             // Estrai ora appuntamento dalle note
-                            const oraMatch = noteApp.match(/app\s*(\d{{1,2}})[:\.]?(\d{{2}})?/i);
+                            const oraMatch = noteApp.match(/app\\s*(\\d{{1,2}})[:\\.]?(\\d{{2}})?/i);
                             if (oraMatch) {{
                                 const ore = oraMatch[1].padStart(2, '0');
                                 const minuti = oraMatch[2] || '00';
@@ -2742,11 +2742,11 @@ def genera_js_gestionale():
                     let dataFormatted = '';
                     if (valoreCurrent) {{
                         // Se è già YYYY-MM-DD
-                        if (/^\d{{4}}-\d{{2}}-\d{{2}}$/.test(valoreCurrent)) {{
+                        if (/^\\d{{4}}-\\d{{2}}-\\d{{2}}$/.test(valoreCurrent)) {{
                             dataFormatted = valoreCurrent;
                         }}
                         // Se è DD/MM/YYYY
-                        else if (/^\d{{2}}\/\d{{2}}\/\d{{4}}$/.test(valoreCurrent)) {{
+                        else if (/^\\d{{2}}\\/\\d{{2}}\\/\\d{{4}}$/.test(valoreCurrent)) {{
                             const parts = valoreCurrent.split('/');
                             dataFormatted = `${{parts[2]}}-${{parts[1]}}-${{parts[0]}}`;
                         }}
@@ -2871,7 +2871,7 @@ def genera_js_gestionale():
                 let value = el.value;
                 
                 // Se è un campo data in formato YYYY-MM-DD, converti a DD/MM/YYYY per Google Sheets
-                if (el.type === 'date' && value && /^\d{{4}}-\d{{2}}-\d{{2}}$/.test(value)) {{
+                if (el.type === 'date' && value && /^\\d{{4}}-\\d{{2}}-\\d{{2}}$/.test(value)) {{
                     const parts = value.split('-');
                     value = `${{parts[2]}}/${{parts[1]}}/${{parts[0]}}`;
                 }}

@@ -281,130 +281,130 @@ def genera_html_verifica_indirizzi() -> str:
 
 def genera_js_verifica_indirizzi() -> str:
     # Doppia graffa: questo JS viene iniettato in una f-string Python.
-    return f'''
+    return '''
         // ============================================================
         // VERIFICA INDIRIZZI
         // ============================================================
         let _viInitDone = false;
         let _viComuniCompleti = [];        // tutti i comuni
-        let _viLclToComuni = {{}};          // mapping LCL -> [comuni]
+        let _viLclToComuni = {};          // mapping LCL -> [comuni]
 
-        async function apriModalVerificaIndirizzi() {{
+        async function apriModalVerificaIndirizzi() {
             const modal = document.getElementById('verificaIndirizziModal');
             modal.classList.add('visible');
-            if (!_viInitDone) {{
+            if (!_viInitDone) {
                 await caricaStatoVerificaIndirizzi();
                 _viInitDone = true;
-            }}
-        }}
+            }
+        }
 
-        function chiudiModalVerificaIndirizzi() {{
+        function chiudiModalVerificaIndirizzi() {
             document.getElementById('verificaIndirizziModal').classList.remove('visible');
-        }}
+        }
 
-        function _viPopolaComuni(lista) {{
+        function _viPopolaComuni(lista) {
             const selComune = document.getElementById('viFiltroComune');
             const valoreCorrente = selComune.value;
             selComune.innerHTML = '<option value="">— Tutti i comuni —</option>';
-            lista.forEach(c => {{
+            lista.forEach(c => {
                 const o = document.createElement('option');
                 o.value = c;
                 o.textContent = c;
                 selComune.appendChild(o);
-            }});
+            });
             // Mantieni la selezione corrente solo se ancora valida
-            if (valoreCorrente && lista.includes(valoreCorrente)) {{
+            if (valoreCorrente && lista.includes(valoreCorrente)) {
                 selComune.value = valoreCorrente;
-            }}
-        }}
+            }
+        }
 
-        function _viOnLCLChange() {{
+        function _viOnLCLChange() {
             const lcl = document.getElementById('viFiltroLCL').value;
-            if (!lcl) {{
+            if (!lcl) {
                 _viPopolaComuni(_viComuniCompleti);
-            }} else {{
+            } else {
                 _viPopolaComuni(_viLclToComuni[lcl] || []);
-            }}
-        }}
+            }
+        }
 
-        async function caricaStatoVerificaIndirizzi() {{
-            try {{
+        async function caricaStatoVerificaIndirizzi() {
+            try {
                 const resp = await fetch('/api/verifica-indirizzi/stato');
                 if (!resp.ok) throw new Error('HTTP ' + resp.status);
                 const data = await resp.json();
 
                 const warningBox = document.getElementById('viDbWarning');
-                if (!data.db || !data.db.disponibile) {{
+                if (!data.db || !data.db.disponibile) {
                     warningBox.style.display = 'block';
                     warningBox.innerHTML = '⚠️ Database indirizzi non disponibile. Esegui sul server:<br>'
                         + '<code style="background:rgba(0,0,0,0.08);padding:2px 6px;border-radius:4px;">'
                         + 'python tools/build_indir_db.py</code>';
                     document.getElementById('viBtnVerifica').disabled = true;
-                }} else {{
+                } else {
                     warningBox.style.display = 'none';
                     document.getElementById('viBtnVerifica').disabled = false;
-                }}
+                }
 
                 _viComuniCompleti = data.comuni || [];
-                _viLclToComuni = data.lcl_to_comuni || {{}};
+                _viLclToComuni = data.lcl_to_comuni || {};
 
                 const selLCL = document.getElementById('viFiltroLCL');
                 selLCL.innerHTML = '<option value="">— Tutti gli LCL —</option>';
-                (data.lcl || []).forEach(lcl => {{
+                (data.lcl || []).forEach(lcl => {
                     const o = document.createElement('option');
                     o.value = lcl;
                     o.textContent = lcl;
                     selLCL.appendChild(o);
-                }});
+                });
                 selLCL.onchange = _viOnLCLChange;
 
                 _viPopolaComuni(_viComuniCompleti);
-            }} catch (err) {{
+            } catch (err) {
                 console.error('[VerificaIndirizzi] caricaStato:', err);
                 const warningBox = document.getElementById('viDbWarning');
                 warningBox.style.display = 'block';
                 warningBox.textContent = '❌ Errore caricamento stato: ' + err.message;
-            }}
-        }}
+            }
+        }
 
-        async function eseguiVerificaIndirizzi() {{
+        async function eseguiVerificaIndirizzi() {
             const btn = document.getElementById('viBtnVerifica');
             const body = document.getElementById('viBody');
             const summary = document.getElementById('viSummary');
             btn.disabled = true;
 
-            const payload = {{
+            const payload = {
                 lcl: document.getElementById('viFiltroLCL').value,
                 comune: document.getElementById('viFiltroComune').value,
                 solo_problematici: document.getElementById('viSoloProblematici').checked,
-            }};
+            };
 
             body.innerHTML = '<div class="vi-loader"><div class="vi-spinner"></div>Verifica in corso...</div>';
             summary.style.display = 'none';
 
-            try {{
-                const resp = await fetch('/api/verifica-indirizzi', {{
+            try {
+                const resp = await fetch('/api/verifica-indirizzi', {
                     method: 'POST',
-                    headers: {{'Content-Type': 'application/json'}},
+                    headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify(payload),
-                }});
-                if (!resp.ok) {{
-                    const err = await resp.json().catch(() => ({{}}));
+                });
+                if (!resp.ok) {
+                    const err = await resp.json().catch(() => ({}));
                     throw new Error(err.error || 'HTTP ' + resp.status);
-                }}
+                }
                 const data = await resp.json();
                 renderRisultatiVerifica(data);
-            }} catch (err) {{
+            } catch (err) {
                 console.error('[VerificaIndirizzi] esegui:', err);
                 body.innerHTML = '<div class="vi-empty"><div class="vi-empty-icon">❌</div>'
                     + 'Errore: ' + escapeHtml(err.message) + '</div>';
-            }} finally {{
+            } finally {
                 btn.disabled = false;
-            }}
-        }}
+            }
+        }
 
-        function _viBadgeLabel(status) {{
-            const map = {{
+        function _viBadgeLabel(status) {
+            const map = {
                 'ok': '✅ OK',
                 'civico_mancante': '⚠️ Civico mancante',
                 'civico_sospetto': '⚠️ Civico sospetto',
@@ -413,62 +413,62 @@ def genera_js_verifica_indirizzi() -> str:
                 'comune_non_riconosciuto': '❓ Comune sconosciuto',
                 'fuori_regione': 'ℹ️ Fuori Piemonte',
                 'db_assente': '⚙️ DB assente',
-            }};
+            };
             return map[status] || status;
-        }}
+        }
 
-        function renderRisultatiVerifica(data) {{
+        function renderRisultatiVerifica(data) {
             const body = document.getElementById('viBody');
             const summary = document.getElementById('viSummary');
 
             // Sommario
-            const stati = data.stati || {{}};
+            const stati = data.stati || {};
             const chips = [
-                `<span class="vi-summary-chip"><b>${{data.totale_filtrati}}</b> contatori filtrati</span>`,
-                `<span class="vi-summary-chip"><b>${{data.totale_problematici}}</b> con problemi</span>`,
+                `<span class="vi-summary-chip"><b>${data.totale_filtrati}</b> contatori filtrati</span>`,
+                `<span class="vi-summary-chip"><b>${data.totale_problematici}</b> con problemi</span>`,
             ];
-            for (const [k, v] of Object.entries(stati)) {{
-                if (v > 0) chips.push(`<span class="vi-summary-chip">${{_viBadgeLabel(k)}}: <b>${{v}}</b></span>`);
-            }}
+            for (const [k, v] of Object.entries(stati)) {
+                if (v > 0) chips.push(`<span class="vi-summary-chip">${_viBadgeLabel(k)}: <b>${v}</b></span>`);
+            }
             summary.innerHTML = chips.join('');
             summary.style.display = 'flex';
 
             const risultati = data.risultati || [];
-            if (risultati.length === 0) {{
+            if (risultati.length === 0) {
                 body.innerHTML = '<div class="vi-empty"><div class="vi-empty-icon">✅</div>'
                     + 'Nessun problema rilevato sui contatori filtrati.</div>';
                 return;
-            }}
+            }
 
-            const rows = risultati.map(r => {{
-                const v = r.verifica || {{}};
+            const rows = risultati.map(r => {
+                const v = r.verifica || {};
                 const sugCiv = (v.suggerimenti_civici || []).map(s =>
-                    `<span class="vi-suggerimento civico">${{s.civico}}${{s.esponente || ''}}</span>`
+                    `<span class="vi-suggerimento civico">${s.civico}${s.esponente || ''}</span>`
                 ).join('');
                 const sugVie = (v.suggerimenti_vie || []).map(s =>
-                    `<span class="vi-suggerimento via" title="similarità ${{s.score}}">${{escapeHtml(s.odonimo)}}</span>`
+                    `<span class="vi-suggerimento via" title="similarità ${s.score}">${escapeHtml(s.odonimo)}</span>`
                 ).join('');
                 let suggHtml = '';
-                if (sugCiv) suggHtml += `<div><span style="font-size:0.78em;color:var(--text-secondary);">Civici vicini:</span> <span class="vi-suggerimenti">${{sugCiv}}</span></div>`;
-                if (sugVie) suggHtml += `<div style="margin-top:4px;"><span style="font-size:0.78em;color:var(--text-secondary);">Vie simili:</span> <span class="vi-suggerimenti">${{sugVie}}</span></div>`;
-                if (v.nota) suggHtml += `<div class="vi-nota">${{escapeHtml(v.nota)}}</div>`;
+                if (sugCiv) suggHtml += `<div><span style="font-size:0.78em;color:var(--text-secondary);">Civici vicini:</span> <span class="vi-suggerimenti">${sugCiv}</span></div>`;
+                if (sugVie) suggHtml += `<div style="margin-top:4px;"><span style="font-size:0.78em;color:var(--text-secondary);">Vie simili:</span> <span class="vi-suggerimenti">${sugVie}</span></div>`;
+                if (v.nota) suggHtml += `<div class="vi-nota">${escapeHtml(v.nota)}</div>`;
 
                 return `
                     <tr>
                         <td>
-                            <div class="vi-cliente">${{escapeHtml(r.cliente || '—')}}</div>
-                            <div class="vi-eneltel">${{escapeHtml(r.eneltel)}}</div>
-                            ${{r.lcl ? `<div style="font-size:0.78em;color:var(--text-secondary);">LCL: ${{escapeHtml(r.lcl)}}</div>` : ''}}
+                            <div class="vi-cliente">${escapeHtml(r.cliente || '—')}</div>
+                            <div class="vi-eneltel">${escapeHtml(r.eneltel)}</div>
+                            ${r.lcl ? `<div style="font-size:0.78em;color:var(--text-secondary);">LCL: ${escapeHtml(r.lcl)}</div>` : ''}
                         </td>
-                        <td>${{escapeHtml(r.comune || '—')}}</td>
+                        <td>${escapeHtml(r.comune || '—')}</td>
                         <td>
-                            <div>${{escapeHtml(r.indirizzo || '—')}} <b>${{escapeHtml(r.civico || '')}}</b></div>
-                            ${{v.odonimo_match ? `<div style="font-size:0.78em;color:var(--text-secondary);">📍 nel registro: ${{escapeHtml(v.odonimo_match)}}</div>` : ''}}
+                            <div>${escapeHtml(r.indirizzo || '—')} <b>${escapeHtml(r.civico || '')}</b></div>
+                            ${v.odonimo_match ? `<div style="font-size:0.78em;color:var(--text-secondary);">📍 nel registro: ${escapeHtml(v.odonimo_match)}</div>` : ''}
                         </td>
-                        <td><span class="vi-badge ${{v.status}}">${{_viBadgeLabel(v.status)}}</span></td>
-                        <td>${{suggHtml || '—'}}</td>
+                        <td><span class="vi-badge ${v.status}">${_viBadgeLabel(v.status)}</span></td>
+                        <td>${suggHtml || '—'}</td>
                     </tr>`;
-            }}).join('');
+            }).join('');
 
             body.innerHTML = `
                 <table class="vi-table">
@@ -481,16 +481,16 @@ def genera_js_verifica_indirizzi() -> str:
                             <th>Suggerimenti</th>
                         </tr>
                     </thead>
-                    <tbody>${{rows}}</tbody>
+                    <tbody>${rows}</tbody>
                 </table>`;
-        }}
+        }
 
         // Helper: escape minimale per evitare XSS in dati utente
-        if (typeof escapeHtml === 'undefined') {{
-            window.escapeHtml = function(s) {{
+        if (typeof escapeHtml === 'undefined') {
+            window.escapeHtml = function(s) {
                 return String(s == null ? '' : s)
                     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
                     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-            }};
-        }}
+            };
+        }
     '''

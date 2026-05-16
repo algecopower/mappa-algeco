@@ -9,9 +9,8 @@ from flask import Blueprint, request, jsonify, session, send_file
 
 from moduli.auth import login_required
 from moduli.shared import (
-    get_worksheet, get_headers, get_header_map,
     get_all_values_cached,
-    _get_username, _api_error, _callbacks,
+    _api_error, _callbacks,
 )
 from moduli.calendario import (
     get_attivita, crea_attivita, modifica_attivita,

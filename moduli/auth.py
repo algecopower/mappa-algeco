@@ -4,7 +4,6 @@ Modulo di autenticazione per il gestionale.
 Gestisce login, sessioni e verifica credenziali.
 """
 import os
-import json
 import hashlib
 import secrets
 from datetime import datetime, timedelta

@@ -5,26 +5,18 @@ Blueprint: Sync, Backup e Upload BoxBeat.
 import os
 import re
 import io
-import json
 import logging
-import traceback
 from datetime import datetime
 
 import pandas as pd
-import gspread.utils
-from flask import Blueprint, request, jsonify, session, send_file
+from flask import Blueprint, request, jsonify, send_file
 
 from moduli.safe_json import json_read
 
 from moduli.auth import login_required
 from moduli.shared import (
-    get_worksheet, get_header_map, get_headers,
-    invalidate_values_cache,
-    find_row_by_eneltel, find_row_by_pod,
-    build_pod_row_map, verify_row_pod,
-    safe_batch_update_by_name,
-    _api_error, _get_username, _callbacks,
-    _trova_indice_colonna, _trova_indice_multi,
+    get_worksheet, get_header_map, safe_batch_update_by_name,
+    _api_error, _callbacks,
     _resolve_anchor_col_name,
 )
 from config import PROVINCIA_ATTIVA, CAMPI_BOXBEAT
@@ -251,7 +243,7 @@ def upload_BOXBEAT():
 
         # Configurazione campi BOXBEAT
         cfg = CAMPI_BOXBEAT.get(PROVINCIA_ATTIVA, {})
-        col_esito_cfg = cfg.get('esito', 'Esito')
+        cfg.get('esito', 'Esito')
         esito_ok = cfg.get('esito_ok_valore', 'Esito OK')
         col_dest_op = cfg.get('colonna_dest_operatore', 'Operatore')
         col_dest_data = cfg.get('colonna_dest_data_inst', 'Data Installazione')

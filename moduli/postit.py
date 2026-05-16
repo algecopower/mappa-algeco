@@ -5,7 +5,6 @@ Gestisce note/promemoria che restano fissati sulle pagine principali
 (mappa, filone) come reminder costanti per gli operatori.
 """
 import os
-import json
 import uuid
 import threading
 from datetime import datetime

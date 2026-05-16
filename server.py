@@ -677,10 +677,13 @@ def csrf_check():
     """Verifica Origin + CSRF token per POST/PUT/DELETE."""
     if request.method not in ('POST', 'PUT', 'DELETE'):
         return None
-    # Login escluso (non ha ancora sessione, quindi nemmeno token).
-    # Logout escluso (forzare un logout non causa danno; e se il CSRF check
-    # fallisce qui l'utente resta loggato in modo silenzioso).
-    if request.path in ('/api/login', '/api/logout'):
+    # Endpoint esclusi dal CSRF check:
+    # - /api/login: nessuna sessione ancora, niente token in sessione.
+    # - /api/logout: forzare un logout non causa danno; e se fallisse qui
+    #   l'utente resterebbe loggato silenziosamente.
+    # - /api/sync/webhook: server-to-server (Apps Script di Google), già
+    #   autenticato via header X-Sync-Secret.
+    if request.path in ('/api/login', '/api/logout', '/api/sync/webhook'):
         return None
 
     # 1) Origin/Referer check

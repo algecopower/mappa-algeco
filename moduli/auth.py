@@ -10,7 +10,14 @@ from datetime import datetime, timedelta
 from functools import wraps
 from flask import session, redirect, url_for, request, jsonify
 
+from argon2 import PasswordHasher
+from argon2.exceptions import VerifyMismatchError, InvalidHashError
+
 from .safe_json import json_read, json_write
+
+# Argon2id con parametri raccomandati OWASP (memory=64MB, time=3, parallel=4).
+# `PasswordHasher()` con default è già conforme.
+_ph = PasswordHasher()
 
 # Directory base per i dati
 SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -28,27 +35,45 @@ def generate_secret_key():
 
 def hash_password(password: str, salt: str = None) -> tuple:
     """
-    Hash della password usando PBKDF2 con SHA-256.
-    Ritorna (hash, salt).
+    Hash della password usando Argon2id.
+
+    Ritorna (hash, salt) per compatibilità con il chiamante. Con Argon2 il
+    salt è incluso nel hash stesso, quindi `salt` ritorna stringa vuota.
+    Il parametro `salt` in input è accettato per API compat ma ignorato.
     """
-    if salt is None:
-        salt = secrets.token_hex(16)
-    
-    # PBKDF2 con 100000 iterazioni
-    password_hash = hashlib.pbkdf2_hmac(
-        'sha256',
-        password.encode('utf-8'),
-        salt.encode('utf-8'),
-        100000
+    return _ph.hash(password), ''
+
+
+def _is_argon2_hash(stored_hash: str) -> bool:
+    """True se l'hash è in formato Argon2 (inizia con $argon2)."""
+    return isinstance(stored_hash, str) and stored_hash.startswith('$argon2')
+
+
+def _verify_pbkdf2_legacy(password: str, stored_hash: str, salt: str) -> bool:
+    """Verifica hash PBKDF2-SHA256 legacy (100k iterazioni)."""
+    if not salt:
+        return False
+    computed = hashlib.pbkdf2_hmac(
+        'sha256', password.encode('utf-8'), salt.encode('utf-8'), 100000
     ).hex()
-    
-    return password_hash, salt
+    return secrets.compare_digest(computed, stored_hash)
 
 
 def verify_password(password: str, stored_hash: str, salt: str) -> bool:
-    """Verifica che la password corrisponda all'hash memorizzato."""
-    computed_hash, _ = hash_password(password, salt)
-    return secrets.compare_digest(computed_hash, stored_hash)
+    """Verifica che la password corrisponda all'hash memorizzato.
+
+    Supporta sia Argon2 (nuovo formato) che PBKDF2-SHA256 (legacy).
+    Il rehash automatico al login per gli hash legacy è gestito in
+    `authenticate()`, che riscrive l'hash in Argon2 se la verifica
+    PBKDF2 ha successo.
+    """
+    if _is_argon2_hash(stored_hash):
+        try:
+            _ph.verify(stored_hash, password)
+            return True
+        except (VerifyMismatchError, InvalidHashError):
+            return False
+    return _verify_pbkdf2_legacy(password, stored_hash, salt)
 
 
 def generate_password(length: int = 16) -> str:
@@ -197,17 +222,24 @@ def authenticate(username: str, password: str, provincia_attiva: str = None) -> 
     if not user.get('active', True):
         return False, None, "Account disabilitato"
     
-    if not verify_password(password, user['password_hash'], user['salt']):
+    stored_hash = user['password_hash']
+    if not verify_password(password, stored_hash, user.get('salt', '')):
         return False, None, "Credenziali non valide"
-    
+
     # Verifica accesso alla provincia
     if provincia_attiva:
         province_utente = user.get('province', list(PROVINCE_DISPONIBILI))
         if provincia_attiva.upper() not in province_utente:
             return False, None, f"Non hai accesso alla provincia {provincia_attiva}"
-    
-    # Aggiorna last_login
+
+    # Aggiorna last_login (+ rehash trasparente se l'hash è legacy PBKDF2
+    # o se i parametri Argon2 vanno aggiornati alle nuove raccomandazioni).
     users[username]['last_login'] = datetime.now().isoformat()
+    needs_rehash = (not _is_argon2_hash(stored_hash)) or _ph.check_needs_rehash(stored_hash)
+    if needs_rehash:
+        new_hash, _ = hash_password(password)
+        users[username]['password_hash'] = new_hash
+        users[username]['salt'] = ''  # Argon2 include il salt nell'hash
     save_users(users)
     
     return True, {

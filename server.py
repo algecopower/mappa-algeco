@@ -625,9 +625,18 @@ app.register_blueprint(access_points_bp)
 app.register_blueprint(verifica_indirizzi_bp)
 
 # ============================================================================
-# CSRF PROTECTION (verifica Origin/Referer per POST/PUT/DELETE)
+# CSRF PROTECTION
 # ============================================================================
-# Origini considerate fidate per richieste state-mutating
+# Doppia barriera:
+#   1) Origin/Referer check (sotto): blocca POST/PUT/DELETE da origini esterne.
+#   2) CSRF token (double-cookie): token random in sessione, riflesso come
+#      cookie 'csrf_token' (non-HttpOnly) leggibile da JS. Il frontend lo
+#      invia nell'header X-CSRF-Token su ogni POST/PUT/DELETE; il server
+#      verifica match con il valore in sessione (immune a CSRF perché un
+#      attaccante cross-site non può leggere il cookie csrf_token grazie a
+#      SameSite=Lax).
+import secrets as _secrets
+
 _TRUSTED_ORIGINS = set()
 for _port in [5001, 5002]:
     _TRUSTED_ORIGINS.add(f'http://localhost:{_port}')
@@ -636,25 +645,61 @@ _TRUSTED_ORIGINS.add(f'https://torino.{DOMINIO_BASE}')
 _TRUSTED_ORIGINS.add(f'https://pavia.{DOMINIO_BASE}')
 _TRUSTED_ORIGINS.add(f'https://{DOMINIO_BASE}')
 
+
+def _get_or_create_csrf_token():
+    """Restituisce il CSRF token in sessione (lo crea se mancante)."""
+    if 'csrf_token' not in session:
+        session['csrf_token'] = _secrets.token_urlsafe(32)
+    return session['csrf_token']
+
+
+@app.after_request
+def set_csrf_cookie(response):
+    """Riflette il CSRF token come cookie leggibile da JS (per il frontend).
+
+    Genera il token se manca, così è disponibile dal primo request autenticato.
+    """
+    if 'user' in session:
+        token = _get_or_create_csrf_token()
+        response.set_cookie(
+            'csrf_token',
+            token,
+            httponly=False,  # JS deve poterlo leggere
+            samesite='Lax',
+            secure=app.config.get('SESSION_COOKIE_SECURE', False),
+            max_age=24 * 60 * 60,
+        )
+    return response
+
+
 @app.before_request
 def csrf_check():
-    """Rifiuta POST/PUT/DELETE da origini non fidate (anti-CSRF)."""
-    if request.method in ('POST', 'PUT', 'DELETE'):
-        # Escludi login (non ha ancora sessione)
-        if request.path == '/api/login':
-            return None
-        
-        origin = request.headers.get('Origin')
-        if not origin:
-            # Fallback: controlla Referer
-            referer = request.headers.get('Referer')
-            if referer:
-                from urllib.parse import urlparse
-                parsed = urlparse(referer)
-                origin = f"{parsed.scheme}://{parsed.netloc}"
-        
-        if origin and origin not in _TRUSTED_ORIGINS:
-            return jsonify({'error': 'Richiesta bloccata: origine non autorizzata'}), 403
+    """Verifica Origin + CSRF token per POST/PUT/DELETE."""
+    if request.method not in ('POST', 'PUT', 'DELETE'):
+        return None
+    # Login escluso (non ha ancora sessione, quindi nemmeno token)
+    if request.path == '/api/login':
+        return None
+
+    # 1) Origin/Referer check
+    origin = request.headers.get('Origin')
+    if not origin:
+        referer = request.headers.get('Referer')
+        if referer:
+            from urllib.parse import urlparse
+            parsed = urlparse(referer)
+            origin = f"{parsed.scheme}://{parsed.netloc}"
+    if origin and origin not in _TRUSTED_ORIGINS:
+        return jsonify({'error': 'Richiesta bloccata: origine non autorizzata'}), 403
+
+    # 2) CSRF token check (solo per utenti già autenticati)
+    if 'user' in session:
+        header_token = request.headers.get('X-CSRF-Token', '')
+        session_token = session.get('csrf_token', '')
+        if not header_token or not session_token or not _secrets.compare_digest(
+            header_token, session_token
+        ):
+            return jsonify({'error': 'CSRF token mancante o non valido'}), 403
     return None
 
 

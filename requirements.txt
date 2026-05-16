@@ -26,3 +26,6 @@ xlrd>=2.0.1
 
 # Fuzzy matching (verifica indirizzi)
 rapidfuzz>=3.0.0
+
+# Hash password (moderno; sostituisce PBKDF2 con upgrade trasparente al login)
+argon2-cffi>=23.0.0

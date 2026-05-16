@@ -468,29 +468,30 @@
     </div>
 
     <!-- Address Search Modal -->
-    <div class="pin-modal" id="addressSearchModal" onclick="if(event.target === this) toggleAddressSearchModal()">
-        <div class="pin-modal-content">
-            <div class="pin-modal-header">
-                <div class="pin-modal-title">📍 Cerca Indirizzo sulla Mappa</div>
-                <button class="pin-modal-close" onclick="toggleAddressSearchModal()">✕</button>
+    <div class="ui-modal" id="addressSearchModal">
+        <div class="ui-modal-content" style="max-width: 600px;">
+            <div class="ui-modal-header">
+                <h2 class="ui-modal-title">📍 Cerca Indirizzo sulla Mappa</h2>
+                <button class="ui-modal-close" type="button">×</button>
             </div>
-
-            <div class="address-search-container">
-                <div class="advanced-search-field" style="width: 100%;">
-                    <label>🏠 Indirizzo completo</label>
-                    <input type="text" id="addressSearchInput" placeholder="Es: Via Roma 15, Torino" autocomplete="off" onkeypress="if(event.key === 'Enter') searchAddress()">
+            <div class="ui-modal-body">
+                <div class="address-search-container">
+                    <div class="advanced-search-field" style="width: 100%;">
+                        <label>🏠 Indirizzo completo</label>
+                        <input type="text" id="addressSearchInput" placeholder="Es: Via Roma 15, Torino" autocomplete="off" onkeypress="if(event.key === 'Enter') searchAddress()">
+                    </div>
+                    <div class="address-search-hint">
+                        Inserisci via, numero civico e comune. Es: "Via Garibaldi 10, Moncalieri"
+                    </div>
                 </div>
-                <div class="address-search-hint">
-                    Inserisci via, numero civico e comune. Es: "Via Garibaldi 10, Moncalieri"
+
+                <div class="advanced-search-actions">
+                    <button class="btn-clear-advanced" onclick="clearAddressSearch()">🗑️ Pulisci</button>
+                    <button class="btn-apply-advanced" onclick="searchAddress()">🔍 Cerca</button>
                 </div>
-            </div>
 
-            <div class="advanced-search-actions">
-                <button class="btn-clear-advanced" onclick="clearAddressSearch()">🗑️ Pulisci</button>
-                <button class="btn-apply-advanced" onclick="searchAddress()">🔍 Cerca</button>
+                <div class="address-search-results" id="addressSearchResults"></div>
             </div>
-
-            <div class="address-search-results" id="addressSearchResults"></div>
         </div>
     </div>
 

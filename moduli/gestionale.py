@@ -3077,13 +3077,13 @@ def genera_js_gestionale():
         
         function apriModalAppuntamento(eneltel) {{
             currentAppuntamentoEneltel = eneltel;
-            document.getElementById('appuntamentoModal').classList.add('visible');
             document.getElementById('appOrarioInizio').value = '09:00';
             document.getElementById('appOrarioFine').value = '';
+            UiModal.open('appuntamentoModal');
         }}
-        
+
         function chiudiModalAppuntamento() {{
-            document.getElementById('appuntamentoModal').classList.remove('visible');
+            UiModal.close('appuntamentoModal');
             currentAppuntamentoEneltel = null;
         }}
         
@@ -3208,15 +3208,15 @@ def genera_js_gestionale():
         // ========================================
         
         function apriModalBOXBEAT() {{
-            document.getElementById('BOXBEATModal').classList.add('visible');
+            UiModal.open('BOXBEATModal');
             // Reset stato
             document.querySelector('.BOXBEAT-progress').classList.remove('visible');
             document.querySelector('.BOXBEAT-result').classList.remove('visible');
             document.querySelector('.BOXBEAT-result').classList.remove('success', 'error');
         }}
-        
+
         function chiudiModalBOXBEAT() {{
-            document.getElementById('BOXBEATModal').classList.remove('visible');
+            UiModal.close('BOXBEATModal');
         }}
         
         function handleBOXBEATDrop(e) {{
@@ -3351,7 +3351,7 @@ def genera_js_gestionale():
         
         async function apriVistaSigilli() {{
             // Mostra modal
-            document.getElementById('sigilliModal').classList.add('visible');
+            UiModal.open('sigilliModal');
             
             // Reset tab a sigilli e filtri
             currentTab = 'sigilli';
@@ -4018,7 +4018,7 @@ def genera_js_gestionale():
         }}
         
         function chiudiVistaSigilli() {{
-            document.getElementById('sigilliModal').classList.remove('visible');
+            UiModal.close('sigilliModal');
             sigilliData = [];
             matricoleData = [];
             currentTab = 'sigilli';
@@ -4029,12 +4029,12 @@ def genera_js_gestionale():
         // ========================================
         
         function apriModalBackup() {{
-            document.getElementById('backupModal').classList.add('visible');
+            UiModal.open('backupModal');
             caricaListaBackup();
         }}
-        
+
         function chiudiModalBackup() {{
-            document.getElementById('backupModal').classList.remove('visible');
+            UiModal.close('backupModal');
         }}
         
         async function caricaListaBackup() {{
@@ -4308,128 +4308,133 @@ def genera_html_gestionale():
         </div>
         
         <!-- MODAL APPUNTAMENTO -->
-        <div id="appuntamentoModal" class="appuntamento-modal">
-            <div class="appuntamento-content">
-                <div class="BOXBEAT-header">
-                    <span class="BOXBEAT-title">📞 Fissa Appuntamento</span>
-                    <button class="btn-close-modal" onclick="chiudiModalAppuntamento()">×</button>
+        <div id="appuntamentoModal" class="ui-modal">
+            <div class="ui-modal-content" style="max-width: 400px;">
+                <div class="ui-modal-header">
+                    <h2 class="ui-modal-title">📞 Fissa Appuntamento</h2>
+                    <button class="ui-modal-close" type="button">×</button>
                 </div>
-                
-                <p style="color: var(--text-secondary); margin-bottom: 15px;">
-                    Inserisci l'orario dell'appuntamento. L'orario verrà aggiunto alle note.
-                </p>
-                
-                <div class="time-picker-group">
-                    <input type="time" id="appOrarioInizio" class="time-input" value="09:00">
-                    <span class="time-separator">-</span>
-                    <input type="time" id="appOrarioFine" class="time-input" placeholder="(opzionale)">
-                </div>
-                
-                <div class="popup-edit-actions">
-                    <button class="btn-save-edit" onclick="confermaAppuntamento()">✅ Conferma</button>
-                    <button class="btn-cancel-edit" onclick="chiudiModalAppuntamento()">Annulla</button>
+                <div class="ui-modal-body">
+                    <p style="color: var(--text-secondary); margin-bottom: 15px;">
+                        Inserisci l'orario dell'appuntamento. L'orario verrà aggiunto alle note.
+                    </p>
+
+                    <div class="time-picker-group">
+                        <input type="time" id="appOrarioInizio" class="time-input" value="09:00">
+                        <span class="time-separator">-</span>
+                        <input type="time" id="appOrarioFine" class="time-input" placeholder="(opzionale)">
+                    </div>
+
+                    <div class="popup-edit-actions">
+                        <button class="btn-save-edit" onclick="confermaAppuntamento()">✅ Conferma</button>
+                        <button class="btn-cancel-edit" onclick="chiudiModalAppuntamento()">Annulla</button>
+                    </div>
                 </div>
             </div>
         </div>
         
         <!-- MODAL BOXBEAT -->
-        <div id="BOXBEATModal" class="BOXBEAT-modal">
-            <div class="BOXBEAT-content">
-                <div class="BOXBEAT-header">
-                    <span class="BOXBEAT-title">📦 Carica installato (Enel)</span>
-                    <button class="btn-close-modal" onclick="chiudiModalBOXBEAT()">×</button>
+        <div id="BOXBEATModal" class="ui-modal">
+            <div class="ui-modal-content">
+                <div class="ui-modal-header">
+                    <h2 class="ui-modal-title">📦 Carica installato (Enel)</h2>
+                    <button class="ui-modal-close" type="button">×</button>
                 </div>
-                
-                <p style="color: var(--text-secondary); margin-bottom: 15px;">
-                    Carica il file esportato da Enel. Verranno aggiornati solo i contatori con <strong>Esito OK</strong>.
-                </p>
-                
-                <div id="BOXBEATDropzone" class="BOXBEAT-dropzone" 
-                     onclick="selectBOXBEATFile()"
-                     ondrop="handleBOXBEATDrop(event)"
-                     ondragover="handleBOXBEATDragOver(event)"
-                     ondragleave="handleBOXBEATDragLeave(event)">
-                    <div class="BOXBEAT-dropzone-icon">📁</div>
-                    <div class="BOXBEAT-dropzone-text">Trascina qui i file o clicca per selezionare</div>
-                    <div class="BOXBEAT-dropzone-subtext">Puoi caricare più file insieme (.xlsx, .xls, .csv)</div>
-                </div>
-                
-                <input type="file" id="BOXBEATFileInput" style="display: none;" 
-                       accept=".xlsx,.xls,.csv" multiple onchange="handleBOXBEATFileSelect(event)">
-                
-                <div class="BOXBEAT-progress">
-                    <div class="BOXBEAT-progress-bar">
-                        <div class="BOXBEAT-progress-fill"></div>
+                <div class="ui-modal-body">
+                    <p style="color: var(--text-secondary); margin-bottom: 15px;">
+                        Carica il file esportato da Enel. Verranno aggiornati solo i contatori con <strong>Esito OK</strong>.
+                    </p>
+
+                    <div id="BOXBEATDropzone" class="BOXBEAT-dropzone"
+                         onclick="selectBOXBEATFile()"
+                         ondrop="handleBOXBEATDrop(event)"
+                         ondragover="handleBOXBEATDragOver(event)"
+                         ondragleave="handleBOXBEATDragLeave(event)">
+                        <div class="BOXBEAT-dropzone-icon">📁</div>
+                        <div class="BOXBEAT-dropzone-text">Trascina qui i file o clicca per selezionare</div>
+                        <div class="BOXBEAT-dropzone-subtext">Puoi caricare più file insieme (.xlsx, .xls, .csv)</div>
                     </div>
-                    <div class="BOXBEAT-progress-text">Elaborazione...</div>
+
+                    <input type="file" id="BOXBEATFileInput" style="display: none;"
+                           accept=".xlsx,.xls,.csv" multiple onchange="handleBOXBEATFileSelect(event)">
+
+                    <div class="BOXBEAT-progress">
+                        <div class="BOXBEAT-progress-bar">
+                            <div class="BOXBEAT-progress-fill"></div>
+                        </div>
+                        <div class="BOXBEAT-progress-text">Elaborazione...</div>
+                    </div>
+
+                    <div class="BOXBEAT-result"></div>
                 </div>
-                
-                <div class="BOXBEAT-result"></div>
             </div>
         </div>
         
         <!-- MODAL SIGILLI/MATRICOLE FULLSCREEN -->
-        <div id="sigilliModal" class="sigilli-modal">
-            <div class="sigilli-container">
-                <!-- Tab per switch -->
-                <div class="sigilli-tabs">
-                    <button id="tabSigilli" class="sigilli-tab active" onclick="switchTab('sigilli')">
-                        🔐 Sigilli
-                        <span id="tabSigilliCount" class="sigilli-tab-count">0</span>
-                    </button>
-                    <button id="tabMatricole" class="sigilli-tab" onclick="switchTab('matricole')">
-                        🔢 Matricole
-                        <span id="tabMatricoleCount" class="sigilli-tab-count">0</span>
-                    </button>
-                </div>
-                
-                <div id="sigilliHeader" class="sigilli-header">
-                    <div id="sigilliTitle" class="sigilli-title">
-                        🔐 Inserisci Sigilli
-                        <span id="sigilliCount" class="sigilli-count"></span>
+        <div id="sigilliModal" class="ui-modal ui-modal--fullscreen" data-no-backdrop-close data-no-escape-close>
+            <div class="ui-modal-content">
+                <div class="sigilli-container">
+                    <!-- Tab per switch -->
+                    <div class="sigilli-tabs">
+                        <button id="tabSigilli" class="sigilli-tab active" onclick="switchTab('sigilli')">
+                            🔐 Sigilli
+                            <span id="tabSigilliCount" class="sigilli-tab-count">0</span>
+                        </button>
+                        <button id="tabMatricole" class="sigilli-tab" onclick="switchTab('matricole')">
+                            🔢 Matricole
+                            <span id="tabMatricoleCount" class="sigilli-tab-count">0</span>
+                        </button>
                     </div>
-                    <button class="btn-close-fullscreen" onclick="chiudiVistaSigilli()">
-                        ✕ Chiudi
-                    </button>
-                </div>
-                
-                <div id="sigilliContent">
-                    <div class="sigilli-loading">
-                        <span class="sigilli-loading-spinner">⏳</span>
-                        Caricamento contatori installati...
+
+                    <div id="sigilliHeader" class="sigilli-header">
+                        <div id="sigilliTitle" class="sigilli-title">
+                            🔐 Inserisci Sigilli
+                            <span id="sigilliCount" class="sigilli-count"></span>
+                        </div>
+                        <button class="btn-close-fullscreen" onclick="chiudiVistaSigilli()">
+                            ✕ Chiudi
+                        </button>
+                    </div>
+
+                    <div id="sigilliContent">
+                        <div class="sigilli-loading">
+                            <span class="sigilli-loading-spinner">⏳</span>
+                            Caricamento contatori installati...
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
         
         <!-- MODAL BACKUP / RIPRISTINO -->
-        <div id="backupModal" class="BOXBEAT-modal">
-            <div class="BOXBEAT-content" style="max-width: 650px;">
-                <div class="BOXBEAT-header">
-                    <span class="BOXBEAT-title">💾 Backup / Ripristino FILONE</span>
-                    <button class="btn-close-modal" onclick="chiudiModalBackup()">×</button>
+        <div id="backupModal" class="ui-modal">
+            <div class="ui-modal-content" style="max-width: 650px;">
+                <div class="ui-modal-header">
+                    <h2 class="ui-modal-title">💾 Backup / Ripristino FILONE</h2>
+                    <button class="ui-modal-close" type="button">×</button>
                 </div>
-                
-                <p style="color: var(--text-secondary); margin-bottom: 15px;">
-                    Il backup viene eseguito automaticamente ogni giorno. Puoi anche forzarlo manualmente o ripristinare una versione precedente.
-                </p>
-                
-                <!-- Pulsante backup manuale -->
-                <div style="margin-bottom: 20px;">
-                    <button class="btn-save-edit" onclick="eseguiBackupManuale(true)" style="width: 100%;">
-                        💾 Forza Backup
-                    </button>
-                </div>
-                
-                <div id="backupStatus" style="display: none; padding: 12px; border-radius: 8px; margin-bottom: 15px; font-size: 0.9em;"></div>
-                
-                <!-- Lista backup disponibili -->
-                <div class="backup-section-title" style="font-weight: 600; color: var(--accent); margin-bottom: 10px; font-size: 0.95em;">
-                    📋 Backup disponibili
-                </div>
-                <div id="backupLista" style="max-height: 400px; overflow-y: auto;">
-                    <div style="text-align: center; padding: 20px; color: var(--text-secondary);">
-                        ⏳ Caricamento...
+                <div class="ui-modal-body">
+                    <p style="color: var(--text-secondary); margin-bottom: 15px;">
+                        Il backup viene eseguito automaticamente ogni giorno. Puoi anche forzarlo manualmente o ripristinare una versione precedente.
+                    </p>
+
+                    <!-- Pulsante backup manuale -->
+                    <div style="margin-bottom: 20px;">
+                        <button class="btn-save-edit" onclick="eseguiBackupManuale(true)" style="width: 100%;">
+                            💾 Forza Backup
+                        </button>
+                    </div>
+
+                    <div id="backupStatus" style="display: none; padding: 12px; border-radius: 8px; margin-bottom: 15px; font-size: 0.9em;"></div>
+
+                    <!-- Lista backup disponibili -->
+                    <div class="backup-section-title" style="font-weight: 600; color: var(--accent); margin-bottom: 10px; font-size: 0.95em;">
+                        📋 Backup disponibili
+                    </div>
+                    <div id="backupLista" style="max-height: 400px; overflow-y: auto;">
+                        <div style="text-align: center; padding: 20px; color: var(--text-secondary);">
+                            ⏳ Caricamento...
+                        </div>
                     </div>
                 </div>
             </div>

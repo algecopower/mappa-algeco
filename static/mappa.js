@@ -1499,12 +1499,8 @@ let addressMarker = null;
 let addressSearchResults = [];  // Array per memorizzare i risultati della ricerca
 
 function toggleAddressSearchModal() {
-    const modal = document.getElementById('addressSearchModal');
-    modal.classList.toggle('visible');
-
-    if (modal.classList.contains('visible')) {
-        document.getElementById('addressSearchInput').focus();
-    }
+    UiModal.toggle('addressSearchModal');
+    // UiModal fa focus automatico sul primo input
 }
 
 function clearAddressSearch() {

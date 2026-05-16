@@ -246,36 +246,37 @@ def genera_css_verifica_indirizzi() -> str:
 def genera_html_verifica_indirizzi() -> str:
     return '''
         <!-- MODAL VERIFICA INDIRIZZI -->
-        <div id="verificaIndirizziModal" class="vi-modal">
-            <div class="vi-content">
-                <div class="vi-header">
-                    <span class="vi-header-title">🔍 Verifica Indirizzi (anagrafe nazionale)</span>
-                    <button class="vi-header-close" onclick="chiudiModalVerificaIndirizzi()">✕</button>
+        <div id="verificaIndirizziModal" class="ui-modal">
+            <div class="ui-modal-content" style="max-width: 1200px; width: 100%;">
+                <div class="ui-modal-header">
+                    <h2 class="ui-modal-title">🔍 Verifica Indirizzi (anagrafe nazionale)</h2>
+                    <button class="ui-modal-close" type="button">×</button>
                 </div>
+                <div class="ui-modal-body" style="padding: 0;">
+                    <div id="viDbWarning" class="vi-warning" style="display:none;"></div>
 
-                <div id="viDbWarning" class="vi-warning" style="display:none;"></div>
+                    <div class="vi-toolbar">
+                        <label>LCL</label>
+                        <select id="viFiltroLCL"><option value="">— Tutti —</option></select>
+                        <label>Comune</label>
+                        <select id="viFiltroComune"><option value="">— Tutti —</option></select>
+                        <label style="display:flex;align-items:center;gap:6px;">
+                            <input type="checkbox" id="viSoloProblematici" checked>
+                            Solo problematici
+                        </label>
+                        <button class="vi-btn-verifica" id="viBtnVerifica" onclick="eseguiVerificaIndirizzi()">
+                            🔍 Verifica
+                        </button>
+                    </div>
 
-                <div class="vi-toolbar">
-                    <label>LCL</label>
-                    <select id="viFiltroLCL"><option value="">— Tutti —</option></select>
-                    <label>Comune</label>
-                    <select id="viFiltroComune"><option value="">— Tutti —</option></select>
-                    <label style="display:flex;align-items:center;gap:6px;">
-                        <input type="checkbox" id="viSoloProblematici" checked>
-                        Solo problematici
-                    </label>
-                    <button class="vi-btn-verifica" id="viBtnVerifica" onclick="eseguiVerificaIndirizzi()">
-                        🔍 Verifica
-                    </button>
-                </div>
+                    <div id="viSummary" class="vi-summary" style="display:none;"></div>
 
-                <div id="viSummary" class="vi-summary" style="display:none;"></div>
-
-                <div class="vi-body" id="viBody">
-                    <div class="vi-empty">
-                        <div class="vi-empty-icon">📋</div>
-                        <div>Seleziona LCL o Comune e clicca "Verifica" per controllare gli indirizzi.</div>
-                        <div style="margin-top:8px;font-size:0.85em;">Senza filtri verranno controllati TUTTI i contatori (può richiedere alcuni secondi).</div>
+                    <div class="vi-body" id="viBody">
+                        <div class="vi-empty">
+                            <div class="vi-empty-icon">📋</div>
+                            <div>Seleziona LCL o Comune e clicca "Verifica" per controllare gli indirizzi.</div>
+                            <div style="margin-top:8px;font-size:0.85em;">Senza filtri verranno controllati TUTTI i contatori (può richiedere alcuni secondi).</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -294,8 +295,7 @@ def genera_js_verifica_indirizzi() -> str:
         let _viLclToComuni = {};          // mapping LCL -> [comuni]
 
         async function apriModalVerificaIndirizzi() {
-            const modal = document.getElementById('verificaIndirizziModal');
-            modal.classList.add('visible');
+            UiModal.open('verificaIndirizziModal');
             if (!_viInitDone) {
                 await caricaStatoVerificaIndirizzi();
                 _viInitDone = true;
@@ -303,7 +303,7 @@ def genera_js_verifica_indirizzi() -> str:
         }
 
         function chiudiModalVerificaIndirizzi() {
-            document.getElementById('verificaIndirizziModal').classList.remove('visible');
+            UiModal.close('verificaIndirizziModal');
         }
 
         function _viPopolaComuni(lista) {

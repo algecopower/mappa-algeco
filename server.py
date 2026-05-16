@@ -677,8 +677,10 @@ def csrf_check():
     """Verifica Origin + CSRF token per POST/PUT/DELETE."""
     if request.method not in ('POST', 'PUT', 'DELETE'):
         return None
-    # Login escluso (non ha ancora sessione, quindi nemmeno token)
-    if request.path == '/api/login':
+    # Login escluso (non ha ancora sessione, quindi nemmeno token).
+    # Logout escluso (forzare un logout non causa danno; e se il CSRF check
+    # fallisce qui l'utente resta loggato in modo silenzioso).
+    if request.path in ('/api/login', '/api/logout'):
         return None
 
     # 1) Origin/Referer check

@@ -29,10 +29,5 @@ ignore = [
     "W605",  # invalid-escape-sequence (regex JS dentro f-string Python — vedi moduli/gestionale.py)
 ]
 
-[tool.ruff.lint.per-file-ignores]
-# 3 nomi non definiti pre-esistenti (_cell_log_lock, _load_cell_log, _save_cell_log)
-# in un try/except che logga warning — il blocco va riallineato.
-"routes/contatori.py" = ["F821"]
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]

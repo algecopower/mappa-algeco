@@ -212,68 +212,11 @@ def update_contatore(eneltel):
         if not fields_validi:
             return jsonify({'error': 'Nessun campo valido da aggiornare'}), 400
 
-        # Leggi i valori precedenti dal DB locale per lo storico.
-        row_num = find_row_by_eneltel(eneltel)
-        old_values = {}
-        if row_num:
-            try:
-                ek = _db.normalize_eneltel(eneltel)
-                local = _db.get_filone_row(ek, lcl=anchor_lcl) or {}
-                row_lcl = local.get('lcl') or ''
-                pending_overlay = {
-                    r['column_name']: r['new_value']
-                    for r in conn.execute(
-                        "SELECT column_name, new_value FROM pending_writes "
-                        "WHERE eneltel_key=? AND COALESCE(lcl,'')=? AND state IN ('pending','in_flight')",
-                        (ek, row_lcl),
-                    ).fetchall()
-                }
-                for col_name in fields_validi:
-                    if col_name in pending_overlay:
-                        old_values[col_name] = pending_overlay[col_name] or ''
-                    else:
-                        chiave = _db.column_to_internal_key(conn, col_name)
-                        if chiave and chiave in _db.COLONNE_NOTE:
-                            old_values[col_name] = local.get(chiave, '') or ''
-                        else:
-                            ev = conn.execute(
-                                "SELECT value FROM filone_extra WHERE eneltel_key=? AND COALESCE(lcl,'')=? AND column_name=?",
-                                (ek, row_lcl, col_name),
-                            ).fetchone()
-                            old_values[col_name] = (ev['value'] if ev else '') or ''
-            except Exception as e:
-                logger.warning(f"[CellLog] Errore lettura old_values da DB: {e}")
-
         success, msg = update_row_fields(eneltel, fields_validi, lcl=anchor_lcl)
 
         if success:
-            # Registra nello storico le modifiche
-            if row_num:
-                try:
-                    ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                    username = _get_username()
-                    entries = []
-                    for col_name, new_val in fields_validi.items():
-                        old_val = old_values.get(col_name, '')
-                        if str(old_val) != str(new_val):
-                            entries.append({
-                                'ts': ts,
-                                'user': username,
-                                'row': row_num,
-                                'col': col_name,
-                                'old': str(old_val)[:500],
-                                'new': str(new_val)[:500],
-                            })
-                    if entries:
-                        with _cell_log_lock:
-                            log = _load_cell_log()
-                            log.extend(entries)
-                            _save_cell_log(log)
-                        logger.info(f"[CellLog] Registrate {len(entries)} modifiche da mappa per ENELTEL {eneltel}")
-                except Exception as e:
-                    logger.warning(f"[CellLog] Errore registrazione log da mappa: {e}")
-
-            # Triggera sync immediato per rigenerare i JSON
+            # L'audit della modifica è gestito automaticamente da
+            # db.record_local_change() dentro update_row_fields().
             _callbacks['trigger_sync_after_edit']()
             return jsonify({'success': True, 'message': msg, 'updated': list(fields_validi.keys())})
         else:

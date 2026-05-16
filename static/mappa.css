@@ -13,17 +13,24 @@
     --border: #0f3460;
     --shadow: rgba(0,0,0,0.3);
 
-    /* Glassmorphism (data-design="glass", default).
-       Le variabili --panel-* sono usate dai container principali
-       (header, sidebar, breadcrumb, popup ricerca/risultati, modali).
-       I bottoni/input/celle usano i bg-* "solidi" e restano invariati. */
-    --panel-blur: 12px;
-    --panel-bg: rgba(22, 33, 62, 0.62);
-    --panel-bg-strong: rgba(15, 52, 96, 0.78);
-    --panel-border: 1px solid rgba(255, 255, 255, 0.08);
-    --panel-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
-    --header-bg: linear-gradient(135deg, rgba(15, 52, 96, 0.72) 0%, rgba(22, 33, 62, 0.55) 100%);
-    --sidebar-bg: linear-gradient(180deg, rgba(22, 33, 62, 0.55) 0%, rgba(26, 26, 46, 0.7) 100%);
+    /* Acrylic (data-design="glass", default).
+       Differenza vs glass classico: oltre al blur applichiamo
+       saturate(180%) per intensificare i colori dietro, una tinta più
+       opaca per dare "velo", e una luce dall'alto-sinistra in highlight
+       per simulare lo spessore del vetro. Le variabili --panel-* sono
+       usate dai container principali. I bottoni/input/celle restano
+       solidi e usano i bg-* originali. */
+    --panel-blur: 18px;
+    --panel-saturate: 180%;
+    --panel-bg: rgba(22, 33, 62, 0.72);
+    --panel-bg-strong: rgba(15, 52, 96, 0.85);
+    --panel-tint: linear-gradient(135deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0) 55%);
+    --panel-border: 1px solid rgba(255, 255, 255, 0.14);
+    --panel-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    --header-bg: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0) 60%), linear-gradient(135deg, rgba(15, 52, 96, 0.85) 0%, rgba(22, 33, 62, 0.7) 100%);
+    --sidebar-bg: linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0) 50%), linear-gradient(180deg, rgba(22, 33, 62, 0.78) 0%, rgba(26, 26, 46, 0.85) 100%);
 }
 
 [data-theme="light"] {
@@ -38,21 +45,26 @@
     --border: #ddd;
     --shadow: rgba(0,0,0,0.1);
 
-    --panel-bg: rgba(255, 255, 255, 0.62);
-    --panel-bg-strong: rgba(255, 255, 255, 0.85);
-    --panel-border: 1px solid rgba(0, 0, 0, 0.08);
-    --panel-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
-    --header-bg: linear-gradient(135deg, rgba(232, 232, 232, 0.72) 0%, rgba(255, 255, 255, 0.55) 100%);
-    --sidebar-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.6) 0%, rgba(245, 245, 245, 0.7) 100%);
+    --panel-bg: rgba(255, 255, 255, 0.72);
+    --panel-bg-strong: rgba(255, 255, 255, 0.88);
+    --panel-tint: linear-gradient(135deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0) 55%);
+    --panel-border: 1px solid rgba(255, 255, 255, 0.4);
+    --panel-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    --header-bg: linear-gradient(135deg, rgba(255,255,255,0.5), rgba(255,255,255,0) 60%), linear-gradient(135deg, rgba(232, 232, 232, 0.82) 0%, rgba(255, 255, 255, 0.7) 100%);
+    --sidebar-bg: linear-gradient(135deg, rgba(255,255,255,0.4), rgba(255,255,255,0) 50%), linear-gradient(180deg, rgba(255, 255, 255, 0.78) 0%, rgba(245, 245, 245, 0.85) 100%);
 }
 
-/* Modalità "solido": disattiva blur e trasparenze.
+/* Modalità "solido": disattiva blur, tinta acrilica e highlight.
    Specificità identica a [data-theme="light"]: l'ordine in CSS
    determina la precedenza, quindi NON spostare questo blocco. */
 [data-design="solid"] {
     --panel-blur: 0;
+    --panel-saturate: 100%;
     --panel-bg: var(--bg-secondary);
     --panel-bg-strong: var(--bg-tertiary);
+    --panel-tint: none;
     --panel-border: 1px solid var(--border);
     --panel-shadow: 0 4px 16px var(--shadow);
     --header-bg: linear-gradient(135deg, var(--bg-tertiary) 0%, var(--bg-secondary) 100%);
@@ -87,12 +99,13 @@ body {
 .sidebar {
     width: 370px;
     background: var(--sidebar-bg);
-    backdrop-filter: blur(var(--panel-blur));
-    -webkit-backdrop-filter: blur(var(--panel-blur));
+    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    border-right: var(--panel-border);
     display: flex;
     flex-direction: column;
     z-index: 1000;
-    box-shadow: 4px 0 20px var(--shadow);
+    box-shadow: var(--panel-shadow);
     transition: all 0.3s ease;
     will-change: backdrop-filter;
 }
@@ -128,11 +141,14 @@ body {
 /* Header */
 .header {
     background: var(--header-bg);
-    backdrop-filter: blur(var(--panel-blur));
-    -webkit-backdrop-filter: blur(var(--panel-blur));
+    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
     padding: 10px 14px;
     border-bottom: var(--panel-border);
+    box-shadow: var(--panel-shadow);
     will-change: backdrop-filter;
+    position: relative;
+    z-index: 5;
 }
 
 .header-top {
@@ -183,8 +199,8 @@ body {
     display: none;
     padding: 6px 10px;
     background: var(--panel-bg-strong);
-    backdrop-filter: blur(var(--panel-blur));
-    -webkit-backdrop-filter: blur(var(--panel-blur));
+    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
     border-bottom: var(--panel-border);
     align-items: center;
     gap: 8px;
@@ -655,10 +671,11 @@ body {
     margin-top: 10px;
     padding: 12px;
     background: var(--panel-bg);
-    backdrop-filter: blur(var(--panel-blur));
-    -webkit-backdrop-filter: blur(var(--panel-blur));
+    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
     border-radius: 12px;
     border: var(--panel-border);
+    box-shadow: var(--panel-shadow);
     max-height: 0;
     overflow: hidden;
     transition: max-height 0.3s ease;
@@ -1861,11 +1878,11 @@ body {
     margin-left: 8px;
 }
 
-/* Popup mappa: blur leggero (la mappa scorre sotto, costo continuo) */
+/* Popup mappa: blur ridotto (la mappa scorre sotto = costo continuo) */
 .leaflet-popup-content-wrapper {
     background: var(--panel-bg-strong);
-    backdrop-filter: blur(calc(var(--panel-blur) * 0.6));
-    -webkit-backdrop-filter: blur(calc(var(--panel-blur) * 0.6));
+    backdrop-filter: blur(calc(var(--panel-blur) * 0.6)) saturate(var(--panel-saturate));
+    -webkit-backdrop-filter: blur(calc(var(--panel-blur) * 0.6)) saturate(var(--panel-saturate));
     color: var(--text-primary);
     border-radius: 12px;
     border: var(--panel-border);
@@ -2332,8 +2349,8 @@ body {
     width: 260px;
     max-height: 480px;
     background: var(--panel-bg-strong);
-    backdrop-filter: blur(var(--panel-blur));
-    -webkit-backdrop-filter: blur(var(--panel-blur));
+    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
     border: var(--panel-border);
     border-radius: 16px;
     box-shadow: var(--panel-shadow);

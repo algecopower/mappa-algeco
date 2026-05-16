@@ -522,12 +522,15 @@ def genera_css_gestionale():
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 15px 0;
-            margin-bottom: 20px;
+            padding: 15px 20px;
+            margin: 0 -20px 20px -20px;  /* tira il bg fino al bordo del container */
             border-bottom: 2px solid #f39c12;
             position: sticky;
             top: 0;
-            background: var(--bg-primary);
+            /* Acrylic locale: copre lo scroll sotto ma si confonde con la card. */
+            background: var(--panel-bg-strong);
+            backdrop-filter: blur(8px) saturate(var(--panel-saturate));
+            -webkit-backdrop-filter: blur(8px) saturate(var(--panel-saturate));
             z-index: 10;
         }
         

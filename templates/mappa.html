@@ -18,11 +18,13 @@
     </style>
     <script src="/static/csrf.js"></script>
 </head>
-<body data-theme="dark">
+<body data-theme="dark" data-design="glass">
     <script>
-        // Applica tema salvato immediatamente
+        // Applica tema + design salvati prima del primo paint per evitare FOUC
         var st = localStorage.getItem('algeco_theme');
         if (st) document.body.setAttribute('data-theme', st);
+        var sd = localStorage.getItem('algeco_design');
+        if (sd) document.body.setAttribute('data-design', sd);
     </script>
     <div class="page-loading-overlay" id="pageLoadingOverlay">
         <div class="page-loading-spinner"></div>
@@ -41,6 +43,7 @@
                 <div class="toggles">
                     <button class="toggle-btn active" id="viewToggle" onclick="toggleView()">🗺️ Zone</button>
                     <button class="toggle-btn" id="themeToggle" onclick="toggleTheme()">🌙 Tema</button>
+                    <button class="toggle-btn" id="designToggle" onclick="toggleDesign()" title="Passa tra effetto vetro e tema solido">💎 Stile</button>
                     <button class="toggle-btn" id="searchModeToggle" onclick="toggleAdvancedSearchModal()">🔍 Ricerca Utente</button>
                     <button class="toggle-btn" id="addressSearchToggle" onclick="toggleAddressSearchModal()">📍 Cerca Indirizzo</button>
                     <button class="toggle-btn" id="refreshBtn" onclick="refreshDati()" title="Aggiorna dati">🔄</button>

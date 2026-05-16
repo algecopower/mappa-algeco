@@ -736,10 +736,47 @@ function toggleTheme() {
     body.setAttribute('data-theme', newTheme);
     setMapTiles(newTheme);
     localStorage.setItem('algeco_theme', newTheme);
-    
+
     const btn = document.getElementById('themeToggle');
     btn.textContent = newTheme === 'dark' ? '🌙 Tema' : '☀️ Tema';
     btn.classList.toggle('active', newTheme === 'light');
+}
+
+
+// Sincronizza il testo del button "Stile" al caricamento (lo stato è già
+// applicato dal bootstrap inline in mappa.html prima del primo paint).
+function _syncDesignToggleBtn() {
+    const btn = document.getElementById('designToggle');
+    if (!btn) return;
+    const current = document.body.getAttribute('data-design') || 'glass';
+    btn.textContent = current === 'glass' ? '💎 Stile' : '⬜ Stile';
+    btn.classList.toggle('active', current === 'solid');
+}
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _syncDesignToggleBtn);
+} else {
+    _syncDesignToggleBtn();
+}
+
+
+// Toggle design glassmorfico vs solido (preferenza utente).
+// L'effetto glass è il default; chi preferisce sobrio o ha device
+// poco potente può passare a solid.
+function toggleDesign() {
+    const body = document.body;
+    const current = body.getAttribute('data-design') || 'glass';
+    const next = current === 'glass' ? 'solid' : 'glass';
+    body.setAttribute('data-design', next);
+    localStorage.setItem('algeco_design', next);
+
+    const btn = document.getElementById('designToggle');
+    if (btn) {
+        btn.textContent = next === 'glass' ? '💎 Stile' : '⬜ Stile';
+        btn.classList.toggle('active', next === 'solid');
+        btn.title = next === 'glass'
+            ? 'Passa a tema solido (zero blur, più leggero su mobile)'
+            : 'Passa a tema vetro (effetto glassmorfico)';
+    }
 }
 
 let _refreshWaitingForSSE = false;

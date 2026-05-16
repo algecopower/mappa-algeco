@@ -12,6 +12,18 @@
     --accent-hover: #ff6b6b;
     --border: #0f3460;
     --shadow: rgba(0,0,0,0.3);
+
+    /* Glassmorphism (data-design="glass", default).
+       Le variabili --panel-* sono usate dai container principali
+       (header, sidebar, breadcrumb, popup ricerca/risultati, modali).
+       I bottoni/input/celle usano i bg-* "solidi" e restano invariati. */
+    --panel-blur: 12px;
+    --panel-bg: rgba(22, 33, 62, 0.62);
+    --panel-bg-strong: rgba(15, 52, 96, 0.78);
+    --panel-border: 1px solid rgba(255, 255, 255, 0.08);
+    --panel-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+    --header-bg: linear-gradient(135deg, rgba(15, 52, 96, 0.72) 0%, rgba(22, 33, 62, 0.55) 100%);
+    --sidebar-bg: linear-gradient(180deg, rgba(22, 33, 62, 0.55) 0%, rgba(26, 26, 46, 0.7) 100%);
 }
 
 [data-theme="light"] {
@@ -25,6 +37,40 @@
     --accent-hover: #a855f7;
     --border: #ddd;
     --shadow: rgba(0,0,0,0.1);
+
+    --panel-bg: rgba(255, 255, 255, 0.62);
+    --panel-bg-strong: rgba(255, 255, 255, 0.85);
+    --panel-border: 1px solid rgba(0, 0, 0, 0.08);
+    --panel-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+    --header-bg: linear-gradient(135deg, rgba(232, 232, 232, 0.72) 0%, rgba(255, 255, 255, 0.55) 100%);
+    --sidebar-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.6) 0%, rgba(245, 245, 245, 0.7) 100%);
+}
+
+/* Modalità "solido": disattiva blur e trasparenze.
+   Specificità identica a [data-theme="light"]: l'ordine in CSS
+   determina la precedenza, quindi NON spostare questo blocco. */
+[data-design="solid"] {
+    --panel-blur: 0;
+    --panel-bg: var(--bg-secondary);
+    --panel-bg-strong: var(--bg-tertiary);
+    --panel-border: 1px solid var(--border);
+    --panel-shadow: 0 4px 16px var(--shadow);
+    --header-bg: linear-gradient(135deg, var(--bg-tertiary) 0%, var(--bg-secondary) 100%);
+    --sidebar-bg: linear-gradient(180deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+}
+
+/* Su mobile blur più leggero per non scaldare la GPU */
+@media (max-width: 768px) {
+    :root { --panel-blur: 6px; }
+}
+
+/* Browser/dispositivi senza backdrop-filter: fallback automatico
+   (background diventa più opaco). Safari < 9, Firefox prima del 103. */
+@supports not (backdrop-filter: blur(1px)) {
+    :root {
+        --panel-bg: var(--bg-secondary);
+        --panel-bg-strong: var(--bg-tertiary);
+    }
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -40,12 +86,15 @@ body {
 /* Sidebar */
 .sidebar {
     width: 370px;
-    background: linear-gradient(180deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+    background: var(--sidebar-bg);
+    backdrop-filter: blur(var(--panel-blur));
+    -webkit-backdrop-filter: blur(var(--panel-blur));
     display: flex;
     flex-direction: column;
     z-index: 1000;
     box-shadow: 4px 0 20px var(--shadow);
     transition: all 0.3s ease;
+    will-change: backdrop-filter;
 }
 
 .sidebar.collapsed {
@@ -78,9 +127,12 @@ body {
 
 /* Header */
 .header {
-    background: linear-gradient(135deg, var(--bg-tertiary) 0%, var(--bg-secondary) 100%);
+    background: var(--header-bg);
+    backdrop-filter: blur(var(--panel-blur));
+    -webkit-backdrop-filter: blur(var(--panel-blur));
     padding: 10px 14px;
-    border-bottom: 1px solid var(--border);
+    border-bottom: var(--panel-border);
+    will-change: backdrop-filter;
 }
 
 .header-top {
@@ -130,8 +182,10 @@ body {
 .breadcrumb {
     display: none;
     padding: 6px 10px;
-    background: var(--bg-tertiary);
-    border-bottom: 1px solid var(--border);
+    background: var(--panel-bg-strong);
+    backdrop-filter: blur(var(--panel-blur));
+    -webkit-backdrop-filter: blur(var(--panel-blur));
+    border-bottom: var(--panel-border);
     align-items: center;
     gap: 8px;
     flex-wrap: nowrap;
@@ -600,9 +654,11 @@ body {
     display: none !important;
     margin-top: 10px;
     padding: 12px;
-    background: var(--bg-tertiary);
+    background: var(--panel-bg);
+    backdrop-filter: blur(var(--panel-blur));
+    -webkit-backdrop-filter: blur(var(--panel-blur));
     border-radius: 12px;
-    border: 1px solid var(--border);
+    border: var(--panel-border);
     max-height: 0;
     overflow: hidden;
     transition: max-height 0.3s ease;
@@ -1805,16 +1861,19 @@ body {
     margin-left: 8px;
 }
 
-/* Popup */
+/* Popup mappa: blur leggero (la mappa scorre sotto, costo continuo) */
 .leaflet-popup-content-wrapper {
-    background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+    background: var(--panel-bg-strong);
+    backdrop-filter: blur(calc(var(--panel-blur) * 0.6));
+    -webkit-backdrop-filter: blur(calc(var(--panel-blur) * 0.6));
     color: var(--text-primary);
     border-radius: 12px;
-    box-shadow: 0 5px 25px var(--shadow);
+    border: var(--panel-border);
+    box-shadow: var(--panel-shadow);
 }
 
 .leaflet-popup-tip {
-    background: var(--bg-secondary);
+    background: var(--panel-bg-strong);
 }
 
 .popup-content {
@@ -2272,16 +2331,19 @@ body {
     right: 12px;
     width: 260px;
     max-height: 480px;
-    background: var(--bg-secondary);
-    border: 1px solid var(--border);
+    background: var(--panel-bg-strong);
+    backdrop-filter: blur(var(--panel-blur));
+    -webkit-backdrop-filter: blur(var(--panel-blur));
+    border: var(--panel-border);
     border-radius: 16px;
-    box-shadow: 0 12px 40px var(--shadow);
+    box-shadow: var(--panel-shadow);
     z-index: 9999;
     transform: translateY(20px);
     opacity: 0;
     pointer-events: none;
     transition: all 0.3s cubic-bezier(.4,0,.2,1);
     overflow: hidden;
+    will-change: backdrop-filter, transform, opacity;
 }
 
 .gestionale-panel.visible {

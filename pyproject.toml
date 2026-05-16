@@ -1,0 +1,38 @@
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = [
+    "venv",
+    "data",
+    "backup",
+    "output",
+    "deploy",
+    "__pycache__",
+    ".venv",
+    "build",
+    "dist",
+]
+
+[tool.ruff.lint]
+# Subset conservativo: solo errori reali, niente regole cosmetiche
+# (whitespace, line-length, ecc. lasciate fuori per non sconvolgere il codice).
+select = [
+    "F",   # pyflakes — errori reali (undefined names, unused imports, ecc.)
+    "E9",  # syntax/runtime errors
+    "W6",  # invalid escape sequences
+]
+ignore = [
+    "F401",  # unused-import (~162 in legacy, ripulire gradualmente)
+    "F541",  # f-string-missing-placeholders (cosmetico)
+    "F841",  # unused-variable (tipicamente `_e` in except)
+    "F811",  # redefined-while-unused
+    "W605",  # invalid-escape-sequence (regex JS dentro f-string Python — vedi moduli/gestionale.py)
+]
+
+[tool.ruff.lint.per-file-ignores]
+# 3 nomi non definiti pre-esistenti (_cell_log_lock, _load_cell_log, _save_cell_log)
+# in un try/except che logga warning — il blocco va riallineato.
+"routes/contatori.py" = ["F821"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -2305,15 +2305,19 @@ body {
 /* Container .settings-modal: gestito da .ui-modal* (vedi UI-MODAL). */
 
 .settings-content {
-    background: var(--bg-primary);
+    background: var(--panel-bg-strong);
+    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
     padding: 0;
     border-radius: 16px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    border: var(--panel-border);
+    box-shadow: var(--panel-shadow);
     max-width: 640px;
     width: 94%;
     max-height: 85vh;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
     animation: modalSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -2358,12 +2362,12 @@ body {
 
 .settings-tabs {
     display: flex;
-    border-bottom: 1px solid var(--border);
+    border-bottom: var(--panel-border);
     padding: 0 16px;
     gap: 2px;
     flex-shrink: 0;
     overflow-x: auto;
-    background: var(--bg-secondary);
+    background: transparent;
 }
 
 .settings-tab {
@@ -2654,8 +2658,8 @@ body {
     justify-content: flex-end;
     gap: 10px;
     padding: 16px 24px;
-    border-top: 1px solid var(--border);
-    background: var(--bg-secondary);
+    border-top: var(--panel-border);
+    background: var(--panel-bg);
     border-radius: 0 0 16px 16px;
     flex-shrink: 0;
 }

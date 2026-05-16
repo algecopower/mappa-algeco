@@ -310,7 +310,7 @@ FILE_CACHE_DISTANZE = os.path.join('cache', f'cache_distanze_{PROVINCIA_ATTIVA.l
 FILE_CACHE_HASH = os.path.join('cache', f'cache_hash_{PROVINCIA_ATTIVA.lower()}.json')
 
 # --- CONFIGURAZIONE LOOP ---
-INTERVALLO_SYNC_SECONDI = 180  # 3 minuti - check periodico per modifiche sul foglio
+INTERVALLO_SYNC_SECONDI = 60  # 1 minuto - check periodico per modifiche sul foglio
 
 # --- CONFIGURAZIONE DB LOCALE (SQLite) ---
 # Vedi /root/.claude/plans/bisognerebbe-ripensare-il-sistema-warm-moonbeam.md

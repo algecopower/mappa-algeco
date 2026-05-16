@@ -31,6 +31,6 @@
   "tempo_intervento_min": 20,
   "data_inizio": "2025-10-01",
   "data_fine": "",
-  "intervallo_sync_secondi": 180,
+  "intervallo_sync_secondi": 60,
   "mappatura_colonne": {}
 }

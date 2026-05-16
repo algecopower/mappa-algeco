@@ -1658,6 +1658,25 @@ _sync_thread = None
 _sync_lock = threading.Lock()      # Impedisce esecuzioni concorrenti di sincronizza_dati
 _sync_needed = threading.Event()   # Segnala che serve un sync ASAP (dopo modifica utente)
 
+
+def _release_memory_to_os():
+    """Forza gc + restituzione dell'heap glibc al sistema operativo.
+
+    Senza questo, dopo un full sync l'RSS resta alto anche dopo che gli
+    oggetti pandas/numpy transitori sono stati garbage-collected: glibc
+    tiene la memoria libera nell'heap pronta per riuso, ma Linux non la
+    vede come 'available'. malloc_trim(0) la restituisce.
+    """
+    import gc
+    import ctypes
+    gc.collect()
+    try:
+        # glibc only; no-op su altri allocator (musl, jemalloc...)
+        libc = ctypes.CDLL('libc.so.6')
+        libc.malloc_trim(0)
+    except (OSError, AttributeError):
+        pass
+
 # Cache risultati ultimo sync riuscito (per light sync su modifiche cosmetiche)
 _last_report = None
 _last_risultato_zone = None
@@ -1776,12 +1795,15 @@ def _do_sincronizza_dati():
         sse_notify_all('sync_complete', {'source': 'full_sync'})
 
         return True
-        
+
     except Exception as e:
         logger.error(f"[SYNC] ❌ Errore: {e}")
         traceback.print_exc()
         sse_notify_all('sync_complete', {'source': 'sync_error'})
         return False
+    finally:
+        # Restituisce al SO la memoria liberata da pandas/numpy nel sync
+        _release_memory_to_os()
 
 
 def sincronizza_dati():

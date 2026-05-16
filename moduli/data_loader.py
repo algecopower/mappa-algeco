@@ -842,6 +842,21 @@ def carica_dati_google_sheets(force=False):
     logger.info("=" * 60)
 
     # ================================================================
+    # OTTIMIZZAZIONE DTYPES: converte colonne string ripetitive a category.
+    # Riduce sensibilmente la memoria del DataFrame e dei downstream
+    # (es. groupby, copy, mappa_data.json). Sicuro: la API esposta
+    # (str/iloc/loc) si comporta allo stesso modo.
+    # ================================================================
+    for col in df.select_dtypes(include=['object']).columns:
+        try:
+            nunique = df[col].nunique(dropna=False)
+            # Convertiamo a category solo se ratio < 50% (alta ripetitività)
+            if nunique > 0 and nunique / len(df) < 0.5:
+                df[col] = df[col].astype('category')
+        except Exception:
+            pass  # Tipo misto/non hashable, lascia object
+
+    # ================================================================
     # SALVA IN CACHE + RILEVA TIPO CAMBIAMENTO
     # ================================================================
     with _dl_cache_lock:

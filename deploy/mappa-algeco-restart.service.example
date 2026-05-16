@@ -1,0 +1,7 @@
+[Unit]
+Description=Restart preventivo Mappa Algeco (libera RAM accumulata)
+Documentation=https://github.com/algecopower/mappa-algeco
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/systemctl restart mappa-algeco-router.service

@@ -79,38 +79,60 @@ _RE_AZIENDA = re.compile(
 )
 
 
+def is_semidiretto(tipologia_contatore: str) -> bool:
+    """
+    Determina se la tipologia indica un contatore Semidiretto.
+    I Semidiretti sono al 99% società/aziende.
+    """
+    if not tipologia_contatore:
+        return False
+    t = str(tipologia_contatore).upper()
+    return 'SEMIDIRETTO' in t or 'SEMIDIRETTA' in t or 'SEMID' in t or 'SEMI DIRETTO' in t
+
+
 # ============================================================================
 # RILEVAMENTO AZIENDE
 # ============================================================================
 
-def is_azienda(nominativo: str) -> bool:
+def is_azienda(nominativo: str, tipologia_contatore: str = '') -> bool:
     """
     Determina se un nominativo è un'azienda/ente (non persona fisica).
+
+    Args:
+        nominativo: nome cliente
+        tipologia_contatore: tipo misuratore (opzionale). Se è un Semidiretto
+            il contatore viene considerato azienda anche se il nominativo
+            non contiene suffissi/prefissi tipici.
     """
+    if is_semidiretto(tipologia_contatore):
+        return True
     if not nominativo:
         return False
     return bool(_RE_AZIENDA.search(nominativo.strip()))
 
 
-def classifica_tipo_contatto(nominativo: str) -> str:
+def classifica_tipo_contatto(nominativo: str, tipologia_contatore: str = '') -> str:
     """
     Classifica il tipo di contatto.
+
+    Args:
+        nominativo: nome cliente
+        tipologia_contatore: tipo misuratore (opzionale). Se Semidiretto il
+            contatto viene classificato come 'azienda' a prescindere dal
+            nominativo.
 
     Returns:
         'azienda' | 'condominio' | 'ente_pubblico' | 'privato'
     """
-    if not nominativo:
-        return 'privato'
+    nome = (nominativo or '').strip()
 
-    nome = nominativo.strip()
-
-    if re.search(r'\bCONDOMINIO\b|\bCOND\.?\b', nome, re.IGNORECASE):
+    if nome and re.search(r'\bCONDOMINIO\b|\bCOND\.?\b', nome, re.IGNORECASE):
         return 'condominio'
 
-    if re.search(r'\bCOMUNE\s+DI\b|\bENTE\b|\bPARROCCHIA\b|\bOSPEDALE\b|\bASL\b|\bMINISTERO\b|\bIST(?:ITUTO)?\.?\b', nome, re.IGNORECASE):
+    if nome and re.search(r'\bCOMUNE\s+DI\b|\bENTE\b|\bPARROCCHIA\b|\bOSPEDALE\b|\bASL\b|\bMINISTERO\b|\bIST(?:ITUTO)?\.?\b', nome, re.IGNORECASE):
         return 'ente_pubblico'
 
-    if is_azienda(nome):
+    if is_azienda(nome, tipologia_contatore):
         return 'azienda'
 
     return 'privato'
@@ -123,10 +145,14 @@ def classifica_tipo_contatto(nominativo: str) -> str:
 def arricchisci_contatti(contatti: List[Dict]) -> List[Dict]:
     """
     Arricchisce una lista di contatti con tipo_contatto e is_azienda.
+
+    Considera anche il campo 'tipologia_contatore' (se presente) per
+    classificare automaticamente i Semidiretti come aziende.
     """
     for contatto in contatti:
         nome = contatto.get('nome', '')
-        contatto['tipo_contatto'] = classifica_tipo_contatto(nome)
+        tipologia = contatto.get('tipologia_contatore', '')
+        contatto['tipo_contatto'] = classifica_tipo_contatto(nome, tipologia)
         contatto['is_azienda'] = contatto['tipo_contatto'] != 'privato'
 
     return contatti

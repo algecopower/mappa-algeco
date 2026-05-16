@@ -24,7 +24,7 @@ import sys
 import os
 import re
 import argparse
-from datetime import datetime, timedelta
+from datetime import datetime
 
 # Setup path
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
@@ -44,7 +44,8 @@ DATE_LETTERE = [
 # ============================================================================
 # FASCE ORARIE - importate dal modulo centralizzato
 # ============================================================================
-from moduli.fasce_orarie import FASCE_ORARIE, TAPPE_PER_FASCIA, assegna_fasce, formatta_fascia_oraria, get_colore_fascia
+from moduli.fasce_orarie import assegna_fasce, formatta_fascia_oraria
+from moduli.rilevamento_aziende import is_azienda
 
 # ============================================================================
 # DATABASE COMUNI ITALIANI (CAP e PROVINCIA)
@@ -250,15 +251,13 @@ def genera_excel_lettere(df, date_da_elaborare, filename=None, tappe_per_fascia=
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     from moduli.percorso import ordina_percorso
-    from moduli.fasce_orarie import FASCE_ORARIE
     from config import PROVINCIA_ATTIVA, DEPOSITO, MATRICOLE_VIP
-    import math as _math
     
     # Determina modalità auto o fisso
     auto_mode = (tappe_per_fascia is None or str(tappe_per_fascia).lower() == 'auto')
     
     if not date_da_elaborare:
-        print(f"❌ Nessuna data definita in DATE_LETTERE")
+        print("❌ Nessuna data definita in DATE_LETTERE")
         return None
     
     if filename is None:
@@ -284,7 +283,7 @@ def genera_excel_lettere(df, date_da_elaborare, filename=None, tappe_per_fascia=
     df_filtrato = df_filtrato.loc[:, ~df_filtrato.columns.duplicated()]
     
     if df_filtrato.empty:
-        print(f"❌ Nessun dato trovato per le date specificate")
+        print("❌ Nessun dato trovato per le date specificate")
         print(f"   Date cercate: {date_da_elaborare}")
         print(f"   Date disponibili nel FILONE: {sorted(df['DATA_K'].unique())[:10]}...")
         return None
@@ -345,7 +344,7 @@ def genera_excel_lettere(df, date_da_elaborare, filename=None, tappe_per_fascia=
         punto['DATA_ITALIANA'] = formatta_data_italiana(punto.get('DATA_K', ''))
         contatori_per_tipo[tipo].append(punto)
     
-    print(f"\n📊 Classificazione contatori:")
+    print("\n📊 Classificazione contatori:")
     print(f"   • Monofase: {len(contatori_per_tipo['monofase'])}")
     print(f"   • Fotovoltaici: {len(contatori_per_tipo['fotovoltaico'])}")
     print(f"   • Trifase Semidiretti: {len(contatori_per_tipo['trifase_semi'])}")
@@ -520,6 +519,81 @@ def genera_excel_lettere(df, date_da_elaborare, filename=None, tappe_per_fascia=
         
         print(f"   📋 Foglio '{nome_foglio}': {len(contatori)} contatori")
     
+    # ------------------------------------------------------------------
+    # Foglio "Contatti Aziendali"
+    # Elenca le aziende rilevate tra tutti i contatori del periodo,
+    # usando i criteri di moduli/rilevamento_aziende.is_azienda + tutti
+    # i Semidiretti (al 99% sono società). TEL/MAIL/PEC vuoti (da
+    # compilare manualmente). Dedupe per POD.
+    # ------------------------------------------------------------------
+    ws_aziende = wb.create_sheet("Contatti Aziendali")
+
+    headers_aziende = ["NOMINATIVO", "COMUNE", "TEL", "MAIL", "PEC", "POD"]
+
+    ws_aziende['A1'] = "CONTATTI AZIENDALI"
+    ws_aziende['A1'].font = Font(bold=True, size=14)
+    ws_aziende['A1'].fill = header_fill
+    ws_aziende['A1'].alignment = Alignment(horizontal='left', vertical='center')
+    ws_aziende['A2'] = periodo_str
+    ws_aziende['A2'].font = Font(italic=True, size=11)
+
+    # Headers tabella (riga 5)
+    for col, header in enumerate(headers_aziende, start=1):
+        cell = ws_aziende.cell(row=5, column=col, value=header)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal='center', vertical='center')
+        cell.border = thin_border
+
+    aziende_rows = []
+    pod_visti = set()
+    for punto in tutti_punti:
+        nominativo = pulisci_nominativo(punto.get('CLI_K', '')) or ''
+        tipo_ce = str(punto.get('TIPO_CE_K', '')).strip()
+        if not is_azienda(nominativo, tipo_ce):
+            continue
+        pod = str(punto.get('POD_K', '')).strip()
+        chiave = pod.upper() if pod else f"__NOPOD__{nominativo.upper()}"
+        if chiave in pod_visti:
+            continue
+        pod_visti.add(chiave)
+        comune = (
+            str(punto.get('LOCALITA', '')).strip() if usa_localita
+            else str(punto.get('COMUNE', '')).strip()
+        )
+        aziende_rows.append((nominativo, comune, pod))
+
+    # Ordina per nominativo
+    aziende_rows.sort(key=lambda r: r[0].lower())
+
+    row = 6
+    for nominativo, comune, pod in aziende_rows:
+        values = [nominativo, comune, '', '', '', pod]
+        for col, value in enumerate(values, start=1):
+            cell = ws_aziende.cell(row=row, column=col, value=value)
+            cell.border = thin_border
+            cell.alignment = Alignment(vertical='center')
+        row += 1
+
+    if not aziende_rows:
+        ws_aziende.cell(row=6, column=1, value="Nessuna azienda rilevata")
+        ws_aziende.merge_cells(
+            start_row=6, start_column=1,
+            end_row=6, end_column=len(headers_aziende),
+        )
+        ws_aziende.cell(row=6, column=1).alignment = Alignment(horizontal='center')
+        ws_aziende.cell(row=6, column=1).font = Font(italic=True)
+
+    # Larghezze colonne: Nominativo, Comune, Tel, Mail, Pec, POD
+    col_widths_aziende = [35, 22, 16, 28, 28, 22]
+    for idx, width in enumerate(col_widths_aziende, start=1):
+        col_letter = chr(64 + idx)
+        ws_aziende.column_dimensions[col_letter].width = width
+
+    ws_aziende.freeze_panes = 'A6'
+
+    print(f"   📋 Foglio 'Contatti Aziendali': {len(aziende_rows)} aziende")
+
     # Crea foglio riepilogo
     ws_summary = wb.create_sheet("RIEPILOGO", 0)
     ws_summary['A1'] = "RIEPILOGO LETTERE"

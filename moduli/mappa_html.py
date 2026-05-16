@@ -99,32 +99,33 @@ def genera_mappa_html(df, report, risultato_zone, filename=None):
     lcl_list = sorted(set(c['lcl'] for c in contatori_data if c['lcl']))
     timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
 
-    # JSON su disco: servono al frontend per il refresh via fetch (SSE)
+    # JSON su disco: il frontend li fetcha all'avvio (vedi
+    # static/mappa.js:initializeData) e ad ogni refresh SSE.
     salva_config_statica()
     salva_dati_json(zone_data, contatori_data, rotte_data, lcl_list, timestamp)
 
-    # Cache per render_mappa_corrente() (route Flask /)
+    # Cache per render_mappa_corrente(): tenere solo dati piccoli (timestamp +
+    # opzioni LCL del filtro). I dati pesanti (~110 MB in RAM) vengono fetchati
+    # dal frontend via /data/<provincia>/mappa_data.json — l'embedding HTML
+    # non serve più, è leftover storico del modo file:// che non usiamo.
     _cached_render_inputs = {
-        'zone_data': zone_data,
-        'contatori_data': contatori_data,
-        'rotte_data': rotte_data,
         'lcl_list': lcl_list,
         'timestamp': timestamp,
     }
 
-    logger.info("✅ Mappa aggiornata (cache render + JSON su disco)")
+    logger.info("✅ Mappa aggiornata (cache render leggera + JSON su disco)")
     return None
 
 
 def render_mappa_corrente():
     """
     Ritorna l'HTML della mappa renderizzato con l'ultima cache di sync.
-    Se la cache è vuota (server appena avviato, sync non ancora completato),
-    rende uno scheletro vuoto: il JS frontend caricherà i dati via fetch.
+    L'HTML non contiene più i dati embedded (zone/contatori/rotte): il
+    frontend li fetcha asincrono. Se la cache è vuota usa default vuoti.
     """
     if _cached_render_inputs is None:
         timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
-        return genera_html_completo([], [], {}, [], timestamp=timestamp)
+        return genera_html_completo([], timestamp=timestamp)
     return genera_html_completo(**_cached_render_inputs)
 
 
@@ -514,8 +515,13 @@ def salva_config_statica():
     logger.info(f"⚙️ Config statica salvata: {filepath}")
 
 
-def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timestamp=None):
-    """Render mappa via template Jinja templates/mappa.html."""
+def genera_html_completo(lcl_list, timestamp=None):
+    """Render mappa via template Jinja templates/mappa.html.
+
+    L'HTML NON contiene piu' i dati pesanti embedded (zone/contatori/rotte):
+    il frontend li fetcha asincrono da /data/<provincia>/mappa_data.json.
+    Risparmio in RAM ~110 MB per backend.
+    """
     if timestamp is None:
         timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
 
@@ -537,9 +543,10 @@ def genera_html_completo(zone_data, contatori_data, rotte_data, lcl_list, timest
         refresh_interval=60000,
         ora_inizio_giornata=ORA_INIZIO_GIORNATA,
         ora_fine_giornata=ORA_FINE_GIORNATA,
-        zone_json=json.dumps(zone_data, ensure_ascii=False),
-        contatori_json=json.dumps(contatori_data, ensure_ascii=False),
-        rotte_json=json.dumps(rotte_data, ensure_ascii=False),
+        # Placeholders: il frontend li riempie via fetch. Niente embedding pesante.
+        zone_json='[]',
+        contatori_json='[]',
+        rotte_json='{}',
         lcl_json=json.dumps(lcl_list, ensure_ascii=False),
         deposito_json=deposito_json,
         colori_tecnici_json=json.dumps(COLORI_TECNICI, ensure_ascii=False),

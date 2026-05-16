@@ -11,59 +11,9 @@ che vengono iniettate in `mappa_html.py`.
 def genera_css_verifica_indirizzi() -> str:
     return '''
         /* ========================================
-           VERIFICA INDIRIZZI - Modal e tabella risultati
+           VERIFICA INDIRIZZI - Toolbar e tabella risultati
+           Il container del modal usa .ui-modal* (definito in mappa.css).
            ======================================== */
-        .vi-modal {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: var(--modal-overlay-bg-strong);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            z-index: 10000;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-        }
-        .vi-modal.visible { display: flex; animation: modalSlideUp 0.2s ease; }
-
-        .vi-content {
-            background: var(--panel-bg-strong);
-            backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-            -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-            color: var(--text-primary);
-            border-radius: 12px;
-            width: min(1200px, 100%);
-            max-height: 90vh;
-            display: flex;
-            flex-direction: column;
-            box-shadow: var(--panel-shadow);
-            border: var(--panel-border);
-            overflow: hidden;
-            border: 1px solid var(--border);
-        }
-
-        .vi-header {
-            display: flex;
-            align-items: center;
-            gap: 14px;
-            padding: 16px 20px;
-            background: linear-gradient(135deg, #2980b9 0%, #1f6391 100%);
-            color: #fff;
-        }
-        .vi-header-title { font-size: 1.1em; font-weight: 700; flex: 1; }
-        .vi-header-close {
-            background: rgba(255,255,255,0.18);
-            border: none;
-            color: #fff;
-            width: 32px;
-            height: 32px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 1.2em;
-        }
-        .vi-header-close:hover { background: rgba(255,255,255,0.32); }
-
         .vi-toolbar {
             display: flex;
             flex-wrap: wrap;

@@ -67,18 +67,21 @@ var CSS = `
     right: 12px;
     width: 400px;
     max-height: 540px;
-    background: var(--bg-secondary, #1e293b);
-    border: 1px solid var(--border, #334155);
+    background: var(--panel-bg-strong, var(--bg-secondary, #1e293b));
+    backdrop-filter: blur(var(--panel-blur, 18px)) saturate(var(--panel-saturate, 180%));
+    -webkit-backdrop-filter: blur(var(--panel-blur, 18px)) saturate(var(--panel-saturate, 180%));
+    border: var(--panel-border, 1px solid rgba(255,255,255,0.14));
     border-radius: 16px;
-    box-shadow: 0 12px 40px var(--shadow, rgba(0,0,0,.3));
+    box-shadow: var(--panel-shadow, 0 12px 40px rgba(0,0,0,.3));
     z-index: 9998;
     transform: translateY(20px);
     opacity: 0;
     pointer-events: none;
-    transition: all .3s cubic-bezier(.4,0,.2,1);
+    transition: transform .3s cubic-bezier(.4,0,.2,1), opacity .3s cubic-bezier(.4,0,.2,1);
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    will-change: backdrop-filter, transform, opacity;
 }
 .bacheca-panel.visible {
     transform: translateY(0);
@@ -92,9 +95,11 @@ var CSS = `
     align-items: center;
     justify-content: space-between;
     padding: 14px 16px;
-    border-bottom: 1px solid var(--border, #334155);
-    background: var(--bg-tertiary, #0f172a);
+    border-bottom: var(--panel-border, 1px solid rgba(255,255,255,0.1));
+    background: linear-gradient(135deg, var(--accent, #e94560) 0%, var(--accent-hover, #ff6b6b) 100%);
+    color: white;
 }
+.bacheca-panel-header .bacheca-panel-title { color: white; }
 .bacheca-panel-title {
     font-weight: 700;
     font-size: .95em;

@@ -50,6 +50,11 @@
     --border: #ddd;
     --shadow: rgba(0,0,0,0.1);
 
+    /* Saturate più alto in light: il bianco "assorbe" le variazioni della
+       mappa sotto, quindi serve enfatizzare i colori per rendere il
+       blur visibile come effetto, senza dover ridurre l'alpha bianca
+       (rischio "grigio sporco"). */
+    --panel-saturate: 250%;
     --panel-bg: rgba(255, 255, 255, 0.62);
     --panel-bg-strong: rgba(255, 255, 255, 0.82);
     --panel-tint: linear-gradient(135deg, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0) 55%);
@@ -330,92 +335,9 @@ body {
     box-shadow: 0 2px 8px rgba(var(--accent-rgb), 0.3);
 }
 
-/* Date Picker Modal */
-.date-picker-modal {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: var(--modal-overlay-bg);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    z-index: 10000;
-    align-items: center;
-    justify-content: center;
-}
-
-.date-picker-modal.visible {
-    display: flex;
-}
-
-/* Orari Lettere Modal */
-.orari-lettere-modal {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: var(--modal-overlay-bg);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    z-index: 10000;
-    align-items: center;
-    justify-content: center;
-}
-
-.orari-lettere-modal.visible {
-    display: flex;
-}
-
-.orari-lettere-content {
-    background: var(--bg-primary);
-    padding: 24px;
-    border-radius: 16px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-    max-width: 440px;
-    width: 90%;
-    animation: modalSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.orari-lettere-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-}
-
-.orari-lettere-title {
-    font-size: 1.3em;
-    font-weight: 700;
-    color: var(--text-primary);
-}
-
-.orari-lettere-close {
-    background: var(--bg-tertiary);
-    border: none;
-    color: var(--text-primary);
-    font-size: 1.3em;
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    cursor: pointer;
-    transition: background 0.3s, color 0.3s, transform 0.3s;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    line-height: 1;
-    padding: 0;
-}
-
-.orari-lettere-close:hover {
-    background: var(--accent);
-    color: white;
-    transform: rotate(90deg);
-}
+/* Date Picker e Orari Lettere: il container modal è gestito da .ui-modal*
+   (vedi sezione UI-MODAL in fondo al file). Qui restano solo gli stili
+   interni specifici del form e del contenuto. */
 
 .orari-lettere-form {
     display: flex;
@@ -505,55 +427,6 @@ body {
 .orari-lettere-result.error {
     border-color: #e74c3c;
     background: rgba(231, 76, 60, 0.1);
-}
-
-.date-picker-content {
-    background: var(--bg-primary);
-    padding: 24px;
-    border-radius: 16px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-    max-width: 90%;
-    max-height: 80vh;
-    overflow-y: auto;
-    min-width: 300px;
-    animation: modalSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.date-picker-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-}
-
-.date-picker-title {
-    font-size: 1.3em;
-    font-weight: 700;
-    color: var(--text-primary);
-}
-
-.date-picker-close {
-    background: var(--bg-tertiary);
-    border: none;
-    color: var(--text-primary);
-    font-size: 1.3em;
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    cursor: pointer;
-    transition: background 0.3s, color 0.3s, transform 0.3s;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    line-height: 1;
-    padding: 0;
-}
-
-.date-picker-close:hover {
-    background: var(--accent);
-    color: white;
-    transform: rotate(90deg);
 }
 
 .date-list-picker {
@@ -2017,77 +1890,8 @@ body {
     margin-bottom: 15px;
 }
 
-/* Pin Search Modal */
-.pin-modal {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: var(--modal-overlay-bg);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    z-index: 10000;
-    align-items: center;
-    justify-content: center;
-}
-
-.pin-modal.visible {
-    display: flex;
-}
-
-.pin-modal-content {
-    background: var(--panel-bg-strong);
-    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-    border-radius: 16px;
-    padding: 24px;
-    width: 90%;
-    max-width: 600px;
-    max-height: 80vh;
-    overflow-y: auto;
-    box-shadow: var(--panel-shadow);
-    border: var(--panel-border);
-    animation: modalSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.pin-modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-}
-
-.pin-modal-title {
-    font-size: 1.3em;
-    font-weight: 700;
-    color: var(--accent);
-}
-
-.pin-modal-close {
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-    border: none;
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    cursor: pointer;
-    font-size: 1.1em;
-    transition: background 0.3s, color 0.3s, transform 0.3s;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    line-height: 1;
-    padding: 0;
-}
-
-.pin-modal-close:hover {
-    background: var(--accent);
-    color: white;
-    transform: rotate(90deg);
-}
+/* Pin Search Modal: container e header gestiti da .ui-modal* (mappa.css).
+   Restano qui solo gli stili specifici della lista risultati. */
 
 .pin-search-results {
     margin-top: 15px;
@@ -2498,24 +2302,7 @@ body {
 /* ============================================================ */
 /* SETTINGS MODAL                                               */
 /* ============================================================ */
-.settings-modal {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.4);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    z-index: 15000;
-    align-items: center;
-    justify-content: center;
-}
-
-.settings-modal.visible {
-    display: flex;
-}
+/* Container .settings-modal: gestito da .ui-modal* (vedi UI-MODAL). */
 
 .settings-content {
     background: var(--bg-primary);
@@ -3223,25 +3010,7 @@ body {
     .settings-field-row-3 { grid-template-columns: 1fr 1fr; }
 }
 
-/* Print Preview Modal */
-.print-preview-modal {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    z-index: 20000;
-    align-items: center;
-    justify-content: center;
-}
-
-.print-preview-modal.visible {
-    display: flex;
-}
+/* Container .print-preview-modal: gestito da .ui-modal* (vedi UI-MODAL). */
 
 .print-preview-content {
     background: white;
@@ -3845,20 +3614,7 @@ body {
     margin-top: 2px;
     padding-left: 22px;
 }
-/* Bulk assign modal */
-.bulk-assign-overlay {
-    display: none;
-    position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(0,0,0,0.5);
-    backdrop-filter: blur(4px);
-    z-index: 10000;
-    align-items: center;
-    justify-content: center;
-}
-.bulk-assign-overlay.visible {
-    display: flex;
-}
+/* Bulk assign modal: container gestito da .ui-modal* (vedi UI-MODAL). */
 .bulk-assign-modal {
     background: var(--bg-primary);
     border: 1px solid var(--border);

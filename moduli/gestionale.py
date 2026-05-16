@@ -247,63 +247,9 @@ def genera_css_gestionale():
         
         /* ========================================
            BOXBEAT UPLOAD
+           Modal container e header gestiti da .ui-modal* (vedi mappa.css).
            ======================================== */
-        
-        .BOXBEAT-modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: var(--modal-overlay-bg);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            z-index: 10000;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        .BOXBEAT-modal.visible {
-            display: flex;
-        }
-        
-        .BOXBEAT-content {
-            background: var(--panel-bg-strong);
-            backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-            -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-            border-radius: 16px;
-            padding: 24px;
-            width: 90%;
-            max-width: 550px;
-            max-height: 90vh;
-            overflow-y: auto;
-            box-shadow: var(--panel-shadow);
-            border: var(--panel-border);
-            animation: modalSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        
-        .BOXBEAT-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-        
-        .BOXBEAT-title {
-            font-size: 1.3em;
-            font-weight: 700;
-            color: var(--accent);
-        }
-        
-        .btn-close-modal {
-            background: none;
-            border: none;
-            font-size: 1.5em;
-            color: var(--text-secondary);
-            cursor: pointer;
-        }
-        
+
         .BOXBEAT-dropzone {
             border: 2px dashed var(--border);
             border-radius: 12px;
@@ -448,24 +394,9 @@ def genera_css_gestionale():
            VISTA SIGILLI FULLSCREEN
            ======================================== */
         
-        .sigilli-modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: var(--panel-bg-strong);
-            backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-            -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-            z-index: 10002;
-            overflow-y: auto;
-        }
-        
-        .sigilli-modal.visible {
-            display: block;
-        }
-        
+        /* Modal container gestito da .ui-modal.ui-modal--fullscreen (mappa.css). */
+
+
         .sigilli-container {
             max-width: 900px;
             margin: 0 auto;
@@ -917,39 +848,8 @@ def genera_css_gestionale():
             opacity: 0.85;
         }
 
-        /* Modale appuntamento */
-        .appuntamento-modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: var(--modal-overlay-bg);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            z-index: 10001;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        .appuntamento-modal.visible {
-            display: flex;
-        }
-        
-        .appuntamento-content {
-            background: var(--panel-bg-strong);
-            backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-            -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-            border-radius: 16px;
-            padding: 24px;
-            width: 90%;
-            max-width: 350px;
-            box-shadow: var(--panel-shadow);
-            border: var(--panel-border);
-            animation: modalSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        
+        /* Modal appuntamento gestito da .ui-modal* (vedi mappa.css). */
+
         .time-picker-group {
             display: flex;
             gap: 10px;
@@ -977,24 +877,8 @@ def genera_css_gestionale():
            VISTA FULLSCREEN MODIFICA
            ======================================== */
         
-        .fullscreen-edit-modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: var(--panel-bg-strong);
-            backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-            -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-            z-index: 10002;
-            overflow-y: auto;
-        }
-        
-        .fullscreen-edit-modal.visible {
-            display: block;
-        }
-        
+        /* Modal container gestito da .ui-modal.ui-modal--fullscreen (mappa.css). */
+
         .fullscreen-edit-container {
             max-width: 700px;
             margin: 0 auto;

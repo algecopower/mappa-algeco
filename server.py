@@ -64,7 +64,9 @@ parser.add_argument('--torino', '-t', action='store_true', help='Avvia solo Tori
 parser.add_argument('--pavia', '-p', action='store_true', help='Avvia solo Pavia')
 parser.add_argument('--pubblico', action='store_true', help='Avvia entrambe + Cloudflare Tunnel (accesso Internet)')
 parser.add_argument('--skip-osrm-check', action='store_true', help='Salta la verifica OSRM')
-args = parser.parse_args()
+# parse_known_args (non parse_args): in produzione gunicorn importa questo
+# modulo e i suoi flag (-c gunicorn.conf.py ...) non devono far fallire.
+args, _ = parser.parse_known_args()
 
 # ============================================================================
 # MODALITÀ LAUNCHER vs FLASK
@@ -536,7 +538,6 @@ import json
 import logging
 import queue
 import threading
-import socket
 from datetime import datetime
 from flask import Flask, request, jsonify, send_from_directory, send_file, make_response, Response, session, redirect, url_for
 from flask_cors import CORS
@@ -2005,12 +2006,38 @@ register_callbacks(
 # ============================================================================
 # MAIN (processo Flask figlio)
 # ============================================================================
+def bootstrap():
+    """Avvia sync background, warmup cache, pulizia. Chiamata sia in dev
+    (sotto __main__) sia in prod (da wsgi.py importato da gunicorn).
+    """
+    avvia_sync_background()
+
+    try:
+        from routes.contatori import warmup_format_cache
+        warmup_format_cache()
+    except Exception as e:
+        logger.warning(f"⚠️ Warmup cache formattazione fallito: {e}")
+
+    try:
+        from routes.contatori import warmup_notes_cache
+        warmup_notes_cache()
+    except Exception as e:
+        logger.warning(f"⚠️ Warmup cache note fallito: {e}")
+
+    try:
+        rimossi = pulisci_boxbeat_completati(giorni_retention=7)
+        if rimossi:
+            logger.info(f"🧹 Pulizia: rimossi {rimossi} boxbeat completati")
+    except Exception as e:
+        logger.warning(f"⚠️ Errore pulizia boxbeat: {e}")
+
+
 if __name__ == '__main__':
     logger.info("=" * 60)
     logger.info(f"  FLASK - {os.environ.get('PROVINCIA', 'TORINO')}")
     logger.info("=" * 60)
     logger.info("")
-    
+
     # Verifica OSRM (normalmente skippata - fatto dal launcher)
     if not args.skip_osrm_check:
         logger.info("🔍 Verifica connessione OSRM...")
@@ -2018,50 +2045,11 @@ if __name__ == '__main__':
             logger.warning("⚠️ OSRM non raggiungibile! Continuo comunque...")
         else:
             logger.info("✅ OSRM raggiungibile")
-    
-    # Ottieni IP locale per accesso in rete
-    def get_local_ip():
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect(('8.8.8.8', 80))
-            ip = s.getsockname()[0]
-            s.close()
-            return ip
-        except Exception:
-            return '127.0.0.1'
-    
-    local_ip = get_local_ip()
-    
-    logger.info("")
+
     logger.info(f"📍 Provincia: {PROVINCIA_ATTIVA}")
-    logger.info("📊 Modalità: PRODUZIONE")
     logger.info(f"🌐 http://localhost:{FLASK_PORT}")
-    logger.info("")
-    
-    # Avvia sync in background (farà subito la prima sincronizzazione)
-    avvia_sync_background()
 
-    # Warmup cache formattazione filone (lettura non-bloccante da Sheets)
-    try:
-        from routes.contatori import warmup_format_cache
-        warmup_format_cache()
-    except Exception as e:
-        logger.warning(f"⚠️ Warmup cache formattazione fallito: {e}")
-
-    # Warmup cache note filone
-    try:
-        from routes.contatori import warmup_notes_cache
-        warmup_notes_cache()
-    except Exception as e:
-        logger.warning(f"⚠️ Warmup cache note fallito: {e}")
-    
-    # Pulizia boxbeat completati vecchi (> 7 giorni) per evitare accumulo
-    try:
-        rimossi = pulisci_boxbeat_completati(giorni_retention=7)
-        if rimossi:
-            logger.info(f"🧹 Pulizia: rimossi {rimossi} boxbeat completati")
-    except Exception as e:
-        logger.warning(f"⚠️ Errore pulizia boxbeat: {e}")
-    
-    # Avvia Flask
+    bootstrap()
+    # Werkzeug dev server: usato solo in modalità dev locale (python server.py).
+    # In produzione il backend viene servito da gunicorn — vedi wsgi.py.
     app.run(host='0.0.0.0', port=FLASK_PORT, debug=False, threaded=True)

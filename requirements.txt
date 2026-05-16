@@ -29,3 +29,6 @@ rapidfuzz>=3.0.0
 
 # Hash password (moderno; sostituisce PBKDF2 con upgrade trasparente al login)
 argon2-cffi>=23.0.0
+
+# WSGI server di produzione (sostituisce Werkzeug dev server)
+gunicorn>=21.0.0

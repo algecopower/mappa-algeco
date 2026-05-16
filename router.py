@@ -301,9 +301,13 @@ class ProcessManager:
             env['FLASK_PORT'] = str(cfg['porta'])
             env['_SERVER_CHILD'] = '1'
 
-            log.info(f"[{slug}] avvio backend → porta {cfg['porta']}")
+            log.info(f"[{slug}] avvio backend (gunicorn) → porta {cfg['porta']}")
+            # gunicorn invece di Werkzeug dev server: thread pool gestito,
+            # max_requests recycling (mitiga memory leak), graceful shutdown.
+            # Vedi gunicorn.conf.py per i parametri.
+            gunicorn_bin = os.path.join(os.path.dirname(sys.executable), 'gunicorn')
             proc = subprocess.Popen(
-                [sys.executable, 'server.py', '--skip-osrm-check'],
+                [gunicorn_bin, '-c', 'gunicorn.conf.py', 'wsgi:app'],
                 env=env, cwd=SCRIPT_DIR,
             )
             self._proc[slug] = proc

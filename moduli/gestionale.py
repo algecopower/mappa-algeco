@@ -269,15 +269,17 @@ def genera_css_gestionale():
         }
         
         .BOXBEAT-content {
-            background: var(--bg-primary);
+            background: var(--panel-bg-strong);
+            backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+            -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
             border-radius: 16px;
             padding: 24px;
             width: 90%;
             max-width: 550px;
             max-height: 90vh;
             overflow-y: auto;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-            border: 1px solid var(--border);
+            box-shadow: var(--panel-shadow);
+            border: var(--panel-border);
             animation: modalSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
         }
         
@@ -453,7 +455,9 @@ def genera_css_gestionale():
             left: 0;
             width: 100%;
             height: 100%;
-            background: var(--bg-primary);
+            background: var(--panel-bg-strong);
+            backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+            -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
             z-index: 10002;
             overflow-y: auto;
         }
@@ -931,13 +935,15 @@ def genera_css_gestionale():
         }
         
         .appuntamento-content {
-            background: var(--bg-primary);
+            background: var(--panel-bg-strong);
+            backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+            -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
             border-radius: 16px;
             padding: 24px;
             width: 90%;
             max-width: 350px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-            border: 1px solid var(--border);
+            box-shadow: var(--panel-shadow);
+            border: var(--panel-border);
             animation: modalSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
         }
         
@@ -975,7 +981,9 @@ def genera_css_gestionale():
             left: 0;
             width: 100%;
             height: 100%;
-            background: var(--bg-primary);
+            background: var(--panel-bg-strong);
+            backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+            -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
             z-index: 10002;
             overflow-y: auto;
         }

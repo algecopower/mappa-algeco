@@ -27,14 +27,17 @@ def genera_css_verifica_indirizzi() -> str:
         .vi-modal.visible { display: flex; animation: modalSlideUp 0.2s ease; }
 
         .vi-content {
-            background: var(--bg-primary);
+            background: var(--panel-bg-strong);
+            backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+            -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
             color: var(--text-primary);
             border-radius: 12px;
             width: min(1200px, 100%);
             max-height: 90vh;
             display: flex;
             flex-direction: column;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+            box-shadow: var(--panel-shadow);
+            border: var(--panel-border);
             overflow: hidden;
             border: 1px solid var(--border);
         }

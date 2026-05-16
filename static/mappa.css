@@ -86,11 +86,13 @@
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { 
-    font-family: 'Inter', 'Segoe UI', Arial, sans-serif; 
-    background: var(--bg-primary); 
+body {
+    font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
+    background: var(--bg-primary);
     color: var(--text-primary);
-    transition: all 0.3s ease;
+    /* Niente transition sul body: durante il toggle tema il bg anima
+       per 200ms e i panel sopra con backdrop-filter ricalcolano il
+       blur frame-by-frame per tutta la durata (laggy). Switch istantaneo. */
 }
 
 /* Mappa estesa a tutta la pagina + sidebar in overlay assoluto.
@@ -114,7 +116,7 @@ body {
     flex-direction: column;
     z-index: 1000;
     box-shadow: var(--panel-shadow);
-    transition: all 0.3s ease;
+    transition: width 0.3s ease;
     will-change: backdrop-filter;
 }
 
@@ -1592,7 +1594,6 @@ body {
     right: 0;
     bottom: 0;
     background: var(--bg-primary);
-    transition: all 0.3s ease;
 }
 
 /* Zoom Slider */
@@ -2026,15 +2027,17 @@ body {
 }
 
 .pin-modal-content {
-    background: var(--bg-primary);
+    background: var(--panel-bg-strong);
+    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
     border-radius: 16px;
     padding: 24px;
     width: 90%;
     max-width: 600px;
     max-height: 80vh;
     overflow-y: auto;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-    border: 1px solid var(--border);
+    box-shadow: var(--panel-shadow);
+    border: var(--panel-border);
     animation: modalSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 

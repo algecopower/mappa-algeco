@@ -459,9 +459,18 @@ def _filter_headers_to_backend(headers):
     return out
 
 
-def _filter_headers_from_backend(headers):
-    """Headers in risposta dal backend: rimuovi hop-by-hop."""
-    return [(k, v) for k, v in headers.items() if k.lower() not in HOP_BY_HOP_HEADERS]
+def _filter_headers_from_backend(upstream):
+    """Headers in risposta dal backend: rimuovi hop-by-hop.
+
+    IMPORTANTE: usa `upstream.raw.headers` (urllib3 HTTPHeaderDict) invece
+    di `upstream.headers` perché quest'ultimo unisce con virgola i valori
+    di header duplicati — corrompendo es. multipli Set-Cookie (separati
+    dal valore originale, contengono già virgole dentro `Expires=...`).
+    """
+    return [
+        (k, v) for k, v in upstream.raw.headers.items()
+        if k.lower() not in HOP_BY_HOP_HEADERS
+    ]
 
 
 def _proxy_to_backend(porta, path, querystring):
@@ -508,7 +517,7 @@ def _proxy_to_backend(porta, path, querystring):
         finally:
             upstream.close()
 
-    headers_out = _filter_headers_from_backend(upstream.headers)
+    headers_out = _filter_headers_from_backend(upstream)
     return Response(generate(), status=upstream.status_code, headers=headers_out)
 
 

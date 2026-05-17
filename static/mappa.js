@@ -1311,12 +1311,12 @@ function toggleView() {
     if (viewMode === 'zone') {
         btn.innerHTML = '<i data-lucide="map"></i> Zone';
         btn.classList.add('active');
-        document.getElementById('searchInput').placeholder = '🔍 Cerca...';
+        document.getElementById('searchInput').placeholder = 'Cerca...';
         mostraVistaZone(document.getElementById('searchInput').value);
     } else {
         btn.innerHTML = '<i data-lucide="building-2"></i> Comuni';
         btn.classList.remove('active');
-        document.getElementById('searchInput').placeholder = '🔍 Cerca...';
+        document.getElementById('searchInput').placeholder = 'Cerca...';
         mostraVistaComuni(document.getElementById('searchInput').value);
     }
     window.refreshLucideIcons();
@@ -1379,7 +1379,7 @@ function toggleSearchMode() {
         searchInput.placeholder = '🔍 Usa i filtri avanzati sotto';
     } else {
         searchInput.disabled = false;
-        searchInput.placeholder = '🔍 Cerca...';
+        searchInput.placeholder = 'Cerca...';
         clearAdvancedSearch();
     }
 }
@@ -1690,7 +1690,8 @@ function toggleOrariLettereModal() {
     if (isOpening) {
         document.getElementById('orariLettereResult').style.display = 'none';
         document.getElementById('orariLettereGenera').disabled = false;
-        document.getElementById('orariLettereGenera').textContent = '🚀 Genera e scrivi nel FILONE';
+        document.getElementById('orariLettereGenera').innerHTML = '<i data-lucide="rocket"></i> Genera e scrivi nel FILONE';
+        if (window.refreshLucideIcons) window.refreshLucideIcons();
     }
 }
 
@@ -1766,14 +1767,16 @@ async function generaOrariLettere() {
             resultDiv.innerHTML = `<strong>❌ Errore:</strong> ${data.error || 'Errore sconosciuto'}`;
             resultDiv.style.display = 'block';
             btn.disabled = false;
-            btn.textContent = '🚀 Genera e scrivi nel FILONE';
+            btn.innerHTML = '<i data-lucide="rocket"></i> Genera e scrivi nel FILONE';
+            if (window.refreshLucideIcons) window.refreshLucideIcons();
         }
     } catch (err) {
         resultDiv.className = 'orari-lettere-result error';
         resultDiv.innerHTML = `<strong>❌ Errore di rete:</strong> ${err.message}`;
         resultDiv.style.display = 'block';
         btn.disabled = false;
-        btn.textContent = '🚀 Genera e scrivi nel FILONE';
+        btn.innerHTML = '<i data-lucide="rocket"></i> Genera e scrivi nel FILONE';
+        if (window.refreshLucideIcons) window.refreshLucideIcons();
     }
 }
 

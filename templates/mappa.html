@@ -42,7 +42,7 @@
             <div class="header">
                 <div class="header-top">
                     <div>
-                        <h1>🗺️ Mappa Contatori</h1>
+                        <h1><i data-lucide="map"></i> Mappa Contatori</h1>
                         <p>{{ provincia }} - <span id="updateTime">{{ timestamp[6:8] }}/{{ timestamp[4:6] }}/{{ timestamp[0:4] }} {{ timestamp[8:10] }}:{{ timestamp[10:12] }}</span></p>
                     </div>
                 </div>
@@ -63,7 +63,7 @@
                 <h2>📋 Pianificazione</h2>
                 <span id="planningBadge" style="font-size: 0.72rem; color: var(--text-muted);">0 schedulabili</span>
                 <button class="btn-icon" onclick="AlgecoTour.start(true)" title="Guida pianificazione" style="margin-left: auto; font-size: 12px; padding: 2px 6px; background: none; border: 1px solid var(--border-color, #334155); border-radius: 5px; color: var(--text-muted); cursor: pointer;">❓</button>
-                <button class="btn-exit-planning" onclick="exitPlanningMode()">✕ Esci</button>
+                <button class="btn-exit-planning" onclick="exitPlanningMode()"><i data-lucide="x"></i> Esci</button>
             </div>
             
             <!-- Planning Filters -->
@@ -84,23 +84,23 @@
                 <!-- Sezione filtri comuni -->
                 <div class="planning-filter-section">
                     <div class="planning-filter-grid">
-                        <label>👤 Nome</label>
+                        <label><i data-lucide="user"></i> Nome</label>
                         <input type="text" id="planFilterNome" placeholder="Cerca nominativo..." autocomplete="off" oninput="applyPlanningFilters()">
-                        <label>🗺️ Zona</label>
+                        <label><i data-lucide="map"></i> Zona</label>
                         <select id="planFilterZona" onchange="onPlanZonaChange()"><option value="">Tutte le zone</option></select>
-                        <label>🏘️ Comune</label>
+                        <label><i data-lucide="building-2"></i> Comune</label>
                         <select id="planFilterComune" onchange="applyPlanningFilters()"><option value="">Tutti i comuni</option></select>
-                        <label>📞 Telefono</label>
+                        <label><i data-lucide="phone"></i> Telefono</label>
                         <div class="planning-filter-chips">
                             <span class="planning-filter-chip active" data-plan-tel="tutti" onclick="setPlanFilterTel('tutti')">Tutti</span>
                             <span class="planning-filter-chip" data-plan-tel="con" onclick="setPlanFilterTel('con')">Con ☎️</span>
                             <span class="planning-filter-chip" data-plan-tel="senza" onclick="setPlanFilterTel('senza')">Senza</span>
                         </div>
-                        <label>⚡ Tipologia</label>
+                        <label><i data-lucide="zap"></i> Tipologia</label>
                         <select id="planFilterTipologia" onchange="applyPlanningFilters()"><option value="">Tutte le tipologie</option></select>
-                        <label>📍 Posizione</label>
+                        <label><i data-lucide="map-pin"></i> Posizione</label>
                         <select id="planFilterPosizione" onchange="applyPlanningFilters()"><option value="">Tutte le posizioni</option></select>
-                        <label>🏷️ LCL</label>
+                        <label><i data-lucide="tag"></i> LCL</label>
                         <select id="planFilterLCL" onchange="onPlanLCLChange()"><option value="">Tutti LCL</option></select>
                     </div>
                 </div>
@@ -108,9 +108,9 @@
                 <div class="planning-filter-section" id="planFiltersPianificatiSection">
                     <div class="planning-filter-section-title pian">📅 Filtri pianificati</div>
                     <div class="planning-filter-grid">
-                        <label>📅 Data</label>
+                        <label><i data-lucide="calendar"></i> Data</label>
                         <select id="planFilterData" onchange="applyPlanningFilters()"><option value="">Tutte le date</option></select>
-                        <label>👷 Operatore</label>
+                        <label><i data-lucide="hard-hat"></i> Operatore</label>
                         <select id="planFilterOperatore" onchange="applyPlanningFilters()"><option value="">Tutti gli operatori</option></select>
                     </div>
                 </div>
@@ -147,12 +147,12 @@
             <div class="filters">
                 <div class="search-row">
                     <div class="search-box">
-                        <input type="text" id="searchInput" placeholder="🔍 Cerca..." autocomplete="off">
+                        <input type="text" id="searchInput" placeholder="Cerca..." autocomplete="off">
                         <button class="search-clear" id="searchClear" onclick="clearSearch()">✕</button>
                     </div>
                     <div class="lcl-filter">
                         <select id="lclFilter" onchange="applicaFiltri()">
-                            <option value="">🏷️ Tutti LCL</option>
+                            <option value="">Tutti LCL</option>
                             {{ lcl_options_html|safe }}
                         </select>
                     </div>
@@ -166,7 +166,7 @@
                 <div class="search-row" id="dataFilterRow" style="margin-top: 10px;">
                     <div class="search-box">
                         <select id="dataFilter" onchange="onDataFilterChange()">
-                            <option value="">📅 Tutte le date</option>
+                            <option value="">Tutte le date</option>
                         </select>
                     </div>
                     <div class="operatore-filter-container" id="operatoreFilterContainer">
@@ -180,33 +180,33 @@
                 <div class="advanced-search-panel" id="advancedSearchPanel">
                     <div class="advanced-search-grid">
                         <div class="advanced-search-field">
-                            <label>👤 Nominativo</label>
+                            <label><i data-lucide="user"></i> Nominativo</label>
                             <input type="text" id="searchNominativo" placeholder="Es: Mario Rossi" autocomplete="off">
                         </div>
                         <div class="advanced-search-field">
-                            <label>⚡ POD</label>
+                            <label><i data-lucide="zap"></i> POD</label>
                             <input type="text" id="searchPod" placeholder="Es: IT001E..." autocomplete="off">
                         </div>
                         <div class="advanced-search-field">
-                            <label>🔢 Eneltel</label>
+                            <label><i data-lucide="hash"></i> Eneltel</label>
                             <input type="text" id="searchEneltel" placeholder="Es: 12345678" autocomplete="off">
                         </div>
                         <div class="advanced-search-field">
-                            <label>🏘️ Comune</label>
+                            <label><i data-lucide="building-2"></i> Comune</label>
                             <input type="text" id="searchComune" placeholder="Es: Torino" autocomplete="off">
                         </div>
                         <div class="advanced-search-field">
-                            <label>📍 Via</label>
+                            <label><i data-lucide="map-pin"></i> Via</label>
                             <input type="text" id="searchVia" placeholder="Es: Via Roma" autocomplete="off">
                         </div>
                         <div class="advanced-search-field">
-                            <label>📱 Telefono</label>
+                            <label><i data-lucide="smartphone"></i> Telefono</label>
                             <input type="text" id="searchTelefono" placeholder="Es: 3331234567" autocomplete="off">
                         </div>
                     </div>
                     <div class="advanced-search-actions">
-                        <button class="btn-clear-advanced" onclick="clearAdvancedSearch()">🗑️ Pulisci</button>
-                        <button class="btn-apply-advanced" onclick="applicaRicercaAvanzata()">🔍 Cerca</button>
+                        <button class="btn-clear-advanced" onclick="clearAdvancedSearch()"><i data-lucide="trash-2"></i> Pulisci</button>
+                        <button class="btn-apply-advanced" onclick="applicaRicercaAvanzata()"><i data-lucide="search"></i> Cerca</button>
                     </div>
                 </div>
             </div>
@@ -253,18 +253,18 @@
             <div class="ui-modal-body">
                 <p style="font-size: 0.82rem; color: var(--text-muted); margin: 0 0 16px 0;" id="bulkAssignCount">0 contatori selezionati</p>
                 <div class="bulk-assign-field">
-                    <label>📅 Data Pianificata</label>
+                    <label><i data-lucide="calendar"></i> Data Pianificata</label>
                     <input type="date" id="bulkAssignData">
                 </div>
                 <div class="bulk-assign-field">
-                    <label>👷 Operatore</label>
+                    <label><i data-lucide="hard-hat"></i> Operatore</label>
                     <select id="bulkAssignOperatore">
                         <option value="">— Nessuno (non modificare) —</option>
                     </select>
                 </div>
                 <div class="bulk-assign-actions">
                     <button class="btn-cancel" onclick="closeBulkAssignModal()">Annulla</button>
-                    <button class="btn-confirm" id="btnBulkConfirm" onclick="executeBulkAssign()">✅ Assegna</button>
+                    <button class="btn-confirm" id="btnBulkConfirm" onclick="executeBulkAssign()"><i data-lucide="check"></i> Assegna</button>
                 </div>
             </div>
         </div>
@@ -362,7 +362,7 @@
                     <select id="printTecnicoFilter" onchange="onPrintTecnicoChange()" style="padding: 10px 16px; border: 2px solid #e9ecef; border-radius: 8px; font-size: 14px; font-weight: 500; background: white; cursor: pointer; min-width: 180px;">
                         <option value="">👥 Tutti i tecnici</option>
                     </select>
-                    <button class="btn-print-cancel" onclick="closePrintPreview()">✕ Chiudi</button>
+                    <button class="btn-print-cancel" onclick="closePrintPreview()"><i data-lucide="x"></i> Chiudi</button>
                     <button class="btn-print-confirm" onclick="executePrint()">🖨️ Stampa</button>
                 </div>
             </div>
@@ -403,15 +403,15 @@
             <div class="ui-modal-body">
                 <div class="orari-lettere-form">
                     <div>
-                        <label>📅 Data inizio</label>
+                        <label><i data-lucide="calendar"></i> Data inizio</label>
                         <input type="date" id="orariLettereDa">
                     </div>
                     <div>
-                        <label>📅 Data fine</label>
+                        <label><i data-lucide="calendar"></i> Data fine</label>
                         <input type="date" id="orariLettereA">
                     </div>
                     <div>
-                        <label>🔢 Tappe per fascia</label>
+                        <label><i data-lucide="hash"></i> Tappe per fascia</label>
                         <div style="margin-top:6px;">
                             <label style="display:inline-flex;align-items:center;cursor:pointer;margin-right:16px;font-weight:normal;">
                                 <input type="radio" name="tappeFasciaMode" value="auto" checked onchange="document.getElementById('orariLettereTappeFascia').disabled=true;" style="margin-right:4px;"> 🧠 Auto (distribuisci uniformemente)
@@ -428,7 +428,7 @@
                         <strong>Non sovrascrive</strong> celle già compilate.
                     </div>
                     <button class="orari-lettere-btn" id="orariLettereGenera" onclick="generaOrariLettere()">
-                        🚀 Genera e scrivi nel FILONE
+                        <i data-lucide="rocket"></i> Genera e scrivi nel FILONE
                     </button>
                     <div class="orari-lettere-result" id="orariLettereResult"></div>
                 </div>
@@ -446,34 +446,34 @@
             <div class="ui-modal-body">
                 <div class="advanced-search-grid">
                     <div class="advanced-search-field">
-                        <label>👤 Nominativo</label>
+                        <label><i data-lucide="user"></i> Nominativo</label>
                         <input type="text" id="modalSearchNominativo" placeholder="Es: Mario Rossi" autocomplete="off">
                     </div>
                     <div class="advanced-search-field">
-                        <label>⚡ POD</label>
+                        <label><i data-lucide="zap"></i> POD</label>
                         <input type="text" id="modalSearchPod" placeholder="Es: IT001E..." autocomplete="off">
                     </div>
                     <div class="advanced-search-field">
-                        <label>🔢 Eneltel</label>
+                        <label><i data-lucide="hash"></i> Eneltel</label>
                         <input type="text" id="modalSearchEneltel" placeholder="Es: 12345678" autocomplete="off">
                     </div>
                     <div class="advanced-search-field">
-                        <label>🏘️ Comune</label>
+                        <label><i data-lucide="building-2"></i> Comune</label>
                         <input type="text" id="modalSearchComune" placeholder="Es: Roma" autocomplete="off">
                     </div>
                     <div class="advanced-search-field">
-                        <label>📍 Via</label>
+                        <label><i data-lucide="map-pin"></i> Via</label>
                         <input type="text" id="modalSearchVia" placeholder="Es: Via Roma" autocomplete="off">
                     </div>
                     <div class="advanced-search-field">
-                        <label>📱 Telefono</label>
+                        <label><i data-lucide="smartphone"></i> Telefono</label>
                         <input type="text" id="modalSearchTelefono" placeholder="Es: 3331234567" autocomplete="off">
                     </div>
                 </div>
 
                 <div class="advanced-search-actions">
-                    <button class="btn-clear-advanced" onclick="clearModalAdvancedSearch()">🗑️ Pulisci</button>
-                    <button class="btn-apply-advanced" onclick="applyModalAdvancedSearch()">🔍 Cerca</button>
+                    <button class="btn-clear-advanced" onclick="clearModalAdvancedSearch()"><i data-lucide="trash-2"></i> Pulisci</button>
+                    <button class="btn-apply-advanced" onclick="applyModalAdvancedSearch()"><i data-lucide="search"></i> Cerca</button>
                 </div>
 
                 <div class="pin-search-results" id="modalSearchResults"></div>
@@ -491,7 +491,7 @@
             <div class="ui-modal-body">
                 <div class="address-search-container">
                     <div class="advanced-search-field" style="width: 100%;">
-                        <label>🏠 Indirizzo completo</label>
+                        <label><i data-lucide="home"></i> Indirizzo completo</label>
                         <input type="text" id="addressSearchInput" placeholder="Es: Via Roma 15, Torino" autocomplete="off" onkeypress="if(event.key === 'Enter') searchAddress()">
                     </div>
                     <div class="address-search-hint">
@@ -500,8 +500,8 @@
                 </div>
 
                 <div class="advanced-search-actions">
-                    <button class="btn-clear-advanced" onclick="clearAddressSearch()">🗑️ Pulisci</button>
-                    <button class="btn-apply-advanced" onclick="searchAddress()">🔍 Cerca</button>
+                    <button class="btn-clear-advanced" onclick="clearAddressSearch()"><i data-lucide="trash-2"></i> Pulisci</button>
+                    <button class="btn-apply-advanced" onclick="searchAddress()"><i data-lucide="search"></i> Cerca</button>
                 </div>
 
                 <div class="address-search-results" id="addressSearchResults"></div>
@@ -681,7 +681,7 @@
                         </div>
                         <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:12px;">
                             <button class="settings-btn-cancel" style="padding:6px 14px; font-size:13px;" onclick="nascondiFormNuovoUtente()">Annulla</button>
-                            <button class="settings-btn-save" style="padding:6px 14px; font-size:13px;" onclick="creaNuovoUtente()">✅ Crea</button>
+                            <button class="settings-btn-save" style="padding:6px 14px; font-size:13px;" onclick="creaNuovoUtente()"><i data-lucide="user-plus"></i> Crea</button>
                         </div>
                     </div>
 
@@ -708,7 +708,7 @@
             </div>
             <div class="settings-footer">
                 <button class="settings-btn-cancel" onclick="chiudiImpostazioni()">Annulla</button>
-                <button class="settings-btn-save" id="settingsBtnSave" onclick="salvaImpostazioni()">💾 Salva e Sincronizza</button>
+                <button class="settings-btn-save" id="settingsBtnSave" onclick="salvaImpostazioni()"><i data-lucide="save"></i> Salva e Sincronizza</button>
             </div>
         </div>
     </div>

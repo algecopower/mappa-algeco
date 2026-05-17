@@ -180,52 +180,83 @@ function loadEmbeddedData() {
 }
 
 // Inizializza dati (prova fetch, fallback embedded)
+async function _doFetchData() {
+    const cacheBuster = Date.now();
+    const [dataResp, configResp] = await Promise.all([
+        fetch(DATA_PATH + '?t=' + cacheBuster, { cache: 'no-store' }),
+        fetch(CONFIG_PATH + '?t=' + cacheBuster, { cache: 'no-store' })
+    ]);
+
+    if (!dataResp.ok || !configResp.ok) {
+        throw new Error(`Fetch failed: data=${dataResp.status} config=${configResp.status}`);
+    }
+
+    const data = await dataResp.json();
+    const config = await configResp.json();
+
+    zone = data.zone || [];
+    contatori = data.contatori || [];
+    rotte = data.rotte || {};
+    dataTimestamp = data.timestamp;
+
+    deposito = config.deposito;
+    coloriTecnici = config.coloriTecnici;
+    matricoleVip = config.matricoleVip;
+    operatoriDict = config.operatoriDict || {};
+    buildReverseOperatoriDict();
+
+    dataLoadMode = 'fetch';
+    updateContatoriVisibili();
+
+    document.getElementById('updateTime').textContent = formatTimestamp(dataTimestamp);
+    console.log('✅ Dati caricati via fetch, contatori:', contatori.length, 'zone:', zone.length);
+}
+
 async function initializeData() {
-    // Se file://, usa direttamente embedded
+    // Modo file:// (raro): usa embedded (probabilmente vuoto, ma compat).
     if (window.location.protocol === 'file:') {
         loadEmbeddedData();
         return;
     }
 
-    try {
-        // Prova fetch parallelo con cache-busting
-        const cacheBuster = Date.now();
-        const [dataResp, configResp] = await Promise.all([
-            fetch(DATA_PATH + '?t=' + cacheBuster, { cache: 'no-store' }),
-            fetch(CONFIG_PATH + '?t=' + cacheBuster, { cache: 'no-store' })
-        ]);
-
-        if (!dataResp.ok || !configResp.ok) throw new Error('Fetch failed');
-
-        const data = await dataResp.json();
-        const config = await configResp.json();
-
-        zone = data.zone;
-        contatori = data.contatori;
-        rotte = data.rotte;
-        dataTimestamp = data.timestamp;
-
-        deposito = config.deposito;
-        coloriTecnici = config.coloriTecnici;
-        matricoleVip = config.matricoleVip;
-        operatoriDict = config.operatoriDict || {};
-        buildReverseOperatoriDict();
-
-        dataLoadMode = 'fetch';
-        updateContatoriVisibili();
-        
-        // IMPORTANTE: Aggiorna l'orario UI con il timestamp dei dati (non l'ora corrente)
-        document.getElementById('updateTime').textContent = formatTimestamp(dataTimestamp);
-        
-        console.log('✅ Dati caricati via fetch, timestamp:', dataTimestamp);
-    } catch (e) {
-        console.log('⚠️ Fetch fallito, uso dati embedded:', e.message);
-        loadEmbeddedData();
+    // Retry con backoff: durante il bootstrap del backend il primo sync può
+    // ancora essere in corso e mappa_data.json non popolato. Riproviamo
+    // alcune volte prima di mostrare lo stato vuoto.
+    const attempts = [0, 800, 1600, 3200, 6000];  // ms di attesa cumulati
+    for (let i = 0; i < attempts.length; i++) {
+        if (attempts[i] > 0) await new Promise(r => setTimeout(r, attempts[i] - (attempts[i-1] || 0)));
+        try {
+            await _doFetchData();
+            return;  // ok
+        } catch (e) {
+            console.log(`⚠️ Tentativo ${i + 1}/${attempts.length} fetch dati fallito:`, e.message);
+            if (i === attempts.length - 1) {
+                // Ultima chance: usa embedded (probabilmente vuoto) per non
+                // lasciare zone/contatori undefined nelle funzioni successive.
+                console.error('❌ Fetch dati fallito definitivamente. Mappa vuota.');
+                loadEmbeddedData();
+            }
+        }
     }
 }
 
-// Inizializza subito con dati embedded (per evitare undefined)
-loadEmbeddedData();
+// Inizializza con embedded SOLO se gli array sono effettivamente popolati
+// (modo file:// o fallback). Niente init sync vuoto: rischierebbe di
+// renderizzare la mappa con 0 contatori prima del fetch async.
+if (EMBEDDED_DATA && Array.isArray(EMBEDDED_DATA.contatori) && EMBEDDED_DATA.contatori.length > 0) {
+    loadEmbeddedData();
+} else {
+    // Inizializza variabili a valori vuoti per evitare ReferenceError
+    // nelle funzioni che potrebbero girare prima del fetch async.
+    zone = [];
+    contatori = [];
+    rotte = {};
+    deposito = EMBEDDED_CONFIG.deposito;
+    coloriTecnici = EMBEDDED_CONFIG.coloriTecnici;
+    matricoleVip = EMBEDDED_CONFIG.matricoleVip;
+    operatoriDict = EMBEDDED_CONFIG.operatoriDict || {};
+    buildReverseOperatoriDict();
+}
 
 // Stato
 let viewMode = 'zone';  // 'zone' o 'town'

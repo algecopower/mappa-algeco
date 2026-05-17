@@ -1,6 +1,64 @@
 /* Generated from moduli/mappa_html.py - CSS base mappa Algeco */
 
 :root {
+    /* ============================================================
+       DESIGN TOKENS — scala consistente per spacing, typography,
+       radius, transition. Usare sempre queste variabili invece di
+       valori hardcoded per garantire ritmo visivo uniforme.
+       ============================================================ */
+
+    /* Spacing scale (base 4px) */
+    --space-1: 4px;    /* tightest */
+    --space-2: 8px;    /* tight */
+    --space-3: 12px;
+    --space-4: 16px;   /* default */
+    --space-5: 20px;
+    --space-6: 24px;   /* section */
+    --space-8: 32px;
+    --space-10: 40px;
+    --space-12: 48px;
+    --space-16: 64px;
+
+    /* Typography scale */
+    --text-2xs: 0.6875rem;  /* 11px - badge/legenda */
+    --text-xs: 0.75rem;     /* 12px - small label */
+    --text-sm: 0.8125rem;   /* 13px - body small */
+    --text-base: 0.875rem;  /* 14px - body */
+    --text-md: 0.9375rem;   /* 15px - body large */
+    --text-lg: 1.0625rem;   /* 17px - subtitle */
+    --text-xl: 1.25rem;     /* 20px - section title */
+    --text-2xl: 1.5rem;     /* 24px - modal title */
+    --text-3xl: 1.875rem;   /* 30px - page title */
+
+    --font-normal: 400;
+    --font-medium: 500;
+    --font-semibold: 600;
+    --font-bold: 700;
+
+    /* Border-radius scale */
+    --radius-sm: 6px;       /* chip, small badge */
+    --radius: 10px;         /* default input/button */
+    --radius-md: 12px;      /* card */
+    --radius-lg: 16px;      /* modal */
+    --radius-xl: 20px;
+    --radius-full: 9999px;  /* pill / circle */
+
+    /* Transition durations & easings */
+    --duration-fast: 120ms;
+    --duration: 200ms;
+    --duration-slow: 320ms;
+    --easing: cubic-bezier(0.16, 1, 0.3, 1);  /* "out expo" — premium feel */
+    --easing-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+    /* Focus ring uniforme */
+    --focus-ring: 0 0 0 3px rgba(233, 69, 96, 0.35);
+
+    /* Elevazioni (shadow scala) */
+    --elev-1: 0 1px 2px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.10);
+    --elev-2: 0 2px 4px rgba(0,0,0,0.10), 0 4px 8px rgba(0,0,0,0.12);
+    --elev-3: 0 4px 8px rgba(0,0,0,0.12), 0 8px 24px rgba(0,0,0,0.18);
+    --elev-4: 0 8px 16px rgba(0,0,0,0.16), 0 24px 48px rgba(0,0,0,0.24);
+
     /* Tema scuro (default) */
     --bg-primary: #1a1a2e;
     --bg-secondary: #16213e;
@@ -10,6 +68,7 @@
     --text-muted: #666;
     --accent: #e94560;
     --accent-hover: #ff6b6b;
+    --accent-rgb: 233, 69, 96;
     --border: #0f3460;
     --shadow: rgba(0,0,0,0.3);
 
@@ -47,8 +106,10 @@
     --text-muted: #999;
     --accent: #9b59b6;
     --accent-hover: #a855f7;
+    --accent-rgb: 155, 89, 182;
     --border: #ddd;
     --shadow: rgba(0,0,0,0.1);
+    --focus-ring: 0 0 0 3px rgba(155, 89, 182, 0.32);
 
     /* Saturate più alto in light: il bianco "assorbe" le variazioni della
        mappa sotto, quindi serve enfatizzare i colori per rendere il
@@ -102,6 +163,87 @@
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
+
+/* ============================================================
+   INTERACTIVE STATES — uniformità per tutta l'app.
+   Applicate via selettori generici: ogni input/select/textarea
+   eredita focus ring; ogni button:active fa micro-press.
+   Le classi specifiche (.btn-save-edit, .btn-confirm, ecc.)
+   restano libere di sovrascrivere il proprio styling, ma
+   ereditano automaticamente i comportamenti base.
+   ============================================================ */
+
+button {
+    font-family: inherit;
+    cursor: pointer;
+    transition:
+        transform var(--duration-fast) var(--easing),
+        box-shadow var(--duration) var(--easing),
+        background-color var(--duration) var(--easing),
+        color var(--duration) var(--easing),
+        border-color var(--duration) var(--easing);
+}
+
+button:not(:disabled):active {
+    transform: scale(0.97);
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+input, select, textarea {
+    font-family: inherit;
+    transition:
+        border-color var(--duration) var(--easing),
+        box-shadow var(--duration) var(--easing),
+        background-color var(--duration) var(--easing);
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+    border-color: var(--accent);
+}
+
+/* Hover lift sui pulsanti "azione" principali: chi vuole l'effetto
+   premium aggiunge .btn-primary, .btn-confirm, .btn-save-edit,
+   .btn-apply-advanced o .btn-clear-advanced (già esistenti). */
+.btn-primary,
+.btn-confirm,
+.btn-save-edit,
+.btn-apply-advanced,
+.btn-clear-advanced,
+.orari-lettere-btn,
+.vi-btn-verifica {
+    box-shadow: var(--elev-1);
+}
+.btn-primary:hover,
+.btn-confirm:hover,
+.btn-save-edit:hover,
+.btn-apply-advanced:hover,
+.btn-clear-advanced:hover,
+.orari-lettere-btn:hover,
+.vi-btn-verifica:hover {
+    box-shadow: var(--elev-2);
+    transform: translateY(-1px);
+}
+.btn-primary:active,
+.btn-confirm:active,
+.btn-save-edit:active,
+.btn-apply-advanced:active,
+.btn-clear-advanced:active,
+.orari-lettere-btn:active,
+.vi-btn-verifica:active {
+    transform: translateY(0) scale(0.98);
+    box-shadow: var(--elev-1);
+}
+
+
 body {
     font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
     background: var(--bg-primary);

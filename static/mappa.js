@@ -247,10 +247,13 @@ if (EMBEDDED_DATA && Array.isArray(EMBEDDED_DATA.contatori) && EMBEDDED_DATA.con
     loadEmbeddedData();
 } else {
     // Inizializza variabili a valori vuoti per evitare ReferenceError
-    // nelle funzioni che potrebbero girare prima del fetch async.
+    // nelle funzioni che potrebbero girare prima del fetch async (es.
+    // popolaFiltroDate(), mostraVistaZone() chiamate nell'INIT a fine file).
     zone = [];
     contatori = [];
     rotte = {};
+    contatoriVisibili = [];
+    zoneVisibili = [];
     deposito = EMBEDDED_CONFIG.deposito;
     coloriTecnici = EMBEDDED_CONFIG.coloriTecnici;
     matricoleVip = EMBEDDED_CONFIG.matricoleVip;

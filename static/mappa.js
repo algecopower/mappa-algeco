@@ -207,6 +207,7 @@ async function _doFetchData() {
 
     dataLoadMode = 'fetch';
     updateContatoriVisibili();
+    popolaFiltroLCL();
 
     document.getElementById('updateTime').textContent = formatTimestamp(dataTimestamp);
     console.log('✅ Dati caricati via fetch, contatori:', contatori.length, 'zone:', zone.length);
@@ -2387,7 +2388,7 @@ function popolaFiltroDate() {
 
     const dataFilter = document.getElementById('dataFilter');
     const prevValue = dataFilter.value;
-    dataFilter.innerHTML = '<option value="">📅 Tutte le date</option>';
+    dataFilter.innerHTML = '<option value="">Tutte le date</option>';
 
     dateOrdinateArray.forEach(data => {
         const option = document.createElement('option');
@@ -2399,6 +2400,32 @@ function popolaFiltroDate() {
     // Ripristina selezione precedente se ancora disponibile
     if (prevValue && dateOrdinateArray.includes(prevValue)) {
         dataFilter.value = prevValue;
+    }
+}
+
+// Popola il filtro LCL dinamicamente dai contatori caricati.
+// L'HTML iniziale può contenere lcl_options_html SSR-renderizzati con
+// la cache del backend, ma quando il fetch async porta i dati reali
+// (o se il primo sync non è ancora completato), riallineiamo qui.
+function popolaFiltroLCL() {
+    const lclFilter = document.getElementById('lclFilter');
+    if (!lclFilter) return;
+    const prevValue = lclFilter.value;
+
+    const lclSet = new Set();
+    contatori.forEach(c => { if (c.lcl) lclSet.add(c.lcl); });
+    const lclSorted = Array.from(lclSet).sort();
+
+    lclFilter.innerHTML = '<option value="">Tutti LCL</option>';
+    lclSorted.forEach(lcl => {
+        const opt = document.createElement('option');
+        opt.value = lcl;
+        opt.textContent = lcl;
+        lclFilter.appendChild(opt);
+    });
+
+    if (prevValue && lclSorted.includes(prevValue)) {
+        lclFilter.value = prevValue;
     }
 }
 
@@ -9207,6 +9234,7 @@ async function executeBulkAssign() {
 // INIT
 // ============================================================
 popolaFiltroDate();
+popolaFiltroLCL();
 updateSchedulabiliBadge();
 mostraVistaZone();
 updatePrintButtonVisibility();
@@ -9219,6 +9247,7 @@ updatePrintButtonVisibility();
     if (dataTimestamp !== oldTimestamp) {
         // Dati diversi caricati via fetch, aggiorna vista
         popolaFiltroDate();
+        popolaFiltroLCL();
         updateSchedulabiliBadge();
         refreshCurrentView();
         console.log('🔄 Vista aggiornata con dati fetch');

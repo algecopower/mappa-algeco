@@ -247,7 +247,7 @@
     <div class="ui-modal" id="bulkAssignOverlay">
         <div class="ui-modal-content" style="max-width: 420px;">
             <div class="ui-modal-header">
-                <h2 class="ui-modal-title">📅 Assegna Data e Operatore</h2>
+                <h2 class="ui-modal-title"><i data-lucide="calendar-check"></i> Assegna Data e Operatore</h2>
                 <button class="ui-modal-close" type="button">×</button>
             </div>
             <div class="ui-modal-body">
@@ -285,68 +285,68 @@
 
     <!-- Gestionale Button -->
     <button class="gestionale-fab" id="gestionaleFab" onclick="toggleGestionalePanel()" title="Strumenti Gestionale">
-        ⚙️
+        <i data-lucide="settings"></i>
     </button>
 
     <!-- Gestionale Panel -->
     <div class="gestionale-panel" id="gestionalePanel">
         <div class="gestionale-panel-header">
-            <div class="gestionale-panel-title">⚙️ Gestionale</div>
-            <button class="gestionale-panel-close" onclick="toggleGestionalePanel()">✕</button>
+            <div class="gestionale-panel-title"><i data-lucide="settings"></i> Gestionale</div>
+            <button class="gestionale-panel-close" onclick="toggleGestionalePanel()"><i data-lucide="x"></i></button>
         </div>
         <div class="gestionale-panel-body">
             <button class="gestionale-panel-btn gp-btn-lettere" onclick="toggleGestionalePanel(); toggleOrariLettereModal()">
-                <span class="gp-btn-icon">✉️</span>
+                <span class="gp-btn-icon"><i data-lucide="mail"></i></span>
                 <span class="gp-btn-text">Orari Lettere</span>
                 <span class="gp-btn-desc">Genera fasce orarie e scrivi nel FILONE</span>
             </button>
             <button class="gestionale-panel-btn gp-btn-BOXBEAT" onclick="toggleGestionalePanel(); apriModalBOXBEAT()">
-                <span class="gp-btn-icon">📦</span>
+                <span class="gp-btn-icon"><i data-lucide="package"></i></span>
                 <span class="gp-btn-text">Carica Installato</span>
                 <span class="gp-btn-desc">Importa file BOXBEAT con esiti</span>
             </button>
             <button class="gestionale-panel-btn gp-btn-sigilli" onclick="toggleGestionalePanel(); apriVistaSigilli()">
-                <span class="gp-btn-icon">🔐</span>
+                <span class="gp-btn-icon"><i data-lucide="lock"></i></span>
                 <span class="gp-btn-text">Sigilli / Matricole</span>
                 <span class="gp-btn-desc">Inserisci sigilli e matricole installate</span>
             </button>
             <button class="gestionale-panel-btn gp-btn-sigilli" onclick="toggleGestionalePanel(); apriModalVerificaIndirizzi()">
-                <span class="gp-btn-icon">🔍</span>
+                <span class="gp-btn-icon"><i data-lucide="map-pinned"></i></span>
                 <span class="gp-btn-text">Verifica Indirizzi</span>
                 <span class="gp-btn-desc">Confronta vie e civici con l'anagrafe nazionale</span>
             </button>
             <a href="/distinte" target="_blank" class="gestionale-panel-btn gp-btn-distinte" style="text-decoration:none;">
-                <span class="gp-btn-icon">📋</span>
+                <span class="gp-btn-icon"><i data-lucide="file-text"></i></span>
                 <span class="gp-btn-text">Gestione PDF E-Distribuzione</span>
                 <span class="gp-btn-desc">Distinte e Moduli Maxy</span>
             </a>
             <a href="/calendario" target="_blank" class="gestionale-panel-btn gp-btn-distinte" style="text-decoration:none;">
-                <span class="gp-btn-icon">📅</span>
+                <span class="gp-btn-icon"><i data-lucide="calendar-days"></i></span>
                 <span class="gp-btn-text">Calendario Attività</span>
                 <span class="gp-btn-desc">Gestisci attività condivise tra utenti</span>
             </a>
             <a href="/filone" target="_blank" class="gestionale-panel-btn gp-btn-distinte" style="text-decoration:none;">
-                <span class="gp-btn-icon">📊</span>
+                <span class="gp-btn-icon"><i data-lucide="table-2"></i></span>
                 <span class="gp-btn-text">Vista Excel Filone</span>
                 <span class="gp-btn-desc">Modifica il filone come un foglio di calcolo</span>
             </a>
             <a href="/dashboard" target="_blank" class="gestionale-panel-btn gp-btn-distinte" style="text-decoration:none;">
-                <span class="gp-btn-icon">📈</span>
+                <span class="gp-btn-icon"><i data-lucide="line-chart"></i></span>
                 <span class="gp-btn-text">Dashboard</span>
                 <span class="gp-btn-desc">Statistiche, report operatori e riepilogo operativo</span>
             </a>
             <button class="gestionale-panel-btn gp-btn-backup" onclick="toggleGestionalePanel(); apriModalBackup()">
-                <span class="gp-btn-icon">💾</span>
+                <span class="gp-btn-icon"><i data-lucide="save"></i></span>
                 <span class="gp-btn-text">Backup / Ripristino</span>
                 <span class="gp-btn-desc">Backup giornaliero e ripristino FILONE</span>
             </button>
             <button class="gestionale-panel-btn gp-btn-lettere" onclick="toggleGestionalePanel(); apriImpostazioni()">
-                <span class="gp-btn-icon">🔧</span>
+                <span class="gp-btn-icon"><i data-lucide="wrench"></i></span>
                 <span class="gp-btn-text">Impostazioni</span>
                 <span class="gp-btn-desc">Configura operatori, deposito, percorsi e date</span>
             </button>
             <button class="gestionale-panel-btn gp-btn-logout" onclick="effettuaLogout()" style="border-top: 1px solid var(--border); margin-top: 2px; padding-top: 8px;">
-                <span class="gp-btn-icon">🚪</span>
+                <span class="gp-btn-icon"><i data-lucide="log-out"></i></span>
                 <span class="gp-btn-text">Disconnetti</span>
                 <span class="gp-btn-desc">Esci dall'account corrente</span>
             </button>
@@ -384,7 +384,7 @@
     <div class="ui-modal" id="datePickerModal">
         <div class="ui-modal-content" style="max-width: 480px;">
             <div class="ui-modal-header">
-                <h2 class="ui-modal-title">📅 Seleziona Data</h2>
+                <h2 class="ui-modal-title"><i data-lucide="calendar"></i> Seleziona Data</h2>
                 <button class="ui-modal-close" type="button">×</button>
             </div>
             <div class="ui-modal-body">
@@ -397,7 +397,7 @@
     <div class="ui-modal" id="orariLettereModal">
         <div class="ui-modal-content" style="max-width: 600px;">
             <div class="ui-modal-header">
-                <h2 class="ui-modal-title">✉️ Genera Orari Lettere</h2>
+                <h2 class="ui-modal-title"><i data-lucide="mail"></i> Genera Orari Lettere</h2>
                 <button class="ui-modal-close" type="button">×</button>
             </div>
             <div class="ui-modal-body">
@@ -440,7 +440,7 @@
     <div class="ui-modal" id="advancedSearchModal">
         <div class="ui-modal-content" style="max-width: 600px;">
             <div class="ui-modal-header">
-                <h2 class="ui-modal-title">🔍 Ricerca Utente</h2>
+                <h2 class="ui-modal-title"><i data-lucide="search"></i> Ricerca Utente</h2>
                 <button class="ui-modal-close" type="button">×</button>
             </div>
             <div class="ui-modal-body">
@@ -485,7 +485,7 @@
     <div class="ui-modal" id="addressSearchModal">
         <div class="ui-modal-content" style="max-width: 600px;">
             <div class="ui-modal-header">
-                <h2 class="ui-modal-title">📍 Cerca Indirizzo sulla Mappa</h2>
+                <h2 class="ui-modal-title"><i data-lucide="map-pin"></i> Cerca Indirizzo sulla Mappa</h2>
                 <button class="ui-modal-close" type="button">×</button>
             </div>
             <div class="ui-modal-body">
@@ -513,7 +513,7 @@
     <div class="ui-modal" id="settingsModal">
         <div class="settings-content">
             <div class="settings-header">
-                <div class="settings-title">🔧 Impostazioni</div>
+                <div class="settings-title"><i data-lucide="wrench"></i> Impostazioni</div>
                 <button class="ui-modal-close" type="button">×</button>
             </div>
             <div class="settings-tabs">

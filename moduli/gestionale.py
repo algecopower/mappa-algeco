@@ -3315,14 +3315,15 @@ def genera_js_gestionale():
                 tabMatricole.classList.remove('active', 'matricole');
                 header.classList.remove('matricole');
                 title.classList.remove('matricole');
-                title.innerHTML = `🔐 Inserisci Sigilli <span id="sigilliCount" class="sigilli-count">(${{sigilliFiltered.length}} da completare)</span>`;
+                title.innerHTML = `<i data-lucide="lock"></i> Inserisci Sigilli <span id="sigilliCount" class="sigilli-count">(${{sigilliFiltered.length}} da completare)</span>`;
             }} else {{
                 tabSigilli.classList.remove('active');
                 tabMatricole.classList.add('active', 'matricole');
                 header.classList.add('matricole');
                 title.classList.add('matricole');
-                title.innerHTML = `🔢 Inserisci Matricole <span id="sigilliCount" class="sigilli-count">(${{matricoleFiltered.length}} da completare)</span>`;
+                title.innerHTML = `<i data-lucide="hash"></i> Inserisci Matricole <span id="sigilliCount" class="sigilli-count">(${{matricoleFiltered.length}} da completare)</span>`;
             }}
+            if (window.refreshLucideIcons) window.refreshLucideIcons();
         }}
         
         function getSigilliFiltrati() {{
@@ -4102,11 +4103,11 @@ def genera_html_gestionale():
             <div class="fullscreen-edit-container">
                 <div class="fullscreen-edit-header">
                     <div class="fullscreen-edit-title">
-                        ✏️ Modifica Contatore
+                        <i data-lucide="pencil"></i> Modifica Contatore
                         <span id="fullscreenEneltel" class="fullscreen-edit-eneltel"></span>
                     </div>
                     <button class="btn-close-fullscreen" onclick="chiudiVistaModifica()">
-                        ✕ Chiudi
+                        <i data-lucide="x"></i> Chiudi
                     </button>
                 </div>
                 
@@ -4198,7 +4199,7 @@ def genera_html_gestionale():
         <div id="appuntamentoModal" class="ui-modal">
             <div class="ui-modal-content" style="max-width: 400px;">
                 <div class="ui-modal-header">
-                    <h2 class="ui-modal-title">📞 Fissa Appuntamento</h2>
+                    <h2 class="ui-modal-title"><i data-lucide="phone"></i> Fissa Appuntamento</h2>
                     <button class="ui-modal-close" type="button">×</button>
                 </div>
                 <div class="ui-modal-body">
@@ -4224,7 +4225,7 @@ def genera_html_gestionale():
         <div id="BOXBEATModal" class="ui-modal">
             <div class="ui-modal-content">
                 <div class="ui-modal-header">
-                    <h2 class="ui-modal-title">📦 Carica installato (Enel)</h2>
+                    <h2 class="ui-modal-title"><i data-lucide="package"></i> Carica installato (Enel)</h2>
                     <button class="ui-modal-close" type="button">×</button>
                 </div>
                 <div class="ui-modal-body">
@@ -4264,22 +4265,22 @@ def genera_html_gestionale():
                     <!-- Tab per switch -->
                     <div class="sigilli-tabs">
                         <button id="tabSigilli" class="sigilli-tab active" onclick="switchTab('sigilli')">
-                            🔐 Sigilli
+                            <i data-lucide="lock"></i> Sigilli
                             <span id="tabSigilliCount" class="sigilli-tab-count">0</span>
                         </button>
                         <button id="tabMatricole" class="sigilli-tab" onclick="switchTab('matricole')">
-                            🔢 Matricole
+                            <i data-lucide="hash"></i> Matricole
                             <span id="tabMatricoleCount" class="sigilli-tab-count">0</span>
                         </button>
                     </div>
 
                     <div id="sigilliHeader" class="sigilli-header">
                         <div id="sigilliTitle" class="sigilli-title">
-                            🔐 Inserisci Sigilli
+                            <i data-lucide="lock"></i> Inserisci Sigilli
                             <span id="sigilliCount" class="sigilli-count"></span>
                         </div>
                         <button class="btn-close-fullscreen" onclick="chiudiVistaSigilli()">
-                            ✕ Chiudi
+                            <i data-lucide="x"></i> Chiudi
                         </button>
                     </div>
 
@@ -4297,7 +4298,7 @@ def genera_html_gestionale():
         <div id="backupModal" class="ui-modal">
             <div class="ui-modal-content" style="max-width: 650px;">
                 <div class="ui-modal-header">
-                    <h2 class="ui-modal-title">💾 Backup / Ripristino FILONE</h2>
+                    <h2 class="ui-modal-title"><i data-lucide="save"></i> Backup / Ripristino FILONE</h2>
                     <button class="ui-modal-close" type="button">×</button>
                 </div>
                 <div class="ui-modal-body">

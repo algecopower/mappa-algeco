@@ -199,7 +199,7 @@ def genera_html_verifica_indirizzi() -> str:
         <div id="verificaIndirizziModal" class="ui-modal">
             <div class="ui-modal-content" style="max-width: 1200px; width: 100%;">
                 <div class="ui-modal-header">
-                    <h2 class="ui-modal-title">🔍 Verifica Indirizzi (anagrafe nazionale)</h2>
+                    <h2 class="ui-modal-title"><i data-lucide="map-pinned"></i> Verifica Indirizzi (anagrafe nazionale)</h2>
                     <button class="ui-modal-close" type="button">×</button>
                 </div>
                 <div class="ui-modal-body" style="padding: 0;">

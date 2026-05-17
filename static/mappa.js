@@ -295,7 +295,11 @@ setMapTiles(document.body.getAttribute('data-theme') || 'dark');
     var t = document.body.getAttribute('data-theme');
     if (t === 'light') {
         var btn = document.getElementById('themeToggle');
-        if (btn) { btn.textContent = '☀️ Tema'; btn.classList.add('active'); }
+        if (btn) {
+            btn.innerHTML = '<i data-lucide="sun"></i> Tema';
+            btn.classList.add('active');
+            if (window.refreshLucideIcons) window.refreshLucideIcons();
+        }
     }
 })();
 
@@ -738,8 +742,25 @@ function toggleTheme() {
     localStorage.setItem('algeco_theme', newTheme);
 
     const btn = document.getElementById('themeToggle');
-    btn.textContent = newTheme === 'dark' ? '🌙 Tema' : '☀️ Tema';
+    const iconName = newTheme === 'dark' ? 'moon' : 'sun';
+    btn.innerHTML = `<i data-lucide="${iconName}"></i> Tema`;
     btn.classList.toggle('active', newTheme === 'light');
+    window.refreshLucideIcons();
+}
+
+
+// Inizializza Lucide icons (converte <i data-lucide="X"> in SVG).
+// Esposto come funzione richiamabile dopo update DOM dinamico (popup,
+// sidebar contatori ricostruita, ecc.).
+window.refreshLucideIcons = function () {
+    if (typeof lucide !== 'undefined' && lucide.createIcons) {
+        lucide.createIcons();
+    }
+};
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', window.refreshLucideIcons);
+} else {
+    window.refreshLucideIcons();
 }
 
 
@@ -749,8 +770,10 @@ function _syncDesignToggleBtn() {
     const btn = document.getElementById('designToggle');
     if (!btn) return;
     const current = document.body.getAttribute('data-design') || 'glass';
-    btn.textContent = current === 'glass' ? '💎 Stile' : '⬜ Stile';
+    const iconName = current === 'glass' ? 'sparkles' : 'square';
+    btn.innerHTML = `<i data-lucide="${iconName}"></i> Stile`;
     btn.classList.toggle('active', current === 'solid');
+    window.refreshLucideIcons();
 }
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', _syncDesignToggleBtn);
@@ -771,11 +794,13 @@ function toggleDesign() {
 
     const btn = document.getElementById('designToggle');
     if (btn) {
-        btn.textContent = next === 'glass' ? '💎 Stile' : '⬜ Stile';
+        const iconName = next === 'glass' ? 'sparkles' : 'square';
+        btn.innerHTML = `<i data-lucide="${iconName}"></i> Stile`;
         btn.classList.toggle('active', next === 'solid');
         btn.title = next === 'glass'
             ? 'Passa a tema solido (zero blur, più leggero su mobile)'
             : 'Passa a tema vetro (effetto glassmorfico)';
+        window.refreshLucideIcons();
     }
 }
 
@@ -1250,16 +1275,17 @@ function toggleView() {
     const btn = document.getElementById('viewToggle');
 
     if (viewMode === 'zone') {
-        btn.innerHTML = '🗺️ Zone';
+        btn.innerHTML = '<i data-lucide="map"></i> Zone';
         btn.classList.add('active');
         document.getElementById('searchInput').placeholder = '🔍 Cerca...';
         mostraVistaZone(document.getElementById('searchInput').value);
     } else {
-        btn.innerHTML = '🏘️ Comuni';
+        btn.innerHTML = '<i data-lucide="building-2"></i> Comuni';
         btn.classList.remove('active');
         document.getElementById('searchInput').placeholder = '🔍 Cerca...';
         mostraVistaComuni(document.getElementById('searchInput').value);
     }
+    window.refreshLucideIcons();
 }
 
 function toggleSidebar() {

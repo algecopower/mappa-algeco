@@ -164,6 +164,17 @@
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
+/* Lucide icons inline col testo: dimensione = altezza riga.
+   stroke-width 1.75 (più sottile del default 2) = look più "premium". */
+[data-lucide], svg.lucide {
+    width: 1em;
+    height: 1em;
+    stroke-width: 1.75;
+    vertical-align: -0.15em;
+    display: inline-block;
+    flex-shrink: 0;
+}
+
 /* ============================================================
    INTERACTIVE STATES — uniformità per tutta l'app.
    Applicate via selettori generici: ogni input/select/textarea

@@ -4,36 +4,7 @@
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
-/* Hover lift sui pulsanti "azione" specifici della mappa. */
-.btn-primary,
-.btn-confirm,
-.btn-save-edit,
-.btn-apply-advanced,
-.btn-clear-advanced,
-.orari-lettere-btn,
-.vi-btn-verifica {
-    box-shadow: var(--elev-1);
-}
-.btn-primary:hover,
-.btn-confirm:hover,
-.btn-save-edit:hover,
-.btn-apply-advanced:hover,
-.btn-clear-advanced:hover,
-.orari-lettere-btn:hover,
-.vi-btn-verifica:hover {
-    box-shadow: var(--elev-2);
-    transform: translateY(-1px);
-}
-.btn-primary:active,
-.btn-confirm:active,
-.btn-save-edit:active,
-.btn-apply-advanced:active,
-.btn-clear-advanced:active,
-.orari-lettere-btn:active,
-.vi-btn-verifica:active {
-    transform: translateY(0) scale(0.98);
-    box-shadow: var(--elev-1);
-}
+/* Tutti i .btn-* sono ora gestiti dal sistema pill unificato in theme.css. */
 
 
 body {

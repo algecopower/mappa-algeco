@@ -144,45 +144,11 @@ def genera_css_gestionale():
             margin-top: 15px;
         }
         
-        .btn-save-edit {
-            flex: 1;
-            padding: 10px 16px;
-            background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            font-size: 0.9em;
-            transition: all 0.2s;
-        }
-        
-        .btn-save-edit:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(39, 174, 96, 0.3);
-        }
-        
-        .btn-save-edit:disabled {
-            background: #95a5a6;
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
-        }
-        
-        .btn-cancel-edit {
-            padding: 10px 16px;
-            background: var(--bg-tertiary);
-            color: var(--text-primary);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 0.9em;
-            transition: all 0.2s;
-        }
-        
-        .btn-cancel-edit:hover {
-            border-color: var(--accent);
-        }
+        /* .btn-save-edit e .btn-cancel-edit sono gestiti dal sistema
+           pill unificato in static/theme.css (.btn-success e .btn-ghost).
+           Manteniamo solo l'estensione "flex: 1" per il save che deve
+           occupare lo spazio nel popup. */
+        .btn-save-edit { flex: 1; }
         
         .btn-appuntamento {
             width: 100%;

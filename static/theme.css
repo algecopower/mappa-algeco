@@ -52,7 +52,7 @@
     --easing: cubic-bezier(0.16, 1, 0.3, 1);
     --easing-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 
-    --focus-ring: 0 0 0 3px rgba(233, 69, 96, 0.35);
+    --focus-ring: 0 0 0 3px rgba(59, 130, 246, 0.35);
 
     /* Elevazioni */
     --elev-1: 0 1px 2px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.10);
@@ -60,71 +60,86 @@
     --elev-3: 0 4px 8px rgba(0,0,0,0.12), 0 8px 24px rgba(0,0,0,0.18);
     --elev-4: 0 8px 16px rgba(0,0,0,0.16), 0 24px 48px rgba(0,0,0,0.24);
 
-    /* Tema scuro (default) */
-    --bg-primary: #1a1a2e;
-    --bg-secondary: #16213e;
-    --bg-tertiary: #0f3460;
-    --text-primary: #eee;
-    --text-secondary: #aaa;
-    --text-muted: #666;
-    --accent: #e94560;
-    --accent-hover: #ff6b6b;
-    --accent-rgb: 233, 69, 96;
-    --border: #0f3460;
-    --shadow: rgba(0,0,0,0.3);
+    /* Tema scuro (default).
+       Accent primario: blu vivo (era #e94560 corallo). Tutto l'UI che
+       usa var(--accent) si aggiorna automaticamente: focus ring, header
+       gradient, pulsanti primari, hover. */
+    --bg-primary: #0b1220;
+    --bg-secondary: #111b30;
+    --bg-tertiary: #1e2a47;
+    --text-primary: #eef2ff;
+    --text-secondary: #b8c2d6;
+    --text-muted: #6c7898;
+    --accent: #3b82f6;          /* blue-500 */
+    --accent-hover: #60a5fa;    /* blue-400 */
+    --accent-deep: #1d4ed8;     /* blue-700 — per gradient depth */
+    --accent-rgb: 59, 130, 246;
+    --border: rgba(99, 124, 168, 0.18);
+    --shadow: rgba(0, 8, 32, 0.45);
 
-    /* Acrylic glass */
-    --panel-blur: 22px;
-    --panel-saturate: 200%;
-    --panel-bg: rgba(22, 33, 62, 0.50);
-    --panel-bg-strong: rgba(15, 52, 96, 0.62);
-    --panel-tint: linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0) 55%);
-    --panel-border: 1px solid rgba(255, 255, 255, 0.18);
+    /* Acrylic glass — più "moderno":
+       blur più intenso (28px), saturate alto, bordo più luminoso,
+       inner glow accent sottile per dare luminescenza al vetro. */
+    --panel-blur: 28px;
+    --panel-saturate: 220%;
+    --panel-bg: rgba(17, 27, 48, 0.42);
+    --panel-bg-strong: rgba(30, 42, 71, 0.58);
+    --panel-tint: linear-gradient(135deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0) 55%);
+    --panel-border: 1px solid rgba(255, 255, 255, 0.22);
     --panel-shadow:
-        0 8px 32px rgba(0, 0, 0, 0.4),
-        inset 0 1px 0 rgba(255, 255, 255, 0.1);
-    --header-bg: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0) 60%), linear-gradient(135deg, rgba(15, 52, 96, 0.6) 0%, rgba(22, 33, 62, 0.45) 100%);
-    --sidebar-bg: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0) 50%), linear-gradient(180deg, rgba(22, 33, 62, 0.55) 0%, rgba(26, 26, 46, 0.65) 100%);
-    --modal-overlay-bg: rgba(0, 0, 0, 0.35);
-    --modal-overlay-bg-strong: rgba(0, 0, 0, 0.5);
+        0 12px 40px rgba(0, 8, 32, 0.5),
+        0 0 0 1px rgba(255, 255, 255, 0.04),
+        inset 0 1px 0 rgba(255, 255, 255, 0.14),
+        inset 0 0 24px rgba(59, 130, 246, 0.06);
+    --header-bg: linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0) 60%), linear-gradient(135deg, rgba(30, 64, 175, 0.55) 0%, rgba(17, 27, 48, 0.45) 100%);
+    --sidebar-bg: linear-gradient(135deg, rgba(255,255,255,0.10), rgba(255,255,255,0) 50%), linear-gradient(180deg, rgba(17, 27, 48, 0.50) 0%, rgba(11, 18, 32, 0.62) 100%);
+    --modal-overlay-bg: rgba(0, 4, 16, 0.38);
+    --modal-overlay-bg-strong: rgba(0, 4, 16, 0.55);
 
-    /* Body bg ambient: gradient sottile per dare profondità al "vetro" */
-    --body-bg: radial-gradient(ellipse at 20% 0%, rgba(15, 52, 96, 0.55) 0%, transparent 55%),
-               radial-gradient(ellipse at 80% 100%, rgba(233, 69, 96, 0.18) 0%, transparent 50%),
-               var(--bg-primary);
+    /* Body bg ambient: aurora blu sfumata */
+    --body-bg:
+        radial-gradient(ellipse at 18% 0%, rgba(59, 130, 246, 0.32) 0%, transparent 55%),
+        radial-gradient(ellipse at 82% 100%, rgba(99, 102, 241, 0.22) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 50%, rgba(14, 165, 233, 0.10) 0%, transparent 60%),
+        var(--bg-primary);
 }
 
 html[data-theme="light"],
 [data-theme="light"] {
-    --bg-primary: #f5f5f5;
+    --bg-primary: #eef2ff;
     --bg-secondary: #ffffff;
-    --bg-tertiary: #e8e8e8;
-    --text-primary: #333;
-    --text-secondary: #666;
-    --text-muted: #999;
-    --accent: #9b59b6;
-    --accent-hover: #a855f7;
-    --accent-rgb: 155, 89, 182;
-    --border: #ddd;
-    --shadow: rgba(0,0,0,0.1);
-    --focus-ring: 0 0 0 3px rgba(155, 89, 182, 0.32);
+    --bg-tertiary: #e0e7ff;
+    --text-primary: #1e293b;
+    --text-secondary: #475569;
+    --text-muted: #94a3b8;
+    --accent: #2563eb;          /* blue-600 — più scuro per contrasto su bianco */
+    --accent-hover: #3b82f6;    /* blue-500 */
+    --accent-deep: #1e40af;     /* blue-800 */
+    --accent-rgb: 37, 99, 235;
+    --border: rgba(37, 99, 235, 0.18);
+    --shadow: rgba(15, 23, 42, 0.10);
+    --focus-ring: 0 0 0 3px rgba(37, 99, 235, 0.30);
 
-    --panel-saturate: 250%;
-    --panel-bg: rgba(255, 255, 255, 0.62);
-    --panel-bg-strong: rgba(255, 255, 255, 0.82);
-    --panel-tint: linear-gradient(135deg, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0) 55%);
-    --panel-border: 1px solid rgba(255, 255, 255, 0.55);
+    --panel-saturate: 240%;
+    --panel-bg: rgba(255, 255, 255, 0.55);
+    --panel-bg-strong: rgba(255, 255, 255, 0.78);
+    --panel-tint: linear-gradient(135deg, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0) 55%);
+    --panel-border: 1px solid rgba(255, 255, 255, 0.7);
     --panel-shadow:
-        0 8px 32px rgba(0, 0, 0, 0.12),
-        inset 0 1px 0 rgba(255, 255, 255, 0.8);
-    --header-bg: linear-gradient(135deg, rgba(255,255,255,0.65), rgba(255,255,255,0) 60%), linear-gradient(135deg, rgba(232, 232, 232, 0.6) 0%, rgba(255, 255, 255, 0.5) 100%);
-    --sidebar-bg: linear-gradient(135deg, rgba(255,255,255,0.6), rgba(255,255,255,0) 50%), linear-gradient(180deg, rgba(255, 255, 255, 0.62) 0%, rgba(245, 245, 245, 0.72) 100%);
-    --modal-overlay-bg: rgba(255, 255, 255, 0.35);
-    --modal-overlay-bg-strong: rgba(255, 255, 255, 0.55);
+        0 12px 40px rgba(37, 99, 235, 0.10),
+        0 0 0 1px rgba(37, 99, 235, 0.05),
+        inset 0 1px 0 rgba(255, 255, 255, 0.95),
+        inset 0 0 32px rgba(37, 99, 235, 0.04);
+    --header-bg: linear-gradient(135deg, rgba(255,255,255,0.7), rgba(255,255,255,0) 60%), linear-gradient(135deg, rgba(219, 234, 254, 0.65) 0%, rgba(255, 255, 255, 0.55) 100%);
+    --sidebar-bg: linear-gradient(135deg, rgba(255,255,255,0.65), rgba(255,255,255,0) 50%), linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, rgba(238, 242, 255, 0.7) 100%);
+    --modal-overlay-bg: rgba(255, 255, 255, 0.4);
+    --modal-overlay-bg-strong: rgba(255, 255, 255, 0.6);
 
-    --body-bg: radial-gradient(ellipse at 20% 0%, rgba(155, 89, 182, 0.12) 0%, transparent 55%),
-               radial-gradient(ellipse at 80% 100%, rgba(155, 89, 182, 0.06) 0%, transparent 50%),
-               var(--bg-primary);
+    --body-bg:
+        radial-gradient(ellipse at 18% 0%, rgba(59, 130, 246, 0.16) 0%, transparent 55%),
+        radial-gradient(ellipse at 82% 100%, rgba(99, 102, 241, 0.12) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 50%, rgba(14, 165, 233, 0.06) 0%, transparent 60%),
+        var(--bg-primary);
 }
 
 [data-design="solid"] {

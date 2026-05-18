@@ -719,7 +719,7 @@ function creaMarkerGruppo(gruppo, colore) {
             className: '',
             html: `<div style="background: ${colore}; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; position: relative; border: 3px solid #06b6d4; box-shadow: 0 2px 8px rgba(6,182,212,0.5); font-weight: bold; font-size: 10px; color: white; ${pulseStyle}">
                 ${primoContatore.indiceTecnico + 1}
-                <span style="position: absolute; top: -8px; right: -8px; background: #ff6b6b; color: white; min-width: 18px; height: 18px; border-radius: 50%; font-size: 11px; font-weight: bold; display: flex; align-items: center; justify-content: center; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">${gruppo.contatori.length}</span>
+                <span style="position: absolute; top: -8px; right: -8px; background: var(--accent); color: white; min-width: 18px; height: 18px; border-radius: 50%; font-size: 11px; font-weight: bold; display: flex; align-items: center; justify-content: center; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">${gruppo.contatori.length}</span>
                 ${showEneltelLabels ? `<span class="marker-label">${numeri}</span>` : ''}
             </div>`,
             iconSize: [28, 28],
@@ -731,7 +731,7 @@ function creaMarkerGruppo(gruppo, colore) {
             className: '',
             html: `<div style="background: ${colore}; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; position: relative; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3); font-weight: bold; font-size: 10px; color: white; ${pulseStyle}">
                 ${primoContatore.indiceTecnico + 1}
-                <span style="position: absolute; top: -8px; right: -8px; background: #ff6b6b; color: white; min-width: 18px; height: 18px; border-radius: 50%; font-size: 11px; font-weight: bold; display: flex; align-items: center; justify-content: center; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">${gruppo.contatori.length}</span>
+                <span style="position: absolute; top: -8px; right: -8px; background: var(--accent); color: white; min-width: 18px; height: 18px; border-radius: 50%; font-size: 11px; font-weight: bold; display: flex; align-items: center; justify-content: center; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">${gruppo.contatori.length}</span>
                 ${showEneltelLabels ? `<span class="marker-label">${numeri}</span>` : ''}
             </div>`,
             iconSize: [28, 28],
@@ -1637,7 +1637,7 @@ function selectAddressResult(lat, lon, displayName) {
     addressMarker = L.marker([lat, lon], {
         icon: L.divIcon({
             className: 'address-marker',
-            html: '<div style="background: #9b59b6; width: 20px; height: 20px; border-radius: 50%; box-shadow: 0 2px 8px rgba(0,0,0,0.4); border: 3px solid white;"></div>',
+            html: '<div style="background: var(--accent); width: 20px; height: 20px; border-radius: 50%; box-shadow: 0 2px 8px rgba(0,0,0,0.4); border: 3px solid white;"></div>',
             iconSize: [20, 20],
             iconAnchor: [10, 10]
         })
@@ -5187,7 +5187,7 @@ function mostraRisultatiRicerca(contatoriMatch) {
     const listaConIndice = contatoriMatch.map((c, idx) => ({
         ...c,
         indiceTecnico: idx,
-        colore: '#e94560'
+        colore: '#3b82f6'
     }));
     
     // Raggruppa contatori sovrapposti
@@ -5199,7 +5199,7 @@ function mostraRisultatiRicerca(contatoriMatch) {
         
         if (isGruppo) {
             // Usa la funzione dedicata per i marker di gruppo
-            const marker = creaMarkerGruppo(gruppo, '#e94560');
+            const marker = creaMarkerGruppo(gruppo, '#3b82f6');
             marker.addTo(map);
             markers.push(marker);
         } else {
@@ -5213,12 +5213,12 @@ function mostraRisultatiRicerca(contatoriMatch) {
             });
             
             const marker = L.marker([c.lat, c.lon], { icon })
-                .bindPopup(() => createContatorePopup(c, c.indiceTecnico + 1, '#e94560'))
+                .bindPopup(() => createContatorePopup(c, c.indiceTecnico + 1, '#3b82f6'))
                 .addTo(map);
             
             marker.contatore = c;
             marker.numeroTappa = c.indiceTecnico + 1;
-            marker.coloreTecnico = '#e94560';
+            marker.coloreTecnico = '#3b82f6';
             marker.prevPoint = null;
             markers.push(marker);
         }

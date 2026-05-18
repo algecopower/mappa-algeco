@@ -361,7 +361,7 @@ def genera_css_gestionale():
         }
         
         .btn-BOXBEAT-upload {
-            background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%);
+            background: linear-gradient(135deg, var(--accent) 0%, var(--accent-deep) 100%);
             color: white;
         }
         
@@ -651,7 +651,7 @@ def genera_css_gestionale():
         
         .sigilli-badge-tipo {
             background: rgba(155, 89, 182, 0.2);
-            color: #9b59b6;
+            color: var(--accent);
         }
         
         .sigilli-badge-tipo.fotovoltaico {
@@ -2936,7 +2936,7 @@ def genera_js_gestionale():
                 // Se il popup è aperto, aggiornalo forzatamente
                 if (marker.isPopupOpen && marker.isPopupOpen()) {{
                     const num = marker.numeroTappa || '';
-                    const colore = marker.coloreTecnico || '#e94560';
+                    const colore = marker.coloreTecnico || '#3b82f6';
                     const prevPoint = marker.prevPoint || null;
                     const nuovoContenuto = createContatorePopup(contatoreAggiornato, num, colore, prevPoint);
                     marker.closePopup();
@@ -2945,7 +2945,7 @@ def genera_js_gestionale():
                     setTimeout(() => {{ marker.openPopup(); }}, 50);
                 }} else {{
                     const num = marker.numeroTappa || '';
-                    const colore = marker.coloreTecnico || '#e94560';
+                    const colore = marker.coloreTecnico || '#3b82f6';
                     const prevPoint = marker.prevPoint || null;
                     const nuovoContenuto = createContatorePopup(contatoreAggiornato, num, colore, prevPoint);
                     marker.unbindPopup();

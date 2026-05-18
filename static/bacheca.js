@@ -96,7 +96,7 @@ var CSS = `
     justify-content: space-between;
     padding: 14px 16px;
     border-bottom: var(--panel-border, 1px solid rgba(255,255,255,0.1));
-    background: linear-gradient(135deg, var(--accent, #e94560) 0%, var(--accent-hover, #ff6b6b) 100%);
+    background: linear-gradient(135deg, var(--accent, #3b82f6) 0%, var(--accent-hover, var(--accent-hover, #60a5fa)) 100%);
     color: white;
 }
 .bacheca-panel-header .bacheca-panel-title { color: white; }

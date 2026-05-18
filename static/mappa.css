@@ -1337,7 +1337,7 @@ body {
 
 .tappa-tempo {
     font-size: 0.7em;
-    color: #667eea;
+    color: var(--accent);
     margin-left: 34px;
     margin-bottom: 3px;
     font-weight: 500;
@@ -1481,7 +1481,7 @@ body {
 #printZoomSlider::-webkit-slider-runnable-track {
     height: 8px;
     border-radius: 4px;
-    background: linear-gradient(to right, #4a5568 0%, #667eea 100%);
+    background: linear-gradient(to right, var(--bg-tertiary) 0%, var(--accent) 100%);
 }
 
 #zoomSlider::-webkit-slider-thumb,
@@ -1491,7 +1491,7 @@ body {
     width: 22px;
     height: 22px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-deep) 100%);
     cursor: pointer;
     box-shadow: 0 2px 8px rgba(0,0,0,0.3);
     border: 3px solid white;
@@ -1508,7 +1508,7 @@ body {
 #printZoomSlider::-moz-range-track {
     height: 8px;
     border-radius: 4px;
-    background: linear-gradient(to right, #4a5568 0%, #667eea 100%);
+    background: linear-gradient(to right, var(--bg-tertiary) 0%, var(--accent) 100%);
 }
 
 #zoomSlider::-moz-range-thumb,
@@ -1516,7 +1516,7 @@ body {
     width: 16px;
     height: 16px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-deep) 100%);
     cursor: pointer;
     box-shadow: 0 2px 8px rgba(0,0,0,0.3);
     border: 3px solid white;
@@ -1561,7 +1561,7 @@ body {
 }
 
 .marker-appuntamento {
-    background: #e94560 !important;
+    background: var(--accent) !important;
     animation: pulse 2s infinite;
 }
 
@@ -1604,7 +1604,7 @@ body {
     position: absolute;
     top: -8px;
     right: -8px;
-    background: #ff6b6b;
+    background: var(--accent-hover);
     color: white;
     min-width: 18px;
     height: 18px;
@@ -1620,7 +1620,7 @@ body {
 
 /* Popup multi-contatore */
 .popup-multi-header {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-deep) 100%);
     color: white;
     padding: 12px;
     border-radius: 8px;
@@ -1701,7 +1701,7 @@ body {
 
 .popup-multi-item-app {
     display: inline-block;
-    background: #e94560;
+    background: var(--accent);
     color: white;
     padding: 2px 6px;
     border-radius: 4px;
@@ -1757,7 +1757,7 @@ body {
 }
 
 .popup-travel-time {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-deep) 100%);
     color: white;
     padding: 8px 12px;
     border-radius: 8px;
@@ -2003,7 +2003,7 @@ body {
     position: fixed;
     bottom: 12px;
     right: 72px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-deep) 100%);
     color: white;
     border: none;
     padding: 12px 24px;
@@ -2073,7 +2073,7 @@ body {
     right: 12px;
     width: 48px;
     height: 48px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-deep) 100%);
     color: white;
     border: none;
     border-radius: 50%;
@@ -2088,7 +2088,7 @@ body {
 }
 
 [data-theme="dark"] .gestionale-fab {
-    background: linear-gradient(135deg, #e94560 0%, #c0392b 100%);
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-deep) 100%);
     box-shadow: 0 4px 15px rgba(233, 69, 96, 0.4);
 }
 
@@ -2138,12 +2138,12 @@ body {
     align-items: center;
     justify-content: space-between;
     padding: 10px 14px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-deep) 100%);
     color: white;
 }
 
 [data-theme="dark"] .gestionale-panel-header {
-    background: linear-gradient(135deg, #e94560 0%, #c0392b 100%);
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-deep) 100%);
 }
 
 .gestionale-panel-title {
@@ -2260,14 +2260,14 @@ body {
     justify-content: space-between;
     align-items: center;
     padding: 18px 24px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-deep) 100%);
     border-radius: 16px 16px 0 0;
     color: white;
     flex-shrink: 0;
 }
 
 [data-theme="dark"] .settings-header {
-    background: linear-gradient(135deg, #e94560 0%, #c0392b 100%);
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-deep) 100%);
 }
 
 .settings-title {
@@ -2599,7 +2599,7 @@ body {
     padding: 10px 24px;
     border: none;
     border-radius: 8px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-deep) 100%);
     color: white;
     cursor: pointer;
     font-size: 13px;
@@ -2609,7 +2609,7 @@ body {
 }
 
 [data-theme="dark"] .settings-btn-save {
-    background: linear-gradient(135deg, #e94560 0%, #c0392b 100%);
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-deep) 100%);
     box-shadow: 0 2px 8px rgba(233, 69, 96, 0.3);
 }
 
@@ -2701,7 +2701,7 @@ body {
 
 .admin-badge-admin {
     background: rgba(102, 126, 234, 0.15);
-    color: #667eea;
+    color: var(--accent);
 }
 
 [data-theme="dark"] .admin-badge-admin {
@@ -2973,7 +2973,7 @@ body {
 }
 
 .btn-print-confirm {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-deep) 100%);
     color: white;
 }
 

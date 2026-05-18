@@ -8,6 +8,18 @@
    sue regole specifiche.
    ============================================================ */
 
+/* Font Inter caricato via @import: garantisce uniformità anche se
+   un template ha dimenticato il <link> Google Fonts. */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+/* Font globale di base per tutte le pagine che includono theme.css. */
+body, button, input, select, textarea {
+    font-family: 'Inter', 'Segoe UI', system-ui, -apple-system,
+                 BlinkMacSystemFont, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
 :root {
     /* Spacing scale (base 4px) */
     --space-1: 4px;

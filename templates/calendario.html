@@ -684,71 +684,14 @@
             animation: spin 0.7s linear infinite;
         }
 
-        /* Btn */
-        .btn {
-            padding: 10px 20px;
-            border-radius: 10px;
-            border: none;
-            cursor: pointer;
-            font-size: 0.95em;
-            font-weight: 600;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            transition: all 0.2s;
-        }
-
+        /* .btn .btn-primary .btn-accent .btn-ghost .btn-danger .btn-sm
+           sono definiti in static/theme.css (sistema unificato).
+           Mappiamo .btn-primary del calendario al verde brand (success). */
         .btn-primary {
-            background: var(--primary);
-            color: white;
-            box-shadow: var(--elev-1);
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
         }
-
-        .btn-primary:hover {
-            background: var(--primary-dark);
-            transform: translateY(-1px);
-            box-shadow: var(--elev-2);
-        }
-
-        /* Bottone accent (azione secondaria con il colore di brand) */
-        .btn-accent {
-            background: linear-gradient(135deg, var(--accent) 0%, var(--accent-deep) 100%);
-            color: white;
-            box-shadow: var(--elev-1);
-        }
-        .btn-accent:hover {
-            transform: translateY(-1px);
-            box-shadow: var(--elev-2);
-        }
-
-        .btn-danger {
-            background: var(--danger);
-            color: white;
-        }
-
-        .btn-danger:hover {
-            opacity: 0.9;
-        }
-
-        .btn-sm {
-            padding: 6px 12px;
-            font-size: 0.85em;
-            border-radius: 8px;
-        }
-
-        .btn-ghost {
-            background: var(--panel-bg);
-            backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-            -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-            border: var(--panel-border);
-            color: var(--text);
-        }
-
-        .btn-ghost:hover {
-            background: var(--panel-bg-strong);
-            border-color: var(--accent);
-            transform: translateY(-1px);
-            box-shadow: var(--elev-1);
+        .btn-primary:not(:disabled):hover {
+            background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary-dark) 100%);
         }
 
         /* Action buttons on activity cards */
@@ -1817,12 +1760,12 @@
     <div class="modal-overlay" id="modalBoxBeatSettings">
         <div class="modal-content" style="max-width: 480px;">
             <div class="modal-header">
-                <h2 style="color: #e91e63;"><i class="fas fa-cog"></i> Impostazioni Promemoria Appuntamento</h2>
+                <h2 style="color: var(--accent);"><i class="fas fa-cog"></i> Impostazioni Promemoria Appuntamento</h2>
                 <button class="modal-close-btn" onclick="chiudiModalBoxBeatSettings()" title="Chiudi"><i data-lucide="x"></i></button>
             </div>
 
             <p style="color: var(--text-muted); font-size: 0.9em; margin-bottom: 16px;">
-                Configura l'orario di scadenza per i promemoria Appuntamento. Riceverai un avviso 
+                Configura l'orario di scadenza per i promemoria Appuntamento. Riceverai un avviso
                 quando si avvicina l'orario impostato e ci sono ancora appuntamenti da riportare.
             </p>
 
@@ -1856,8 +1799,8 @@
             </div>
 
             <div class="modal-footer">
-                <button class="btn btn-ghost" onclick="chiudiModalBoxBeatSettings()">Annulla</button>
-                <button class="btn" style="background: #e91e63; color: white;" onclick="salvaBoxBeatSettings()">
+                <button class="btn btn-sm btn-ghost" onclick="chiudiModalBoxBeatSettings()">Annulla</button>
+                <button class="btn btn-sm btn-accent" onclick="salvaBoxBeatSettings()">
                     <i class="fas fa-save"></i> Salva
                 </button>
             </div>

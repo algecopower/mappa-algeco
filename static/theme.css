@@ -226,6 +226,112 @@ button {
 button:not(:disabled):active { transform: scale(0.97); }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
 
+/* ============================================================
+   SISTEMA BOTTONI UNIFICATO (.btn + varianti)
+   Stile acrylic coerente in tutta l'app. Le pagine che avevano
+   override locali possono rimuoverli per ereditare da qui.
+   ============================================================ */
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    padding: 10px 18px;
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+    font-family: inherit;
+    font-size: var(--text-base);
+    font-weight: var(--font-semibold);
+    line-height: 1;
+    cursor: pointer;
+    white-space: nowrap;
+    user-select: none;
+    transition:
+        transform var(--duration-fast) var(--easing),
+        box-shadow var(--duration) var(--easing),
+        background-color var(--duration) var(--easing),
+        border-color var(--duration) var(--easing),
+        color var(--duration) var(--easing);
+}
+
+.btn-sm {
+    padding: 6px 12px;
+    font-size: var(--text-sm);
+    border-radius: var(--radius-sm);
+    gap: var(--space-1);
+}
+
+.btn-lg {
+    padding: 14px 24px;
+    font-size: var(--text-md);
+}
+
+.btn:not(:disabled):hover { transform: translateY(-1px); }
+.btn:not(:disabled):active { transform: translateY(0) scale(0.98); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
+
+/* PRIMARY: accent gradient (azione principale, brand) */
+.btn-primary,
+.btn-accent {
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-deep) 100%);
+    color: white;
+    box-shadow:
+        var(--elev-1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+.btn-primary:not(:disabled):hover,
+.btn-accent:not(:disabled):hover {
+    box-shadow:
+        var(--elev-3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+/* SUCCESS: verde (conferma, salva, OK) */
+.btn-success {
+    background: linear-gradient(135deg, #25D366 0%, #128C7E 100%);
+    color: white;
+    box-shadow:
+        var(--elev-1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+.btn-success:not(:disabled):hover { box-shadow: var(--elev-3), inset 0 1px 0 rgba(255, 255, 255, 0.25); }
+
+/* DANGER: rosso (elimina, distruttivo) */
+.btn-danger {
+    background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
+    color: white;
+    box-shadow:
+        var(--elev-1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+.btn-danger:not(:disabled):hover { box-shadow: var(--elev-3), inset 0 1px 0 rgba(255, 255, 255, 0.25); }
+
+/* GHOST: acrylic translucido (azione secondaria, annulla) */
+.btn-ghost,
+.btn-secondary {
+    background: var(--panel-bg);
+    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    border: var(--panel-border);
+    color: var(--text-primary);
+}
+.btn-ghost:not(:disabled):hover,
+.btn-secondary:not(:disabled):hover {
+    background: var(--panel-bg-strong);
+    border-color: var(--accent);
+    box-shadow: var(--elev-1);
+}
+
+/* ICON-ONLY: quadrato, niente padding extra */
+.btn-icon-only {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border-radius: var(--radius-sm);
+}
+.btn-icon-only.btn-sm { width: 28px; height: 28px; }
+
 input, select, textarea {
     font-family: inherit;
     transition:

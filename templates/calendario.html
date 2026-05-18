@@ -8,6 +8,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="/static/theme.css">
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+    <script src="/static/theme-init.js" defer></script>
     <style>
         :root {
             --primary: #25D366;
@@ -1643,7 +1644,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h2><i class="fas fa-pen"></i> <span id="modalTitle">Nuova Attività</span></h2>
-                <button class="modal-close-btn" onclick="chiudiModal()" title="Chiudi">✕</button>
+                <button class="modal-close-btn" onclick="chiudiModal()" title="Chiudi"><i data-lucide="x"></i></button>
             </div>
 
             <input type="hidden" id="editId" value="">
@@ -1736,7 +1737,7 @@
         <div class="modal-content" style="max-width: 580px;">
             <div class="modal-header">
                 <h2 style="color: #e91e63;"><i class="fas fa-clipboard-check"></i> <span id="bbModalTitle">Nuovo Promemoria Appuntamento</span></h2>
-                <button class="modal-close-btn" onclick="chiudiModalBoxBeat()" title="Chiudi">✕</button>
+                <button class="modal-close-btn" onclick="chiudiModalBoxBeat()" title="Chiudi"><i data-lucide="x"></i></button>
             </div>
 
             <input type="hidden" id="bbEditId" value="">
@@ -1801,7 +1802,7 @@
         <div class="modal-content" style="max-width: 480px;">
             <div class="modal-header">
                 <h2 style="color: #e91e63;"><i class="fas fa-cog"></i> Impostazioni Promemoria Appuntamento</h2>
-                <button class="modal-close-btn" onclick="chiudiModalBoxBeatSettings()" title="Chiudi">✕</button>
+                <button class="modal-close-btn" onclick="chiudiModalBoxBeatSettings()" title="Chiudi"><i data-lucide="x"></i></button>
             </div>
 
             <p style="color: var(--text-muted); font-size: 0.9em; margin-bottom: 16px;">

@@ -271,118 +271,58 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn:not(:disabled):active { transform: translateY(0) scale(0.98); }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
 
-/* Tutti i bottoni con colore semantico sono "vetri colorati":
-   tinta semi-trasparente + backdrop-filter + bordo luminoso del colore
-   + inset highlight + glow esterno sottile. Niente più gradient
-   "flat saturi" tipo dashboard 2015. */
-
+/* PRIMARY/ACCENT: gradient pieno accent (azione brand) */
 .btn-primary,
 .btn-accent {
-    background: linear-gradient(135deg,
-        rgba(var(--accent-rgb), 0.40) 0%,
-        rgba(var(--accent-rgb), 0.22) 100%);
-    backdrop-filter: blur(16px) saturate(180%);
-    -webkit-backdrop-filter: blur(16px) saturate(180%);
-    border: 1px solid rgba(var(--accent-rgb), 0.55);
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-deep) 100%);
     color: white;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
     box-shadow:
-        0 6px 20px rgba(var(--accent-rgb), 0.30),
-        inset 0 1px 0 rgba(255, 255, 255, 0.28),
-        inset 0 -1px 0 rgba(0, 0, 0, 0.10);
+        var(--elev-1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 .btn-primary:not(:disabled):hover,
 .btn-accent:not(:disabled):hover {
-    background: linear-gradient(135deg,
-        rgba(var(--accent-rgb), 0.55) 0%,
-        rgba(var(--accent-rgb), 0.32) 100%);
-    border-color: rgba(var(--accent-rgb), 0.75);
     box-shadow:
-        0 10px 30px rgba(var(--accent-rgb), 0.40),
-        inset 0 1px 0 rgba(255, 255, 255, 0.40);
+        var(--elev-3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 
-/* SUCCESS: vetro verde */
+/* SUCCESS: gradient verde (conferma, salva) */
 :root { --success-rgb: 37, 211, 102; }
 .btn-success {
-    background: linear-gradient(135deg,
-        rgba(var(--success-rgb), 0.40) 0%,
-        rgba(var(--success-rgb), 0.22) 100%);
-    backdrop-filter: blur(16px) saturate(180%);
-    -webkit-backdrop-filter: blur(16px) saturate(180%);
-    border: 1px solid rgba(var(--success-rgb), 0.55);
+    background: linear-gradient(135deg, #25D366 0%, #128C7E 100%);
     color: white;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
     box-shadow:
-        0 6px 20px rgba(var(--success-rgb), 0.30),
-        inset 0 1px 0 rgba(255, 255, 255, 0.28),
-        inset 0 -1px 0 rgba(0, 0, 0, 0.10);
+        var(--elev-1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
-.btn-success:not(:disabled):hover {
-    background: linear-gradient(135deg,
-        rgba(var(--success-rgb), 0.55) 0%,
-        rgba(var(--success-rgb), 0.32) 100%);
-    border-color: rgba(var(--success-rgb), 0.75);
-    box-shadow:
-        0 10px 30px rgba(var(--success-rgb), 0.40),
-        inset 0 1px 0 rgba(255, 255, 255, 0.40);
-}
+.btn-success:not(:disabled):hover { box-shadow: var(--elev-3), inset 0 1px 0 rgba(255, 255, 255, 0.25); }
 
-/* DANGER: vetro rosso */
+/* DANGER: gradient rosso (distruttivo) */
 :root { --danger-rgb: 239, 68, 68; }
 .btn-danger {
-    background: linear-gradient(135deg,
-        rgba(var(--danger-rgb), 0.40) 0%,
-        rgba(var(--danger-rgb), 0.22) 100%);
-    backdrop-filter: blur(16px) saturate(180%);
-    -webkit-backdrop-filter: blur(16px) saturate(180%);
-    border: 1px solid rgba(var(--danger-rgb), 0.55);
+    background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
     color: white;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
     box-shadow:
-        0 6px 20px rgba(var(--danger-rgb), 0.30),
-        inset 0 1px 0 rgba(255, 255, 255, 0.28),
-        inset 0 -1px 0 rgba(0, 0, 0, 0.10);
+        var(--elev-1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
-.btn-danger:not(:disabled):hover {
-    background: linear-gradient(135deg,
-        rgba(var(--danger-rgb), 0.55) 0%,
-        rgba(var(--danger-rgb), 0.32) 100%);
-    border-color: rgba(var(--danger-rgb), 0.75);
-    box-shadow:
-        0 10px 30px rgba(var(--danger-rgb), 0.40),
-        inset 0 1px 0 rgba(255, 255, 255, 0.40);
-}
+.btn-danger:not(:disabled):hover { box-shadow: var(--elev-3), inset 0 1px 0 rgba(255, 255, 255, 0.25); }
 
-/* GHOST/SECONDARY: vetro neutro (azione secondaria, annulla) */
+/* GHOST/SECONDARY: outline neutro su panel acrylic (azione secondaria) */
 .btn-ghost,
 .btn-secondary {
-    background: rgba(255, 255, 255, 0.06);
-    backdrop-filter: blur(16px) saturate(180%);
-    -webkit-backdrop-filter: blur(16px) saturate(180%);
-    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: var(--panel-bg);
+    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    border: var(--panel-border);
     color: var(--text-primary);
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.10);
 }
 .btn-ghost:not(:disabled):hover,
 .btn-secondary:not(:disabled):hover {
-    background: rgba(255, 255, 255, 0.12);
-    border-color: rgba(var(--accent-rgb), 0.6);
-    box-shadow:
-        0 6px 20px rgba(var(--accent-rgb), 0.15),
-        inset 0 1px 0 rgba(255, 255, 255, 0.18);
-}
-
-[data-theme="light"] .btn-ghost,
-[data-theme="light"] .btn-secondary {
-    background: rgba(255, 255, 255, 0.5);
-    border: 1px solid rgba(0, 0, 0, 0.08);
-}
-[data-theme="light"] .btn-ghost:not(:disabled):hover,
-[data-theme="light"] .btn-secondary:not(:disabled):hover {
-    background: rgba(255, 255, 255, 0.75);
-    border-color: rgba(var(--accent-rgb), 0.5);
+    background: var(--panel-bg-strong);
+    border-color: var(--accent);
+    box-shadow: var(--elev-1);
 }
 
 /* ICON-ONLY: quadrato, niente padding extra */

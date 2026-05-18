@@ -237,11 +237,9 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
    ============================================================ */
 
 /* ============================================================
-   STILE PILL UNIFICATO — applicato a tutte le classi-bottone
-   dell'app, anche quelle "legacy" usate nella mappa
-   (.btn-confirm, .btn-save-edit, .btn-apply-advanced, ecc.).
-   Look ispirato a Linear/Stripe/Vercel: capsule, gradient
-   minimale a 2 stop, niente "Aero/lucido caramella".
+   STILE UNIFICATO BOTTONI — modello: "Genera e scrivi nel FILONE"
+   Gradient 135° pulito, border-radius medio (10px, non capsule),
+   font-weight 700, nessun bordo evidente, glow esterno discreto.
    ============================================================ */
 
 :root { --success-rgb: 37, 211, 102; --danger-rgb: 239, 68, 68; }
@@ -260,12 +258,12 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     align-items: center;
     justify-content: center;
     gap: var(--space-2);
-    padding: 9px 18px;
-    border: 1px solid transparent;
-    border-radius: var(--radius-full);
+    padding: 12px 22px;
+    border: none;
+    border-radius: var(--radius);   /* 10px - rounded ma non capsule */
     font-family: 'Inter', system-ui, sans-serif;
     font-size: var(--text-base);
-    font-weight: var(--font-semibold);
+    font-weight: var(--font-bold);
     line-height: 1;
     cursor: pointer;
     white-space: nowrap;
@@ -274,13 +272,12 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
         transform var(--duration-fast) var(--easing),
         box-shadow var(--duration) var(--easing),
         background var(--duration) var(--easing),
-        border-color var(--duration) var(--easing),
         color var(--duration) var(--easing),
         filter var(--duration) var(--easing);
 }
 
-.btn-sm { padding: 6px 14px; font-size: var(--text-sm); gap: var(--space-1); }
-.btn-lg { padding: 12px 24px; font-size: var(--text-md); }
+.btn-sm { padding: 8px 14px; font-size: var(--text-sm); gap: var(--space-1); border-radius: var(--radius-sm); }
+.btn-lg { padding: 14px 28px; font-size: var(--text-md); border-radius: var(--radius-md); }
 
 .btn:not(:disabled):hover,
 .btn-confirm:not(:disabled):hover,
@@ -291,7 +288,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .orari-lettere-btn:not(:disabled):hover,
 .vi-btn-verifica:not(:disabled):hover,
 .btn-print-confirm:not(:disabled):hover,
-.btn-print-cancel:not(:disabled):hover { transform: translateY(-1px); filter: brightness(1.05); }
+.btn-print-cancel:not(:disabled):hover { transform: translateY(-2px); }
 
 .btn:not(:disabled):active,
 .btn-confirm:not(:disabled):active,
@@ -302,14 +299,11 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .orari-lettere-btn:not(:disabled):active,
 .vi-btn-verifica:not(:disabled):active,
 .btn-print-confirm:not(:disabled):active,
-.btn-print-cancel:not(:disabled):active { transform: scale(0.97); }
+.btn-print-cancel:not(:disabled):active { transform: translateY(0) scale(0.98); }
 
-.btn:disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; transform: none; box-shadow: none; }
 
-/* PRIMARY/ACCENT: blu (azione brand)
-   Si applica anche a .btn-confirm/.btn-apply-advanced/.orari-lettere-btn/
-   .vi-btn-verifica/.btn-print-confirm — sono "azione primaria" anche
-   se non hanno la classe .btn-primary esplicita. */
+/* PRIMARY/ACCENT (blu) — stesso pattern di .orari-lettere-btn */
 .btn-primary,
 .btn-accent,
 .btn-confirm,
@@ -317,12 +311,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .orari-lettere-btn,
 .vi-btn-verifica,
 .btn-print-confirm {
-    background: linear-gradient(180deg, var(--accent-hover) 0%, var(--accent-deep) 100%);
+    background: linear-gradient(135deg, var(--accent-hover) 0%, var(--accent-deep) 100%);
     color: white;
-    border-color: rgba(0, 0, 0, 0.20);
-    box-shadow:
-        0 4px 14px rgba(var(--accent-rgb), 0.35),
-        inset 0 1px 0 rgba(255, 255, 255, 0.20);
 }
 .btn-primary:not(:disabled):hover,
 .btn-accent:not(:disabled):hover,
@@ -331,45 +321,30 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .orari-lettere-btn:not(:disabled):hover,
 .vi-btn-verifica:not(:disabled):hover,
 .btn-print-confirm:not(:disabled):hover {
-    box-shadow:
-        0 6px 20px rgba(var(--accent-rgb), 0.50),
-        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    box-shadow: 0 6px 18px rgba(var(--accent-rgb), 0.40);
 }
 
-/* SUCCESS: verde (.btn-save-edit della mappa è semanticamente "salva") */
+/* SUCCESS (verde) */
 .btn-success,
 .btn-save-edit {
-    background: linear-gradient(180deg, #34d399 0%, #15803d 100%);
+    background: linear-gradient(135deg, #4ade80 0%, #15803d 100%);
     color: white;
-    border-color: rgba(0, 0, 0, 0.20);
-    box-shadow:
-        0 4px 14px rgba(var(--success-rgb), 0.35),
-        inset 0 1px 0 rgba(255, 255, 255, 0.20);
 }
 .btn-success:not(:disabled):hover,
 .btn-save-edit:not(:disabled):hover {
-    box-shadow:
-        0 6px 20px rgba(var(--success-rgb), 0.50),
-        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    box-shadow: 0 6px 18px rgba(var(--success-rgb), 0.40);
 }
 
-/* DANGER: rosso */
+/* DANGER (rosso) */
 .btn-danger {
-    background: linear-gradient(180deg, #f87171 0%, #b91c1c 100%);
+    background: linear-gradient(135deg, #f87171 0%, #b91c1c 100%);
     color: white;
-    border-color: rgba(0, 0, 0, 0.20);
-    box-shadow:
-        0 4px 14px rgba(var(--danger-rgb), 0.35),
-        inset 0 1px 0 rgba(255, 255, 255, 0.20);
 }
 .btn-danger:not(:disabled):hover {
-    box-shadow:
-        0 6px 20px rgba(var(--danger-rgb), 0.50),
-        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    box-shadow: 0 6px 18px rgba(var(--danger-rgb), 0.40);
 }
 
-/* GHOST/SECONDARY: capsule outline acrylic (azione secondaria)
-   Applicato anche a .btn-cancel-edit/.btn-clear-advanced/.btn-print-cancel. */
+/* GHOST/SECONDARY (acrylic neutro) */
 .btn-ghost,
 .btn-secondary,
 .btn-cancel-edit,
@@ -378,9 +353,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     background: var(--panel-bg);
     backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
     -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-    border: 1px solid rgba(255, 255, 255, 0.18);
+    border: 1px solid rgba(255, 255, 255, 0.14);
     color: var(--text-primary);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10);
 }
 [data-theme="light"] .btn-ghost,
 [data-theme="light"] .btn-secondary,
@@ -396,14 +370,11 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-print-cancel:not(:disabled):hover {
     background: var(--panel-bg-strong);
     border-color: rgba(var(--accent-rgb), 0.55);
-    box-shadow:
-        0 4px 14px rgba(var(--accent-rgb), 0.18),
-        inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
-/* ICON-ONLY: cerchio */
-.btn-icon-only { width: 36px; height: 36px; padding: 0; }
-.btn-icon-only.btn-sm { width: 30px; height: 30px; }
+/* ICON-ONLY: quadrato */
+.btn-icon-only { width: 40px; height: 40px; padding: 0; }
+.btn-icon-only.btn-sm { width: 32px; height: 32px; }
 
 input, select, textarea {
     font-family: inherit;

@@ -6,6 +6,8 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2">
     <title>Calendario Attività - Algeco</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/static/theme.css">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
     <style>
         :root {
             --primary: #25D366;
@@ -15,24 +17,29 @@
             --success: #27ae60;
             --info: #3498db;
             --purple: #9b59b6;
-            --bg-dark: #1a1a2e;
-            --bg-card: #16213e;
-            --text: #eee;
-            --text-muted: #888;
-            --border: #333;
+            /* I container card e page bg sono ora ereditati dal theme acrylic
+               (theme.css). Le variabili locali puntano alle nuove. */
+            --bg-dark: transparent;
+            --bg-card: var(--panel-bg-strong);
+            --text: var(--text-primary);
+            --text-muted: var(--text-secondary);
         }
 
         [data-theme="light"] {
-            --bg-dark: #f5f5f5;
-            --bg-card: #ffffff;
-            --text: #333;
-            --text-muted: #777;
-            --border: #ddd;
+            --bg-dark: transparent;
+            --bg-card: var(--panel-bg-strong);
+            --text: var(--text-primary);
+            --text-muted: var(--text-secondary);
         }
 
-        [data-theme="light"] header {
-            background: #ffffff;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        body { background: var(--body-bg) !important; }
+
+        /* Acrylic sui container principali */
+        header, .attivita-card, .modal-content, .empty-state {
+            backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+            -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+            border: var(--panel-border);
+            box-shadow: var(--panel-shadow);
         }
 
         [data-theme="light"] .back-btn {

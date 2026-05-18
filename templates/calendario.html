@@ -684,15 +684,8 @@
             animation: spin 0.7s linear infinite;
         }
 
-        /* .btn .btn-primary .btn-accent .btn-ghost .btn-danger .btn-sm
-           sono definiti in static/theme.css (sistema unificato).
-           Mappiamo .btn-primary del calendario al verde brand (success). */
-        .btn-primary {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-        }
-        .btn-primary:not(:disabled):hover {
-            background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary-dark) 100%);
-        }
+        /* .btn .btn-success .btn-accent .btn-ghost .btn-danger .btn-sm
+           sono tutti definiti in static/theme.css (vetri colorati). */
 
         /* Action buttons on activity cards */
         .action-btn {
@@ -1432,7 +1425,7 @@
                 <button class="btn btn-sm btn-accent" onclick="scaricaExcelBoxBeat()" title="Scarica Excel appuntamenti di oggi" aria-label="Scarica Excel">
                     <i class="fas fa-file-excel"></i>
                 </button>
-                <button class="btn btn-sm btn-primary" onclick="apriModalNuova()">
+                <button class="btn btn-sm btn-success" onclick="apriModalNuova()">
                     <i class="fas fa-plus"></i>
                     Nuova Attività
                 </button>
@@ -1667,7 +1660,7 @@
 
             <div class="modal-footer">
                 <button class="btn btn-ghost" onclick="chiudiModal()">Annulla</button>
-                <button class="btn btn-primary" id="btnSalva" onclick="salvaAttivita()">
+                <button class="btn btn-success" id="btnSalva" onclick="salvaAttivita()">
                     <i class="fas fa-save"></i> Salva
                 </button>
             </div>

@@ -76,10 +76,6 @@
             border-color: #ddd;
         }
 
-        [data-theme="light"] .stat-card {
-            background: #ffffff;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-        }
 
         [data-theme="light"] .calendar-grid .day {
             background: #ffffff;
@@ -206,15 +202,20 @@
         }
 
         .stat-card {
-            background: var(--bg-card);
-            border-radius: 12px;
+            background: var(--panel-bg-strong);
+            backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+            -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+            border: var(--panel-border);
+            border-radius: var(--radius-md);
             padding: 16px;
             text-align: center;
-            transition: transform 0.2s;
+            box-shadow: var(--panel-shadow);
+            transition: transform var(--duration) var(--easing), box-shadow var(--duration) var(--easing);
         }
 
         .stat-card:hover {
             transform: translateY(-2px);
+            box-shadow: var(--elev-3);
         }
 
         .stat-card .stat-value {
@@ -700,11 +701,24 @@
         .btn-primary {
             background: var(--primary);
             color: white;
+            box-shadow: var(--elev-1);
         }
 
         .btn-primary:hover {
             background: var(--primary-dark);
             transform: translateY(-1px);
+            box-shadow: var(--elev-2);
+        }
+
+        /* Bottone accent (azione secondaria con il colore di brand) */
+        .btn-accent {
+            background: linear-gradient(135deg, var(--accent) 0%, var(--accent-deep) 100%);
+            color: white;
+            box-shadow: var(--elev-1);
+        }
+        .btn-accent:hover {
+            transform: translateY(-1px);
+            box-shadow: var(--elev-2);
         }
 
         .btn-danger {
@@ -723,16 +737,18 @@
         }
 
         .btn-ghost {
-            background: transparent;
-            color: var(--text-muted);
-            padding: 6px 10px;
-            border: none;
+            background: var(--panel-bg);
+            backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+            -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+            border: var(--panel-border);
+            color: var(--text);
         }
 
         .btn-ghost:hover {
-            color: var(--text);
-            background: rgba(255,255,255,0.08);
-            border-radius: 8px;
+            background: var(--panel-bg-strong);
+            border-color: var(--accent);
+            transform: translateY(-1px);
+            box-shadow: var(--elev-1);
         }
 
         /* Action buttons on activity cards */
@@ -1467,17 +1483,17 @@
                     <i class="fas fa-user"></i>
                     <span id="currentUser">-</span>
                 </span>
-                <button class="btn btn-sm" style="background: #e91e63; color: white;" onclick="apriModalBoxBeatSettings()" title="Impostazioni Promemoria">
+                <button class="btn btn-sm btn-accent" onclick="apriModalBoxBeatSettings()" title="Impostazioni Promemoria">
                     <i class="fas fa-cog"></i> Promemoria
                 </button>
-                <button class="btn btn-sm" style="background: #e91e63; color: white;" onclick="scaricaExcelBoxBeat()" title="Scarica Excel appuntamenti di oggi">
+                <button class="btn btn-sm btn-accent" onclick="scaricaExcelBoxBeat()" title="Scarica Excel appuntamenti di oggi" aria-label="Scarica Excel">
                     <i class="fas fa-file-excel"></i>
                 </button>
-                <button class="btn btn-primary" onclick="apriModalNuova()">
+                <button class="btn btn-sm btn-primary" onclick="apriModalNuova()">
                     <i class="fas fa-plus"></i>
                     Nuova Attività
                 </button>
-                <button class="btn btn-sm" id="btnSelectMode" onclick="toggleSelectMode()" title="Seleziona più attività">
+                <button class="btn btn-sm btn-ghost" id="btnSelectMode" onclick="toggleSelectMode()" title="Seleziona più attività">
                     <i class="fas fa-check-double"></i> Seleziona
                 </button>
             </div>

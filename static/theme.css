@@ -82,10 +82,12 @@ body, button, input, select, textarea {
     --text-primary: #eef2ff;
     --text-secondary: #b8c2d6;
     --text-muted: #6c7898;
-    --accent: #3b82f6;          /* blue-500 */
-    --accent-hover: #60a5fa;    /* blue-400 */
-    --accent-deep: #1d4ed8;     /* blue-700 — per gradient depth */
+    --accent: #3b82f6;             /* blue-500 */
+    --accent-hover: #60a5fa;       /* blue-400 */
+    --accent-deep: #1d4ed8;        /* blue-700 — per gradient depth */
+    --accent-secondary: #818cf8;   /* indigo-400 — variante coordinata, era cyan */
     --accent-rgb: 59, 130, 246;
+    --accent-secondary-rgb: 129, 140, 248;
     --border: rgba(99, 124, 168, 0.18);
     --shadow: rgba(0, 8, 32, 0.45);
 
@@ -124,10 +126,12 @@ html[data-theme="light"],
     --text-primary: #1e293b;
     --text-secondary: #475569;
     --text-muted: #94a3b8;
-    --accent: #2563eb;          /* blue-600 — più scuro per contrasto su bianco */
-    --accent-hover: #3b82f6;    /* blue-500 */
-    --accent-deep: #1e40af;     /* blue-800 */
+    --accent: #2563eb;             /* blue-600 — più scuro per contrasto su bianco */
+    --accent-hover: #3b82f6;       /* blue-500 */
+    --accent-deep: #1e40af;        /* blue-800 */
+    --accent-secondary: #6366f1;   /* indigo-500 */
     --accent-rgb: 37, 99, 235;
+    --accent-secondary-rgb: 99, 102, 241;
     --border: rgba(37, 99, 235, 0.18);
     --shadow: rgba(15, 23, 42, 0.10);
     --focus-ring: 0 0 0 3px rgba(37, 99, 235, 0.30);

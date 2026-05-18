@@ -1724,6 +1724,15 @@ body {
     background: var(--panel-bg-strong);
 }
 
+/* Forza font Inter dentro tutta la mappa Leaflet (popup, tooltip,
+   controls). Leaflet di default usa font generico sans-serif. */
+.leaflet-container,
+.leaflet-container .leaflet-popup-content,
+.leaflet-container .leaflet-tooltip,
+.leaflet-container .leaflet-control {
+    font-family: 'Inter', 'Segoe UI', system-ui, Arial, sans-serif !important;
+}
+
 .popup-content {
     min-width: 250px;
 }
@@ -3450,7 +3459,7 @@ body {
     flex-shrink: 0;
 }
 .btn-assign-bulk:hover {
-    box-shadow: 0 2px 8px rgba(6,182,212,0.3);
+    box-shadow: 0 2px 8px rgba(var(--accent-secondary-rgb), 0.3);
 }
 .btn-assign-bulk:disabled {
     opacity: 0.4;
@@ -3599,7 +3608,7 @@ body {
 }
 .bulk-assign-actions .btn-confirm:hover {
     transform: scale(1.02);
-    box-shadow: 0 4px 12px rgba(6,182,212,0.3);
+    box-shadow: 0 4px 12px rgba(var(--accent-secondary-rgb), 0.3);
 }
 /* Map selection overlays */
 .selection-rect {
@@ -3628,8 +3637,8 @@ body {
 .btn-planning-mode {
     padding: 5px 10px;
     border-radius: 8px;
-    border: 1px solid rgba(6,182,212,0.4);
-    background: rgba(6,182,212,0.1);
+    border: 1px solid rgba(var(--accent-secondary-rgb), 0.4);
+    background: rgba(var(--accent-secondary-rgb), 0.1);
     color: var(--accent-secondary, #06b6d4);
     cursor: pointer;
     font-size: 0.78rem;
@@ -3637,8 +3646,8 @@ body {
     transition: all 0.15s;
 }
 .btn-planning-mode:hover {
-    background: rgba(6,182,212,0.2);
-    border-color: #06b6d4;
+    background: rgba(var(--accent-secondary-rgb), 0.2);
+    border-color: var(--accent-secondary);
 }
 
 /* iOS Safari mobile fix: previeni auto-zoom su focus input <16px */

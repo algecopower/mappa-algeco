@@ -6,6 +6,8 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2">
     <title>Gestione PDF E-Distribuzione - Algeco Power</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/static/theme.css">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
     <style>
         :root {
             --primary: #25D366;
@@ -14,19 +16,18 @@
             --warning: #f39c12;
             --success: #27ae60;
             --info: #3498db;
-            --bg-dark: #1a1a2e;
-            --bg-card: #16213e;
-            --text: #eee;
-            --text-muted: #888;
-            --border: #333;
+            /* Card e bg ereditati da theme.css (acrylic). */
+            --bg-dark: transparent;
+            --bg-card: var(--panel-bg-strong);
+            --text: var(--text-primary);
+            --text-muted: var(--text-secondary);
         }
 
         [data-theme="light"] {
-            --bg-dark: #f5f5f5;
-            --bg-card: #ffffff;
-            --text: #333;
-            --text-muted: #777;
-            --border: #ddd;
+            --bg-dark: transparent;
+            --bg-card: var(--panel-bg-strong);
+            --text: var(--text-primary);
+            --text-muted: var(--text-secondary);
             --primary: #25D366;
             --primary-dark: #128C7E;
             --danger: #e74c3c;
@@ -35,9 +36,20 @@
             --info: #2980b9;
         }
 
+        body { background: var(--body-bg) !important; }
+
+        /* Acrylic sui container principali della pagina distinte */
+        .upload-section, .stats-section, .results-section,
+        .lavoro-card, .modal-content, .toolbar, .filter-section {
+            backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+            -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+            border: var(--panel-border);
+            box-shadow: var(--panel-shadow);
+        }
+
         [data-theme="light"] .upload-section {
-            background: #ffffff;
-            border-color: #ccc;
+            background: var(--panel-bg-strong);
+            border-color: var(--panel-border);
         }
 
         [data-theme="light"] .upload-section label {

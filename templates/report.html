@@ -6,6 +6,8 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2">
     <title>Report Operatori - Algeco</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/static/theme.css">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
     <script>
         (function(){
             const t = localStorage.getItem('algeco_theme') || 'dark';
@@ -17,20 +19,34 @@
             --primary: #25D366; --primary-dark: #128C7E;
             --danger: #e74c3c; --warning: #f39c12; --success: #27ae60;
             --info: #3498db; --purple: #9b59b6;
-            --bg-dark: #1a1a2e; --bg-card: #16213e; --bg-card-hover: #1a2744;
+            /* Card e bg ereditati da theme.css (acrylic). */
+            --bg-dark: transparent;
+            --bg-card: var(--panel-bg-strong);
+            --bg-card-hover: var(--panel-bg-strong);
             --bg-inner: rgba(255,255,255,0.03);
-            --text: #eee; --text-muted: #888; --text-dim: #666; --border: #333;
+            --text: var(--text-primary);
+            --text-muted: var(--text-secondary);
+            --text-dim: var(--text-muted);
         }
         [data-theme="light"] {
-            --bg-dark: #f0f2f5; --bg-card: #ffffff; --bg-card-hover: #f8f9fa;
-            --bg-inner: #f5f7f9; --text: #333; --text-muted: #777;
-            --text-dim: #aaa; --border: #ddd;
+            --bg-dark: transparent;
+            --bg-card: var(--panel-bg-strong);
+            --bg-card-hover: var(--panel-bg-strong);
+            --bg-inner: rgba(0,0,0,0.03);
+            --text: var(--text-primary);
+            --text-muted: var(--text-secondary);
+            --text-dim: var(--text-muted);
         }
-        [data-theme="light"] .panel { background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
-        [data-theme="light"] .kpi-card { background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
-        [data-theme="light"] .back-btn { color: #555; }
-        [data-theme="light"] .back-btn:hover { color: var(--primary); }
-        [data-theme="light"] header { background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+
+        body { background: var(--body-bg) !important; }
+
+        /* Acrylic sui container principali */
+        header, .panel, .kpi-card, .filter-bar, .op-detail {
+            backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+            -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+            border: var(--panel-border);
+            box-shadow: var(--panel-shadow);
+        }
         [data-theme="light"] .op-detail { background: #f8f9fa; }
         [data-theme="light"] .tab-btn.active { background: #fff; }
         [data-theme="light"] .tab-btn { color: #666; }

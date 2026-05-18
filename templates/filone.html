@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2">
     <title>Filone - Vista Excel</title>
+    <link rel="stylesheet" href="/static/theme.css">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
     <script>
         (function() {
             const t = localStorage.getItem('algeco_theme') || 'dark';
@@ -19,9 +21,11 @@
             --warning: #f39c12;
             --success: #27ae60;
             --info: #3498db;
-            --bg-body: #0f0f23;
-            --bg-dark: #1a1a2e;
-            --bg-card: #16213e;
+            /* Page bg trasparente: il vetro vince. Le card della tabella
+               restano semi-opache per leggibilità (vista Excel densa). */
+            --bg-body: transparent;
+            --bg-dark: transparent;
+            --bg-card: var(--panel-bg-strong);
             --bg-cell: #1a1a2e;
             --bg-cell-alt: #151528;
             --bg-cell-hover: #252550;

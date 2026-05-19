@@ -3704,10 +3704,12 @@ body {
     border-radius: 0;
     border: 0;
     /* Fullscreen modali (sigilli/matricole, modifica contatore):
-       il contenuto è alto > 100vh, deve poter scorrere. Override
-       dell'overflow:hidden ereditato da .ui-modal-content. */
+       contenuto può essere alto > 100vh. Override del .ui-modal-content
+       base che è flex column + overflow:hidden. */
+    display: block;
     overflow-y: auto;
     overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
 }
 
 .ui-modal-header {

@@ -5565,6 +5565,14 @@ async function reloadData() {
         updateContatoriVisibili();
         updateSchedulabiliBadge();
         if (planningMode) {
+            // Ricostruisci la cache marker: nuovi contatori comparirebbero solo
+            // qui, e quelli rimossi resterebbero "fantasma" nella mappa.
+            if (planningLayerGroup) {
+                map.removeLayer(planningLayerGroup);
+                planningLayerGroup = null;
+            }
+            _allPlanMarkersMap = null;
+            _buildAllPlanMarkers();
             populatePlanningDropdowns();
             applyPlanningFilters(true);
         } else {
@@ -8217,6 +8225,7 @@ let lassoSvg = null;
 let planningContatoriFiltrati = [];
 let planningLayerGroup = null;
 let _planFilterTimer = null;
+let _planFilterPendingKeepView = true;  // true finché nessun caller chiede zoom esplicito
 let _allPlanMarkersMap = null;  // Map<eneltel, L.circleMarker> - cache persistente
 let _allPlanContatori = [];     // Cache contatori pianificabili per filtri dipendenti
 let _planCardsRenderedSet = null;  // Set di eneltel attualmente visibili nelle card
@@ -8304,25 +8313,34 @@ function populatePlanningDropdowns() {
     });
     const allPlan = _allPlanContatori;
 
+    // Helper: ricostruisce le option mantenendo la selezione corrente se ancora valida.
+    // Senza questo, un sync SSE in arrivo mentre l'utente filtra azzera tutte le tendine.
+    const repopulate = (sel, placeholderHtml, values, makeOption) => {
+        const prev = sel.value;
+        sel.innerHTML = placeholderHtml;
+        values.forEach(v => sel.appendChild(makeOption(v)));
+        if (prev && Array.from(sel.options).some(o => o.value === prev)) {
+            sel.value = prev;
+        }
+    };
+
     // Comuni
     const comuni = new Set();
     allPlan.forEach(c => { if (c.comune) comuni.add(c.comune); });
-    const selComune = document.getElementById('planFilterComune');
-    selComune.innerHTML = '<option value="">Tutti</option>';
-    Array.from(comuni).sort().forEach(com => {
-        const o = document.createElement('option');
-        o.value = com; o.textContent = com;
-        selComune.appendChild(o);
-    });
+    repopulate(
+        document.getElementById('planFilterComune'),
+        '<option value="">Tutti</option>',
+        Array.from(comuni).sort(),
+        com => { const o = document.createElement('option'); o.value = com; o.textContent = com; return o; }
+    );
 
     // Zone
-    const selZona = document.getElementById('planFilterZona');
-    selZona.innerHTML = '<option value="">Tutte le zone</option>';
-    zone.forEach(z => {
-        const o = document.createElement('option');
-        o.value = z.nome; o.textContent = z.nome;
-        selZona.appendChild(o);
-    });
+    repopulate(
+        document.getElementById('planFilterZona'),
+        '<option value="">Tutte le zone</option>',
+        zone.map(z => z.nome),
+        nome => { const o = document.createElement('option'); o.value = nome; o.textContent = nome; return o; }
+    );
 
     // Tipologia (merge case-insensitive)
     const tipologieMap = new Map();
@@ -8332,13 +8350,12 @@ function populatePlanningDropdowns() {
             if (!tipologieMap.has(key)) tipologieMap.set(key, c.tipo_ce.trim());
         }
     });
-    const selTipo = document.getElementById('planFilterTipologia');
-    selTipo.innerHTML = '<option value="">Tutte</option>';
-    Array.from(tipologieMap.values()).sort((a,b) => a.toLowerCase().localeCompare(b.toLowerCase())).forEach(t => {
-        const o = document.createElement('option');
-        o.value = t; o.textContent = t;
-        selTipo.appendChild(o);
-    });
+    repopulate(
+        document.getElementById('planFilterTipologia'),
+        '<option value="">Tutte</option>',
+        Array.from(tipologieMap.values()).sort((a,b) => a.toLowerCase().localeCompare(b.toLowerCase())),
+        t => { const o = document.createElement('option'); o.value = t; o.textContent = t; return o; }
+    );
 
     // Posizione
     const posizioni = new Map();
@@ -8348,50 +8365,47 @@ function populatePlanningDropdowns() {
         const norm = normalizePosizione(raw);
         if (norm && !posizioni.has(norm)) posizioni.set(norm, norm.charAt(0).toUpperCase() + norm.slice(1));
     });
-    const selPos = document.getElementById('planFilterPosizione');
-    selPos.innerHTML = '<option value="">Tutte</option>';
-    Array.from(posizioni.entries()).sort((a,b) => a[1].localeCompare(b[1])).forEach(([n, l]) => {
-        const o = document.createElement('option');
-        o.value = n; o.textContent = l;
-        selPos.appendChild(o);
-    });
+    repopulate(
+        document.getElementById('planFilterPosizione'),
+        '<option value="">Tutte</option>',
+        Array.from(posizioni.entries()).sort((a,b) => a[1].localeCompare(b[1])),
+        ([n, l]) => { const o = document.createElement('option'); o.value = n; o.textContent = l; return o; }
+    );
 
     // LCL
     const lcls = new Set();
     allPlan.forEach(c => { if (c.lcl) lcls.add(c.lcl); });
-    const selLCL = document.getElementById('planFilterLCL');
-    selLCL.innerHTML = '<option value="">Tutti</option>';
-    Array.from(lcls).sort().forEach(l => {
-        const o = document.createElement('option');
-        o.value = l; o.textContent = l;
-        selLCL.appendChild(o);
-    });
+    repopulate(
+        document.getElementById('planFilterLCL'),
+        '<option value="">Tutti</option>',
+        Array.from(lcls).sort(),
+        l => { const o = document.createElement('option'); o.value = l; o.textContent = l; return o; }
+    );
 
     // Date (solo future)
     const dateSet = new Set();
     allPlan.forEach(c => { if (c.data && c.data !== '' && c.data >= oggiStr) dateSet.add(c.data); });
-    const selData = document.getElementById('planFilterData');
-    selData.innerHTML = '<option value="">Tutte le date</option>';
-    Array.from(dateSet).sort().forEach(d => {
-        const o = document.createElement('option');
-        o.value = d; o.textContent = '📅 ' + formatDate(d);
-        selData.appendChild(o);
-    });
+    repopulate(
+        document.getElementById('planFilterData'),
+        '<option value="">Tutte le date</option>',
+        Array.from(dateSet).sort(),
+        d => { const o = document.createElement('option'); o.value = d; o.textContent = '📅 ' + formatDate(d); return o; }
+    );
 
-    // Operatori (from pianificati)
+    // Operatori (from pianificati) — placeholder include la voce fissa "__NESSUNO__"
     const opSet = new Set();
     allPlan.forEach(c => { if (c.tecnico && c.tecnico !== 'TUTTI') opSet.add(c.tecnico); });
-    const selOp = document.getElementById('planFilterOperatore');
-    selOp.innerHTML = '<option value="">Tutti</option>';
-    const oNone = document.createElement('option');
-    oNone.value = '__NESSUNO__'; oNone.textContent = '📦 Senza operatore';
-    selOp.appendChild(oNone);
-    Array.from(opSet).sort().forEach(op => {
-        const o = document.createElement('option');
-        o.value = op;
-        o.textContent = (reverseOperatoriDict[op] || op) + (reverseOperatoriDict[op] ? ' (' + op + ')' : '');
-        selOp.appendChild(o);
-    });
+    repopulate(
+        document.getElementById('planFilterOperatore'),
+        '<option value="">Tutti</option><option value="__NESSUNO__">📦 Senza operatore</option>',
+        Array.from(opSet).sort(),
+        op => {
+            const o = document.createElement('option');
+            o.value = op;
+            o.textContent = (reverseOperatoriDict[op] || op) + (reverseOperatoriDict[op] ? ' (' + op + ')' : '');
+            return o;
+        }
+    );
 
     // Popola dropdown operatori nel modal di assegnazione
     const selOpModal = document.getElementById('bulkAssignOperatore');
@@ -8566,10 +8580,16 @@ function getPlanningContatori() {
 
 function applyPlanningFilters(keepView) {
     if (!planningMode) return;
-    // Debounce: evita chiamate ripetute ravvicinate (es. toggle rapidi)
+    // Debounce: evita chiamate ripetute ravvicinate (es. toggle rapidi).
+    // Merge dell'intento `keepView`: se un caller (utente) chiede zoom,
+    // un sync SSE che arriva nello stesso frame non deve sovrascriverlo.
+    if (!keepView) _planFilterPendingKeepView = false;
     if (_planFilterTimer) cancelAnimationFrame(_planFilterTimer);
     _planFilterTimer = requestAnimationFrame(() => {
-        _applyPlanningFiltersNow(keepView);
+        const kv = _planFilterPendingKeepView;
+        _planFilterPendingKeepView = true;
+        _planFilterTimer = null;
+        _applyPlanningFiltersNow(kv);
     });
 }
 

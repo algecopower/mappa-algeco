@@ -81,6 +81,107 @@ def assegna_fasce(percorso_ordinato, fasce=None, tappe_per_fascia=None, bilancia
     return risultato
 
 
+def consolida_fasce_per_indirizzo(tappe_con_fasce, fasce_ordinate=None):
+    """
+    Post-pass: allinea le fasce dei contatori con stesso indirizzo
+    (comune + localita + via + civico) ma fascia diversa.
+
+    Motivazione: il geocoder talvolta piazza coordinate leggermente diverse
+    per contatori che condividono lo stesso indirizzo postale (caso tipico:
+    fotovoltaico geocodificato qualche centinaio di metri lontano dal
+    POD principale). Il TSP li tratta come fermate distinte e li distribuisce
+    in fasce non adiacenti, producendo lettere incongruenti per lo stesso
+    cliente. Questa funzione corregge a valle senza toccare l'ottimizzazione.
+
+    Regola di allineamento (richiesta utente):
+      1. Fascia di maggioranza nel gruppo.
+      2. In caso di parità: fascia "centrale" — la mediana per indice
+         tra le candidate (per len pari prende l'upper-middle).
+
+    Gruppi ignorati:
+      - meno di 2 punti
+      - civico vuoto/NaN o SN/SNC (rischio di accorpare punti spuri lungo
+        la stessa via)
+      - via vuota
+
+    Args:
+        tappe_con_fasce: lista di tuple (punto_dict, fascia_str) — output
+            tipicamente di assegna_fasce()
+        fasce_ordinate: lista di fasce in ordine cronologico (default: FASCE_ORARIE)
+
+    Returns:
+        Nuova lista (punto, fascia) con eventuali fasce riassegnate.
+        L'ordine originale è preservato.
+    """
+    from collections import Counter
+
+    if not tappe_con_fasce:
+        return tappe_con_fasce
+
+    if fasce_ordinate is None:
+        fasce_ordinate = FASCE_ORARIE
+
+    fascia_idx = {f: i for i, f in enumerate(fasce_ordinate)}
+    civici_invalidi = {'', 'NAN', 'NONE', 'SN', 'SNC',
+                       'S.N.', 'S.N.C.', 'S/N', 'S/NC'}
+
+    def _campo(p, *chiavi):
+        for k in chiavi:
+            v = p.get(k)
+            if v is not None and str(v).strip():
+                return str(v).strip()
+        return ''
+
+    def chiave_indirizzo(punto):
+        via = _campo(punto, 'VIA_K', 'via').upper()
+        civico = _campo(punto, 'CIVICO_K', 'civico').upper()
+        if not via or civico in civici_invalidi:
+            return None
+        comune = _campo(punto, 'COMUNE', 'comune').upper()
+        # LOCALITA disambigua frazioni omonime dello stesso comune (Pavia).
+        localita = _campo(punto, 'LOCALITA', 'localita').upper()
+        return (comune, localita, via, civico)
+
+    gruppi = {}
+    for i, (punto, _fascia) in enumerate(tappe_con_fasce):
+        k = chiave_indirizzo(punto)
+        if k is None:
+            continue
+        gruppi.setdefault(k, []).append(i)
+
+    riallineamenti = {}
+    for indici in gruppi.values():
+        if len(indici) < 2:
+            continue
+        fasce_gruppo = [tappe_con_fasce[i][1] for i in indici]
+        if len(set(fasce_gruppo)) == 1:
+            continue
+
+        conteggio = Counter(fasce_gruppo)
+        max_count = max(conteggio.values())
+        candidate = [f for f, c in conteggio.items() if c == max_count]
+        candidate_idx = sorted(
+            fascia_idx.get(f, len(fasce_ordinate)) for f in candidate
+        )
+        scelta_idx = candidate_idx[len(candidate_idx) // 2]
+        if 0 <= scelta_idx < len(fasce_ordinate):
+            scelta = fasce_ordinate[scelta_idx]
+        else:
+            scelta = candidate[0]
+
+        for i in indici:
+            if tappe_con_fasce[i][1] != scelta:
+                riallineamenti[i] = scelta
+
+    if not riallineamenti:
+        return tappe_con_fasce
+
+    return [
+        (p, riallineamenti.get(i, f))
+        for i, (p, f) in enumerate(tappe_con_fasce)
+    ]
+
+
 def formatta_fascia_oraria(fascia):
     """
     Converte la fascia oraria dal formato 'xx/xx' a 'dalle x:00 alle x:00'.

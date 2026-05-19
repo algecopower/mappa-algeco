@@ -44,7 +44,7 @@ DATE_LETTERE = [
 # ============================================================================
 # FASCE ORARIE - importate dal modulo centralizzato
 # ============================================================================
-from moduli.fasce_orarie import assegna_fasce, formatta_fascia_oraria
+from moduli.fasce_orarie import assegna_fasce, formatta_fascia_oraria, consolida_fasce_per_indirizzo
 from moduli.rilevamento_aziende import is_azienda
 
 # ============================================================================
@@ -320,7 +320,11 @@ def genera_excel_lettere(df, date_da_elaborare, filename=None, tappe_per_fascia=
             else:
                 tpf = int(tappe_per_fascia)
                 tappe_con_fasce = assegna_fasce(percorso_ordinato, tappe_per_fascia=tpf)
-            
+
+            # Consolidamento: contatori con stesso indirizzo postale devono
+            # cadere nella stessa fascia (vedi consolida_fasce_per_indirizzo).
+            tappe_con_fasce = consolida_fasce_per_indirizzo(tappe_con_fasce)
+
             # Salva la fascia per ogni contatore
             for punto, fascia in tappe_con_fasce:
                 eneltel = punto.get('ENEL_K', '')

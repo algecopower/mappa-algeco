@@ -1918,7 +1918,12 @@ def genera_orari_lettere():
     Associa i risultati per POD.
     """
     from moduli.percorso import ordina_percorso
-    from moduli.fasce_orarie import assegna_fasce, formatta_fascia_oraria, FASCE_ORARIE
+    from moduli.fasce_orarie import (
+        assegna_fasce,
+        consolida_fasce_per_indirizzo,
+        formatta_fascia_oraria,
+        FASCE_ORARIE,
+    )
     from moduli.data_loader import carica_dati_google_sheets
     from genera_excel_lettere import genera_excel_lettere as _genera_excel
 
@@ -2013,6 +2018,10 @@ def genera_orari_lettere():
                 else:
                     tpf = tappe_per_fascia_fisso
                     tappe_con_fasce = assegna_fasce(percorso_ordinato, tappe_per_fascia=tpf)
+
+                # Consolida fasce per indirizzo (allinea contatori con stesso
+                # comune+localita+via+civico ma fascia diversa).
+                tappe_con_fasce = consolida_fasce_per_indirizzo(tappe_con_fasce)
 
                 for punto, fascia in tappe_con_fasce:
                     pod = str(punto.get('POD_K', '')).strip()

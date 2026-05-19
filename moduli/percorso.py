@@ -274,6 +274,98 @@ calcola_distanza_haversine = _haversine_km
 # ACCESS POINTS - estrazione coords per il routing
 # =============================================================================
 
+_CIVICI_INVALIDI_CLUSTER = {
+    '', 'NAN', 'NONE', 'SN', 'SNC', 'S.N.', 'S.N.C.', 'S/N', 'S/NC'
+}
+
+
+def _campo_str(punto: Dict, *chiavi: str) -> str:
+    """Restituisce il primo campo non-vuoto tra `chiavi`, strippato. '' se nessuno."""
+    for k in chiavi:
+        v = punto.get(k)
+        if v is None:
+            continue
+        try:
+            if pd.isna(v):
+                continue
+        except (TypeError, ValueError):
+            pass
+        s = str(v).strip()
+        if s:
+            return s
+    return ''
+
+
+def _cluster_indirizzi_uguali(punti: List[Dict]) -> None:
+    """
+    Allinea in-place le coordinate di routing dei contatori che condividono
+    lo stesso indirizzo postale (comune + localita + via + civico), così che
+    il TSP li tratti come un'unica fermata e li visiti consecutivamente.
+
+    Motivazione: il geocoder talvolta colloca contatori con stesso indirizzo
+    in punti distanti centinaia di metri (es. POD fotovoltaico spostato).
+    OSRM, ignaro che siano lo stesso edificio, li infila in cluster diversi
+    del percorso. Forzare la stessa coordinata di routing risolve a monte.
+
+    Scrive solo `Lat_access`/`Lon_access`: `Lat`/`Lon` originali restano
+    intatte per la visualizzazione su mappa. La modifica è in-memory sui
+    dict passati, che provengono da `df.to_dict('records')` e sono già
+    copie indipendenti — il FILONE non viene toccato.
+
+    Strategia di scelta del rappresentante: medoide del gruppo
+    (il punto del gruppo più vicino al centroide). Per gruppi con
+    maggioranza ai medesimi coords il medoide coincide con quella coord.
+
+    Saltati:
+      - gruppi con un solo punto
+      - punti con civico vuoto / SN / SNC (rischio di accorpare punti
+        spuri lungo la stessa via)
+    """
+    if not punti or len(punti) < 2:
+        return
+
+    gruppi: Dict[Tuple[str, str, str, str], List[int]] = {}
+    for i, p in enumerate(punti):
+        via = _campo_str(p, 'VIA_K', 'via').upper()
+        civico = _campo_str(p, 'CIVICO_K', 'civico').upper()
+        if not via or civico in _CIVICI_INVALIDI_CLUSTER:
+            continue
+        comune = _campo_str(p, 'COMUNE', 'comune').upper()
+        localita = _campo_str(p, 'LOCALITA', 'localita').upper()
+        gruppi.setdefault((comune, localita, via, civico), []).append(i)
+
+    for indici in gruppi.values():
+        if len(indici) < 2:
+            continue
+
+        coords: List[Tuple[float, float]] = []
+        for i in indici:
+            try:
+                coords.append(_coord_routing(punti[i]))
+            except ValueError:
+                coords.append(None)
+
+        coords_valide = [c for c in coords if c is not None]
+        if len(coords_valide) < 2:
+            continue
+
+        # Se sono tutte già identiche, niente da fare
+        if len(set(coords_valide)) == 1:
+            continue
+
+        # Medoide: punto del gruppo più vicino al centroide
+        lat_c = sum(c[0] for c in coords_valide) / len(coords_valide)
+        lon_c = sum(c[1] for c in coords_valide) / len(coords_valide)
+        medoide = min(
+            coords_valide,
+            key=lambda c: (c[0] - lat_c) ** 2 + (c[1] - lon_c) ** 2,
+        )
+
+        for i in indici:
+            punti[i]['Lat_access'] = medoide[0]
+            punti[i]['Lon_access'] = medoide[1]
+
+
 def _coord_routing(p: Dict) -> Tuple[float, float]:
     """
     Ritorna (lat, lon) da usare per il ROUTING.
@@ -796,13 +888,19 @@ def ottimizza_percorso(
     """
     if not punti:
         return []
-    
+
     if len(punti) == 1:
         return list(punti)
-    
+
     if deposito is None:
         deposito = DEPOSITO
-    
+
+    # Allinea le coordinate di routing dei contatori con stesso indirizzo:
+    # evita che il geocoder, piazzando un POD a centinaia di metri dagli
+    # altri dello stesso edificio, ne provochi la separazione in cluster
+    # distinti del percorso.
+    _cluster_indirizzi_uguali(punti)
+
     # Soglia orario per appuntamenti serali
     ora_limite_serale = 17 * 60 if PROVINCIA_ATTIVA == 'TORINO' else 15 * 60
     

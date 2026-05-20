@@ -1369,6 +1369,17 @@ def api_admin_db_stats():
             warnings.append(f'Backlog pending anomalo: {backlog} (soglia 500)')
         if max_attempts >= 10:
             warnings.append(f'Pending con {max_attempts} tentativi falliti (soglia 10)')
+        # Anomalie strutturali del foglio rilevate nelle ultime 24h
+        anom_recent = conn.execute(
+            "SELECT kind, COUNT(*) AS c, MAX(ts) AS last_ts FROM filone_anomalies "
+            "WHERE kind IN ('header_changed','canary_failed','mass_column_shift','sheet_id_changed') "
+            "AND ts > ? GROUP BY kind",
+            (_db._now_ts() - 24 * 3600,),
+        ).fetchall()
+        for a in anom_recent:
+            warnings.append(
+                f"Anomalia foglio: {a['kind']} ({a['c']}x nelle ultime 24h)"
+            )
         return jsonify({
             'success': True,
             'use_db_backend': USE_DB_BACKEND,
@@ -1377,6 +1388,8 @@ def api_admin_db_stats():
             'health': {
                 'backlog': backlog,
                 'max_attempts': max_attempts,
+                'recent_anomalies': [{'kind': a['kind'], 'count': a['c'],
+                                       'last_ts': a['last_ts']} for a in anom_recent],
                 'warnings': warnings,
                 'ok': not warnings,
             },

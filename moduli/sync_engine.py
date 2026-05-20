@@ -32,6 +32,24 @@ from . import shared
 logger = logging.getLogger('mappa_algeco')
 
 
+# Soglia oltre la quale un cambio massivo su una singola colonna in un pull
+# viene considerato spanamento e fa abortire il pull. Calibrata su dati reali:
+# import BoxBeat legittimi raggiungono ~37 righe/colonna, span osservati
+# superano 190 righe. Margine ampio a 150.
+_MAX_REMOTE_CHANGES_PER_COL = 150
+
+
+class _SpanLimitExceeded(Exception):
+    """Sollevata dentro pull_once quando una singola colonna supera
+    _MAX_REMOTE_CHANGES_PER_COL cambi da Sheets in un pull. Abortisce
+    la TX corrente (rollback automatico via context manager) e fa uscire
+    pull_once con result['aborted']='mass_column_shift'."""
+    def __init__(self, column, count):
+        self.column = column
+        self.count = count
+        super().__init__(f"colonna '{column}' ha sforato la soglia ({count})")
+
+
 # ============================================================================
 # CONFIG ACCESSOR — leggiamo lazy così il modulo è importabile in test
 # ============================================================================
@@ -144,7 +162,12 @@ def pull_once(values=None):
     eneltel_seen = set()
     duplicates = []
 
-    with conn:
+    # Counter cambi remoti per colonna in questo pull. Se una singola colonna
+    # supera _MAX_REMOTE_CHANGES_PER_COL → SPANAMENTO MASSIVO → abort.
+    col_change_count = {}
+
+    try:
+      with conn:
         conn.execute('BEGIN IMMEDIATE')
 
         # Aggiorna column_registry con header attuale
@@ -281,6 +304,11 @@ def pull_once(values=None):
                                 new_value=remote_val,
                                 source='remote',
                             )
+                            # Conteggio cambi per colonna: se sfora la soglia,
+                            # è span massivo → abortisce tutto il pull.
+                            col_change_count[col_name] = col_change_count.get(col_name, 0) + 1
+                            if col_change_count[col_name] > _MAX_REMOTE_CHANGES_PER_COL:
+                                raise _SpanLimitExceeded(col_name, col_change_count[col_name])
                 else:
                     extra_values[col_name] = remote_val
 
@@ -305,6 +333,28 @@ def pull_once(values=None):
 
         db.sync_state_set('last_full_pull_ts', db._now_ts())
         db.sync_state_set('last_full_pull_sheet_hash', sheet_hash)
+    except _SpanLimitExceeded as e:
+        # La transazione `with conn:` è stata rollback automaticamente:
+        # nessuna modifica al DB è stata applicata.
+        logger.error("=" * 70)
+        logger.error(f"[pull] ⛔ MOVIMENTO COLONNA SOSPETTO: '{e.column}' "
+                     f"avrebbe ricevuto {e.count} cambi da Sheets in un singolo pull "
+                     f"(soglia: {_MAX_REMOTE_CHANGES_PER_COL})")
+        logger.error("  Il DB locale NON è stato modificato. Verifica il foglio "
+                     "Google: probabile span (incollaggio errato, filter+paste, ecc.)")
+        logger.error("  Stato attuale del foglio + DB ispezionabile da admin UI.")
+        logger.error("=" * 70)
+        try:
+            conn2 = db.get_conn()
+            db.record_anomaly(conn2, kind='mass_column_shift',
+                              detail={'column': e.column, 'count': e.count,
+                                      'threshold': _MAX_REMOTE_CHANGES_PER_COL})
+        except Exception:
+            pass
+        return {'rows': len(body), 'changed': 0, 'new': 0, 'conflicts': 0,
+                'orphans': 0, 'aborted': 'mass_column_shift',
+                'detail': f"colonna '{e.column}' avrebbe ricevuto {e.count} cambi "
+                          f"(soglia {_MAX_REMOTE_CHANGES_PER_COL})"}
 
     elapsed = time.time() - t0
     result = {
@@ -516,6 +566,25 @@ def drain_once(*, batch_size=None):
     """
     if _cfg('USE_DB_BACKEND', 'shadow') == 'off':
         return {'drained': 0, 'skipped': True, 'reason': 'USE_DB_BACKEND=off'}
+
+    # Stop di sicurezza: se nelle ultime 6h un pull ha rilevato anomalia
+    # strutturale del foglio (header changed, canary failed, mass column
+    # shift), il drainer NON pusha — il foglio potrebbe essere in stato
+    # spanato e scrivere sopra peggiorerebbe la situazione.
+    conn = db.get_conn()
+    recent_block = conn.execute(
+        "SELECT ts, kind, detail FROM filone_anomalies "
+        "WHERE kind IN ('header_changed','canary_failed','mass_column_shift') "
+        "AND ts > ? ORDER BY ts DESC LIMIT 1",
+        (db._now_ts() - 6 * 3600,),
+    ).fetchone()
+    if recent_block:
+        logger.warning(
+            f"[drain] ⏸️  bloccato per anomalia recente: kind={recent_block['kind']} "
+            f"detail={(recent_block['detail'] or '')[:200]}. Il drainer riprenderà "
+            f"automaticamente dopo 6h o quando l'anomalia viene risolta."
+        )
+        return {'drained': 0, 'skipped': True, 'reason': f"anomaly_{recent_block['kind']}"}
 
     batch_size = batch_size or _cfg('DRAIN_BATCH_SIZE', 400)
     pending = db.list_pending_writes(state='pending', limit=batch_size)

@@ -75,6 +75,43 @@ def _value_is_valid_for_column(col_name, value):
     return bool(pattern.match(str(value).strip()))
 
 
+def _enqueue_auto_correct(conn, *, eneltel_key, lcl, column_name, db_value, remote_value):
+    """Genera una pending_write per ripristinare il valore corretto del DB su
+    Sheets. Chiamata quando il pattern check rifiuta un valore remoto.
+
+    La pending viene inserita con state='pending' e origin='pattern_auto_correct',
+    base_value=remote_value (= valore corrente sul foglio). Il drainer la
+    pusha al prossimo ciclo (~30s) e Sheets torna al valore corretto.
+    Coalesce con eventuali pending già esistenti per la stessa cella (UNIQUE
+    INDEX parziale): se l'utente ha già una pending in volo, la sua vince
+    (questa nuova viene sostituita dalla precedente coalescing).
+    """
+    db_val_str = '' if db_value is None else str(db_value)
+    remote_val_str = '' if remote_value is None else str(remote_value)
+    now = db._now_ts()
+    try:
+        # Coalesce: rimuovi eventuali pending precedenti non ancora pushate
+        # PER QUESTA STESSA cella (stesso comportamento di record_local_change).
+        conn.execute(
+            "DELETE FROM pending_writes WHERE eneltel_key=? AND COALESCE(lcl,'')=? "
+            "AND column_name=? AND state IN ('pending','in_flight')",
+            (eneltel_key, lcl or '', column_name),
+        )
+        conn.execute(
+            'INSERT INTO pending_writes(eneltel_key, lcl, column_name, new_value, '
+            'base_value, created_ts, user, origin, state) '
+            'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            (eneltel_key, lcl or '', column_name, db_val_str, remote_val_str,
+             now, None, 'pattern_auto_correct', 'pending'),
+        )
+        logger.warning(
+            f"[auto-correct] {eneltel_key}/{column_name}: "
+            f"Sheets={remote_val_str[:30]!r} → ripristino DB={db_val_str[:30]!r}"
+        )
+    except Exception as e:
+        logger.warning(f"[auto-correct] enqueue fallito per {eneltel_key}/{column_name}: {e}")
+
+
 # ============================================================================
 # CONFIG ACCESSOR — leggiamo lazy così il modulo è importabile in test
 # ============================================================================
@@ -317,8 +354,9 @@ def pull_once(values=None):
                     # Validazione pattern per colonne critiche (SIGILLO,
                     # Operatore, Esito, Matricola CE inst, cod.). Se il
                     # valore remoto non matcha il pattern atteso, NON
-                    # applico il diff: DB tiene il vecchio. Registra
-                    # l'anomalia per visibilità admin.
+                    # applico il diff: DB tiene il vecchio. Inoltre,
+                    # AUTO-CORREZIONE: genero una pending che il drainer
+                    # pusherà su Sheets per ripristinare il valore corretto.
                     if changed and not _value_is_valid_for_column(col_name, remote_val):
                         db.record_anomaly(
                             conn, kind='invalid_pattern_skipped',
@@ -334,7 +372,12 @@ def pull_once(values=None):
                             old_value=old,
                             new_value=remote_val,
                             source='invalid_pattern_skipped',
-                            detail={'kept_db_value': True},
+                            detail={'kept_db_value': True, 'auto_correct': True},
+                        )
+                        _enqueue_auto_correct(
+                            conn, eneltel_key=eneltel_key, lcl=lcl_val,
+                            column_name=col_name, db_value=old,
+                            remote_value=remote_val,
                         )
                         skip_columns.add(chiave)
                         continue
@@ -375,7 +418,12 @@ def pull_once(values=None):
                                 old_value=old_ex,
                                 new_value=remote_val,
                                 source='invalid_pattern_skipped',
-                                detail={'kept_db_value': True},
+                                detail={'kept_db_value': True, 'auto_correct': True},
+                            )
+                            _enqueue_auto_correct(
+                                conn, eneltel_key=eneltel_key, lcl=lcl_val,
+                                column_name=col_name, db_value=old_ex,
+                                remote_value=remote_val,
                             )
                             skip_columns.add(col_name)
                             continue

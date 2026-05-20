@@ -1372,7 +1372,8 @@ def api_admin_db_stats():
         # Anomalie strutturali del foglio rilevate nelle ultime 24h
         anom_recent = conn.execute(
             "SELECT kind, COUNT(*) AS c, MAX(ts) AS last_ts FROM filone_anomalies "
-            "WHERE kind IN ('header_changed','canary_failed','sheet_id_changed') "
+            "WHERE kind IN ('header_changed','canary_failed','sheet_id_changed',"
+            "'invalid_pattern_skipped') "
             "AND ts > ? GROUP BY kind",
             (_db._now_ts() - 24 * 3600,),
         ).fetchall()

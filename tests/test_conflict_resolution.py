@@ -24,19 +24,19 @@ def test_scenario_locale_only(sync_engine_isolato, db_isolato):
     se = sync_engine_isolato
     db = db_isolato
 
-    se.pull_once(values=[_headers(), _row('1', op='OLD')])
-    db.record_local_change('1', {'Operatore': 'NEW'}, origin='unit_test')
+    se.pull_once(values=[_headers(), _row('1', op='AA11111')])
+    db.record_local_change('1', {'Operatore': 'AA22222'}, origin='unit_test')
 
     # Pull con foglio invariato
-    se.pull_once(values=[_headers(), _row('1', op='OLD')])
+    se.pull_once(values=[_headers(), _row('1', op='AA11111')])
 
     pending = db.list_pending_writes()
     assert len(pending) == 1
-    assert pending[0]['new_value'] == 'NEW'
+    assert pending[0]['new_value'] == 'AA22222'
 
-    # filone[operatore] è 'NEW' (preview ottimistica scritta da record_local_change)
+    # filone[operatore] è 'AA22222' (preview ottimistica scritta da record_local_change)
     row = db.get_filone_row('1')
-    assert row['operatore'] == 'NEW'
+    assert row['operatore'] == 'AA22222'
 
 
 def test_scenario_remote_only(sync_engine_isolato, db_isolato):
@@ -44,11 +44,11 @@ def test_scenario_remote_only(sync_engine_isolato, db_isolato):
     se = sync_engine_isolato
     db = db_isolato
 
-    se.pull_once(values=[_headers(), _row('2', op='OLD')])
-    se.pull_once(values=[_headers(), _row('2', op='NEW_FROM_SHEETS')])
+    se.pull_once(values=[_headers(), _row('2', op='AA11111')])
+    se.pull_once(values=[_headers(), _row('2', op='AC33333')])
 
     row = db.get_filone_row('2')
-    assert row['operatore'] == 'NEW_FROM_SHEETS'
+    assert row['operatore'] == 'AC33333'
 
 
 def test_scenario_both_different_field(sync_engine_isolato, db_isolato):
@@ -60,19 +60,19 @@ def test_scenario_both_different_field(sync_engine_isolato, db_isolato):
     db = db_isolato
 
     # Stato iniziale comune
-    se.pull_once(values=[_headers(), _row('3', op='OPold', note='NOTEold')])
+    se.pull_once(values=[_headers(), _row('3', op='AB11111', note='NOTEold')])
 
     # Locale modifica Operatore
-    db.record_local_change('3', {'Operatore': 'OPnew'}, origin='unit_test')
+    db.record_local_change('3', {'Operatore': 'AB22222'}, origin='unit_test')
 
     # Sheets modifica NOTE APP (Operatore invariato)
-    se.pull_once(values=[_headers(), _row('3', op='OPold', note='NOTEnew')])
+    se.pull_once(values=[_headers(), _row('3', op='AB11111', note='NOTEnew')])
 
     row = db.get_filone_row('3')
     # Note remote → applicato
     assert row['note_appuntamento'] == 'NOTEnew'
     # Operatore: pending in volo, preview ottimistica = OPnew
-    assert row['operatore'] == 'OPnew'
+    assert row['operatore'] == 'AB22222'
 
     # Conflitti: zero
     n_conflicts = db.get_conn().execute(
@@ -84,7 +84,7 @@ def test_scenario_both_different_field(sync_engine_isolato, db_isolato):
     pending = db.list_pending_writes()
     assert len(pending) == 1
     assert pending[0]['column_name'] == 'Operatore'
-    assert pending[0]['new_value'] == 'OPnew'
+    assert pending[0]['new_value'] == 'AB22222'
 
 
 def test_scenario_both_same_field_base_uguale_remote(sync_engine_isolato, db_isolato):
@@ -94,10 +94,10 @@ def test_scenario_both_same_field_base_uguale_remote(sync_engine_isolato, db_iso
     se = sync_engine_isolato
     db = db_isolato
 
-    se.pull_once(values=[_headers(), _row('4', op='OLD')])
-    db.record_local_change('4', {'Operatore': 'NEW'}, origin='unit_test')
+    se.pull_once(values=[_headers(), _row('4', op='AA11111')])
+    db.record_local_change('4', {'Operatore': 'AA22222'}, origin='unit_test')
     # Remoto invariato
-    se.pull_once(values=[_headers(), _row('4', op='OLD')])
+    se.pull_once(values=[_headers(), _row('4', op='AA11111')])
 
     n_conflicts = db.get_conn().execute(
         "SELECT COUNT(*) c FROM audit_log WHERE source='conflict_local_wins'"
@@ -115,7 +115,7 @@ def test_scenario_both_same_field_conflict_local_wins(sync_engine_isolato, db_is
     db = db_isolato
 
     # Stato iniziale: OLD
-    se.pull_once(values=[_headers(), _row('5', op='OLD')])
+    se.pull_once(values=[_headers(), _row('5', op='AA11111')])
 
     # Locale modifica → LOCAL (base=OLD)
     db.record_local_change('5', {'Operatore': 'LOCAL'}, origin='unit_test')
@@ -136,7 +136,7 @@ def test_scenario_both_same_field_conflict_local_wins(sync_engine_isolato, db_is
     assert audit is not None
     assert audit['eneltel_key'] == '5'
     assert audit['column_name'] == 'Operatore'
-    assert audit['old_value'] == 'OLD'      # base_value
+    assert audit['old_value'] == 'AA11111'      # base_value
     assert audit['new_value'] == 'REMOTE'   # remote_val al momento del pull
 
     # La pending è ancora in volo (sarà drenata e sovrascriverà REMOTE su Sheets)
@@ -154,15 +154,15 @@ def test_pending_in_flight_blocca_remote_pull(sync_engine_isolato, db_isolato):
     se = sync_engine_isolato
     db = db_isolato
 
-    se.pull_once(values=[_headers(), _row('6', op='OLD')])
-    db.record_local_change('6', {'Operatore': 'NEW'}, origin='unit_test')
+    se.pull_once(values=[_headers(), _row('6', op='AA11111')])
+    db.record_local_change('6', {'Operatore': 'AA22222'}, origin='unit_test')
 
     pending_id = db.list_pending_writes()[0]['id']
     db.mark_pending_in_flight([pending_id])
 
     # Pull con remote invariato a OLD: il pull NON deve scrivere OLD
     # sul DB (preview ottimistica = NEW deve restare).
-    se.pull_once(values=[_headers(), _row('6', op='OLD')])
+    se.pull_once(values=[_headers(), _row('6', op='AA11111')])
 
     row = db.get_filone_row('6')
-    assert row['operatore'] == 'NEW'
+    assert row['operatore'] == 'AA22222'

@@ -33,6 +33,49 @@ logger = logging.getLogger('mappa_algeco')
 
 
 # ============================================================================
+# PATTERN VALIDATION (colonne critiche storicamente soggette a span)
+# ============================================================================
+# Per QUESTE colonne (e solo queste), durante il pull, ogni cambio remoto
+# viene validato contro un pattern atteso. Se il nuovo valore non matcha,
+# il cambio viene SALTATO (DB tiene il vecchio valore) e registrato in
+# filone_anomalies come 'invalid_pattern_skipped'. Skip per cella, non
+# per pull: le altre celle/colonne procedono normalmente.
+#
+# I valori vuoti sono SEMPRE permessi (un campo può legittimamente essere
+# svuotato; non blocchiamo cancellazioni).
+import re as _re_validate
+_COLUMN_PATTERN_VALIDATORS = {
+    # SIGILLO: codice numerico con eventuale lettera finale (es. 20196086Z)
+    'SIGILLO': _re_validate.compile(r'^\d{6,}[A-Z]?$'),
+    # Operatore: matricola tecnico Enel (es. AE101392, AG49808)
+    'Operatore': _re_validate.compile(r'^A[A-Z]\d{4,7}$'),
+    # Esito: parole brevi maiuscole con eventuale spazio (es. ESITO OK, ANNULLATO)
+    'Esito': _re_validate.compile(r'^[A-Z][A-Z0-9 .\-/_]{1,40}$'),
+    # Matricola CE inst: alfanumerico lungo (es. 25E4E5KE105694676)
+    'Matricola CE inst': _re_validate.compile(r'^[A-Z0-9]{8,30}$'),
+    # cod.: codice misuratore alfanumerico (es. 02E1E5121)
+    'cod.': _re_validate.compile(r'^[A-Z0-9]{4,25}$'),
+}
+
+
+def _value_is_valid_for_column(col_name, value):
+    """Ritorna True se `value` è valido per la colonna (oppure se la colonna
+    non ha validatore o il valore è vuoto). False se il pattern non matcha.
+    Confronto case-insensitive sul col_name."""
+    if value is None or str(value).strip() == '':
+        return True  # vuoto sempre OK (cancellazioni legittime)
+    pattern = None
+    col_low = col_name.strip().lower()
+    for known_name, p in _COLUMN_PATTERN_VALIDATORS.items():
+        if known_name.lower() == col_low:
+            pattern = p
+            break
+    if pattern is None:
+        return True  # nessun validatore per questa colonna
+    return bool(pattern.match(str(value).strip()))
+
+
+# ============================================================================
 # CONFIG ACCESSOR — leggiamo lazy così il modulo è importabile in test
 # ============================================================================
 def _cfg(name, default=None):
@@ -259,29 +302,83 @@ def pull_once(values=None):
                     continue  # è la PK, non la salvo come campo
                 if chiave and chiave in db.COLONNE_NOTE:
                     new_typed = _coerce_value(remote_val, chiave)
+                    # Per le colonne REAL (lat/lon) confronto numerico:
+                    # Sheets restituisce le decimali con la virgola (locale
+                    # italiano), il DB le ha come float (notazione punto).
+                    # Senza coercion il confronto stringa segnerebbe
+                    # sempre un falso "cambio remoto" ad ogni pull.
+                    old = existing[chiave] if existing is not None and chiave in existing.keys() else None
+                    if chiave in db._COLONNE_REAL:
+                        old_typed = _coerce_value(old, chiave)
+                        changed = (existing is not None) and (old_typed != new_typed)
+                    else:
+                        changed = (existing is not None) and (str(old or '') != str(remote_val or ''))
+
+                    # Validazione pattern per colonne critiche (SIGILLO,
+                    # Operatore, Esito, Matricola CE inst, cod.). Se il
+                    # valore remoto non matcha il pattern atteso, NON
+                    # applico il diff: DB tiene il vecchio. Registra
+                    # l'anomalia per visibilità admin.
+                    if changed and not _value_is_valid_for_column(col_name, remote_val):
+                        db.record_anomaly(
+                            conn, kind='invalid_pattern_skipped',
+                            eneltel_key=eneltel_key, sheets_row=sheets_row,
+                            detail={'column': col_name,
+                                    'remote_value': str(remote_val)[:60],
+                                    'db_value': str(old or '')[:60]},
+                        )
+                        db.audit(
+                            conn,
+                            eneltel_key=eneltel_key,
+                            column_name=col_name,
+                            old_value=old,
+                            new_value=remote_val,
+                            source='invalid_pattern_skipped',
+                            detail={'kept_db_value': True},
+                        )
+                        skip_columns.add(chiave)
+                        continue
+
                     typed_values[chiave] = new_typed
-                    if existing is not None:
-                        old = existing[chiave] if chiave in existing.keys() else None
-                        # Per le colonne REAL (lat/lon) confronto numerico:
-                        # Sheets restituisce le decimali con la virgola (locale
-                        # italiano), il DB le ha come float (notazione punto).
-                        # Senza coercion il confronto stringa segnerebbe
-                        # sempre un falso "cambio remoto" ad ogni pull.
-                        if chiave in db._COLONNE_REAL:
-                            old_typed = _coerce_value(old, chiave)
-                            changed = old_typed != new_typed
-                        else:
-                            changed = str(old or '') != str(remote_val or '')
-                        if changed:
+                    if changed:
+                        db.audit(
+                            conn,
+                            eneltel_key=eneltel_key,
+                            column_name=col_name,
+                            old_value=old,
+                            new_value=remote_val,
+                            source='remote',
+                        )
+                else:
+                    # Colonne extra (non in COLONNE_NOTE): valida solo se ha
+                    # un pattern definito (es. cod. non è in COLONNE_NOTE).
+                    if remote_val and not _value_is_valid_for_column(col_name, remote_val):
+                        # Skip dell'extra: leggo il vecchio valore da filone_extra
+                        ex_cur = conn.execute(
+                            "SELECT value FROM filone_extra "
+                            "WHERE eneltel_key=? AND COALESCE(lcl,'')=? AND column_name=?",
+                            (eneltel_key, lcl_val, col_name),
+                        ).fetchone()
+                        old_ex = ex_cur['value'] if ex_cur else None
+                        if str(old_ex or '') != str(remote_val or ''):
+                            db.record_anomaly(
+                                conn, kind='invalid_pattern_skipped',
+                                eneltel_key=eneltel_key, sheets_row=sheets_row,
+                                detail={'column': col_name,
+                                        'remote_value': str(remote_val)[:60],
+                                        'db_value': str(old_ex or '')[:60]},
+                            )
                             db.audit(
                                 conn,
                                 eneltel_key=eneltel_key,
                                 column_name=col_name,
-                                old_value=old,
+                                old_value=old_ex,
                                 new_value=remote_val,
-                                source='remote',
+                                source='invalid_pattern_skipped',
+                                detail={'kept_db_value': True},
                             )
-                else:
+                            skip_columns.add(col_name)
+                            continue
                     extra_values[col_name] = remote_val
 
             db.upsert_filone_row(

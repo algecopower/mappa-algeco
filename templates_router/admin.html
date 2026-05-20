@@ -465,6 +465,57 @@
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
+  /* Pannello live log */
+  .logs-section {
+    margin-top: 24px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    box-shadow: 0 2px 8px var(--shadow);
+  }
+  .logs-head {
+    display: flex; align-items: center; gap: 10px;
+    flex-wrap: wrap; margin-bottom: 10px;
+  }
+  .logs-head h2 {
+    font-size: 14px; font-weight: 600; color: var(--text-primary);
+    text-transform: uppercase; letter-spacing: 0.5px; margin-right: auto;
+  }
+  .logs-head select {
+    background: var(--bg-tertiary); border: 1px solid var(--border);
+    color: var(--text-primary); padding: 5px 10px; border-radius: 5px;
+    font-size: 12px; font-family: inherit;
+  }
+  .logs-pause-btn {
+    background: var(--bg-tertiary); border: 1px solid var(--border);
+    color: var(--text-primary); padding: 5px 10px; border-radius: 5px;
+    font-size: 12px; cursor: pointer;
+  }
+  .logs-pause-btn.paused { background: var(--accent); color: white; border-color: var(--accent); }
+  .logs-container {
+    background: var(--bg-primary); border: 1px solid var(--border);
+    border-radius: 6px; max-height: 360px; overflow-y: auto;
+    font-family: 'JetBrains Mono', Consolas, monospace; font-size: 11px; line-height: 1.55;
+  }
+  .log-row {
+    padding: 3px 10px;
+    display: grid; grid-template-columns: 130px 56px 78px 1fr; gap: 10px;
+    align-items: start;
+  }
+  .log-row:hover { background: var(--bg-secondary); }
+  .log-row .log-ts { color: var(--text-muted); }
+  .log-row .log-lvl { text-transform: uppercase; font-weight: 600; font-size: 10px; padding-top: 1px; }
+  .log-row .log-lvl.err { color: var(--error); }
+  .log-row .log-lvl.warn { color: var(--warn); }
+  .log-row .log-lvl.info { color: var(--text-secondary); }
+  .log-row .log-src {
+    color: var(--text-secondary); font-weight: 600; font-size: 10px;
+    padding-top: 1px;
+  }
+  .log-row .log-msg { color: var(--text-primary); word-break: break-word; white-space: pre-wrap; }
+  .log-empty { padding: 30px 16px; text-align: center; color: var(--text-muted); font-style: italic; font-size: 12px; }
+
   /* ---- Responsive ---- */
   @media (max-width: 768px) {
     header.app-header { padding: 10px 14px; flex-wrap: wrap; gap: 8px; }
@@ -533,6 +584,39 @@
     <h2>Nessuna provincia configurata</h2>
     <p>Clicca "Aggiungi provincia" per crearne una.</p>
   </div>
+
+  <!-- Live log viewer -->
+  <section class="logs-section">
+    <div class="logs-head">
+      <h2>📋 Log in tempo reale</h2>
+      <label>Origine
+        <select id="logsSource">
+          <option value="tutti">Tutti</option>
+          <option value="router">Router</option>
+        </select>
+      </label>
+      <label>Livello
+        <select id="logsLevel">
+          <option value="error">Solo errori</option>
+          <option value="warn" selected>Avvisi+</option>
+          <option value="info">Info+</option>
+          <option value="all">Tutto (debug)</option>
+        </select>
+      </label>
+      <label>Mostra
+        <select id="logsLimit">
+          <option value="100">100 righe</option>
+          <option value="200" selected>200 righe</option>
+          <option value="500">500 righe</option>
+        </select>
+      </label>
+      <button class="logs-pause-btn" id="logsPauseBtn" onclick="toggleLogsPause()" title="Mette in pausa l'auto-refresh">⏸ Pausa</button>
+      <button class="btn secondary" onclick="caricaLogs(true)" title="Ricarica i log">🔄</button>
+    </div>
+    <div class="logs-container" id="logsContainer">
+      <div class="log-empty">Caricamento log…</div>
+    </div>
+  </section>
 </main>
 
 <!-- Modal Aggiungi/Modifica -->
@@ -1132,6 +1216,101 @@ document.getElementById('searchEneltel').addEventListener('keydown', e => {
 });
 
 // ============================================================
+// LIVE LOG VIEWER
+// ============================================================
+let _logsPaused = false;
+let _logsTimer = null;
+const _LOGS_REFRESH_MS = 3000;
+
+function toggleLogsPause() {
+  _logsPaused = !_logsPaused;
+  const btn = document.getElementById('logsPauseBtn');
+  if (_logsPaused) {
+    btn.classList.add('paused');
+    btn.textContent = '▶ Riprendi';
+  } else {
+    btn.classList.remove('paused');
+    btn.textContent = '⏸ Pausa';
+    caricaLogs(true);
+  }
+}
+
+function _logLevelLabel(pri) {
+  if (pri <= 3) return {label: 'ERR', cls: 'err'};
+  if (pri <= 4) return {label: 'WARN', cls: 'warn'};
+  return {label: 'INFO', cls: 'info'};
+}
+
+async function caricaLogs(force) {
+  if (_logsPaused && !force) return;
+  const source = document.getElementById('logsSource').value;
+  const level = document.getElementById('logsLevel').value;
+  const limit = document.getElementById('logsLimit').value;
+  try {
+    const r = await fetch(`/api/logs?source=${encodeURIComponent(source)}&level=${level}&limit=${limit}`, {
+      credentials: 'same-origin',
+    });
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({}));
+      throw new Error(j.error || r.statusText);
+    }
+    const data = await r.json();
+    // Aggiorna dropdown sources se ci sono nuove province
+    const sel = document.getElementById('logsSource');
+    const want = new Set((data.sources_disponibili || []));
+    const got = new Set(Array.from(sel.options).map(o => o.value));
+    if (want.size !== got.size || [...want].some(x => !got.has(x))) {
+      const cur = sel.value;
+      sel.innerHTML = Array.from(want).map(s =>
+        `<option value="${escapeHtml(s)}">${escapeHtml(s === 'tutti' ? 'Tutti' : s === 'router' ? 'Router' : s)}</option>`
+      ).join('');
+      sel.value = cur;
+    }
+    rendiLogs(data.logs || []);
+  } catch (e) {
+    const cont = document.getElementById('logsContainer');
+    cont.innerHTML = `<div class="log-empty" style="color: var(--error)">Errore caricamento log: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function rendiLogs(logs) {
+  const cont = document.getElementById('logsContainer');
+  if (!logs.length) {
+    cont.innerHTML = '<div class="log-empty">Nessun log nel periodo selezionato.</div>';
+    return;
+  }
+  const html = logs.map(l => {
+    const dt = new Date(l.ts * 1000);
+    const ts = dt.toLocaleDateString('it-IT', {day:'2-digit', month:'2-digit'}) + ' ' +
+               dt.toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+    const lvl = _logLevelLabel(l.priority);
+    const src = l.source === 'router' ? 'router'
+              : l.source === '?' ? '—'
+              : l.source.toLowerCase();
+    return `<div class="log-row">
+      <span class="log-ts">${escapeHtml(ts)}</span>
+      <span class="log-lvl ${lvl.cls}">${lvl.label}</span>
+      <span class="log-src">${escapeHtml(src)}</span>
+      <span class="log-msg">${escapeHtml(l.message)}</span>
+    </div>`;
+  }).join('');
+  // Mantieni posizione di scroll solo se l'utente sta in fondo
+  const wasAtBottom = (cont.scrollTop + cont.clientHeight) >= (cont.scrollHeight - 30);
+  cont.innerHTML = html;
+  if (wasAtBottom) cont.scrollTop = 0;  // log più recenti sono in alto (-r di journalctl)
+}
+
+function _startLogsAutoRefresh() {
+  if (_logsTimer) clearInterval(_logsTimer);
+  _logsTimer = setInterval(() => caricaLogs(false), _LOGS_REFRESH_MS);
+}
+
+document.getElementById('logsSource').addEventListener('change', () => caricaLogs(true));
+document.getElementById('logsLevel').addEventListener('change', () => caricaLogs(true));
+document.getElementById('logsLimit').addEventListener('change', () => caricaLogs(true));
+
+
+// ============================================================
 // INIT
 // ============================================================
 async function caricaTutto() {
@@ -1148,6 +1327,8 @@ async function caricaTutto() {
     }
   } catch (_) {}
   caricaTutto();
+  caricaLogs(true);
+  _startLogsAutoRefresh();
 })();
 </script>
 </body>

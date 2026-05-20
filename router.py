@@ -587,6 +587,8 @@ def _admin_dispatch(path):
             'router_port': ROUTER_PORT,
             'backends': pm.stato(),
         })
+    if p == 'api/logs' and method == 'GET':
+        return _admin_check() or _admin_logs()
     if p == 'api/probe-sheet' and method == 'POST':
         return _admin_check() or _admin_probe_sheet()
     m = re.match(r'^api/provinces/([A-Z0-9_]+)/bootstrap$', p)
@@ -679,6 +681,111 @@ def _admin_dump_eneltel(slug, eneltel):
     if r is None:
         return err_resp, err_code
     return (r.text, r.status_code, {'Content-Type': r.headers.get('Content-Type', 'application/json')})
+
+
+# ============================================================================
+# ADMIN — Live log viewer
+# ============================================================================
+# Priorità syslog: 0=emerg .. 7=debug. Mappa per filtro UI:
+_LOG_LEVEL_THRESHOLD = {
+    'error': 3,    # err + warning escluso
+    'warn': 4,     # warning e sopra (err, crit, alert, emerg)
+    'info': 6,     # info e sopra (warning, err, ecc.)
+    'all': 7,      # tutto, incluso debug
+}
+
+
+def _pid_to_slug_map():
+    """Ritorna mappa {pid_str: 'TORINO'|'PAVIA'|...} per identificare i log
+    in base al PID. Il PID del router stesso viene marcato come '__router__'."""
+    out = {}
+    with pm._lock:
+        for slug, proc in pm._proc.items():
+            if proc and proc.poll() is None:
+                out[str(proc.pid)] = slug
+    out[str(os.getpid())] = '__router__'
+    return out
+
+
+def _admin_logs():
+    """Ritorna gli ultimi N log dal systemd journal del servizio.
+
+    Query params:
+      - level: error|warn|info|all (default warn)
+      - limit: max righe (default 200, max 2000)
+      - source: tutti|router|TORINO|PAVIA|... (default tutti)
+      - since: timestamp Unix opzionale per delta updates
+    """
+    level = request.args.get('level', 'warn').lower()
+    limit = min(int(request.args.get('limit', 200)), 2000)
+    source = request.args.get('source', 'tutti')
+    since = request.args.get('since', '').strip()
+
+    priority_max = _LOG_LEVEL_THRESHOLD.get(level, _LOG_LEVEL_THRESHOLD['warn'])
+
+    cmd = [
+        '/usr/bin/journalctl',
+        '-u', 'mappa-algeco-router.service',
+        '--output', 'json',
+        '--no-pager',
+        '--lines', str(limit * 3),  # raccogliamo extra per compensare i filtri
+        '-r',  # reverse: più recenti prima
+    ]
+    if since:
+        try:
+            since_ts = int(float(since))
+            cmd.extend(['--since', f'@{since_ts}'])
+        except (ValueError, TypeError):
+            pass
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+    except subprocess.TimeoutExpired:
+        return jsonify({'error': 'journalctl timeout'}), 504
+    if result.returncode != 0:
+        return jsonify({'error': f'journalctl exit {result.returncode}', 'stderr': result.stderr[-500:]}), 500
+
+    pid_map = _pid_to_slug_map()
+    logs = []
+    for line in result.stdout.splitlines():
+        if not line.strip():
+            continue
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        try:
+            pri = int(entry.get('PRIORITY', 6))
+        except (TypeError, ValueError):
+            pri = 6
+        if pri > priority_max:
+            continue
+        msg = entry.get('MESSAGE', '')
+        pid = entry.get('_PID', '')
+        slug = pid_map.get(pid, '?')
+        if source != 'tutti':
+            if source == 'router' and slug != '__router__':
+                continue
+            elif source not in ('router',) and slug != source:
+                continue
+        ts_us = int(entry.get('__REALTIME_TIMESTAMP', '0'))
+        ts = ts_us / 1_000_000 if ts_us else 0
+        logs.append({
+            'ts': ts,
+            'priority': pri,
+            'source': 'router' if slug == '__router__' else slug,
+            'pid': pid,
+            'message': msg[:1000],
+        })
+        if len(logs) >= limit:
+            break
+
+    return jsonify({
+        'logs': logs,
+        'count': len(logs),
+        'pid_map': pid_map,
+        'sources_disponibili': ['tutti', 'router'] + sorted(set(pid_map.values()) - {'__router__'}),
+    })
 
 
 # ============================================================================

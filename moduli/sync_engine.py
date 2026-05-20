@@ -121,7 +121,11 @@ def _is_operatore(value):
         return True
     return False
 # Data Installazione: DD/MM/YYYY (cifre 1-2 / cifre 1-2 / 4 cifre)
-_DATA_INST_RE = _re_validate.compile(r'^\d{1,2}/\d{1,2}/\d{4}$')
+# OPPURE stato 'annullato' (case-insensitive) per contatori non installati.
+_DATA_INST_RE = _re_validate.compile(
+    r'^(\d{1,2}/\d{1,2}/\d{4}|annullato)$',
+    _re_validate.IGNORECASE,
+)
 # Email: deve contenere @, niente spazi (single email, no liste).
 # Forma: local@dominio.tld (TLD lungo minimo 2)
 _EMAIL_RE = _re_validate.compile(r'^[^\s@]+@[^\s@]+\.[^\s@]{2,}$')

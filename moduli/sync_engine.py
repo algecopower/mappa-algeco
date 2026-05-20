@@ -62,18 +62,21 @@ _OPERATORE_RE = _re_validate.compile(r'^A[A-Z]\d{5,8}$')
 _SIGILLO_RE = _re_validate.compile(r'^\d{8,14}[A-Z]?$')
 _MATRICOLA_CE_RE = _re_validate.compile(r'^\d{2}E[0-9A-Z]{6,30}$')
 _COD_RE = _re_validate.compile(r'^\d{6,7}$')
+# Data Installazione: DD/MM/YYYY (cifre 1-2 / cifre 1-2 / 4 cifre)
+_DATA_INST_RE = _re_validate.compile(r'^\d{1,2}/\d{1,2}/\d{4}$')
 _ESITO_RE = _re_validate.compile(
     r'^(ESITO OK|ESITO KO|ANNULLATO|RIFIUTO|INSTALLATO|NON INSTALLATO|'
     r'TIMEOUT|CHIUSO DA BACK OFFICE|INVIATA VELINA A BERGIA|'
     r'PS[A-Z]{2}(?:\s+-.*)?)$'
 )
 
-# (A) Validatori: queste 4 colonne rifiutano cambi non conformi.
+# (A) Validatori: queste colonne rifiutano cambi non conformi.
 _COLUMN_PATTERN_VALIDATORS = {
     'Operatore': _OPERATORE_RE,
     'SIGILLO': _SIGILLO_RE,
     'Matricola CE inst': _MATRICOLA_CE_RE,
     'cod.': _COD_RE,
+    'Data Installazione': _DATA_INST_RE,
 }
 
 # (B) Classificatore: include anche Esito. Usato dal dispatch.
@@ -82,6 +85,7 @@ _PATTERN_FOR_CLASSIFY = {
     'SIGILLO': _SIGILLO_RE,
     'Matricola CE inst': _MATRICOLA_CE_RE,
     'cod.': _COD_RE,
+    'Data Installazione': _DATA_INST_RE,
     'Esito': _ESITO_RE,
 }
 
@@ -91,6 +95,7 @@ _CRITICAL_COL_TO_CHIAVE = {
     'SIGILLO': 'sigillo',
     'Matricola CE inst': 'matricola_installata',
     'cod.': 'codice_installato',
+    'Data Installazione': 'data_installazione',
     'Esito': 'esito',
 }
 

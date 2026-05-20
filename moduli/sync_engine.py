@@ -64,10 +64,13 @@ _MATRICOLA_CE_RE = _re_validate.compile(r'^\d{2}E[0-9A-Z]{6,30}$')
 _COD_RE = _re_validate.compile(r'^\d{6,7}$')
 # Data Installazione: DD/MM/YYYY (cifre 1-2 / cifre 1-2 / 4 cifre)
 _DATA_INST_RE = _re_validate.compile(r'^\d{1,2}/\d{1,2}/\d{4}$')
+# Esito: euristica "inizia con keyword maiuscola". La stringa è classificata
+# come Esito se INIZIA con una di queste parole-chiave (case-sensitive).
+# Maiuscolo per non confondersi con note generiche tipo "ho chiamato bergia".
 _ESITO_RE = _re_validate.compile(
-    r'^(ESITO OK|ESITO KO|ANNULLATO|RIFIUTO|INSTALLATO|NON INSTALLATO|'
-    r'TIMEOUT|CHIUSO DA BACK OFFICE|INVIATA VELINA A BERGIA|'
-    r'PS[A-Z]{2}(?:\s+-.*)?)$'
+    r'^(ESITO\b|PS[A-Z]{2}\b|PROBLEMA\b|BEAT\b|BERGIA\b|VELINA\b|'
+    r'BACK OFFICE\b|ANNULLATO\b|RIFIUTO\b|INSTALLATO\b|NON INSTALLATO\b|'
+    r'TIMEOUT\b|CHIUSO\b|INVIATA\b).{0,100}$'
 )
 
 # (A) Validatori: queste colonne rifiutano cambi non conformi.

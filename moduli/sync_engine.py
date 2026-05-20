@@ -46,18 +46,49 @@ logger = logging.getLogger('mappa_algeco')
 # I valori vuoti sono SEMPRE permessi (un campo può legittimamente essere
 # svuotato; non blocchiamo cancellazioni).
 import re as _re_validate
+# Pattern calibrati sui dati reali del DB Torino (5/2026).
+# Sono mutuamente esclusivi: ogni valore matcha al massimo UNA colonna.
 _COLUMN_PATTERN_VALIDATORS = {
-    # SIGILLO: codice numerico con eventuale lettera finale (es. 20196086Z)
-    'SIGILLO': _re_validate.compile(r'^\d{6,}[A-Z]?$'),
-    # Operatore: matricola tecnico Enel (es. AE101392, AG49808)
-    'Operatore': _re_validate.compile(r'^A[A-Z]\d{4,7}$'),
-    # Esito: parole brevi maiuscole con eventuale spazio (es. ESITO OK, ANNULLATO)
-    'Esito': _re_validate.compile(r'^[A-Z][A-Z0-9 .\-/_]{1,40}$'),
-    # Matricola CE inst: alfanumerico lungo (es. 25E4E5KE105694676)
-    'Matricola CE inst': _re_validate.compile(r'^[A-Z0-9]{8,30}$'),
-    # cod.: codice misuratore alfanumerico (es. 02E1E5121)
-    'cod.': _re_validate.compile(r'^[A-Z0-9]{4,25}$'),
+    # Operatore: matricola tecnico Enel (es. AE94428, AE101392, AG18966)
+    # Pattern: A + lettera + 5-8 cifre.
+    'Operatore': _re_validate.compile(r'^A[A-Z]\d{5,8}$'),
+    # Sigillo: numerico 8-14 cifre + eventuale lettera finale (es. 20196086Z)
+    # Minimo 8 cifre per distinguere da cod. che è 6-7 cifre.
+    'SIGILLO': _re_validate.compile(r'^\d{8,14}[A-Z]?$'),
+    # Matricola CE inst: prefisso "anno + E" + codice (es. 25E4E5KA104122513, 24E4E5KE1)
+    'Matricola CE inst': _re_validate.compile(r'^\d{2}E[0-9A-Z]{6,30}$'),
+    # cod. (codice installato): SOLO numerico 6-7 cifre (utente confermato)
+    'cod.': _re_validate.compile(r'^\d{6,7}$'),
+    # Esito: lista chiusa di valori "ufficiali" osservati nel foglio reale
+    # + codice generico PSXX (es. PSLT - Impossibilità di lavoro...).
+    # Tutto il resto è considerato testo libero → nota.
+    'Esito': _re_validate.compile(
+        r'^(ESITO OK|ESITO KO|ANNULLATO|RIFIUTO|INSTALLATO|NON INSTALLATO|'
+        r'TIMEOUT|CHIUSO DA BACK OFFICE|INVIATA VELINA A BERGIA|'
+        r'PS[A-Z]{2}(?:\s+-.*)?)$'),
 }
+
+# Mappa col_name → chiave_interna corrispondente (per scrivere su filone)
+_CRITICAL_COL_TO_CHIAVE = {
+    'Operatore': 'operatore',
+    'SIGILLO': 'sigillo',
+    'Matricola CE inst': 'matricola_installata',
+    'cod.': 'codice_installato',
+    'Esito': 'esito',
+}
+
+
+def _find_target_column_by_pattern(value):
+    """Per un valore, ritorna il nome della colonna critica che lo accetta
+    (None se nessuno matcha). I pattern sono mutuamente esclusivi:
+    ritorna al massimo una colonna."""
+    v = (value or '').strip()
+    if not v:
+        return None
+    for col_name, pattern in _COLUMN_PATTERN_VALIDATORS.items():
+        if pattern.match(v):
+            return col_name
+    return None
 
 
 def _value_is_valid_for_column(col_name, value):
@@ -185,9 +216,80 @@ def _enqueue_auto_correct(conn, *, eneltel_key, lcl, column_name, db_value, remo
             azione=f'ripristino su Sheets con valore DB',
         )
 
-        # Salva-nota: se il valore rifiutato sembra contenere informazione
-        # (qualunque cosa che non sia un codice di un'altra colonna critica),
-        # salvalo in NOTE APP per non perdere il dato.
+        # DISPATCH: se il valore rifiutato matcha il pattern di UN'ALTRA
+        # colonna critica, prova a metterlo lì (solo se la destinazione è
+        # vuota o spanata). Esempio: 'AG18966' in SIGILLO → spostalo in Operatore.
+        target_col = _find_target_column_by_pattern(remote_val_str)
+        if target_col and target_col != column_name:
+            target_chiave = _CRITICAL_COL_TO_CHIAVE.get(target_col)
+            if target_chiave:
+                # Leggi valore corrente DB della colonna destinazione
+                cur_row = conn.execute(
+                    f"SELECT {target_chiave} FROM filone "
+                    "WHERE eneltel_key=? AND COALESCE(lcl,'')=?",
+                    (eneltel_key, lcl or ''),
+                ).fetchone()
+                cur_target = (cur_row[target_chiave] if cur_row else '') or ''
+                # Se destinazione è vuota OPPURE ha un valore già fuori
+                # pattern (probabile span incrociato), sovrascrivi.
+                target_pattern = _COLUMN_PATTERN_VALIDATORS.get(target_col)
+                dest_libera = (not cur_target.strip()) or (
+                    target_pattern is not None
+                    and not target_pattern.match(cur_target.strip())
+                )
+                if dest_libera:
+                    conn.execute(
+                        "DELETE FROM pending_writes WHERE eneltel_key=? AND COALESCE(lcl,'')=? "
+                        "AND column_name=? AND state IN ('pending','in_flight')",
+                        (eneltel_key, lcl or '', target_col),
+                    )
+                    conn.execute(
+                        'INSERT INTO pending_writes(eneltel_key, lcl, column_name, new_value, '
+                        'base_value, created_ts, user, origin, state) '
+                        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                        (eneltel_key, lcl or '', target_col, remote_val_str, cur_target,
+                         now, None, 'value_relocated', 'pending'),
+                    )
+                    # Aggiorno anche filone per UI immediata
+                    conn.execute(
+                        f"UPDATE filone SET {target_chiave}=?, last_local_change_ts=? "
+                        "WHERE eneltel_key=? AND COALESCE(lcl,'')=?",
+                        (remote_val_str, now, eneltel_key, lcl or ''),
+                    )
+                    logger.warning(
+                        f"[auto-correct] {eneltel_key}: spostato {remote_val_str[:30]!r} "
+                        f"da {column_name} a {target_col} (era={cur_target[:30]!r})"
+                    )
+                    _recovery_event(
+                        ts=now,
+                        event='value_relocated',
+                        eneltel_key=eneltel_key, lcl=lcl or '',
+                        column=target_col,
+                        sheets_aveva=cur_target,
+                        db_aveva=cur_target,
+                        valore_spostato_da=column_name,
+                        valore=remote_val_str,
+                        azione=f'spostato in {target_col} (era libera o spanata)',
+                    )
+                else:
+                    # Destinazione già occupata da un valore valido → ambiguità
+                    _recovery_event(
+                        ts=now,
+                        event='value_relocation_skipped',
+                        eneltel_key=eneltel_key, lcl=lcl or '',
+                        column=target_col,
+                        valore_in_arrivo=remote_val_str,
+                        dest_attuale=cur_target,
+                        azione=f'spostamento {column_name}→{target_col} bloccato '
+                               f'(dest ha già valore valido); ispezione manuale',
+                    )
+                # In ogni caso: niente rescue in NOTE APP per questo valore
+                # (è stato gestito dal dispatch o segnalato come ambiguo).
+                return
+
+        # Fallback: il valore non matcha nessun pattern di colonna critica
+        # → è probabilmente una nota libera. Salvalo in NOTE APP per non
+        # perderlo, accodando al valore già esistente.
         if _looks_like_rescuable_note(remote_val_str):
             # Trova il nome esatto della colonna NOTE APP nel column_registry
             note_col_row = conn.execute(

@@ -61,7 +61,65 @@ import re as _re_validate
 _OPERATORE_RE = _re_validate.compile(r'^A[A-Z]\d{5,8}$')
 _SIGILLO_RE = _re_validate.compile(r'^\d{8,14}[A-Z]?$')
 _MATRICOLA_CE_RE = _re_validate.compile(r'^\d{2}E[0-9A-Z]{6,30}$')
-_COD_RE = _re_validate.compile(r'^\d{6,7}$')
+# cod. (codice installato): solo numerico, lunghezza variabile (5-10 cifre)
+# perché può essere troncato o avere zeri iniziali a seconda della provincia
+# (Torino tipicamente 6-7, Pavia 8 con zeri iniziali tipo '03345799').
+_COD_RE = _re_validate.compile(r'^\d{5,10}$')
+
+
+# ---- OPERATORE: pattern PER-PROVINCIA (lista nomi/matricole + generico) ----
+_op_cache = {'ts': 0, 'provincia': None, 'valid_values': set(), 'pattern_generico': _OPERATORE_RE}
+_OP_CACHE_TTL_S = 60
+
+
+def _operatori_validi_provincia():
+    """Set di valori validi per la colonna Operatore della provincia attiva.
+
+    Composto da:
+    - matricole/nomi in PROVINCE[PROV]['operatori_dict'] (chiave→valore)
+    - matricole in PROVINCE[PROV]['operatori_vip']
+    - valore speciale 'ANNULLATO' (stato comune di riassegnazione)
+
+    Cache 60s per non rileggere config.PROVINCE ad ogni cella.
+    """
+    import time as _t
+    now = _t.time()
+    try:
+        from config import PROVINCIA_ATTIVA, PROVINCE
+    except ImportError:
+        return _op_cache['valid_values']
+    if (_op_cache['ts'] + _OP_CACHE_TTL_S > now
+            and _op_cache['provincia'] == PROVINCIA_ATTIVA):
+        return _op_cache['valid_values']
+    cfg = PROVINCE.get(PROVINCIA_ATTIVA, {})
+    valid = set()
+    for v in (cfg.get('operatori_dict') or {}).values():
+        if v:
+            valid.add(str(v).strip().upper())
+    for v in (cfg.get('operatori_vip') or []):
+        if v:
+            valid.add(str(v).strip().upper())
+    valid.add('ANNULLATO')
+    _op_cache['ts'] = now
+    _op_cache['provincia'] = PROVINCIA_ATTIVA
+    _op_cache['valid_values'] = valid
+    return valid
+
+
+def _is_operatore(value):
+    """True se `value` è un operatore valido per la provincia attiva.
+    Combina lista dinamica (config) + pattern matricola generica AE/AG/...."""
+    v = (value or '').strip()
+    if not v:
+        return False
+    upper = v.upper()
+    # 1) Match esatto con lista per-provincia (case-insensitive)
+    if upper in _operatori_validi_provincia():
+        return True
+    # 2) Pattern matricola generica (per matricole nuove non ancora registrate)
+    if _OPERATORE_RE.match(upper):
+        return True
+    return False
 # Data Installazione: DD/MM/YYYY (cifre 1-2 / cifre 1-2 / 4 cifre)
 _DATA_INST_RE = _re_validate.compile(r'^\d{1,2}/\d{1,2}/\d{4}$')
 # Email: deve contenere @, niente spazi (single email, no liste).
@@ -113,12 +171,22 @@ _CRITICAL_COL_TO_CHIAVE = {
 def _find_target_column_by_pattern(value):
     """Per un valore, ritorna il nome della colonna critica che lo accetta
     (None se nessuno matcha). I pattern sono mutuamente esclusivi:
-    ritorna al massimo una colonna. Include Esito (lista chiusa) per il
-    riconoscimento di esiti finiti per errore in altre colonne."""
+    ritorna al massimo una colonna.
+
+    Operatore: classificazione dinamica per-provincia (lista nomi/matricole
+    + pattern generico). Le altre colonne usano i pattern statici.
+    """
     v = (value or '').strip()
     if not v:
         return None
+    # Operatore prima (dinamico). Pattern mutuamente esclusivi: una matricola
+    # non matcha anche SIGILLO/cod./Matricola CE/Data/EMAIL/Esito.
+    if _is_operatore(v):
+        return 'Operatore'
+    # Altre colonne con pattern statico (skip Operatore qui)
     for col_name, pattern in _PATTERN_FOR_CLASSIFY.items():
+        if col_name == 'Operatore':
+            continue
         if pattern.match(v):
             return col_name
     return None
@@ -127,18 +195,23 @@ def _find_target_column_by_pattern(value):
 def _value_is_valid_for_column(col_name, value):
     """Ritorna True se `value` è valido per la colonna (oppure se la colonna
     non ha validatore o il valore è vuoto). False se il pattern non matcha.
-    Confronto case-insensitive sul col_name."""
+    Confronto case-insensitive sul col_name.
+
+    Per la colonna Operatore usa la lista dinamica per-provincia (vedi
+    _is_operatore) invece del pattern regex statico.
+    """
     if value is None or str(value).strip() == '':
         return True  # vuoto sempre OK (cancellazioni legittime)
-    pattern = None
+    v = str(value).strip()
     col_low = col_name.strip().lower()
+    # Operatore: validazione dinamica per-provincia
+    if col_low == 'operatore':
+        return _is_operatore(v)
+    # Altre colonne con pattern statico
     for known_name, p in _COLUMN_PATTERN_VALIDATORS.items():
         if known_name.lower() == col_low:
-            pattern = p
-            break
-    if pattern is None:
-        return True  # nessun validatore per questa colonna
-    return bool(pattern.match(str(value).strip()))
+            return bool(p.match(v))
+    return True  # nessun validatore per questa colonna
 
 
 # Quando il pattern check rifiuta un valore in SIGILLO/Operatore/Esito/

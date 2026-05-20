@@ -75,6 +75,12 @@ def _value_is_valid_for_column(col_name, value):
     return bool(pattern.match(str(value).strip()))
 
 
+# Pattern di una nota: inizia con XX/XX (data tipo 25/03, 1/12, ecc.).
+# Quando il pattern check rifiuta un valore in SIGILLO/Operatore/... ma il
+# valore matcha questa euristica, viene "salvato" in NOTE APP anziché perso.
+_NOTE_LIKE = _re_validate.compile(r'^\d{1,2}/\d{1,2}\b')
+
+
 def _enqueue_auto_correct(conn, *, eneltel_key, lcl, column_name, db_value, remote_value):
     """Genera una pending_write per ripristinare il valore corretto del DB su
     Sheets. Chiamata quando il pattern check rifiuta un valore remoto.
@@ -85,6 +91,11 @@ def _enqueue_auto_correct(conn, *, eneltel_key, lcl, column_name, db_value, remo
     Coalesce con eventuali pending già esistenti per la stessa cella (UNIQUE
     INDEX parziale): se l'utente ha già una pending in volo, la sua vince
     (questa nuova viene sostituita dalla precedente coalescing).
+
+    EURISTICA "salva nota": se il valore rifiutato sembra una nota (inizia
+    con 'XX/XX', tipico delle date utente), viene anche generata una pending
+    per scriverlo nella colonna NOTE APP, concatenando al valore esistente.
+    Così non si perde la nota in caso di span tipo NOTE APP↔SIGILLO.
     """
     db_val_str = '' if db_value is None else str(db_value)
     remote_val_str = '' if remote_value is None else str(remote_value)
@@ -108,6 +119,53 @@ def _enqueue_auto_correct(conn, *, eneltel_key, lcl, column_name, db_value, remo
             f"[auto-correct] {eneltel_key}/{column_name}: "
             f"Sheets={remote_val_str[:30]!r} → ripristino DB={db_val_str[:30]!r}"
         )
+
+        # Euristica salva-nota: se il valore rifiutato è verosimilmente una
+        # nota utente (inizia con XX/XX), salviamolo in NOTE APP.
+        if remote_val_str and _NOTE_LIKE.match(remote_val_str.strip()):
+            # Trova il nome esatto della colonna NOTE APP nel column_registry
+            note_col_row = conn.execute(
+                "SELECT column_name FROM column_registry "
+                "WHERE chiave_interna='note_appuntamento' "
+                "ORDER BY last_seen_ts DESC LIMIT 1"
+            ).fetchone()
+            if note_col_row:
+                note_col = note_col_row['column_name']
+                # Leggi valore corrente NOTE APP dal DB
+                cur_note_row = conn.execute(
+                    "SELECT note_appuntamento FROM filone "
+                    "WHERE eneltel_key=? AND COALESCE(lcl,'')=?",
+                    (eneltel_key, lcl or ''),
+                ).fetchone()
+                cur_note = (cur_note_row['note_appuntamento'] if cur_note_row else '') or ''
+                # Concatena nuova nota con quella esistente (se diversa)
+                rescued = remote_val_str.strip()
+                if rescued in cur_note:
+                    return  # già presente, niente da fare
+                new_note = f"{rescued} // {cur_note}" if cur_note else rescued
+                # Coalesce + insert pending per NOTE APP
+                conn.execute(
+                    "DELETE FROM pending_writes WHERE eneltel_key=? AND COALESCE(lcl,'')=? "
+                    "AND column_name=? AND state IN ('pending','in_flight')",
+                    (eneltel_key, lcl or '', note_col),
+                )
+                conn.execute(
+                    'INSERT INTO pending_writes(eneltel_key, lcl, column_name, new_value, '
+                    'base_value, created_ts, user, origin, state) '
+                    'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                    (eneltel_key, lcl or '', note_col, new_note, cur_note,
+                     now, None, 'note_rescue_from_span', 'pending'),
+                )
+                # Aggiorno anche filone.note_appuntamento per UI immediata
+                conn.execute(
+                    "UPDATE filone SET note_appuntamento=?, last_local_change_ts=? "
+                    "WHERE eneltel_key=? AND COALESCE(lcl,'')=?",
+                    (new_note, now, eneltel_key, lcl or ''),
+                )
+                logger.warning(
+                    f"[auto-correct] {eneltel_key}: salvata nota da {column_name} "
+                    f"in {note_col}: {rescued[:40]!r}"
+                )
     except Exception as e:
         logger.warning(f"[auto-correct] enqueue fallito per {eneltel_key}/{column_name}: {e}")
 

@@ -102,6 +102,42 @@ def pull_once(values=None):
         if chiave == 'lcl':
             col_lcl_idx = i
 
+    # ────────────────────────────────────────────────────────────────────
+    # GUARDS ANTI-SPANAMENTO — eseguiti prima di applicare qualunque diff.
+    # In caso di anomalia abortisco TUTTO il pull (no skip selettivo) e
+    # lascio il DB intatto. Il prossimo pull riproverà.
+    # ────────────────────────────────────────────────────────────────────
+    hdr_ok, hdr_msg = _check_headers_consistent(conn, headers)
+    if not hdr_ok:
+        logger.error("=" * 70)
+        logger.error("[pull] ⛔ SCHEMA HEADER DEL FOGLIO CAMBIATO — pull abortito")
+        logger.error(f"  {hdr_msg}")
+        logger.error("  Il DB locale NON è stato modificato. Verificare manualmente il foglio.")
+        logger.error("=" * 70)
+        try:
+            db.record_anomaly(conn, kind='header_changed',
+                              detail={'msg': hdr_msg})
+        except Exception:
+            pass
+        return {'rows': len(body), 'changed': 0, 'new': 0, 'conflicts': 0,
+                'orphans': 0, 'aborted': 'header_changed', 'detail': hdr_msg}
+
+    canary_ok, canary_msg = _check_canary_rows(conn, headers, body)
+    if not canary_ok:
+        logger.error("=" * 70)
+        logger.error("[pull] ⛔ SPANAMENTO BODY RILEVATO (canary check fallito) — pull abortito")
+        logger.error(f"  {canary_msg}")
+        logger.error("  Il DB locale NON è stato modificato. Probabile shift/incollaggio")
+        logger.error("  errato di valori nelle celle. Verificare il foglio manualmente.")
+        logger.error("=" * 70)
+        try:
+            db.record_anomaly(conn, kind='canary_failed',
+                              detail={'msg': canary_msg})
+        except Exception:
+            pass
+        return {'rows': len(body), 'changed': 0, 'new': 0, 'conflicts': 0,
+                'orphans': 0, 'aborted': 'canary_failed', 'detail': canary_msg}
+
     n_changed = 0
     n_new = 0
     n_conflicts = 0
@@ -294,6 +330,153 @@ def _find_eneltel_column_index(conn, headers):
         if lookup.get(name.strip().lower()) == 'eneltel':
             return i
     return None
+
+
+# ============================================================================
+# GUARDS ANTI-SPANAMENTO
+# ============================================================================
+def _check_headers_consistent(conn, headers_now):
+    """Verifica che gli header attuali del foglio corrispondano al
+    column_registry del DB (nomi + posizioni).
+
+    Ritorna (True, '') se OK; (False, msg) se: una colonna nota è SPARITA,
+    è stata SPOSTATA di indice, o è stata RINOMINATA.
+
+    NOTA: l'aggiunta di NUOVE colonne in coda è permessa (es. nuova colonna
+    sul foglio che il DB non conosce ancora). Solo le colonne note che
+    cambiano posizione/scompaiono fanno scattare il blocco.
+    """
+    cur = conn.execute(
+        "SELECT column_name, last_index, last_seen_ts "
+        "FROM column_registry ORDER BY last_seen_ts DESC"
+    )
+    # Tieni solo la versione più recente per ogni last_index (dedup alias storici)
+    registry = {}
+    seen_idx = set()
+    for r in cur.fetchall():
+        if r['last_index'] in seen_idx:
+            continue
+        seen_idx.add(r['last_index'])
+        registry[r['column_name']] = r['last_index']
+    if not registry:
+        return True, 'registry vuoto (primo pull)'
+
+    headers_idx = {h: i + 1 for i, h in enumerate(headers_now) if h}
+    moved, removed = [], []
+    for name, expected_idx in registry.items():
+        actual_idx = headers_idx.get(name)
+        if actual_idx is None:
+            removed.append(name)
+        elif actual_idx != expected_idx:
+            moved.append(f"{name}: era idx {expected_idx}, ora {actual_idx}")
+    if removed or moved:
+        msg_parts = []
+        if removed:
+            msg_parts.append(f"colonne mancanti: {removed[:8]}")
+        if moved:
+            msg_parts.append(f"colonne spostate: {moved[:8]}")
+        return False, '; '.join(msg_parts)
+    return True, ''
+
+
+# Colonne "ancora" usate dal canary check: campi che identificano una riga
+# in modo stabile e cambiano raramente nel tempo. Se sul foglio un body è
+# stato shiftato (incollaggio errato, span massivo), almeno una di queste 4
+# si troverà in una colonna sbagliata e il confronto col DB darà mismatch.
+_CANARY_COLUMNS = {
+    'pod': ('POD', 'CODICE POD', 'POD '),
+    'nominativo': ('NOMINATIVO', 'CLIENTE', 'NOME'),
+    'indirizzo': ('INDIRIZZO', 'VIA'),
+    'comune': ('COMUNE',),
+}
+
+
+def _check_canary_rows(conn, headers_now, body, sample_size=20, max_mismatch_ratio=0.5):
+    """Verifica colonne ancora (POD/NOMINATIVO/INDIRIZZO/COMUNE) su un
+    campione di righe già conosciute nel DB.
+
+    Se sul foglio i valori del body sono stati shiftati di colonna anche
+    parzialmente, almeno una delle 4 colonne ancora si troverà fuori posto
+    e il confronto col DB rileverà mismatch. Sono campi che cambiano
+    raramente, quindi un mismatch massivo è segnale forte di span.
+
+    Ritorna (True, '') se OK; (False, msg) se > max_mismatch_ratio del
+    campione ha ALMENO UNA delle 4 colonne ancora diversa dal DB.
+    """
+    # Trova indici delle ancore + Eneltel negli header del foglio
+    eneltel_idx = None
+    canary_idx = {}  # chiave_interna -> idx
+    for i, h in enumerate(headers_now):
+        if not h:
+            continue
+        hu = h.strip().upper()
+        if hu == 'ENELTEL':
+            eneltel_idx = i
+            continue
+        for chiave, aliases in _CANARY_COLUMNS.items():
+            if hu in (a.upper() for a in aliases) and chiave not in canary_idx:
+                canary_idx[chiave] = i
+                break
+
+    if eneltel_idx is None or not canary_idx:
+        return True, 'colonne canary non disponibili (skip)'
+
+    n = len(body)
+    if n < 5:
+        return True, 'foglio troppo piccolo (skip)'
+    step = max(1, n // sample_size)
+    sample_offsets = list(range(0, n, step))[:sample_size]
+
+    n_checked = 0
+    n_mismatch = 0
+    examples = []
+    canary_cols = list(canary_idx.keys())
+    sel_cols = ', '.join(canary_cols)
+    for row_offset in sample_offsets:
+        row = body[row_offset]
+        if eneltel_idx >= len(row):
+            continue
+        eneltel_key = db.normalize_eneltel(row[eneltel_idx])
+        if not eneltel_key:
+            continue
+        existing = conn.execute(
+            f"SELECT {sel_cols} FROM filone WHERE eneltel_key=? LIMIT 1",
+            (eneltel_key,),
+        ).fetchone()
+        if existing is None:
+            continue
+
+        n_checked += 1
+        mismatch_fields = []
+        for chiave in canary_cols:
+            i = canary_idx[chiave]
+            sheet_val = (row[i] if i < len(row) else '').strip()
+            db_val = (existing[chiave] or '').strip()
+            # Confronto solo se entrambi popolati (modifiche legittime
+            # del foglio possono svuotare un campo: non blocchiamo per quello).
+            if sheet_val and db_val and sheet_val != db_val:
+                mismatch_fields.append(chiave)
+
+        if mismatch_fields:
+            n_mismatch += 1
+            if len(examples) < 3:
+                ex = {'eneltel': eneltel_key, 'campi_diversi': mismatch_fields}
+                for chiave in mismatch_fields:
+                    i = canary_idx[chiave]
+                    sheet_val = (row[i] if i < len(row) else '').strip()[:24]
+                    db_val = (existing[chiave] or '').strip()[:24]
+                    ex[chiave] = {'sheet': sheet_val, 'db': db_val}
+                examples.append(ex)
+
+    if n_checked < 5:
+        return True, f'campione canary insufficiente ({n_checked} righe)'
+
+    ratio = n_mismatch / n_checked if n_checked else 0
+    if ratio > max_mismatch_ratio:
+        return False, (f"{n_mismatch}/{n_checked} righe campione con almeno "
+                       f"un'ancora diversa ({ratio:.0%}, soglia {max_mismatch_ratio:.0%}). "
+                       f"Ancore controllate: {canary_cols}. Esempi: {examples}")
+    return True, ''
 
 
 def _load_pending_by_col(conn, eneltel_key, lcl=''):

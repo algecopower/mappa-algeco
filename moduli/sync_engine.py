@@ -70,6 +70,7 @@ _DATA_INST_RE = _re_validate.compile(r'^\d{1,2}/\d{1,2}/\d{4}$')
 _ESITO_RE = _re_validate.compile(
     r'^(ESITO\b|PS[A-Z]{2}\b|PROBLEMA\b|BEAT\b|BERGIA\b|VELINA\b|'
     r'BACK OFFICE\b|ANNULLATO\b|RIFIUTO\b|INSTALLATO\b|NON INSTALLATO\b|'
+    r'NON SINCRONIZZATO\b|SINCRONIZZAZIONE\b|'
     r'TIMEOUT\b|CHIUSO\b|INVIATA\b).{0,100}$'
 )
 

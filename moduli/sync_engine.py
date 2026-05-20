@@ -64,6 +64,9 @@ _MATRICOLA_CE_RE = _re_validate.compile(r'^\d{2}E[0-9A-Z]{6,30}$')
 _COD_RE = _re_validate.compile(r'^\d{6,7}$')
 # Data Installazione: DD/MM/YYYY (cifre 1-2 / cifre 1-2 / 4 cifre)
 _DATA_INST_RE = _re_validate.compile(r'^\d{1,2}/\d{1,2}/\d{4}$')
+# Email: deve contenere @, niente spazi (single email, no liste).
+# Forma: local@dominio.tld (TLD lungo minimo 2)
+_EMAIL_RE = _re_validate.compile(r'^[^\s@]+@[^\s@]+\.[^\s@]{2,}$')
 # Esito: euristica "inizia con keyword maiuscola". La stringa è classificata
 # come Esito se INIZIA con una di queste parole-chiave (case-sensitive).
 # Maiuscolo per non confondersi con note generiche tipo "ho chiamato bergia".
@@ -81,6 +84,7 @@ _COLUMN_PATTERN_VALIDATORS = {
     'Matricola CE inst': _MATRICOLA_CE_RE,
     'cod.': _COD_RE,
     'Data Installazione': _DATA_INST_RE,
+    'EMAIL': _EMAIL_RE,
 }
 
 # (B) Classificatore: include anche Esito. Usato dal dispatch.
@@ -90,6 +94,7 @@ _PATTERN_FOR_CLASSIFY = {
     'Matricola CE inst': _MATRICOLA_CE_RE,
     'cod.': _COD_RE,
     'Data Installazione': _DATA_INST_RE,
+    'EMAIL': _EMAIL_RE,
     'Esito': _ESITO_RE,
 }
 
@@ -100,6 +105,7 @@ _CRITICAL_COL_TO_CHIAVE = {
     'Matricola CE inst': 'matricola_installata',
     'cod.': 'codice_installato',
     'Data Installazione': 'data_installazione',
+    'EMAIL': 'email',
     'Esito': 'esito',
 }
 

@@ -585,6 +585,23 @@
     <p>Clicca "Aggiungi provincia" per crearne una.</p>
   </div>
 
+  <!-- Report anomalie span -->
+  <section class="logs-section">
+    <div class="logs-head">
+      <h2>📋 Report anomalie span</h2>
+      <label>Provincia
+        <select id="recProvSel"></select>
+      </label>
+      <label>Data
+        <input id="recDate" type="date" />
+      </label>
+      <button class="btn secondary" onclick="caricaRecoveryReports()" title="Carica report">🔄</button>
+    </div>
+    <div id="recContainer" class="logs-container" style="max-height: 320px;">
+      <div class="log-empty">Seleziona provincia e data per caricare il report.</div>
+    </div>
+  </section>
+
   <!-- Live log viewer -->
   <section class="logs-section">
     <div class="logs-head">
@@ -858,10 +875,14 @@ async function caricaProvince() {
 }
 
 function aggiornaSelectInspector(province) {
-  const sel = document.getElementById('searchProvSel');
-  const cur = sel.value;
-  sel.innerHTML = province.map(p => `<option value="${escapeHtml(p.slug)}">${escapeHtml(p.slug)}</option>`).join('');
-  if (cur) sel.value = cur;
+  const opts = province.map(p => `<option value="${escapeHtml(p.slug)}">${escapeHtml(p.slug)}</option>`).join('');
+  for (const id of ['searchProvSel', 'recProvSel']) {
+    const sel = document.getElementById(id);
+    if (!sel) continue;
+    const cur = sel.value;
+    sel.innerHTML = opts;
+    if (cur) sel.value = cur;
+  }
 }
 
 function rendiGrid(province) {
@@ -1214,6 +1235,76 @@ function chiudiInspector() {
 document.getElementById('searchEneltel').addEventListener('keydown', e => {
   if (e.key === 'Enter') { e.preventDefault(); ispezionaEneltel(); }
 });
+
+// ============================================================
+// REPORT ANOMALIE SPAN
+// ============================================================
+async function caricaRecoveryReports() {
+  const slug = document.getElementById('recProvSel').value;
+  const date = document.getElementById('recDate').value;
+  const cont = document.getElementById('recContainer');
+  if (!slug) { cont.innerHTML = '<div class="log-empty">Seleziona una provincia.</div>'; return; }
+  cont.innerHTML = '<div class="log-empty"><span class="spinner"></span> Caricamento…</div>';
+  try {
+    const params = date ? `?date=${encodeURIComponent(date)}` : '';
+    const r = await api('GET', `/api/provinces/${slug}/recovery-reports${params}`);
+    rendiRecoveryReports(r);
+  } catch (e) {
+    cont.innerHTML = `<div class="log-empty" style="color:var(--error)">Errore: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function rendiRecoveryReports(data) {
+  const cont = document.getElementById('recContainer');
+  if (!data.file_exists) {
+    let msg = `<div class="log-empty">Nessun report per ${escapeHtml(data.date)}.`;
+    if (data.available_dates && data.available_dates.length) {
+      msg += `<br><small>Date disponibili: ${data.available_dates.slice(0, 10).map(d => `<a href="#" onclick="document.getElementById('recDate').value='${d}';caricaRecoveryReports();return false">${d}</a>`).join(' · ')}</small>`;
+    }
+    msg += '</div>';
+    cont.innerHTML = msg;
+    return;
+  }
+  if (!data.entries.length) {
+    cont.innerHTML = `<div class="log-empty">Nessuna anomalia rilevata il ${escapeHtml(data.date)}.</div>`;
+    return;
+  }
+  // Tabella eventi
+  let html = `<table class="inspector-table" style="font-size:11px;">
+    <thead><tr>
+      <th>Ora</th><th>Tipo</th><th>Eneltel</th><th>Colonna</th>
+      <th>Sheets aveva</th><th>DB aveva</th><th>Azione</th>
+    </tr></thead><tbody>`;
+  for (const e of data.entries) {
+    const dt = new Date(e.ts * 1000);
+    const ora = dt.toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+    const eventLabel = {
+      'pattern_auto_correct': '🔧 Auto-correzione',
+      'note_rescue_from_span': '💾 Nota recuperata',
+      'value_relocated': '➡️ Valore spostato',
+      'value_relocation_skipped': '⚠️ Ambiguità',
+    }[e.event] || e.event;
+    html += `<tr>
+      <td class="mono">${escapeHtml(ora)}</td>
+      <td>${escapeHtml(eventLabel)}</td>
+      <td class="mono">${escapeHtml(e.eneltel_key || '—')}</td>
+      <td>${escapeHtml(e.column || '—')}</td>
+      <td class="mono" title="${escapeHtml(e.sheets_aveva || e.valore_in_arrivo || '')}">${escapeHtml((e.sheets_aveva || e.valore_in_arrivo || '').slice(0, 30))}</td>
+      <td class="mono" title="${escapeHtml(e.db_aveva || e.dest_attuale || '')}">${escapeHtml((e.db_aveva || e.dest_attuale || '').slice(0, 30))}</td>
+      <td>${escapeHtml(e.azione || '—')}</td>
+    </tr>`;
+  }
+  html += `</tbody></table>
+    <div style="font-size:11px; color:var(--text-muted); padding:8px;">
+      ${data.entries.length} eventi · file: <span class="mono">recovery_${escapeHtml(data.date)}.jsonl</span>
+    </div>`;
+  cont.innerHTML = html;
+}
+
+document.getElementById('recDate').valueAsDate = new Date();
+document.getElementById('recDate').addEventListener('change', caricaRecoveryReports);
+document.getElementById('recProvSel').addEventListener('change', caricaRecoveryReports);
+
 
 // ============================================================
 // LIVE LOG VIEWER

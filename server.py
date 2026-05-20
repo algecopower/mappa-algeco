@@ -1556,6 +1556,68 @@ def api_admin_db_action():
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
+@app.route('/api/admin/recovery-reports', methods=['GET'])
+@admin_required
+def api_admin_recovery_reports():
+    """Ritorna gli eventi del file JSONL giornaliero degli span recovery.
+
+    Query params:
+      - date: YYYY-MM-DD (default oggi)
+      - limit: max entries (default 500, max 5000)
+
+    Risposta: {date, file_exists, count, entries: [...]}
+    """
+    try:
+        import datetime as _dt
+        date_str = request.args.get('date', _dt.date.today().isoformat())
+        limit = min(int(request.args.get('limit', 500)), 5000)
+        report_dir = os.path.join(SCRIPT_DIR, 'data', PROVINCIA_ATTIVA.lower(),
+                                  'span_reports')
+        path = os.path.join(report_dir, f'recovery_{date_str}.jsonl')
+        if not os.path.exists(path):
+            # Lista date disponibili come fallback
+            available = []
+            if os.path.isdir(report_dir):
+                for f in sorted(os.listdir(report_dir), reverse=True):
+                    if f.startswith('recovery_') and f.endswith('.jsonl'):
+                        available.append(f[len('recovery_'):-len('.jsonl')])
+            return jsonify({
+                'date': date_str,
+                'file_exists': False,
+                'count': 0,
+                'entries': [],
+                'available_dates': available[:30],
+            })
+        entries = []
+        with open(path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    import json as _j
+                    entries.append(_j.loads(line))
+                except (ValueError, TypeError):
+                    continue
+                if len(entries) >= limit:
+                    break
+        # Date disponibili
+        available = []
+        for f in sorted(os.listdir(report_dir), reverse=True):
+            if f.startswith('recovery_') and f.endswith('.jsonl'):
+                available.append(f[len('recovery_'):-len('.jsonl')])
+        return jsonify({
+            'date': date_str,
+            'file_exists': True,
+            'count': len(entries),
+            'entries': entries,
+            'available_dates': available[:30],
+        })
+    except Exception as e:
+        logger.exception('[admin] errore /api/admin/recovery-reports')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 @app.route('/api/admin/db-dump/anomalies', methods=['GET'])
 @admin_required
 def api_admin_db_dump_anomalies():

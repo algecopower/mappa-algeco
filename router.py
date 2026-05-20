@@ -602,6 +602,9 @@ def _admin_dispatch(path):
     m = re.match(r'^api/provinces/([A-Z0-9_]+)/dump-eneltel/(.+)$', p)
     if m and method == 'GET':
         return _admin_check() or _admin_dump_eneltel(m.group(1), m.group(2))
+    m = re.match(r'^api/provinces/([A-Z0-9_]+)/recovery-reports$', p)
+    if m and method == 'GET':
+        return _admin_check() or _admin_recovery_reports(m.group(1))
 
     return jsonify({'error': 'admin endpoint non trovato', 'path': p}), 404
 
@@ -678,6 +681,21 @@ def _admin_dump_eneltel(slug, eneltel):
     r, err_resp, err_code = _proxy_admin_to_backend(
         slug, f'/api/admin/db-dump/eneltel/{eneltel}', method='GET', timeout=15,
     )
+    if r is None:
+        return err_resp, err_code
+    return (r.text, r.status_code, {'Content-Type': r.headers.get('Content-Type', 'application/json')})
+
+
+def _admin_recovery_reports(slug):
+    date = request.args.get('date', '')
+    limit = request.args.get('limit', '')
+    qs = []
+    if date:
+        qs.append(f'date={date}')
+    if limit:
+        qs.append(f'limit={limit}')
+    path = '/api/admin/recovery-reports' + (('?' + '&'.join(qs)) if qs else '')
+    r, err_resp, err_code = _proxy_admin_to_backend(slug, path, method='GET', timeout=15)
     if r is None:
         return err_resp, err_code
     return (r.text, r.status_code, {'Content-Type': r.headers.get('Content-Type', 'application/json')})

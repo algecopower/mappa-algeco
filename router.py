@@ -605,6 +605,9 @@ def _admin_dispatch(path):
     m = re.match(r'^api/provinces/([A-Z0-9_]+)/recovery-reports$', p)
     if m and method == 'GET':
         return _admin_check() or _admin_recovery_reports(m.group(1))
+    m = re.match(r'^api/provinces/([A-Z0-9_]+)/backup-diff$', p)
+    if m and method == 'GET':
+        return _admin_check() or _admin_backup_diff(m.group(1))
 
     return jsonify({'error': 'admin endpoint non trovato', 'path': p}), 404
 
@@ -696,6 +699,17 @@ def _admin_recovery_reports(slug):
         qs.append(f'limit={limit}')
     path = '/api/admin/recovery-reports' + (('?' + '&'.join(qs)) if qs else '')
     r, err_resp, err_code = _proxy_admin_to_backend(slug, path, method='GET', timeout=15)
+    if r is None:
+        return err_resp, err_code
+    return (r.text, r.status_code, {'Content-Type': r.headers.get('Content-Type', 'application/json')})
+
+
+def _admin_backup_diff(slug):
+    date = request.args.get('date', '')
+    qs = [f'date={date}'] if date else []
+    path = '/api/admin/backup-diff' + (('?' + '&'.join(qs)) if qs else '')
+    # Timeout alto: il diff scarica e processa l'intero foglio
+    r, err_resp, err_code = _proxy_admin_to_backend(slug, path, method='GET', timeout=120)
     if r is None:
         return err_resp, err_code
     return (r.text, r.status_code, {'Content-Type': r.headers.get('Content-Type', 'application/json')})

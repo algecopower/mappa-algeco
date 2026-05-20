@@ -595,7 +595,8 @@
       <label>Data
         <input id="recDate" type="date" />
       </label>
-      <button class="btn secondary" onclick="caricaRecoveryReports()" title="Carica report">🔄</button>
+      <button class="btn secondary" onclick="caricaRecoveryReports()" title="Carica report del giorno">🔄</button>
+      <button class="btn warn" onclick="confrontaConBackup()" title="Confronta il foglio attuale con il backup del giorno selezionato (rileva celle ancora 'fuori posto')">🔍 Confronta con backup</button>
     </div>
     <div id="recContainer" class="logs-container" style="max-height: 320px;">
       <div class="log-empty">Seleziona provincia e data per caricare il report.</div>
@@ -1304,6 +1305,66 @@ function rendiRecoveryReports(data) {
 document.getElementById('recDate').valueAsDate = new Date();
 document.getElementById('recDate').addEventListener('change', caricaRecoveryReports);
 document.getElementById('recProvSel').addEventListener('change', caricaRecoveryReports);
+
+
+// ============================================================
+// CONFRONTO CON BACKUP
+// ============================================================
+async function confrontaConBackup() {
+  const slug = document.getElementById('recProvSel').value;
+  const date = document.getElementById('recDate').value;
+  const cont = document.getElementById('recContainer');
+  if (!slug) { toast('Seleziona una provincia', 'error'); return; }
+  cont.innerHTML = `<div class="log-empty"><span class="spinner"></span> Confronto col backup del ${escapeHtml(date || '(ieri)')} in corso (può richiedere 30-60s)…</div>`;
+  try {
+    const params = date ? `?date=${encodeURIComponent(date)}` : '';
+    const r = await api('GET', `/api/provinces/${slug}/backup-diff${params}`);
+    rendiConfrontoBackup(r);
+  } catch (e) {
+    cont.innerHTML = `<div class="log-empty" style="color:var(--error)">Errore confronto: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function rendiConfrontoBackup(data) {
+  const cont = document.getElementById('recContainer');
+  if (!data.backup_file_exists) {
+    let html = `<div class="log-empty">Backup non trovato per ${escapeHtml(data.date)}.`;
+    if (data.available_dates && data.available_dates.length) {
+      html += `<br><small>Date backup disponibili: ${data.available_dates.slice(0, 10).map(d => `<a href="#" onclick="document.getElementById('recDate').value='${d}';return false">${d}</a>`).join(' · ')}</small>`;
+    }
+    html += '</div>';
+    cont.innerHTML = html;
+    return;
+  }
+  const s = data.stats || {};
+  let html = `<div style="padding:10px 12px;background:var(--bg-tertiary);border-radius:6px;margin-bottom:8px;font-size:12px;">
+    📅 <b>Backup del ${escapeHtml(data.date)}</b> · ${s.eneltel_nel_backup || 0} eneltel ·
+    ${s.totale_celle_diverse_dal_backup || 0} celle diverse dal backup ·
+    <span style="color:var(--error);font-weight:600;">${s.celle_sospette || 0} sospette</span>
+  </div>`;
+  if (!data.sospetti || !data.sospetti.length) {
+    html += '<div class="log-empty" style="color:var(--ok)">✅ Nessuna cella sospetta. Tutte le differenze dal backup sembrano modifiche legittime.</div>';
+    cont.innerHTML = html;
+    return;
+  }
+  html += `<table class="inspector-table" style="font-size:11px;">
+    <thead><tr><th>Eneltel</th><th>Colonna</th><th>Backup aveva</th><th>Attuale</th><th>Motivo</th></tr></thead><tbody>`;
+  for (const it of data.sospetti) {
+    html += `<tr>
+      <td class="mono">${escapeHtml(it.eneltel_key)}</td>
+      <td>${escapeHtml(it.colonna)}</td>
+      <td class="mono" title="${escapeHtml(it.backup_aveva)}">${escapeHtml(it.backup_aveva.slice(0, 40))}</td>
+      <td class="mono" title="${escapeHtml(it.attuale)}">${escapeHtml(it.attuale.slice(0, 40))}</td>
+      <td style="color:var(--warn);font-size:10px;">${escapeHtml(it.motivo)}</td>
+    </tr>`;
+  }
+  html += `</tbody></table>
+    <div style="font-size:11px; color:var(--text-muted); padding:8px;">
+      Le righe sopra hanno valore "fuori pattern" rispetto al backup di ${escapeHtml(data.date)}.
+      Verifica manualmente sul foglio. Colonne controllate: ${escapeHtml((s.colonne_controllate || []).join(', '))}.
+    </div>`;
+  cont.innerHTML = html;
+}
 
 
 // ============================================================

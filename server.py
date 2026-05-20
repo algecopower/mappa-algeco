@@ -1556,6 +1556,149 @@ def api_admin_db_action():
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
+@app.route('/api/admin/backup-diff', methods=['GET'])
+@admin_required
+def api_admin_backup_diff():
+    """Confronta lo stato ATTUALE del foglio con un backup JSON.
+
+    Per ogni eneltel/colonna critica, segnala le celle dove backup ≠ attuale
+    e il valore attuale è "sospetto" (cioè non matcha il pattern atteso per
+    la sua colonna). Utile per identificare valori ancora fuori posto dopo
+    uno span risolto solo in parte.
+
+    Query params:
+      - date: YYYY-MM-DD del backup da confrontare (default: ieri)
+      - limit: max risultati (default 500)
+
+    Risposta: {date, backup_file, sospetti: [...], stats: {...}}
+    """
+    try:
+        import datetime as _dt
+        import json as _j
+        from moduli import shared as _shared
+        from moduli import sync_engine as _se
+        from moduli import db as _db
+
+        date_str = request.args.get('date', '').strip()
+        if not date_str:
+            date_str = (_dt.date.today() - _dt.timedelta(days=1)).isoformat()
+        limit = min(int(request.args.get('limit', 500)), 5000)
+
+        backup_dir = os.path.join(SCRIPT_DIR, 'backup', PROVINCIA_ATTIVA.lower())
+        backup_path = os.path.join(backup_dir,
+                                    f'filone_{PROVINCIA_ATTIVA.lower()}_{date_str}.json')
+        if not os.path.exists(backup_path):
+            # Lista date disponibili
+            available = []
+            if os.path.isdir(backup_dir):
+                import re as _re
+                for f in sorted(os.listdir(backup_dir), reverse=True):
+                    m = _re.match(rf'filone_{PROVINCIA_ATTIVA.lower()}_(\d{{4}}-\d{{2}}-\d{{2}})\.json$', f)
+                    if m:
+                        available.append(m.group(1))
+            return jsonify({
+                'date': date_str,
+                'backup_file_exists': False,
+                'available_dates': available[:30],
+                'sospetti': [], 'stats': {},
+            })
+
+        with open(backup_path, 'r', encoding='utf-8') as f:
+            bk = _j.load(f)
+        bk_headers = bk.get('headers', [])
+        bk_rows = bk.get('righe', [])
+
+        # Mappa eneltel → dict critici dal backup
+        def _bk_idx(name):
+            for i, h in enumerate(bk_headers):
+                if h.strip().upper() == name.upper():
+                    return i
+            return None
+        bk_ek_i = _bk_idx('Eneltel')
+        if bk_ek_i is None:
+            return jsonify({'error': 'colonna Eneltel non trovata nel backup'}), 500
+        # Indici nel backup delle colonne critiche
+        critical_idx_bk = {}
+        for col_name in _se._CRITICAL_COL_TO_CHIAVE.keys():
+            i = _bk_idx(col_name)
+            if i is not None:
+                critical_idx_bk[col_name] = i
+
+        # Costruzione mappa backup
+        bk_map = {}
+        for row in bk_rows:
+            if bk_ek_i >= len(row):
+                continue
+            ek = str(row[bk_ek_i]).lstrip('0').upper()
+            entry = {}
+            for col_name, i in critical_idx_bk.items():
+                entry[col_name] = (row[i] if i < len(row) else '').strip()
+            bk_map[ek] = entry
+
+        # Stato ATTUALE dal foglio (force fresh)
+        _shared.invalidate_values_cache()
+        all_vals = _shared.get_all_values_cached(force=True)
+        sh_headers = all_vals[0]
+        def _sh_idx(name):
+            for i, h in enumerate(sh_headers):
+                if h.strip().upper() == name.upper():
+                    return i
+            return None
+        sh_ek_i = _sh_idx('Eneltel')
+        critical_idx_sh = {}
+        for col_name in critical_idx_bk:
+            i = _sh_idx(col_name)
+            if i is not None:
+                critical_idx_sh[col_name] = i
+
+        sospetti = []
+        n_diversi_totali = 0
+        for row in all_vals[1:]:
+            if sh_ek_i >= len(row):
+                continue
+            ek = str(row[sh_ek_i]).lstrip('0').upper()
+            if ek not in bk_map:
+                continue
+            bk_entry = bk_map[ek]
+            for col_name, i in critical_idx_sh.items():
+                attuale = (row[i] if i < len(row) else '').strip()
+                bk_val = bk_entry.get(col_name, '').strip()
+                if attuale == bk_val:
+                    continue
+                n_diversi_totali += 1
+                # È sospetto SE il valore attuale non matcha il pattern atteso
+                # per quella colonna (segno che è ancora "spanato"/sbagliato).
+                pattern = _se._COLUMN_PATTERN_VALIDATORS.get(col_name)
+                if pattern is not None and attuale and not pattern.match(attuale):
+                    sospetti.append({
+                        'eneltel_key': ek,
+                        'colonna': col_name,
+                        'backup_aveva': bk_val,
+                        'attuale': attuale,
+                        'motivo': f'attuale non matcha pattern di {col_name}',
+                    })
+                    if len(sospetti) >= limit:
+                        break
+            if len(sospetti) >= limit:
+                break
+
+        return jsonify({
+            'date': date_str,
+            'backup_file_exists': True,
+            'backup_file': os.path.basename(backup_path),
+            'sospetti': sospetti,
+            'stats': {
+                'totale_celle_diverse_dal_backup': n_diversi_totali,
+                'celle_sospette': len(sospetti),
+                'eneltel_nel_backup': len(bk_map),
+                'colonne_controllate': list(critical_idx_sh.keys()),
+            },
+        })
+    except Exception as e:
+        logger.exception('[admin] errore /api/admin/backup-diff')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 @app.route('/api/admin/recovery-reports', methods=['GET'])
 @admin_required
 def api_admin_recovery_reports():

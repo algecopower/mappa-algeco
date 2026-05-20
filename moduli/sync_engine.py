@@ -22,6 +22,8 @@ Entrambi i flussi sono callabili sia in modalità "one-shot" (per test e
 per integrazione col loop di sync esistente in server.py) sia in modalità
 "loop daemon" via `start_workers()`.
 """
+import os
+import json
 import time
 import logging
 import threading
@@ -75,10 +77,66 @@ def _value_is_valid_for_column(col_name, value):
     return bool(pattern.match(str(value).strip()))
 
 
-# Pattern di una nota: inizia con XX/XX (data tipo 25/03, 1/12, ecc.).
-# Quando il pattern check rifiuta un valore in SIGILLO/Operatore/... ma il
-# valore matcha questa euristica, viene "salvato" in NOTE APP anziché perso.
-_NOTE_LIKE = _re_validate.compile(r'^\d{1,2}/\d{1,2}\b')
+# Quando il pattern check rifiuta un valore in SIGILLO/Operatore/Esito/
+# Matricola CE inst/cod., e il valore NON è vuoto, viene salvato in NOTE APP
+# anziché perso. Il valore già non matchava il pattern atteso della colonna,
+# quindi qualsiasi sua forma (data con /, data senza /, testo, codice strano)
+# va comunque conservata per non perdere informazione.
+# Eccezione: scarta valori che sono chiaramente "puri codici" già conosciuti
+# di altre colonne critiche (matricole operatore, sigilli) per evitare di
+# riempire NOTE APP di rumore.
+_PURE_MATRICOLA = _re_validate.compile(r'^A[A-Z]\d{4,7}$')
+_PURE_SIGILLO = _re_validate.compile(r'^\d{6,}[A-Z]?$')
+
+
+def _looks_like_rescuable_note(value):
+    """Ritorna True se `value` va salvato in NOTE APP quando rifiutato dal
+    pattern check di un'altra colonna. Strategia conservativa:
+    - Vuoto: NO (niente da salvare).
+    - Pura matricola (es. 'AG18966'): NO (è solo nel posto sbagliato per
+      sbaglio, non una nota).
+    - Puro sigillo (es. '20196086Z'): NO (idem).
+    - Qualunque altra cosa: SÌ (date con/senza slash, testo libero, ecc.)."""
+    s = (value or '').strip()
+    if not s:
+        return False
+    if _PURE_MATRICOLA.match(s) or _PURE_SIGILLO.match(s):
+        return False
+    return True
+
+
+# Buffer thread-local di eventi recovery raccolti durante il pull corrente.
+# Alla fine di pull_once vengono scritti in data/{prov}/span_reports/recovery_YYYY-MM-DD.jsonl
+_recovery_buffer = threading.local()
+
+
+def _recovery_event(**fields):
+    """Appende un evento al buffer del pull corrente (thread-local)."""
+    if not hasattr(_recovery_buffer, 'events'):
+        _recovery_buffer.events = []
+    _recovery_buffer.events.append(fields)
+
+
+def _flush_recovery_report():
+    """Scrive il buffer eventi nel file jsonl giornaliero della provincia.
+    Idempotente, no-op se buffer vuoto. Chiamata alla fine di pull_once."""
+    events = getattr(_recovery_buffer, 'events', None)
+    if not events:
+        return
+    try:
+        from config import PROVINCIA_ATTIVA
+        import datetime as _dt
+        report_dir = os.path.join('data', PROVINCIA_ATTIVA.lower(), 'span_reports')
+        os.makedirs(report_dir, exist_ok=True)
+        fname = os.path.join(report_dir, f'recovery_{_dt.date.today().isoformat()}.jsonl')
+        with open(fname, 'a', encoding='utf-8') as f:
+            for e in events:
+                f.write(json.dumps(e, ensure_ascii=False, default=str) + '\n')
+        logger.warning(f"[recovery-report] scritti {len(events)} eventi in {fname}")
+    except Exception as e:
+        logger.warning(f"[recovery-report] write fallito: {e}")
+    finally:
+        _recovery_buffer.events = []
 
 
 def _enqueue_auto_correct(conn, *, eneltel_key, lcl, column_name, db_value, remote_value):
@@ -119,10 +177,18 @@ def _enqueue_auto_correct(conn, *, eneltel_key, lcl, column_name, db_value, remo
             f"[auto-correct] {eneltel_key}/{column_name}: "
             f"Sheets={remote_val_str[:30]!r} → ripristino DB={db_val_str[:30]!r}"
         )
+        _recovery_event(
+            ts=db._now_ts(),
+            event='pattern_auto_correct',
+            eneltel_key=eneltel_key, lcl=lcl or '', column=column_name,
+            sheets_aveva=remote_val_str, db_aveva=db_val_str,
+            azione=f'ripristino su Sheets con valore DB',
+        )
 
-        # Euristica salva-nota: se il valore rifiutato è verosimilmente una
-        # nota utente (inizia con XX/XX), salviamolo in NOTE APP.
-        if remote_val_str and _NOTE_LIKE.match(remote_val_str.strip()):
+        # Salva-nota: se il valore rifiutato sembra contenere informazione
+        # (qualunque cosa che non sia un codice di un'altra colonna critica),
+        # salvalo in NOTE APP per non perdere il dato.
+        if _looks_like_rescuable_note(remote_val_str):
             # Trova il nome esatto della colonna NOTE APP nel column_registry
             note_col_row = conn.execute(
                 "SELECT column_name FROM column_registry "
@@ -165,6 +231,16 @@ def _enqueue_auto_correct(conn, *, eneltel_key, lcl, column_name, db_value, remo
                 logger.warning(
                     f"[auto-correct] {eneltel_key}: salvata nota da {column_name} "
                     f"in {note_col}: {rescued[:40]!r}"
+                )
+                _recovery_event(
+                    ts=now,
+                    event='note_rescue_from_span',
+                    eneltel_key=eneltel_key, lcl=lcl or '', column=note_col,
+                    sheets_aveva=cur_note, db_aveva=cur_note,
+                    nota_salvata_da_colonna=column_name,
+                    valore_recuperato=rescued,
+                    nota_dopo_concat=new_note,
+                    azione=f'recovery di {column_name} in {note_col}',
                 )
     except Exception as e:
         logger.warning(f"[auto-correct] enqueue fallito per {eneltel_key}/{column_name}: {e}")
@@ -510,6 +586,9 @@ def pull_once(values=None):
         db.sync_state_set('last_full_pull_sheet_hash', sheet_hash)
 
     elapsed = time.time() - t0
+    # Flush eventi recovery raccolti durante il pull (se presenti) nel
+    # file giornaliero data/{prov}/span_reports/recovery_YYYY-MM-DD.jsonl
+    _flush_recovery_report()
     result = {
         'rows': len(body),
         'changed': n_changed,

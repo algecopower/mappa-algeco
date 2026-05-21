@@ -180,6 +180,14 @@ class _DBWorksheetProxy:
             "Le formattazioni/note cella vivono solo lato UI (cell_log.json)."
         )
 
+    @property
+    def spreadsheet(self):
+        """Stub minimo per chiamate del tipo
+        `ws.spreadsheet.fetch_sheet_metadata(...)` che leggevano
+        regole condizionali / formati / note dal foglio.
+        Ritorna metadati vuoti: i chiamanti gestiscono il caso 'nessuna regola'."""
+        return _DBSpreadsheetProxy()
+
     def _all_rows(self):
         """Cache rows + headers in un'unica chiamata (TTL via get_all_values_cached)."""
         return get_all_values_cached()
@@ -239,6 +247,35 @@ class _DBWorksheetProxy:
     def append_rows(self, *a, **k):     return self._write_disabled('append_rows')
     def clear(self, *a, **k):           return self._write_disabled('clear')
     def resize(self, *a, **k):          return self._write_disabled('resize')
+
+
+class _DBSpreadsheetProxy:
+    """Proxy minimal per `ws.spreadsheet.*`. Senza Google Sheets non c'è
+    metadata Spreadsheet: ritorniamo strutture vuote per non rompere il
+    codice esistente che legge regole condizionali / formati / note.
+    """
+
+    @property
+    def id(self):
+        return ''
+
+    def fetch_sheet_metadata(self, *args, **kwargs):
+        """Storicamente: GET su Sheets API per metadata foglio. Ora: vuoto."""
+        return {'sheets': []}
+
+    def values_batch_get(self, *args, **kwargs):
+        return {'valueRanges': []}
+
+    def values_batch_update(self, *args, **kwargs):
+        raise NotImplementedError(
+            "spreadsheet.values_batch_update() non supportato (Sheets disconnesso). "
+            "Usa safe_batch_update_by_name() per scrivere nel DB."
+        )
+
+    def batch_update(self, *args, **kwargs):
+        raise NotImplementedError(
+            "spreadsheet.batch_update() non supportato (Sheets disconnesso)."
+        )
 
 
 _ws_proxy_singleton = None

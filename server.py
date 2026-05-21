@@ -643,10 +643,32 @@ _TRUSTED_ORIGINS = set()
 for _port in [5001, 5002, 5050]:
     _TRUSTED_ORIGINS.add(f'http://localhost:{_port}')
     _TRUSTED_ORIGINS.add(f'http://127.0.0.1:{_port}')
-_TRUSTED_ORIGINS.add(f'https://torino.{DOMINIO_BASE}')
-_TRUSTED_ORIGINS.add(f'https://pavia.{DOMINIO_BASE}')
-_TRUSTED_ORIGINS.add(f'https://admin.{DOMINIO_BASE}')
+# Base + sottodomini admin/legacy
 _TRUSTED_ORIGINS.add(f'https://{DOMINIO_BASE}')
+_TRUSTED_ORIGINS.add(f'https://admin.{DOMINIO_BASE}')
+
+
+def _refresh_trusted_origins():
+    """Aggiorna `_TRUSTED_ORIGINS` con tutti i sottodomini in provinces.json.
+
+    Chiamata al boot e a ogni richiesta CSRF (caching implicito: la lettura
+    di provinces.json è veloce, e il check CSRF è già rate-limited dal
+    `before_request` del backend). Evita di hardcodare i nomi delle
+    province nel codice.
+    """
+    try:
+        from moduli.safe_json import json_read as _jr
+        provs = _jr(os.path.join(SCRIPT_DIR, 'data', 'provinces.json'), default={}) or {}
+        for slug, cfg in provs.items():
+            sub = (cfg or {}).get('sottodominio')
+            if sub:
+                _TRUSTED_ORIGINS.add(f'https://{sub}')
+                _TRUSTED_ORIGINS.add(f'http://{sub}')
+    except Exception:
+        pass
+
+
+_refresh_trusted_origins()
 
 
 def _get_or_create_csrf_token():
@@ -694,6 +716,12 @@ def csrf_check():
 
     # 1) Origin/Referer check
     origin = request.headers.get('Origin')
+    if not origin:
+        pass  # noop, fall through to referer
+    elif origin not in _TRUSTED_ORIGINS:
+        # Refresh lazy: una nuova provincia potrebbe essere stata creata
+        # dopo il boot. Rileggi provinces.json al volo prima di rifiutare.
+        _refresh_trusted_origins()
     if not origin:
         referer = request.headers.get('Referer')
         if referer:

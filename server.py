@@ -1298,6 +1298,39 @@ def api_admin_delete_user(username):
     return jsonify({'success': False, 'message': msg}), 404
 
 
+@app.route('/api/admin/users/<username>/province', methods=['PUT'])
+@admin_required
+def api_admin_set_user_provinces(username):
+    """Imposta la lista province a cui un utente ha accesso.
+
+    Body: {'province': ['TORINO', 'PAVIA', ...]}
+    Sostituisce completamente la lista corrente.
+    """
+    try:
+        from moduli.safe_json import json_read as _jr, json_write as _jw
+        body = request.get_json(silent=True) or {}
+        provs = body.get('province')
+        if not isinstance(provs, list):
+            return jsonify({'success': False, 'message': "'province' deve essere una lista"}), 400
+        provs_norm = [str(p).strip().upper() for p in provs if str(p).strip()]
+        users_file = os.path.join(SCRIPT_DIR, 'users.json')
+        users = _jr(users_file, default={}) or {}
+        uname = (username or '').strip().lower()
+        if uname not in users:
+            return jsonify({'success': False, 'message': f"Utente '{username}' non trovato"}), 404
+        users[uname]['province'] = provs_norm
+        if not _jw(users_file, users, indent=2):
+            return jsonify({'success': False, 'message': 'Errore salvataggio users.json'}), 500
+        return jsonify({
+            'success': True,
+            'username': uname,
+            'province': provs_norm,
+        })
+    except Exception as e:
+        logger.exception('[admin] errore PUT user province')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 @app.route('/api/admin/users/<username>/reset-password', methods=['POST'])
 @admin_required
 def api_admin_reset_password(username):
@@ -1781,6 +1814,78 @@ def api_admin_columns_list():
         return jsonify({'success': True, 'columns': out, 'total': len(out)})
     except Exception as e:
         logger.exception('[admin] errore GET /api/admin/columns')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/admin/columns/bootstrap-standard', methods=['POST'])
+@admin_required
+def api_admin_columns_bootstrap_standard():
+    """Popola `column_registry` con le colonne standard del programma.
+
+    Usa MAPPATURA_COLONNE_DEFAULT: per ogni `chiave_interna` prende il
+    primo `nomi_default` come nome canonico e lo inserisce in
+    column_registry con la chiave_interna giusta. Salta colonne già
+    presenti (case-insensitive).
+
+    Utile alla creazione di una provincia nuova: in 1 click il DB ha
+    tutte le colonne del programma pronte per ricevere modifiche
+    senza dover importare un Excel.
+    """
+    try:
+        from moduli import db as _db
+        from config import MAPPATURA_COLONNE_DEFAULT
+        conn = _db.get_conn()
+        # Lista esistenti (case-insensitive)
+        esistenti = {
+            r['column_name'].strip().lower()
+            for r in conn.execute('SELECT column_name FROM column_registry').fetchall()
+        }
+        # Max index attuale
+        max_idx = conn.execute(
+            "SELECT COALESCE(MAX(last_index), 0) AS m FROM column_registry"
+        ).fetchone()['m']
+        added = []
+        skipped = []
+        now = _db._now_ts()
+        with conn:
+            conn.execute('BEGIN IMMEDIATE')
+            for chiave, info in MAPPATURA_COLONNE_DEFAULT.items():
+                nomi = info.get('nomi_default') or []
+                if not nomi:
+                    continue
+                nome = nomi[0]  # nome canonico (primo della lista)
+                if nome.strip().lower() in esistenti:
+                    skipped.append(nome)
+                    continue
+                max_idx += 1
+                conn.execute(
+                    'INSERT INTO column_registry(column_name, chiave_interna, last_index, last_seen_ts) '
+                    'VALUES (?, ?, ?, ?)',
+                    (nome, chiave, max_idx, now),
+                )
+                added.append(nome)
+                esistenti.add(nome.strip().lower())
+            # Eneltel: assicurati che esista (è la chiave primaria)
+            if 'eneltel' not in esistenti:
+                max_idx += 1
+                conn.execute(
+                    'INSERT INTO column_registry(column_name, chiave_interna, last_index, last_seen_ts) '
+                    'VALUES (?, ?, ?, ?)',
+                    ('Eneltel', 'eneltel', max_idx, now),
+                )
+                added.append('Eneltel')
+        logger.info(
+            f"[admin] bootstrap schema standard: {len(added)} colonne aggiunte, "
+            f"{len(skipped)} gia' presenti"
+        )
+        return jsonify({
+            'success': True,
+            'added': added,
+            'skipped': skipped,
+            'total_now': len(added) + len(skipped),
+        })
+    except Exception as e:
+        logger.exception('[admin] errore bootstrap-standard')
         return jsonify({'success': False, 'message': str(e)}), 500
 
 

@@ -627,6 +627,12 @@ def _admin_dispatch(path):
     if m and method == 'POST':
         return _admin_check() or _admin_proxy_simple(m.group(1), '/api/admin/columns', 'POST')
 
+    m = re.match(r'^api/provinces/([A-Z0-9_]+)/columns/bootstrap-standard$', p)
+    if m and method == 'POST':
+        return _admin_check() or _admin_proxy_simple(
+            m.group(1), '/api/admin/columns/bootstrap-standard', 'POST'
+        )
+
     m = re.match(r'^api/provinces/([A-Z0-9_]+)/columns/(.+)/rename$', p)
     if m and method == 'PUT':
         return _admin_check() or _admin_proxy_simple(
@@ -648,6 +654,11 @@ def _admin_dispatch(path):
     if m and method == 'POST':
         return _admin_check() or _admin_users_proxy(
             f'/api/admin/users/{m.group(1)}/{m.group(2)}', 'POST'
+        )
+    m = re.match(r'^api/admin/users/([^/]+)/province$', p)
+    if m and method == 'PUT':
+        return _admin_check() or _admin_users_proxy(
+            f'/api/admin/users/{m.group(1)}/province', 'PUT'
         )
 
     return jsonify({'error': 'admin endpoint non trovato', 'path': p}), 404
@@ -1040,11 +1051,53 @@ def _admin_create_province():
 
     # Crea la cartella dati. Il DB SQLite verrà inizializzato vuoto al
     # primo avvio del backend (db.py crea lo schema on-demand). I dati
-    # entrano successivamente via import Excel dalla dashboard admin.
+    # entrano successivamente via import Excel o tramite il wizard.
     data_dir = os.path.join(SCRIPT_DIR, 'data', slug.lower())
     os.makedirs(data_dir, exist_ok=True)
 
-    return jsonify({'ok': True, 'slug': slug, 'cfg': cfg}), 201
+    # Auto-grant accesso all'admin che ha creato la provincia (così non
+    # deve modificare users.json a mano dopo ogni creazione).
+    granted_to = _grant_provincia_a_utente_corrente(slug)
+
+    return jsonify({
+        'ok': True, 'slug': slug, 'cfg': cfg,
+        'auto_granted_to': granted_to,
+    }), 201
+
+
+def _grant_provincia_a_utente_corrente(slug):
+    """Aggiunge `slug` alla lista 'province' dell'utente loggato.
+
+    Ritorna l'username modificato, o None se non possibile.
+    """
+    try:
+        user = _validate_session()
+        if not user:
+            return None
+        username = (user.get('username') or '').strip().lower()
+        if not username:
+            return None
+        import json as _json
+        users_file = os.path.join(SCRIPT_DIR, 'users.json')
+        if not os.path.exists(users_file):
+            return None
+        with open(users_file, 'r', encoding='utf-8') as f:
+            users = _json.load(f)
+        if username not in users:
+            return None
+        provs = users[username].get('province') or []
+        if slug not in provs:
+            provs.append(slug)
+            users[username]['province'] = provs
+            tmp = users_file + '.tmp'
+            with open(tmp, 'w', encoding='utf-8') as f:
+                _json.dump(users, f, indent=2, ensure_ascii=False)
+            os.replace(tmp, users_file)
+            log.info(f"[admin] auto-grant: aggiunto {slug} a {username}")
+        return username
+    except Exception as e:
+        log.warning(f"[admin] auto-grant {slug} fallito: {e}")
+        return None
 
 
 def _admin_update_province(slug):

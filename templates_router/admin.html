@@ -260,6 +260,19 @@
   }
   .actions .btn { font-size: 12px; padding: 6px 10px; }
 
+  .wizard-step {
+    padding: 6px 14px; border-radius: 16px; font-weight: 600;
+    background: var(--bg-tertiary); color: var(--text-muted);
+    user-select: none;
+  }
+  .wizard-step.active {
+    background: var(--accent); color: white;
+  }
+  .wizard-step.done {
+    background: rgba(46, 204, 113, 0.20); color: var(--ok);
+  }
+  .wizard-step.done::before { content: '✓ '; }
+
   .alert-banner {
     background: rgba(231, 76, 60, 0.12);
     color: var(--error);
@@ -785,6 +798,71 @@
   </div>
 </div>
 
+<div class="modal" id="modalWizard">
+  <div class="modal-content wide">
+    <div class="modal-head">
+      <h2 id="wizardTitle">🪄 Wizard di configurazione</h2>
+      <button class="close" onclick="chiudiWizard()">&times;</button>
+    </div>
+    <div style="padding:14px 16px;">
+      <div id="wizardSteps" style="display:flex;gap:6px;margin-bottom:18px;font-size:12px;flex-wrap:wrap;">
+        <span class="wizard-step active" data-step="1">1. Struttura colonne</span>
+        <span class="wizard-step" data-step="2">2. Operatori</span>
+        <span class="wizard-step" data-step="3">3. Accessi utenti</span>
+      </div>
+
+      <!-- STEP 1: Colonne -->
+      <div class="wizard-page" id="wizPage1">
+        <div style="background:var(--bg-tertiary);padding:12px 14px;border-radius:8px;margin-bottom:14px;border-left:3px solid var(--ok);">
+          <b>💡 Step 1 — Colonne del filone</b><br>
+          <small style="color:var(--text-secondary);">
+            Carica i campi standard del programma (POD, Eneltel, Nominativo, telefono, ecc.) con un click.
+            In alternativa potrai aggiungere/rimuovere colonne in qualunque momento dalla scheda "Colonne".
+          </small>
+        </div>
+        <div id="wizColonneStatus" style="margin-bottom:14px;"></div>
+        <button class="btn success" onclick="wizBootstrapColonne()" id="wizBtnBootstrap">⚙️ Carica schema standard del programma</button>
+        <button class="btn secondary" onclick="wizSkipStep(2)" style="margin-left:8px;">Salta →</button>
+      </div>
+
+      <!-- STEP 2: Operatori -->
+      <div class="wizard-page" id="wizPage2" style="display:none;">
+        <div style="background:var(--bg-tertiary);padding:12px 14px;border-radius:8px;margin-bottom:14px;border-left:3px solid var(--ok);">
+          <b>💡 Step 2 — Operatori (tecnici)</b><br>
+          <small style="color:var(--text-secondary);">
+            Aggiungi gli operatori che lavoreranno su questa provincia: matricola, nome visibile, colore mappa.
+            Puoi aggiungerne altri in qualunque momento dalla scheda "Operatori".
+          </small>
+        </div>
+        <div id="wizOpContainer"></div>
+        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn success" onclick="wizOpAddRow()">➕ Aggiungi riga</button>
+          <div style="flex:1"></div>
+          <button class="btn secondary" onclick="wizGoTo(1)">← Indietro</button>
+          <button class="btn" onclick="wizSalvaOperatori()">Salva e prosegui →</button>
+        </div>
+      </div>
+
+      <!-- STEP 3: Accessi utenti -->
+      <div class="wizard-page" id="wizPage3" style="display:none;">
+        <div style="background:var(--bg-tertiary);padding:12px 14px;border-radius:8px;margin-bottom:14px;border-left:3px solid var(--ok);">
+          <b>💡 Step 3 — Chi può accedere</b><br>
+          <small style="color:var(--text-secondary);">
+            Spunta gli utenti che potranno vedere e modificare questa provincia.
+            Sei tu sei già pre-selezionato (chi crea ha accesso automatico).
+          </small>
+        </div>
+        <div id="wizUtentiContainer"></div>
+        <div style="margin-top:12px;display:flex;gap:8px;">
+          <button class="btn secondary" onclick="wizGoTo(2)">← Indietro</button>
+          <div style="flex:1"></div>
+          <button class="btn" onclick="wizSalvaAccessi()">Salva e finisci 🎉</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal" id="modalOperatori">
   <div class="modal-content wide">
     <div class="modal-head">
@@ -1065,14 +1143,15 @@ function rendiGrid(province) {
     let actionsHtml = '';
     if (dbNotInit) {
       // Provincia appena creata o senza dati: serve avviare il backend
-      // (che crea lo schema DB vuoto) PRIMA di poter importare l'Excel.
+      // (che crea lo schema DB vuoto) PRIMA di poter importare/wizard.
       if (stato === 'running') {
         actionsHtml = `
-          <button class="btn warn" onclick="apriImportExcel('${p.slug}')" title="Importa il primo file Excel per popolare il filone">📥 Importa Excel</button>
+          <button class="btn success" onclick="apriWizard('${p.slug}')" title="Wizard guidato: aggiungi colonne standard, operatori e accessi utenti senza importare Excel">🪄 Configura (wizard)</button>
+          <button class="btn warn" onclick="apriImportExcel('${p.slug}')" title="In alternativa, importa subito il primo file Excel">📥 Importa Excel</button>
           <button class="btn secondary" onclick="azione('${p.slug}','stop')" title="Ferma il programma">⏸ Ferma</button>
         `;
       } else {
-        actionsHtml = `<button class="btn success" onclick="azione('${p.slug}','start')" title="Avvia il programma. Al primo avvio viene creato un database vuoto pronto a ricevere l'import Excel.">▶ Avvia</button>`;
+        actionsHtml = `<button class="btn success" onclick="azione('${p.slug}','start')" title="Avvia il programma. Al primo avvio viene creato un database vuoto pronto da configurare con il wizard o un import Excel.">▶ Avvia</button>`;
       }
     } else if (stato === 'running') {
       const obCount = (p.outbox && p.outbox.n_pending_unique_cells) || 0;
@@ -1117,8 +1196,8 @@ function rendiGrid(province) {
         <button class="btn danger" onclick="elimina('${p.slug}')" title="Elimina la provincia">🗑️</button>
       </div>
       ${dbNotInit ? (stato === 'running'
-        ? '<div class="alert-banner">⚠️ Programma avviato ma vuoto. Clicca "Importa Excel" per caricare il primo file.</div>'
-        : '<div class="alert-banner">⚠️ Provincia nuova. Clicca "Avvia" per avviare il programma (crea un database vuoto), poi importa il primo Excel.</div>') : ''}
+        ? '<div class="alert-banner">⚠️ Programma avviato ma vuoto. Clicca <b>"🪄 Configura (wizard)"</b> per allestire colonne e operatori interattivamente, oppure <b>"📥 Importa Excel"</b> per partire da un file della collega.</div>'
+        : '<div class="alert-banner">⚠️ Provincia nuova. Clicca "Avvia" per avviare il programma (crea un database vuoto), poi usa il wizard guidato o l\'import Excel.</div>') : ''}
     `;
     grid.appendChild(card);
   }
@@ -1155,6 +1234,196 @@ async function dbAction(slug, action) {
     toast(`Errore ${label}: ${e.message}`, 'error');
   }
 }
+
+// ============================================================
+// WIZARD configurazione provincia
+// ============================================================
+let _wizSlug = null;
+let _wizOpRows = [];
+let _wizUtenti = [];
+
+async function apriWizard(slug) {
+  _wizSlug = slug;
+  document.getElementById('wizardTitle').textContent = `🪄 Configurazione iniziale — ${slug}`;
+  _wizOpRows = [];
+  _wizUtenti = [];
+  wizGoTo(1);
+  document.getElementById('wizColonneStatus').innerHTML = '';
+  document.getElementById('wizBtnBootstrap').disabled = false;
+  document.getElementById('modalWizard').classList.add('open');
+}
+
+function chiudiWizard() {
+  document.getElementById('modalWizard').classList.remove('open');
+  _wizSlug = null;
+  setTimeout(caricaTutto, 300); // ricarica dati card
+}
+
+function wizGoTo(n) {
+  for (let i = 1; i <= 3; i++) {
+    const page = document.getElementById('wizPage' + i);
+    if (page) page.style.display = (i === n) ? 'block' : 'none';
+    const step = document.querySelector(`.wizard-step[data-step="${i}"]`);
+    if (step) {
+      step.classList.remove('active', 'done');
+      if (i === n) step.classList.add('active');
+      else if (i < n) step.classList.add('done');
+    }
+  }
+  if (n === 2) wizRendiOperatori();
+  if (n === 3) wizCaricaUtenti();
+}
+
+function wizSkipStep(toStep) { wizGoTo(toStep); }
+
+async function wizBootstrapColonne() {
+  const btn = document.getElementById('wizBtnBootstrap');
+  const status = document.getElementById('wizColonneStatus');
+  btn.disabled = true;
+  status.innerHTML = '<div class="log-empty"><span class="spinner"></span> Caricamento schema standard…</div>';
+  try {
+    const r = await api('POST', `/api/provinces/${_wizSlug}/columns/bootstrap-standard`);
+    status.innerHTML = `
+      <div style="background:rgba(46,204,113,0.12);color:var(--ok);border-left:3px solid var(--ok);padding:10px 14px;border-radius:6px;">
+        ✓ Schema standard caricato: <b>${(r.added || []).length}</b> colonne aggiunte
+        ${(r.skipped || []).length > 0 ? ` (${r.skipped.length} già presenti)` : ''}.
+      </div>
+      <div style="margin-top:10px;text-align:right;">
+        <button class="btn" onclick="wizGoTo(2)">Prosegui agli operatori →</button>
+      </div>`;
+  } catch (e) {
+    status.innerHTML = `<div class="log-empty" style="color:var(--error)">Errore: ${escapeHtml(e.message)}</div>`;
+    btn.disabled = false;
+  }
+}
+
+function wizRendiOperatori() {
+  const cont = document.getElementById('wizOpContainer');
+  if (!_wizOpRows.length) {
+    cont.innerHTML = '<div class="log-empty">Nessun operatore. Clicca "Aggiungi riga" o salta lo step.</div>';
+    return;
+  }
+  let html = `<table class="inspector-table" style="font-size:13px;width:100%;">
+    <thead><tr>
+      <th style="width:30%">Matricola</th>
+      <th style="width:40%">Nome visibile</th>
+      <th style="width:20%">Colore</th>
+      <th style="width:10%"></th>
+    </tr></thead><tbody>`;
+  for (let i = 0; i < _wizOpRows.length; i++) {
+    const r = _wizOpRows[i];
+    html += `<tr>
+      <td><input type="text" data-widx="${i}" data-wfield="matricola" value="${escapeHtml(r.matricola)}"
+        placeholder="AE101392" style="width:100%;padding:6px 8px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);border-radius:4px;font-family:'JetBrains Mono',monospace;"></td>
+      <td><input type="text" data-widx="${i}" data-wfield="nome" value="${escapeHtml(r.nome)}"
+        placeholder="PAUL" style="width:100%;padding:6px 8px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);border-radius:4px;"></td>
+      <td><input type="color" data-widx="${i}" data-wfield="colore" value="${escapeHtml(r.colore)}"
+        style="width:60px;height:32px;padding:2px;background:var(--bg-primary);border:1px solid var(--border);border-radius:4px;cursor:pointer;"></td>
+      <td style="text-align:center;"><button class="btn danger" style="font-size:12px;padding:4px 10px;" onclick="wizOpRemove(${i})">🗑️</button></td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  cont.innerHTML = html;
+  for (const inp of cont.querySelectorAll('input[data-widx]')) {
+    inp.addEventListener('input', e => {
+      const i = parseInt(e.target.dataset.widx);
+      _wizOpRows[i][e.target.dataset.wfield] = e.target.value;
+    });
+  }
+}
+
+function wizOpAddRow() {
+  _wizOpRows.push({ matricola: '', nome: '', colore: '#3498db' });
+  wizRendiOperatori();
+}
+
+function wizOpRemove(i) {
+  _wizOpRows.splice(i, 1);
+  wizRendiOperatori();
+}
+
+async function wizSalvaOperatori() {
+  // Se non hai aggiunto niente puoi comunque proseguire
+  if (!_wizOpRows.length) { wizGoTo(3); return; }
+  // Valida
+  const seen = new Set();
+  for (const r of _wizOpRows) {
+    const m = (r.matricola || '').trim().toUpperCase();
+    if (!m) { toast('Matricola vuota: completa o rimuovi la riga', 'error'); return; }
+    if (seen.has(m)) { toast(`Matricola duplicata: ${m}`, 'error'); return; }
+    seen.add(m);
+  }
+  const operatori_vip = [];
+  const colori_operatori = {};
+  const operatori_dict = {};
+  for (const r of _wizOpRows) {
+    const m = r.matricola.trim().toUpperCase();
+    operatori_vip.push(m);
+    if (r.colore) colori_operatori[m] = r.colore;
+    const n = (r.nome || '').trim().toUpperCase();
+    if (n) operatori_dict[n] = m;
+  }
+  try {
+    await api('PUT', `/api/provinces/${_wizSlug}`, {
+      operatori_vip, colori_operatori, operatori_dict,
+    });
+    toast(`✓ ${_wizOpRows.length} operatori salvati`, 'success');
+    wizGoTo(3);
+  } catch (e) {
+    toast('Errore: ' + e.message, 'error');
+  }
+}
+
+async function wizCaricaUtenti() {
+  const cont = document.getElementById('wizUtentiContainer');
+  cont.innerHTML = '<div class="log-empty"><span class="spinner"></span> Caricamento utenti…</div>';
+  try {
+    const data = await api('GET', '/api/admin/users');
+    let arr = data.users || data || [];
+    if (!Array.isArray(arr)) arr = Object.entries(arr).map(([username, info]) => ({ username, ...info }));
+    _wizUtenti = arr;
+    let html = `<div style="display:flex;flex-direction:column;gap:6px;max-height:340px;overflow-y:auto;">`;
+    for (const u of arr) {
+      const checked = (u.province || []).includes(_wizSlug) ? 'checked' : '';
+      const ruoloLabel = u.ruolo === 'admin' ? ' <span class="badge ok" style="font-size:10px;">admin</span>' : '';
+      const altreProv = (u.province || []).filter(s => s !== _wizSlug).join(', ');
+      const altreLabel = altreProv ? `<small style="color:var(--text-muted);">— già su: ${escapeHtml(altreProv)}</small>` : '';
+      html += `<label style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--bg-tertiary);border-radius:6px;cursor:pointer;">
+        <input type="checkbox" data-wuser="${escapeHtml(u.username)}" ${checked} style="width:auto;">
+        <span style="flex:1;"><b>${escapeHtml(u.username)}</b>${ruoloLabel} ${altreLabel}</span>
+      </label>`;
+    }
+    html += '</div>';
+    cont.innerHTML = html;
+  } catch (e) {
+    cont.innerHTML = `<div class="log-empty" style="color:var(--error)">Errore: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+async function wizSalvaAccessi() {
+  // Raccogli checkbox state e applica via per-utente
+  const cont = document.getElementById('wizUtentiContainer');
+  const checked = new Set(Array.from(cont.querySelectorAll('input[data-wuser]'))
+    .filter(c => c.checked).map(c => c.dataset.wuser));
+  const calls = [];
+  for (const u of _wizUtenti) {
+    const eraSelezionato = (u.province || []).includes(_wizSlug);
+    const oraSelezionato = checked.has(u.username);
+    if (eraSelezionato === oraSelezionato) continue; // nessun cambio per questo utente
+    let newProvs = [...(u.province || [])];
+    if (oraSelezionato && !eraSelezionato) newProvs.push(_wizSlug);
+    if (!oraSelezionato && eraSelezionato) newProvs = newProvs.filter(s => s !== _wizSlug);
+    calls.push(api('PUT', `/api/admin/users/${encodeURIComponent(u.username)}/province`, { province: newProvs }));
+  }
+  try {
+    const results = await Promise.all(calls);
+    toast(`🎉 Configurazione completata! ${results.length} accessi utente aggiornati. Riavvia la provincia per applicare.`, 'success');
+    chiudiWizard();
+  } catch (e) {
+    toast('Errore: ' + e.message, 'error');
+  }
+}
+
 
 // ============================================================
 // OPERATORI (CRUD per provincia)
@@ -1347,7 +1616,7 @@ function rendiUtenti(users) {
       <td><b>${escapeHtml(username)}</b></td>
       <td>${ruoloBadge}</td>
       <td>${statoBadge}</td>
-      <td>${province}</td>
+      <td>${province} <button class="btn secondary" style="font-size:11px;padding:2px 6px;margin-left:4px;" onclick="utenteEditProvince('${escapeHtml(username)}', ${JSON.stringify(u.province || []).replace(/"/g, '&quot;')})" title="Modifica province a cui ha accesso">✏️</button></td>
       <td><small>${last}</small></td>
       <td>
         <button class="btn secondary" style="font-size:12px;padding:3px 8px;" onclick="utenteToggle('${escapeHtml(username)}', ${attivo})" title="${attivo ? 'Disattiva' : 'Riattiva'} questo utente">${attivo ? '⏸' : '▶'}</button>
@@ -1399,6 +1668,36 @@ async function utenteReset(username) {
   try {
     await api('POST', `/api/admin/users/${encodeURIComponent(username)}/reset-password`, { password });
     toast(`✓ Password aggiornata per "${username}"`, 'success');
+  } catch (e) {
+    toast('Errore: ' + e.message, 'error');
+  }
+}
+
+async function utenteEditProvince(username, currentProvs) {
+  const tutte = _province.map(p => p.slug);
+  const lista = tutte.map(s => {
+    const checked = currentProvs.includes(s) ? '✓ ' : '  ';
+    return `${checked}${s}`;
+  }).join('\n');
+  const input = prompt(
+    `Province a cui "${username}" può accedere.\n\n` +
+    `Stato corrente:\n${lista}\n\n` +
+    `Scrivi gli slug separati da virgola (es. TORINO,PAVIA).\n` +
+    `Lascia vuoto per togliere TUTTI gli accessi.`,
+    currentProvs.join(',')
+  );
+  if (input === null) return; // cancel
+  const newProvs = input.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+  // Avvisa se include slug non esistenti
+  const invalid = newProvs.filter(s => !tutte.includes(s));
+  if (invalid.length && !confirm(
+    `Le seguenti province non esistono ancora: ${invalid.join(', ')}.\n` +
+    `Procedere comunque? (saranno accessibili se creerai quelle province in futuro)`
+  )) return;
+  try {
+    await api('PUT', `/api/admin/users/${encodeURIComponent(username)}/province`, { province: newProvs });
+    toast(`✓ Accessi di "${username}" aggiornati: ${newProvs.join(', ') || '(nessuna)'}`, 'success');
+    caricaUtenti();
   } catch (e) {
     toast('Errore: ' + e.message, 'error');
   }

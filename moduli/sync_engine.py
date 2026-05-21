@@ -212,6 +212,12 @@ _ESITO_RE = _re_validate.compile(
     r'NON SINCRONIZZATO\b|SINCRONIZZAZIONE\b|'
     r'TIMEOUT\b|CHIUSO\b|INVIATA\b).{0,100}$'
 )
+# Orari (fasce orarie lettere): classificatore "best effort". Riconosciamo
+# solo il formato "dalle ... alle ..." (case-insensitive). Altri formati
+# accettati (Pavia usa anche "9,00 12,00", non classificabili → fallback).
+_ORARI_RE = _re_validate.compile(
+    r'.*\bdalle\b.*\balle\b.*', _re_validate.IGNORECASE
+)
 
 # (A) Validatori: queste colonne rifiutano cambi non conformi.
 _COLUMN_PATTERN_VALIDATORS = {
@@ -223,7 +229,7 @@ _COLUMN_PATTERN_VALIDATORS = {
     'EMAIL': _EMAIL_RE,
 }
 
-# (B) Classificatore: include anche Esito. Usato dal dispatch.
+# (B) Classificatore: include anche Esito e Orari. Usato dal dispatch.
 _PATTERN_FOR_CLASSIFY = {
     'Operatore': _OPERATORE_RE,
     'SIGILLO': _SIGILLO_RE,
@@ -232,6 +238,7 @@ _PATTERN_FOR_CLASSIFY = {
     'Data Installazione': _DATA_INST_RE,
     'EMAIL': _EMAIL_RE,
     'Esito': _ESITO_RE,
+    'Orari': _ORARI_RE,
 }
 
 # Mappa col_name → chiave_interna corrispondente (per scrivere su filone)
@@ -243,6 +250,7 @@ _CRITICAL_COL_TO_CHIAVE = {
     'Data Installazione': 'data_installazione',
     'EMAIL': 'email',
     'Esito': 'esito',
+    'Orari': 'orari_lettere',
 }
 
 

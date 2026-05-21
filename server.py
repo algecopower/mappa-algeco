@@ -1556,6 +1556,79 @@ def api_admin_db_action():
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
+@app.route('/api/admin/validation-rules', methods=['GET'])
+@admin_required
+def api_admin_get_validation_rules():
+    """Ritorna le regole di validazione attuali della provincia + metadata."""
+    try:
+        from moduli import sync_engine as _se
+        rules = _se._load_validation_rules()
+        # Lista colonne validate (default)
+        columns = [
+            'Operatore', 'SIGILLO', 'Matricola CE inst', 'cod.',
+            'Data Installazione', 'EMAIL',
+        ]
+        # Garantisci che ogni colonna abbia un'entry (default)
+        out = {}
+        for col in columns:
+            r = rules.get(col, {}) if isinstance(rules, dict) else {}
+            out[col] = {
+                'enabled': r.get('enabled', True),
+                'auto_correct': r.get('auto_correct', True),
+                'extra_valid_values': r.get('extra_valid_values') or [],
+            }
+        return jsonify({
+            'success': True,
+            'provincia': PROVINCIA_ATTIVA,
+            'columns': columns,
+            'rules': out,
+        })
+    except Exception as e:
+        logger.exception('[admin] errore GET /api/admin/validation-rules')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/admin/validation-rules', methods=['PUT'])
+@admin_required
+def api_admin_put_validation_rules():
+    """Aggiorna le regole di validazione della provincia.
+
+    Body: {'rules': {colonna: {enabled, auto_correct, extra_valid_values[]}}}
+    Salva atomicamente in data/{provincia}/validation_rules.json.
+    """
+    try:
+        from moduli import sync_engine as _se
+        import json as _j
+        body = request.get_json(silent=True) or {}
+        new_rules = body.get('rules')
+        if not isinstance(new_rules, dict):
+            return jsonify({'success': False, 'message': "campo 'rules' mancante o non valido"}), 400
+        # Normalizza ogni entry
+        clean = {}
+        for col, r in new_rules.items():
+            if not isinstance(r, dict):
+                continue
+            clean[col] = {
+                'enabled': bool(r.get('enabled', True)),
+                'auto_correct': bool(r.get('auto_correct', True)),
+                'extra_valid_values': [str(v).strip() for v in (r.get('extra_valid_values') or []) if str(v).strip()],
+            }
+        path = os.path.join(SCRIPT_DIR, 'data', PROVINCIA_ATTIVA.lower(),
+                             'validation_rules.json')
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp = path + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            _j.dump(clean, f, indent=2, ensure_ascii=False)
+        os.replace(tmp, path)
+        # Forza il refresh della cache nel sync_engine
+        _se.reset_rules_cache()
+        logger.info(f"[admin] validation_rules aggiornate: {list(clean.keys())}")
+        return jsonify({'success': True, 'rules': clean, 'path': path})
+    except Exception as e:
+        logger.exception('[admin] errore PUT /api/admin/validation-rules')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 @app.route('/api/admin/backup-diff', methods=['GET'])
 @admin_required
 def api_admin_backup_diff():

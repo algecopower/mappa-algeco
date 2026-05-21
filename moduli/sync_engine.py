@@ -108,7 +108,9 @@ def _operatori_validi_provincia():
 
 def _is_operatore(value):
     """True se `value` è un operatore valido per la provincia attiva.
-    Combina lista dinamica (config) + pattern matricola generica AE/AG/...."""
+    Combina lista dinamica (config) + pattern matricola generica AE/AG/....
+    Considera anche i valori in extra_valid_values delle regole admin.
+    """
     v = (value or '').strip()
     if not v:
         return False
@@ -116,10 +118,82 @@ def _is_operatore(value):
     # 1) Match esatto con lista per-provincia (case-insensitive)
     if upper in _operatori_validi_provincia():
         return True
-    # 2) Pattern matricola generica (per matricole nuove non ancora registrate)
+    # 2) Extra valori configurati da admin UI per questa colonna
+    rules = _load_validation_rules().get('Operatore', {})
+    for extra in (rules.get('extra_valid_values') or []):
+        if str(extra).strip().upper() == upper:
+            return True
+    # 3) Pattern matricola generica (per matricole nuove non ancora registrate)
     if _OPERATORE_RE.match(upper):
         return True
     return False
+
+
+# ---- VALIDATION RULES configurabili da admin UI ----
+# File: data/{provincia}/validation_rules.json
+# Schema:
+#   {
+#     "Operatore": {"enabled": bool, "auto_correct": bool, "extra_valid_values": [...]},
+#     "SIGILLO":   {"enabled": bool, "auto_correct": bool, "extra_valid_values": [...]},
+#     ...
+#   }
+# Se file assente o colonna non presente, comportamento default:
+#   enabled=True, auto_correct=True, extra_valid_values=[]
+_rules_cache = {'ts': 0, 'provincia': None, 'rules': {}}
+_RULES_CACHE_TTL_S = 60
+
+
+def _validation_rules_path():
+    try:
+        from config import PROVINCIA_ATTIVA
+    except ImportError:
+        return None
+    return os.path.join('data', PROVINCIA_ATTIVA.lower(), 'validation_rules.json')
+
+
+def _load_validation_rules():
+    """Ritorna dict delle regole correnti (per la provincia attiva).
+    Default vuoto se file mancante. Cache 60s."""
+    import time as _t
+    now = _t.time()
+    try:
+        from config import PROVINCIA_ATTIVA
+    except ImportError:
+        return {}
+    if (_rules_cache['ts'] + _RULES_CACHE_TTL_S > now
+            and _rules_cache['provincia'] == PROVINCIA_ATTIVA):
+        return _rules_cache['rules']
+    path = _validation_rules_path()
+    rules = {}
+    if path and os.path.exists(path):
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                rules = json.load(f) or {}
+        except (OSError, ValueError) as e:
+            logger.warning(f"[validation_rules] lettura fallita ({path}): {e}")
+    _rules_cache['ts'] = now
+    _rules_cache['provincia'] = PROVINCIA_ATTIVA
+    _rules_cache['rules'] = rules
+    return rules
+
+
+def _column_rules(col_name):
+    """Ritorna (enabled, auto_correct, extra_valid_set) per la colonna."""
+    rules = _load_validation_rules().get(col_name, {})
+    enabled = rules.get('enabled', True)
+    auto_correct = rules.get('auto_correct', True)
+    extra = set()
+    for v in (rules.get('extra_valid_values') or []):
+        if v:
+            extra.add(str(v).strip().upper())
+    return enabled, auto_correct, extra
+
+
+def reset_rules_cache():
+    """Forza il refresh delle regole alla prossima chiamata (chiamato dopo PUT)."""
+    _rules_cache['ts'] = 0
+    _rules_cache['provincia'] = None
+    _rules_cache['rules'] = {}
 # Data Installazione: DD/MM/YYYY (cifre 1-2 / cifre 1-2 / 4 cifre)
 # OPPURE stato 'annullato' (case-insensitive) per contatori non installati.
 _DATA_INST_RE = _re_validate.compile(
@@ -197,25 +271,40 @@ def _find_target_column_by_pattern(value):
 
 
 def _value_is_valid_for_column(col_name, value):
-    """Ritorna True se `value` è valido per la colonna (oppure se la colonna
-    non ha validatore o il valore è vuoto). False se il pattern non matcha.
-    Confronto case-insensitive sul col_name.
+    """Ritorna True se `value` è valido per la colonna.
 
-    Per la colonna Operatore usa la lista dinamica per-provincia (vedi
-    _is_operatore) invece del pattern regex statico.
+    Tiene conto delle regole admin (validation_rules.json):
+    - enabled=False per la colonna → sempre True (validazione disattivata)
+    - valore in extra_valid_values → sempre True
+    - vuoto → sempre True (cancellazioni legittime)
+
+    Per Operatore usa la lista dinamica per-provincia (vedi _is_operatore)
+    invece del pattern regex statico.
     """
     if value is None or str(value).strip() == '':
-        return True  # vuoto sempre OK (cancellazioni legittime)
+        return True
     v = str(value).strip()
     col_low = col_name.strip().lower()
-    # Operatore: validazione dinamica per-provincia
+    # Risolvi il nome canonico della colonna (case-insensitive)
+    canonical = None
     if col_low == 'operatore':
+        canonical = 'Operatore'
+    else:
+        for known_name in _COLUMN_PATTERN_VALIDATORS.keys():
+            if known_name.lower() == col_low:
+                canonical = known_name
+                break
+    if canonical is None:
+        return True  # nessun validatore per questa colonna
+    enabled, _auto, extra = _column_rules(canonical)
+    if not enabled:
+        return True  # admin ha disattivato la validazione
+    if v.upper() in extra:
+        return True  # valore esplicitamente permesso dall'admin
+    # Validazione standard
+    if canonical == 'Operatore':
         return _is_operatore(v)
-    # Altre colonne con pattern statico
-    for known_name, p in _COLUMN_PATTERN_VALIDATORS.items():
-        if known_name.lower() == col_low:
-            return bool(p.match(v))
-    return True  # nessun validatore per questa colonna
+    return bool(_COLUMN_PATTERN_VALIDATORS[canonical].match(v))
 
 
 # Quando il pattern check rifiuta un valore in SIGILLO/Operatore/Esito/
@@ -383,32 +472,49 @@ def _enqueue_auto_correct(conn, *, eneltel_key, lcl, column_name, db_value, remo
     db_val_str = '' if db_value is None else str(db_value)
     remote_val_str = '' if remote_value is None else str(remote_value)
     now = db._now_ts()
+    # Verifica se auto-correzione è disabilitata per questa colonna
+    _enabled, auto_correct_attivo, _extra = _column_rules(column_name)
     try:
-        # Coalesce: rimuovi eventuali pending precedenti non ancora pushate
-        # PER QUESTA STESSA cella (stesso comportamento di record_local_change).
-        conn.execute(
-            "DELETE FROM pending_writes WHERE eneltel_key=? AND COALESCE(lcl,'')=? "
-            "AND column_name=? AND state IN ('pending','in_flight')",
-            (eneltel_key, lcl or '', column_name),
-        )
-        conn.execute(
-            'INSERT INTO pending_writes(eneltel_key, lcl, column_name, new_value, '
-            'base_value, created_ts, user, origin, state) '
-            'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            (eneltel_key, lcl or '', column_name, db_val_str, remote_val_str,
-             now, None, 'pattern_auto_correct', 'pending'),
-        )
-        logger.warning(
-            f"[auto-correct] {eneltel_key}/{column_name}: "
-            f"Sheets={remote_val_str[:30]!r} → ripristino DB={db_val_str[:30]!r}"
-        )
-        _recovery_event(
-            ts=db._now_ts(),
-            event='pattern_auto_correct',
-            eneltel_key=eneltel_key, lcl=lcl or '', column=column_name,
-            sheets_aveva=remote_val_str, db_aveva=db_val_str,
-            azione=f'ripristino su Sheets con valore DB',
-        )
+        if auto_correct_attivo:
+            # Coalesce: rimuovi eventuali pending precedenti non ancora pushate
+            conn.execute(
+                "DELETE FROM pending_writes WHERE eneltel_key=? AND COALESCE(lcl,'')=? "
+                "AND column_name=? AND state IN ('pending','in_flight')",
+                (eneltel_key, lcl or '', column_name),
+            )
+            conn.execute(
+                'INSERT INTO pending_writes(eneltel_key, lcl, column_name, new_value, '
+                'base_value, created_ts, user, origin, state) '
+                'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                (eneltel_key, lcl or '', column_name, db_val_str, remote_val_str,
+                 now, None, 'pattern_auto_correct', 'pending'),
+            )
+            logger.warning(
+                f"[auto-correct] {eneltel_key}/{column_name}: "
+                f"Sheets={remote_val_str[:30]!r} → ripristino DB={db_val_str[:30]!r}"
+            )
+            _recovery_event(
+                ts=db._now_ts(),
+                event='pattern_auto_correct',
+                eneltel_key=eneltel_key, lcl=lcl or '', column=column_name,
+                sheets_aveva=remote_val_str, db_aveva=db_val_str,
+                azione=f'ripristino su Sheets con valore DB',
+            )
+        else:
+            # Auto-correzione disattivata da admin UI: registra l'anomalia
+            # ma NON genera pending. Sheets resta com'è.
+            logger.warning(
+                f"[auto-correct DISABLED] {eneltel_key}/{column_name}: "
+                f"valore '{remote_val_str[:30]}' fuori pattern, NON corretto "
+                f"(auto_correct=false in validation_rules.json)"
+            )
+            _recovery_event(
+                ts=db._now_ts(),
+                event='pattern_violation_report_only',
+                eneltel_key=eneltel_key, lcl=lcl or '', column=column_name,
+                sheets_aveva=remote_val_str, db_aveva=db_val_str,
+                azione=f'segnalato (auto-correzione disattivata da admin)',
+            )
 
         # DISPATCH: se il valore rifiutato matcha il pattern di UN'ALTRA
         # colonna critica, prova a spostarlo lì.

@@ -585,6 +585,21 @@
     <p>Clicca "Aggiungi provincia" per crearne una.</p>
   </div>
 
+  <!-- Regole di validazione (admin configurable) -->
+  <section class="logs-section">
+    <div class="logs-head">
+      <h2>🛡️ Regole di validazione</h2>
+      <label>Provincia
+        <select id="vrProvSel"></select>
+      </label>
+      <button class="btn secondary" onclick="caricaValidationRules()" title="Ricarica regole">🔄</button>
+      <button class="btn" onclick="salvaValidationRules()" title="Salva modifiche">💾 Salva</button>
+    </div>
+    <div id="vrContainer" class="logs-container" style="max-height: 460px; padding: 8px;">
+      <div class="log-empty">Seleziona una provincia per caricare le regole.</div>
+    </div>
+  </section>
+
   <!-- Report anomalie span -->
   <section class="logs-section">
     <div class="logs-head">
@@ -877,7 +892,7 @@ async function caricaProvince() {
 
 function aggiornaSelectInspector(province) {
   const opts = province.map(p => `<option value="${escapeHtml(p.slug)}">${escapeHtml(p.slug)}</option>`).join('');
-  for (const id of ['searchProvSel', 'recProvSel']) {
+  for (const id of ['searchProvSel', 'recProvSel', 'vrProvSel']) {
     const sel = document.getElementById(id);
     if (!sel) continue;
     const cur = sel.value;
@@ -1236,6 +1251,86 @@ function chiudiInspector() {
 document.getElementById('searchEneltel').addEventListener('keydown', e => {
   if (e.key === 'Enter') { e.preventDefault(); ispezionaEneltel(); }
 });
+
+// ============================================================
+// REGOLE DI VALIDAZIONE
+// ============================================================
+let _vrCurrent = null;  // ultime regole caricate {provincia, columns, rules}
+
+async function caricaValidationRules() {
+  const slug = document.getElementById('vrProvSel').value;
+  const cont = document.getElementById('vrContainer');
+  if (!slug) { cont.innerHTML = '<div class="log-empty">Seleziona una provincia.</div>'; return; }
+  cont.innerHTML = '<div class="log-empty"><span class="spinner"></span> Caricamento regole…</div>';
+  try {
+    const r = await api('GET', `/api/provinces/${slug}/validation-rules`);
+    _vrCurrent = r;
+    rendiValidationRules(r);
+  } catch (e) {
+    cont.innerHTML = `<div class="log-empty" style="color:var(--error)">Errore: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function rendiValidationRules(data) {
+  const cont = document.getElementById('vrContainer');
+  if (!data.rules) { cont.innerHTML = '<div class="log-empty">Dati non disponibili.</div>'; return; }
+  let html = `<div style="padding:6px 4px 14px;font-size:12px;color:var(--text-secondary);">
+    Per ogni colonna controllata, scegli se attivare la validazione e l'auto-correzione.
+    Aggiungi valori "validi extra" per autorizzare formati nuovi (uno per riga).
+  </div>`;
+  for (const col of data.columns) {
+    const r = data.rules[col] || {enabled:true, auto_correct:true, extra_valid_values:[]};
+    const enabledId = `vr_${col}_enabled`;
+    const autoId = `vr_${col}_auto`;
+    const extraId = `vr_${col}_extra`;
+    html += `<div style="border:1px solid var(--border); border-radius:8px; padding:12px 14px; margin-bottom:10px; background:var(--bg-tertiary);">
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:8px;">
+        <strong style="font-size:14px;">${escapeHtml(col)}</strong>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:normal;">
+          <input type="checkbox" id="${enabledId}" ${r.enabled?'checked':''} data-col="${escapeHtml(col)}" data-field="enabled" style="width:auto;">
+          Validazione attiva
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:normal;">
+          <input type="checkbox" id="${autoId}" ${r.auto_correct?'checked':''} data-col="${escapeHtml(col)}" data-field="auto_correct" style="width:auto;">
+          Auto-correzione su Sheets
+        </label>
+      </div>
+      <label style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.4px;">Valori extra sempre accettati (uno per riga)</label>
+      <textarea id="${extraId}" data-col="${escapeHtml(col)}" data-field="extra_valid_values"
+        rows="2" style="width:100%; padding:6px 8px; background:var(--bg-primary); border:1px solid var(--border); color:var(--text-primary); border-radius:4px; font-size:12px; font-family:'JetBrains Mono',Consolas,monospace; resize:vertical;"
+        placeholder="es. B1234567">${escapeHtml((r.extra_valid_values || []).join('\\n'))}</textarea>
+    </div>`;
+  }
+  cont.innerHTML = html;
+}
+
+async function salvaValidationRules() {
+  if (!_vrCurrent) { toast('Carica prima le regole', 'error'); return; }
+  const slug = document.getElementById('vrProvSel').value;
+  if (!slug) return;
+  // Raccogli i valori dal form
+  const newRules = {};
+  for (const col of _vrCurrent.columns) {
+    const enabledEl = document.getElementById(`vr_${col}_enabled`);
+    const autoEl = document.getElementById(`vr_${col}_auto`);
+    const extraEl = document.getElementById(`vr_${col}_extra`);
+    const extraLines = (extraEl?.value || '').split('\n').map(s => s.trim()).filter(Boolean);
+    newRules[col] = {
+      enabled: !!enabledEl?.checked,
+      auto_correct: !!autoEl?.checked,
+      extra_valid_values: extraLines,
+    };
+  }
+  try {
+    const r = await api('PUT', `/api/provinces/${slug}/validation-rules`, {rules: newRules});
+    toast(`Regole ${slug} salvate (cache refresh in 60s).`, 'success');
+  } catch (e) {
+    toast('Errore salvataggio: ' + e.message, 'error');
+  }
+}
+
+document.getElementById('vrProvSel').addEventListener('change', caricaValidationRules);
+
 
 // ============================================================
 // REPORT ANOMALIE SPAN

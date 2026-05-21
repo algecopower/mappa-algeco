@@ -5564,6 +5564,13 @@ async function reloadData() {
         // Ricalcola e refresh
         updateContatoriVisibili();
         updateSchedulabiliBadge();
+        // Rigenera i filtri della sidebar: le option dei dropdown (date,
+        // LCL, tecnici) sono derivate da contatoriVisibili, quindi senza
+        // questa chiamata una data appena spostata o un nuovo operatore
+        // non comparirebbero finché l'utente non ricarica la pagina.
+        try { popolaFiltroDate(); } catch (_) {}
+        try { popolaFiltroLCL(); } catch (_) {}
+        try { populateTecnicoFilter(); } catch (_) {}
         if (planningMode) {
             // Ricostruisci la cache marker: nuovi contatori comparirebbero solo
             // qui, e quelli rimossi resterebbero "fantasma" nella mappa.

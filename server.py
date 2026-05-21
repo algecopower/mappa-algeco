@@ -1301,10 +1301,27 @@ def api_admin_delete_user(username):
 @app.route('/api/admin/users/<username>/reset-password', methods=['POST'])
 @admin_required
 def api_admin_reset_password(username):
-    """Reset password di un utente (solo admin)."""
-    success, msg, new_pass = reset_password(username)
+    """Reset password di un utente (solo admin).
+
+    Body opzionale: {'password': 'nuova_password'}. Se omesso, ne viene
+    generata una casuale e ritornata in 'new_password'.
+    """
+    body = request.get_json(silent=True) or {}
+    nuova = body.get('password')
+    if nuova is not None:
+        nuova = str(nuova).strip()
+        if len(nuova) < 6:
+            return jsonify({
+                'success': False,
+                'message': 'La password deve essere lunga almeno 6 caratteri',
+            }), 400
+    success, msg, new_pass = reset_password(username, new_password=nuova)
     if success:
-        return jsonify({'success': True, 'message': msg, 'new_password': new_pass})
+        out = {'success': True, 'message': msg}
+        # Ritorna la password SOLO se è stata generata dal server
+        if new_pass is not None:
+            out['new_password'] = new_pass
+        return jsonify(out)
     return jsonify({'success': False, 'message': msg}), 404
 
 

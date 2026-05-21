@@ -1661,6 +1661,16 @@ def update_filone_row(row_num):
         except Exception as e_app:
             logger.warning(f"[Appuntamento] ⚠️ Errore rilevamento APP da filone: {e_app}")
 
+        # Trigger sync per propagare la modifica alla mappa via SSE.
+        # trigger_sync_after_edit() prova prima una patch in-place (campi
+        # cosmetici); se fallisce o se il cambio e' strutturale
+        # (data_pianificata, operatore, lat/lon, esito, comune) sveglia
+        # il sync loop che ricalcola zone/percorsi.
+        try:
+            _callbacks['trigger_sync_after_edit']()
+        except Exception:
+            pass
+
         return jsonify({
             'success': True,
             'updated': res['written'],
@@ -1834,6 +1844,13 @@ def update_filone_bulk():
             f"(remapped={res['remapped']}, lost={len(res['lost_anchors'])}, "
             f"invalid_cols={res['invalid_cols']})"
         )
+
+        # Trigger sync per propagare alla mappa (vedi update_filone_row)
+        try:
+            _callbacks['trigger_sync_after_edit']()
+        except Exception:
+            pass
+
         return jsonify({
             'success': True,
             'rows': len(rows_ok),

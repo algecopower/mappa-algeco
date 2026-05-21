@@ -1850,23 +1850,19 @@ def update_filone_bulk():
 @bp.route('/api/filone/append', methods=['POST'])
 @login_required
 def append_filone_rows():
-    """Aggiunge nuove righe in fondo al FILONE.
+    """Aggiunge nuove righe in fondo al FILONE (DB locale).
 
     Body JSON: { "rows": [ { "col_name": "value", ... }, ... ] }
-    Ogni dizionario rappresenta una nuova riga; le chiavi sono i nomi delle colonne del filone.
+    Ogni dict rappresenta una nuova riga; chiave = nome colonna esattamente
+    come appare nel column_registry. Eneltel è obbligatorio (chiave primaria).
 
-    Anti-spanamento: legge gli header FRESCHI dentro il write-lock per
-    posizionare i valori nelle colonne giuste anche se la collega ha appena
-    modificato la struttura del foglio.
+    Le righe vengono inserite direttamente in `filone` (campi tipati) e
+    `filone_extra` (colonne libere). Il `last_local_change_ts` viene
+    impostato così le righe entrano nell'outbox per l'export delta.
     """
-    return jsonify({
-        'success': False,
-        'unsupported': True,
-        'error': 'Per aggiungere nuovi contatori usa l\'import Excel '
-                 'dalla dashboard admin. L\'append diretto su Sheets non '
-                 'è più disponibile (Sheets disconnesso il 21/05/2026).',
-    }), 410
     try:
+        from moduli import db as _db
+
         data = request.json
         if not data or 'rows' not in data:
             return jsonify({'error': 'Formato non valido. Atteso: {"rows": [...]}'}), 400
@@ -1874,48 +1870,154 @@ def append_filone_rows():
         new_rows = data['rows']
         if not new_rows or not isinstance(new_rows, list):
             return jsonify({'error': 'Nessuna riga da aggiungere'}), 400
-
         if len(new_rows) > 5000:
             return jsonify({'error': 'Troppo righe (max 5000)'}), 400
 
-        with _gsheets_write_lock:
-            # Refresh atomico header dentro al lock di scrittura.
-            header_map = force_refresh_headers()
-            ordered_headers = get_headers()
-            ws = get_worksheet()
+        username = ((session.get('user') or {}).get('username')
+                    or session.get('utente') or 'unknown')
 
-            unknown_cols = set()
-            rows_to_append = []
-            for row_data in new_rows:
-                row_values = [''] * len(ordered_headers)
-                for col_name, value in row_data.items():
-                    if col_name.startswith('_'):
+        conn = _db.get_conn()
+        added = 0
+        skipped = []
+        unknown_cols = set()
+        max_sheets_row = conn.execute(
+            "SELECT COALESCE(MAX(sheets_row), 1) AS m FROM filone"
+        ).fetchone()['m']
+
+        with conn:
+            conn.execute('BEGIN IMMEDIATE')
+            now = _db._now_ts()
+
+            for idx, row_data in enumerate(new_rows):
+                # Trova Eneltel (case-insensitive sui nomi noti)
+                eneltel_raw = None
+                for k, v in row_data.items():
+                    if k.startswith('_'):
                         continue
-                    col_idx = header_map.get(col_name)
-                    if col_idx is None:
-                        unknown_cols.add(col_name)
+                    if k.strip().lower() in ('eneltel',):
+                        eneltel_raw = v
+                        break
+                eneltel_key = _db.normalize_eneltel(eneltel_raw or '')
+                if not eneltel_key:
+                    skipped.append({'idx': idx, 'reason': 'Eneltel mancante o non valido'})
+                    continue
+
+                # Lcl opzionale per disambiguare righe Pavia multi-LCL
+                lcl = ''
+                for k, v in row_data.items():
+                    if k.strip().lower() == 'lcl':
+                        lcl = str(v or '').strip()
+                        break
+
+                # Già esiste? salta
+                exists = conn.execute(
+                    "SELECT 1 FROM filone WHERE eneltel_key=? AND COALESCE(lcl,'')=?",
+                    (eneltel_key, lcl),
+                ).fetchone()
+                if exists:
+                    skipped.append({
+                        'idx': idx,
+                        'reason': f'Eneltel {eneltel_key} già presente'
+                                  + (f' (LCL={lcl})' if lcl else ''),
+                    })
+                    continue
+
+                # Smista i campi tipati vs extra
+                filone_cols = {'lcl': lcl}
+                extra_cols = {}
+                for k, v in row_data.items():
+                    if not k or k.startswith('_'):
                         continue
-                    row_values[col_idx - 1] = str(value) if value is not None else ''
-                rows_to_append.append(row_values)
+                    if k.strip().lower() == 'eneltel':
+                        continue
+                    chiave = _db.column_to_internal_key(conn, k)
+                    val_str = '' if v is None else str(v).strip()
+                    if chiave and chiave in _db.COLONNE_NOTE:
+                        filone_cols[chiave] = val_str
+                    elif chiave == 'eneltel':
+                        continue
+                    else:
+                        # Colonna non riconosciuta: se è nel registry la mettiamo
+                        # in filone_extra, altrimenti la segnaliamo
+                        in_registry = conn.execute(
+                            "SELECT 1 FROM column_registry WHERE LOWER(column_name)=?",
+                            (k.strip().lower(),),
+                        ).fetchone()
+                        if in_registry:
+                            extra_cols[_db.canonical_column_name(conn, k)] = val_str
+                        else:
+                            unknown_cols.add(k)
 
-            if not rows_to_append:
-                return jsonify({'error': 'Nessun campo valido da aggiungere'}), 400
-
-            if unknown_cols:
-                logger.warning(
-                    f"[Filone Append] Colonne ignorate (non presenti sul foglio): "
-                    f"{sorted(unknown_cols)}"
+                max_sheets_row += 1
+                # INSERT filone
+                cols_sql = ['eneltel_key', 'sheets_row', 'row_hash',
+                            'last_remote_pull_ts', 'last_local_change_ts', 'is_orphan']
+                vals_sql = [eneltel_key, max_sheets_row,
+                            _db.compute_row_hash(list(filone_cols.values())),
+                            now, now, 0]
+                for k, v in filone_cols.items():
+                    cols_sql.append(k)
+                    vals_sql.append(v)
+                conn.execute(
+                    f"INSERT INTO filone ({', '.join(cols_sql)}) "
+                    f"VALUES ({', '.join('?' * len(cols_sql))})",
+                    vals_sql,
                 )
+                # INSERT filone_extra
+                for col_name, val in extra_cols.items():
+                    conn.execute(
+                        "INSERT OR REPLACE INTO filone_extra(eneltel_key, lcl, column_name, value) "
+                        "VALUES (?, ?, ?, ?)",
+                        (eneltel_key, lcl, col_name, val),
+                    )
+                # Audit
+                _db.audit(conn, eneltel_key=eneltel_key, column_name=None,
+                          old_value=None, new_value=None,
+                          source='local', user=username,
+                          detail={'action': 'append_row', 'lcl': lcl,
+                                  'sheets_row': max_sheets_row,
+                                  'n_extra': len(extra_cols)})
+                # Pending writes per outbox (1 per ogni campo non vuoto)
+                for col_name, val in {**{('eneltel'): eneltel_raw},
+                                       **filone_cols,
+                                       **extra_cols}.items():
+                    if not val or not str(val).strip():
+                        continue
+                    # Risolvi il nome canonico per la pending
+                    if col_name in ('eneltel',):
+                        col_canonical = _db.canonical_column_name(conn, 'Eneltel')
+                    elif col_name in extra_cols:
+                        col_canonical = col_name
+                    else:
+                        # nome tipato → trova nome del registry
+                        reg = conn.execute(
+                            "SELECT column_name FROM column_registry WHERE chiave_interna=? LIMIT 1",
+                            (col_name,),
+                        ).fetchone()
+                        col_canonical = reg['column_name'] if reg else col_name
+                    conn.execute(
+                        "INSERT INTO pending_writes(eneltel_key, lcl, column_name, new_value, "
+                        "base_value, created_ts, user, origin, state) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        (eneltel_key, lcl, col_canonical, str(val),
+                         '', now, username, 'append_row', 'pending'),
+                    )
+                added += 1
 
-            _sheets_retry(
-                ws.append_rows, rows_to_append, value_input_option='USER_ENTERED',
-            )
-        invalidate_values_cache()
+        # Trigger sync per rigenerare mappa
+        try:
+            _callbacks['trigger_sync_after_edit']()
+        except Exception:
+            pass
 
-        logger.info(f"[Filone] ✅ Append: {len(rows_to_append)} nuove righe aggiunte")
+        logger.info(
+            f"[Filone] ✅ Append DB: {added} righe aggiunte, "
+            f"{len(skipped)} saltate, {len(unknown_cols)} colonne ignorate"
+        )
         return jsonify({
             'success': True,
-            'rows_added': len(rows_to_append),
+            'rows_added': added,
+            'rows_skipped': skipped,
             'colonne_ignorate': sorted(unknown_cols),
         })
 

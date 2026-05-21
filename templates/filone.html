@@ -1568,6 +1568,7 @@
                 <button class="fmt-btn" onclick="clearCellFormat()" title="Cancella formattazione">&#x1F6AB;</button>
             </div>
             <div class="toolbar-sep"></div>
+            <button class="tb" id="btnNuovoContatore" onclick="aggiungiNuovoContatoreFilone()" title="Aggiungi un nuovo contatore al filone (chiede il codice Eneltel, poi puoi riempire le altre celle cliccandoci)">&#x2795; Nuovo</button>
             <button class="tb" id="btnAggiungiNota" onclick="aggiungiNotaFilone()" title="Aggiungi nota con data (DD/MM) in testa alla cella selezionata">&#x1F4DD; Nota</button>
             <button class="tb" id="btnCellNote" onclick="openCellNotePopup()" title="Pop-up nota sulla cella selezionata (stile Google Sheets, sync bidirezionale)">&#x1F4AC; Commento</button>
             <button class="tb" id="btnCellHistory" onclick="showCellHistoryForSelection()" title="Mostra storico modifiche della cella selezionata">&#x1F4DC; Storico</button>
@@ -3572,6 +3573,59 @@ function buildNotaConData(testoNota, notaAttuale) {
         return nuovaNota + ' // ' + notaAttuale.trim();
     }
     return nuovaNota;
+}
+
+// Aggiunge un nuovo contatore al filone (chiede solo Eneltel, le altre celle
+// vengono riempite dall'utente cliccandoci dopo).
+async function aggiungiNuovoContatoreFilone() {
+    const eneltel = prompt(
+        'Codice Eneltel del nuovo contatore (obbligatorio).\n\n' +
+        'Inserisci qui sotto il codice; le altre celle (POD, NOMINATIVO, ' +
+        'telefono, ecc.) potrai riempirle cliccando sulle celle vuote ' +
+        'della nuova riga subito dopo.'
+    );
+    if (eneltel === null) return;
+    const ek = eneltel.trim();
+    if (!ek) { toast('Codice Eneltel mancante', 'error'); return; }
+
+    // Eneltel duplicato? controllo locale
+    const ekUp = ek.toUpperCase();
+    const eneltelColIdx = headers.findIndex(h => h.trim().toLowerCase() === 'eneltel');
+    if (eneltelColIdx >= 0) {
+        const dup = rawData.find(r => String(r[headers[eneltelColIdx]] || '').toUpperCase() === ekUp);
+        if (dup) {
+            toast(`Eneltel ${ek} è già presente nel filone (riga ${dup._row})`, 'error');
+            return;
+        }
+    }
+
+    try {
+        const r = await fetch('/api/filone/append', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': (document.cookie.match(/(?:^|;\s*)csrf_token=([^;]+)/) || [])[1] || '',
+            },
+            body: JSON.stringify({ rows: [{ Eneltel: ek }] }),
+        });
+        const resp = await r.json();
+        if (!r.ok || !resp.success) {
+            const msg = resp.error || resp.message || (resp.rows_skipped && resp.rows_skipped[0] && resp.rows_skipped[0].reason) || 'errore sconosciuto';
+            toast('Errore: ' + msg, 'error');
+            return;
+        }
+        if (resp.rows_added > 0) {
+            toast(`✓ Contatore ${ek} aggiunto. Clicca sulle celle vuote per riempirle.`, 'success');
+            // Ricarica dati: dopo loadData la nuova riga sarà in fondo
+            setTimeout(() => loadData(), 500);
+        } else if (resp.rows_skipped && resp.rows_skipped.length) {
+            toast(`Riga saltata: ${resp.rows_skipped[0].reason}`, 'error');
+        } else {
+            toast('Nessuna riga aggiunta', 'error');
+        }
+    } catch (e) {
+        toast('Errore di rete: ' + e.message, 'error');
+    }
 }
 
 function aggiungiNotaFilone() {

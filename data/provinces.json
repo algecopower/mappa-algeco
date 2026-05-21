@@ -11,17 +11,20 @@
     "operatori_vip": [
       "AE101392",
       "AG49808",
-      "AG18966"
+      "AG18966",
+      "AG63397"
     ],
     "colori_operatori": {
       "AE101392": "#e74c3c",
       "AG49808": "#f1c40f",
-      "AG18966": "#2ecc71"
+      "AG18966": "#2ecc71",
+      "AG63397": "#bf33db"
     },
     "operatori_dict": {
-      "Operatore 1 (AE101392)": "AE101392",
-      "Operatore 2 (AG49808)": "AG49808",
-      "Operatore 3 (AG18966)": "AG18966"
+      "PAUL": "AE101392",
+      "MIHAI": "AG49808",
+      "SIDI": "AG18966",
+      "MOHAMED": "AG63397"
     },
     "file_mappa": "templates/mappa_torino.html",
     "ora_inizio_giornata": 540,
@@ -64,15 +67,28 @@
     "nome": "Lecco",
     "deposito": {
       "Nome": "DEPOSITO LECCO",
-      "Lat": 45.681701,
-      "Lon": 9.3544143
+      "Lat": 45.7727912,
+      "Lon": 9.3257548
     },
-    "operatori_vip": [],
-    "colori_operatori": {},
-    "operatori_dict": {},
+    "operatori_vip": [
+      "AG29392",
+      "AG12345"
+    ],
+    "colori_operatori": {
+      "AG29392": "#8d31bf",
+      "AG12345": "#3498db"
+    },
+    "operatori_dict": {
+      "MARCO": "AG29392",
+      "PIPPO": "AG12345"
+    },
     "file_mappa": "templates/mappa_lecco.html",
     "ora_inizio_giornata": 480,
     "ora_fine_giornata": 1020,
+    "velocita_media_kmh": 35,
+    "tempo_intervento_min": 20,
+    "data_inizio": "",
+    "data_fine": "",
     "sottodominio": "lecco.mappa-algeco.com",
     "porta": 5003
   }

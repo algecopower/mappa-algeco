@@ -280,8 +280,8 @@ MAPPATURA_COLONNE = {}
 # ============================================================================
 
 # --- FILTRO DATE ---
-DATA_INIZIO = '2025-10-01'
-DATA_FINE = ''  # Vuoto = illimitata (mostra tutti i contatori fino all'ultima data disponibile)
+DATA_INIZIO = _provincia.get('data_inizio') or '2025-10-01'
+DATA_FINE = _provincia.get('data_fine') or ''  # Vuoto = illimitata
 
 # --- CONFIGURAZIONE CALCOLO DISTANZE ---
 # Server OSRM locale (Docker) - molto più veloce e senza limiti

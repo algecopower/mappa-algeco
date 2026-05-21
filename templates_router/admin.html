@@ -571,6 +571,7 @@
   <!-- Toolbar -->
   <div class="toolbar">
     <button class="btn" onclick="apriFormAggiungi()">➕ Aggiungi provincia</button>
+    <button class="btn secondary" onclick="apriUtenti()" title="Gestisci utenti e password">🔑 Utenti</button>
     <button class="btn secondary" onclick="caricaTutto()" title="Ricarica la pagina con i dati più recenti">🔄 Aggiorna pagina</button>
     <div style="flex:1"></div>
     <select id="searchProvSel" class="search-prov-select" title="Provincia in cui cercare"></select>
@@ -688,6 +689,19 @@
         </div>
       </div>
 
+      <div class="form-row">
+        <div class="form-group">
+          <label>Data inizio filone</label>
+          <input name="data_inizio" type="date">
+          <div class="help">Mostra solo contatori con data programmata da qui in avanti. Lascia vuoto per nessun limite.</div>
+        </div>
+        <div class="form-group">
+          <label>Data fine filone</label>
+          <input name="data_fine" type="date">
+          <div class="help">Mostra solo contatori fino a questa data. Lascia vuoto per illimitata.</div>
+        </div>
+      </div>
+
       <div class="form-group">
         <label style="display:flex; align-items:center; gap:8px; text-transform:none; font-size:13px;">
           <input type="checkbox" name="usa_localita_come_comune" style="width:auto;"> Usa la colonna "Località" al posto di "Comune"
@@ -767,6 +781,57 @@
         </div>
       </div>
       <div id="elencoContainer"><div class="log-empty"><span class="spinner"></span> Caricamento…</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="modalOperatori">
+  <div class="modal-content wide">
+    <div class="modal-head">
+      <h2 id="operatoriTitle">Operatori</h2>
+      <button class="close" onclick="chiudiOperatori()">&times;</button>
+    </div>
+    <div style="padding:14px 16px 0;">
+      <div style="background:var(--bg-tertiary);padding:12px 14px;border-radius:8px;margin-bottom:14px;border-left:3px solid var(--ok);">
+        <div style="font-weight:600;margin-bottom:6px;">💡 A cosa serve questa pagina</div>
+        <div style="font-size:13px;color:var(--text-secondary);line-height:1.5;">
+          Definisci la lista degli operatori (tecnici) attivi sulla provincia.
+          Ogni operatore ha una <b>matricola</b> (codice Enel, es. AE101392),
+          un <b>nome</b> visibile (es. PAUL) e un <b>colore</b> usato sulla mappa.
+          Le modifiche vengono applicate al prossimo riavvio del backend.
+        </div>
+      </div>
+      <div id="opContainer"><div class="log-empty"><span class="spinner"></span> Caricamento…</div></div>
+      <div class="form-actions" style="margin-top:14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <button class="btn success" onclick="opAddRow()">➕ Aggiungi operatore</button>
+        <div style="flex:1"></div>
+        <button class="btn secondary" onclick="caricaOperatori()">🔄 Annulla modifiche</button>
+        <button class="btn" onclick="salvaOperatori()">💾 Salva</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="modalUtenti">
+  <div class="modal-content wide">
+    <div class="modal-head">
+      <h2>Gestione utenti</h2>
+      <button class="close" onclick="chiudiUtenti()">&times;</button>
+    </div>
+    <div style="padding:14px 16px 0;">
+      <div style="background:var(--bg-tertiary);padding:12px 14px;border-radius:8px;margin-bottom:14px;border-left:3px solid var(--ok);">
+        <div style="font-weight:600;margin-bottom:6px;">💡 A cosa serve questa pagina</div>
+        <div style="font-size:13px;color:var(--text-secondary);line-height:1.5;">
+          Gestisci gli account che possono accedere al programma e alla
+          dashboard admin. Solo gli utenti con ruolo <b>admin</b> vedono questa
+          pagina e possono modificare la mappatura colonne, importare Excel, ecc.
+        </div>
+      </div>
+      <div id="utentiContainer"><div class="log-empty"><span class="spinner"></span> Caricamento…</div></div>
+      <div class="form-actions" style="margin-top:14px;">
+        <button class="btn success" onclick="apriCreaUtente()">➕ Nuovo utente</button>
+        <button class="btn secondary" onclick="caricaUtenti()" style="margin-left:8px;">🔄 Ricarica</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1029,6 +1094,7 @@ function rendiGrid(province) {
         ${obCount > 0 ? `<button class="btn secondary" onclick="segnaConsegnate('${p.slug}', ${obCount})" title="Marca tutte le modifiche correnti come gi&agrave; consegnate alla collega">✓ Segna consegnate</button>` : ''}
         <button class="btn secondary" onclick="scaricaFiloneCompleto('${p.slug}')" title="Scarica l'intero filone (snapshot completo dei dati nel DB)">📋 Scarica completo</button>
         <button class="btn secondary" onclick="apriColonne('${p.slug}')" title="Gestisci la mappatura nomi colonne e l'elenco delle colonne registrate">🗂️ Colonne</button>
+        <button class="btn secondary" onclick="apriOperatori('${p.slug}')" title="Gestisci gli operatori (matricola, nome, colore)">👥 Operatori</button>
         <button class="btn secondary" onclick="dbAction('${p.slug}','snapshot-db')" title="Crea una copia di sicurezza dei dati locali">💾 Backup</button>
       `;
     } else {
@@ -1089,6 +1155,266 @@ async function dbAction(slug, action) {
     toast(`Errore ${label}: ${e.message}`, 'error');
   }
 }
+
+// ============================================================
+// OPERATORI (CRUD per provincia)
+// ============================================================
+let _opSlug = null;
+let _opRows = [];  // [{matricola, nome, colore}]
+
+async function apriOperatori(slug) {
+  _opSlug = slug;
+  document.getElementById('operatoriTitle').textContent = `Operatori — ${slug}`;
+  document.getElementById('modalOperatori').classList.add('open');
+  caricaOperatori();
+}
+
+function chiudiOperatori() {
+  document.getElementById('modalOperatori').classList.remove('open');
+  _opSlug = null;
+}
+
+async function caricaOperatori() {
+  if (!_opSlug) return;
+  const cont = document.getElementById('opContainer');
+  cont.innerHTML = '<div class="log-empty"><span class="spinner"></span> Caricamento…</div>';
+  try {
+    const { province } = await api('GET', '/api/provinces');
+    const p = (province || []).find(x => x.slug === _opSlug);
+    if (!p) { cont.innerHTML = '<div class="log-empty" style="color:var(--error)">Provincia non trovata</div>'; return; }
+    // Costruisci array {matricola, nome, colore}
+    const colori = p.colori_operatori || {};
+    const dict = p.operatori_dict || {}; // {nome: matricola}
+    const matrToNome = {};
+    for (const [nome, matr] of Object.entries(dict)) matrToNome[matr] = nome;
+    const vip = p.operatori_vip || [];
+    _opRows = vip.map(m => ({
+      matricola: m,
+      nome: matrToNome[m] || '',
+      colore: colori[m] || '#666666',
+    }));
+    rendiOperatori();
+  } catch (e) {
+    cont.innerHTML = `<div class="log-empty" style="color:var(--error)">Errore: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function rendiOperatori() {
+  const cont = document.getElementById('opContainer');
+  if (!_opRows.length) {
+    cont.innerHTML = '<div class="log-empty">Nessun operatore. Clicca "Aggiungi operatore" qui sotto.</div>';
+    return;
+  }
+  let html = `<table class="inspector-table" style="font-size:13px;width:100%;">
+    <thead><tr>
+      <th style="width:30%">Matricola</th>
+      <th style="width:40%">Nome visibile</th>
+      <th style="width:20%">Colore mappa</th>
+      <th style="width:10%"></th>
+    </tr></thead><tbody>`;
+  for (let i = 0; i < _opRows.length; i++) {
+    const r = _opRows[i];
+    html += `<tr>
+      <td><input type="text" data-idx="${i}" data-field="matricola" value="${escapeHtml(r.matricola)}"
+        placeholder="es. AE101392"
+        style="width:100%;padding:6px 8px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);border-radius:4px;font-size:13px;font-family:'JetBrains Mono',monospace;"></td>
+      <td><input type="text" data-idx="${i}" data-field="nome" value="${escapeHtml(r.nome)}"
+        placeholder="es. PAUL"
+        style="width:100%;padding:6px 8px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);border-radius:4px;font-size:13px;"></td>
+      <td>
+        <input type="color" data-idx="${i}" data-field="colore" value="${escapeHtml(r.colore)}"
+          style="width:60px;height:32px;padding:2px;background:var(--bg-primary);border:1px solid var(--border);border-radius:4px;cursor:pointer;">
+        <small style="color:var(--text-muted);margin-left:6px;">${escapeHtml(r.colore)}</small>
+      </td>
+      <td style="text-align:center;">
+        <button class="btn danger" style="font-size:12px;padding:4px 10px;" onclick="opRemoveRow(${i})" title="Rimuovi questo operatore">🗑️</button>
+      </td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  cont.innerHTML = html;
+  // Wire change handlers
+  for (const inp of cont.querySelectorAll('input[data-idx]')) {
+    inp.addEventListener('input', e => {
+      const i = parseInt(e.target.dataset.idx);
+      const f = e.target.dataset.field;
+      _opRows[i][f] = e.target.value;
+      if (f === 'colore') rendiOperatori(); // ridisegna per mostrare hex
+    });
+  }
+}
+
+function opAddRow() {
+  _opRows.push({ matricola: '', nome: '', colore: '#3498db' });
+  rendiOperatori();
+}
+
+function opRemoveRow(i) {
+  if (!confirm(`Rimuovere l'operatore "${_opRows[i].nome || _opRows[i].matricola || '(vuoto)'}"?`)) return;
+  _opRows.splice(i, 1);
+  rendiOperatori();
+}
+
+async function salvaOperatori() {
+  if (!_opSlug) return;
+  // Valida: matricole non vuote e univoche
+  const matricole = new Set();
+  for (const r of _opRows) {
+    const m = (r.matricola || '').trim().toUpperCase();
+    if (!m) { toast('Matricola vuota: completa o rimuovi la riga', 'error'); return; }
+    if (matricole.has(m)) { toast(`Matricola duplicata: ${m}`, 'error'); return; }
+    matricole.add(m);
+  }
+  // Costruisci i 3 dict
+  const operatori_vip = _opRows.map(r => r.matricola.trim().toUpperCase());
+  const colori_operatori = {};
+  const operatori_dict = {};
+  for (const r of _opRows) {
+    const m = r.matricola.trim().toUpperCase();
+    if (r.colore) colori_operatori[m] = r.colore;
+    const n = (r.nome || '').trim().toUpperCase();
+    if (n) operatori_dict[n] = m;
+  }
+  try {
+    const r = await api('PUT', `/api/provinces/${_opSlug}`, {
+      operatori_vip, colori_operatori, operatori_dict,
+    });
+    const restart = r.backend_riavviato ? ' Backend riavviato.' : ' Riavvia la provincia per applicare.';
+    toast(`✓ ${_opRows.length} operatori salvati per ${_opSlug}.${restart}`, 'success');
+    setTimeout(caricaTutto, 800);
+  } catch (e) {
+    toast('Errore: ' + e.message, 'error');
+  }
+}
+
+
+// ============================================================
+// UTENTI (CRUD globale - users.json)
+// ============================================================
+async function apriUtenti() {
+  document.getElementById('modalUtenti').classList.add('open');
+  caricaUtenti();
+}
+
+function chiudiUtenti() {
+  document.getElementById('modalUtenti').classList.remove('open');
+}
+
+async function caricaUtenti() {
+  const cont = document.getElementById('utentiContainer');
+  cont.innerHTML = '<div class="log-empty"><span class="spinner"></span> Caricamento…</div>';
+  try {
+    const data = await api('GET', '/api/admin/users');
+    rendiUtenti(data.users || data || []);
+  } catch (e) {
+    cont.innerHTML = `<div class="log-empty" style="color:var(--error)">Errore: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function rendiUtenti(users) {
+  const cont = document.getElementById('utentiContainer');
+  // users può arrivare come array o come dict {username: {...}}
+  let arr = users;
+  if (!Array.isArray(users)) {
+    arr = Object.entries(users).map(([username, info]) => ({ username, ...info }));
+  }
+  if (!arr.length) {
+    cont.innerHTML = '<div class="log-empty">Nessun utente registrato.</div>';
+    return;
+  }
+  let html = `<table class="inspector-table" style="font-size:13px;width:100%;">
+    <thead><tr>
+      <th style="width:18%">Username</th>
+      <th style="width:14%">Ruolo</th>
+      <th style="width:14%">Stato</th>
+      <th style="width:24%">Province</th>
+      <th style="width:14%">Ultimo accesso</th>
+      <th style="width:16%">Azioni</th>
+    </tr></thead><tbody>`;
+  for (const u of arr) {
+    const username = u.username || '?';
+    const ruolo = u.ruolo || u.role || 'user';
+    const attivo = u.active !== false && u.attivo !== false;
+    const province = (u.province || []).join(', ') || '<i style="color:var(--text-muted);">tutte</i>';
+    const last = u.last_login ? new Date(u.last_login).toLocaleString('it-IT') : '<i style="color:var(--text-muted);">mai</i>';
+    const ruoloBadge = ruolo === 'admin'
+      ? '<span class="badge ok">admin</span>'
+      : `<span class="badge" style="background:var(--bg-tertiary);color:var(--text-secondary);">${escapeHtml(ruolo)}</span>`;
+    const statoBadge = attivo
+      ? '<span class="badge ok">attivo</span>'
+      : '<span class="badge danger" style="background:#3a1f1f;color:#ff8a80;">disattivato</span>';
+    html += `<tr>
+      <td><b>${escapeHtml(username)}</b></td>
+      <td>${ruoloBadge}</td>
+      <td>${statoBadge}</td>
+      <td>${province}</td>
+      <td><small>${last}</small></td>
+      <td>
+        <button class="btn secondary" style="font-size:12px;padding:3px 8px;" onclick="utenteToggle('${escapeHtml(username)}', ${attivo})" title="${attivo ? 'Disattiva' : 'Riattiva'} questo utente">${attivo ? '⏸' : '▶'}</button>
+        <button class="btn secondary" style="font-size:12px;padding:3px 8px;" onclick="utenteReset('${escapeHtml(username)}')" title="Imposta una nuova password">🔑</button>
+        <button class="btn danger" style="font-size:12px;padding:3px 8px;" onclick="utenteDelete('${escapeHtml(username)}')" title="Elimina utente">🗑️</button>
+      </td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  cont.innerHTML = html;
+}
+
+async function apriCreaUtente() {
+  const username = prompt('Nome utente (lowercase, no spazi):');
+  if (!username || !username.trim()) return;
+  const password = prompt(`Password iniziale per "${username.trim()}":`);
+  if (!password || password.length < 6) {
+    toast('Password troppo corta (min 6 caratteri)', 'error');
+    return;
+  }
+  const ruolo = confirm('Vuoi che sia un AMMINISTRATORE?\n\nOK = admin (può gestire tutto)\nAnnulla = utente normale') ? 'admin' : 'user';
+  try {
+    await api('POST', '/api/admin/users', { username: username.trim(), password, ruolo });
+    toast(`✓ Utente "${username.trim()}" creato come ${ruolo}`, 'success');
+    caricaUtenti();
+  } catch (e) {
+    toast('Errore: ' + e.message, 'error');
+  }
+}
+
+async function utenteToggle(username, attivo) {
+  const azione = attivo ? 'disattivare' : 'riattivare';
+  if (!confirm(`Vuoi ${azione} l'utente "${username}"?`)) return;
+  try {
+    await api('POST', `/api/admin/users/${encodeURIComponent(username)}/toggle`, {});
+    toast(`✓ Utente "${username}" ${azione.replace('are', 'ato')}`, 'success');
+    caricaUtenti();
+  } catch (e) {
+    toast('Errore: ' + e.message, 'error');
+  }
+}
+
+async function utenteReset(username) {
+  const password = prompt(`Nuova password per "${username}":`);
+  if (!password || password.length < 6) {
+    if (password !== null) toast('Password troppo corta (min 6)', 'error');
+    return;
+  }
+  try {
+    await api('POST', `/api/admin/users/${encodeURIComponent(username)}/reset-password`, { password });
+    toast(`✓ Password aggiornata per "${username}"`, 'success');
+  } catch (e) {
+    toast('Errore: ' + e.message, 'error');
+  }
+}
+
+async function utenteDelete(username) {
+  if (!confirm(`⚠️ Eliminare l'utente "${username}"?\nL'azione è irreversibile.`)) return;
+  try {
+    await api('DELETE', `/api/admin/users/${encodeURIComponent(username)}`);
+    toast(`🗑️ Utente "${username}" eliminato`, 'success');
+    caricaUtenti();
+  } catch (e) {
+    toast('Errore: ' + e.message, 'error');
+  }
+}
+
 
 // ============================================================
 // OUTBOX (modifiche locali da consegnare alla collega)
@@ -1619,6 +1945,8 @@ function apriFormModifica(p) {
   form.querySelector('[name=deposito_lon]').value = d.Lon != null ? d.Lon : '';
   form.querySelector('[name=velocita_media_kmh]').value = p.velocita_media_kmh != null ? p.velocita_media_kmh : 35;
   form.querySelector('[name=tempo_intervento_min]').value = p.tempo_intervento_min != null ? p.tempo_intervento_min : 20;
+  form.querySelector('[name=data_inizio]').value = p.data_inizio || '';
+  form.querySelector('[name=data_fine]').value = p.data_fine || '';
   form.querySelector('[name=ora_inizio_giornata]').value = minutiToHHMM(p.ora_inizio_giornata != null ? p.ora_inizio_giornata : 480);
   form.querySelector('[name=ora_fine_giornata]').value = minutiToHHMM(p.ora_fine_giornata != null ? p.ora_fine_giornata : 1020);
   form.querySelector('[name=usa_localita_come_comune]').checked = !!p.usa_localita_come_comune;
@@ -1657,6 +1985,8 @@ async function submitForm(ev) {
     ora_fine_giornata: hhmmToMinuti(fd.get('ora_fine_giornata')),
     velocita_media_kmh: parseInt(fd.get('velocita_media_kmh')) || 35,
     tempo_intervento_min: parseInt(fd.get('tempo_intervento_min')) || 20,
+    data_inizio: fd.get('data_inizio') || '',
+    data_fine: fd.get('data_fine') || '',
     usa_localita_come_comune: fd.get('usa_localita_come_comune') === 'on',
   };
   const porta = fd.get('porta');

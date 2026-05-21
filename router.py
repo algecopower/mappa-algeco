@@ -638,6 +638,18 @@ def _admin_dispatch(path):
             m.group(1), f'/api/admin/columns/{m.group(2)}', 'DELETE'
         )
 
+    # Utenti (users.json globale, proxy a backend running qualsiasi)
+    if p == 'api/admin/users' and method in ('GET', 'POST'):
+        return _admin_check() or _admin_users_proxy('/api/admin/users', method)
+    m = re.match(r'^api/admin/users/([^/]+)$', p)
+    if m and method == 'DELETE':
+        return _admin_check() or _admin_users_proxy(f'/api/admin/users/{m.group(1)}', 'DELETE')
+    m = re.match(r'^api/admin/users/([^/]+)/(toggle|reset-password)$', p)
+    if m and method == 'POST':
+        return _admin_check() or _admin_users_proxy(
+            f'/api/admin/users/{m.group(1)}/{m.group(2)}', 'POST'
+        )
+
     return jsonify({'error': 'admin endpoint non trovato', 'path': p}), 404
 
 
@@ -759,6 +771,19 @@ def _admin_outbox_excel(slug):
         if v:
             fwd_headers[h] = v
     return (r.content, r.status_code, fwd_headers)
+
+
+def _admin_users_proxy(backend_path, method):
+    """Proxy degli endpoint /api/admin/users* verso un backend running.
+    users.json è globale (sotto SCRIPT_DIR), quindi qualsiasi provincia
+    può servire l'endpoint."""
+    slug, _cfg = _backend_up_per_validazione()
+    if not slug:
+        return jsonify({
+            'error': 'Nessuna provincia in esecuzione. Avvia almeno una provincia '
+                     'per poter gestire gli utenti.',
+        }), 503
+    return _admin_proxy_simple(slug, backend_path, method)
 
 
 def _admin_proxy_simple(slug, backend_path, method, timeout=30):
@@ -1001,6 +1026,8 @@ def _admin_create_province():
         'ora_fine_giornata': int(body.get('ora_fine_giornata') or 1020),
         'velocita_media_kmh': int(body.get('velocita_media_kmh') or 35),
         'tempo_intervento_min': int(body.get('tempo_intervento_min') or 20),
+        'data_inizio': body.get('data_inizio') or '',
+        'data_fine': body.get('data_fine') or '',
         'sottodominio': body.get('sottodominio') or f'{slug.lower()}.mappa-algeco.com',
         'porta': int(body.get('porta') or porta_libera_successiva(province)),
     }
@@ -1041,7 +1068,7 @@ def _admin_update_province(slug):
     aggiornato = dict(current)
 
     # Campi merge-abili: copia se presenti nel body
-    for k in ('nome', 'sottodominio', 'file_mappa'):
+    for k in ('nome', 'sottodominio', 'file_mappa', 'data_inizio', 'data_fine'):
         if k in body:
             aggiornato[k] = body[k]
     for k in ('ora_inizio_giornata', 'ora_fine_giornata', 'porta',
@@ -1084,6 +1111,7 @@ def _admin_update_province(slug):
     STRUTTURALI = {'porta', 'sottodominio', 'file_mappa',
                    'deposito', 'ora_inizio_giornata', 'ora_fine_giornata',
                    'velocita_media_kmh', 'tempo_intervento_min',
+                   'data_inizio', 'data_fine',
                    'operatori_vip', 'operatori_dict', 'colori_operatori',
                    'usa_localita_come_comune'}
     cambi = [k for k in STRUTTURALI if aggiornato.get(k) != current.get(k)]

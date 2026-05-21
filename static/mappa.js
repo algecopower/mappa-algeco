@@ -7418,11 +7418,15 @@ mostraPercorsoMultiOperatori = function(...args) {
 let settingsData = null;  // Cache dei dati settings caricati
 
 function apriImpostazioni() {
-    UiModal.open('settingsModal');
-    // Mostra spinner di caricamento
-    const overlay = document.getElementById('settingsLoadingOverlay');
-    if (overlay) overlay.classList.remove('hidden');
-    caricaImpostazioni();
+    // Post-migrazione totale (21/05/2026): tutte le impostazioni sono
+    // gestite dalla dashboard admin (https://admin.<dominio>/). Niente
+    // più pannello locale. Apriamo la dashboard in una nuova scheda
+    // mantenendo aperta la mappa.
+    const host = window.location.hostname; // es. 'torino.mappa-algeco.com'
+    const parts = host.split('.');
+    const baseDomain = parts.length >= 2 ? parts.slice(-2).join('.') : host;
+    const adminUrl = `https://admin.${baseDomain}/`;
+    window.open(adminUrl, '_blank', 'noopener');
 }
 
 function chiudiImpostazioni() {

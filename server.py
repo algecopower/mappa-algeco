@@ -590,9 +590,10 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # Limite upload: 16 MB
 
 # CORS: limita le origini consentite (localhost + dominio Cloudflare)
 _CORS_ORIGINS = [
-    'http://localhost:5001', 'http://localhost:5002',
-    'http://127.0.0.1:5001', 'http://127.0.0.1:5002',
+    'http://localhost:5001', 'http://localhost:5002', 'http://localhost:5050',
+    'http://127.0.0.1:5001', 'http://127.0.0.1:5002', 'http://127.0.0.1:5050',
     f'https://torino.{DOMINIO_BASE}', f'https://pavia.{DOMINIO_BASE}',
+    f'https://admin.{DOMINIO_BASE}',
     f'https://{DOMINIO_BASE}',
 ]
 CORS(app, supports_credentials=True, origins=_CORS_ORIGINS)

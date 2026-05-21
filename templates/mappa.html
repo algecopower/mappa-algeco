@@ -518,10 +518,7 @@
             </div>
             <div class="settings-tabs">
                 <button class="settings-tab active" data-tab="operatori" onclick="switchSettingsTab('operatori')">👥 Operatori</button>
-                <button class="settings-tab" data-tab="deposito" onclick="switchSettingsTab('deposito')">🏢 Deposito</button>
-                <button class="settings-tab" data-tab="percorso" onclick="switchSettingsTab('percorso')">🛣️ Percorso</button>
                 <button class="settings-tab" data-tab="date" onclick="switchSettingsTab('date')">📅 Date</button>
-                <button class="settings-tab" data-tab="sync" onclick="switchSettingsTab('sync')">🔄 Sync</button>
                 <button class="settings-tab settings-tab-admin" data-tab="utenti" onclick="switchSettingsTab('utenti')" id="tabUtentiBtn" style="display:none">🔑 Utenti</button>
             </div>
             <div class="settings-body">
@@ -550,50 +547,6 @@
                     </button>
                 </div>
 
-                <!-- Tab: Deposito -->
-                <div class="settings-section" id="settingsTab_deposito">
-                    <h3>Coordinate Deposito</h3>
-                    <div class="settings-field">
-                        <label>Nome deposito</label>
-                        <input type="text" id="settings_deposito_nome">
-                    </div>
-                    <div class="settings-field-row">
-                        <div class="settings-field">
-                            <label>Latitudine</label>
-                            <input type="number" step="0.0000001" id="settings_deposito_lat">
-                        </div>
-                        <div class="settings-field">
-                            <label>Longitudine</label>
-                            <input type="number" step="0.0000001" id="settings_deposito_lon">
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Tab: Percorso -->
-                <div class="settings-section" id="settingsTab_percorso">
-                    <h3>Parametri Calcolo Percorso</h3>
-                    <div class="settings-field-row">
-                        <div class="settings-field">
-                            <label>Velocità media (km/h)</label>
-                            <input type="number" min="1" max="130" id="settings_velocita">
-                        </div>
-                        <div class="settings-field">
-                            <label>Tempo intervento (min)</label>
-                            <input type="number" min="1" max="120" id="settings_tempo_intervento">
-                        </div>
-                    </div>
-                    <div class="settings-field-row">
-                        <div class="settings-field">
-                            <label>Ora inizio giornata</label>
-                            <input type="text" placeholder="es. 8:00 o 9:00" id="settings_ora_inizio">
-                        </div>
-                        <div class="settings-field">
-                            <label>Ora fine giornata</label>
-                            <input type="text" placeholder="es. 17:00 o 18:00" id="settings_ora_fine">
-                        </div>
-                    </div>
-                </div>
-
                 <!-- Tab: Date -->
                 <div class="settings-section" id="settingsTab_date">
                     <h3>Intervallo Date Filone</h3>
@@ -613,18 +566,6 @@
                     </div>
                     <p style="font-size: 12px; color: var(--text-secondary); margin-top: 8px;">
                         Verranno caricati solo i contatori con data programmata in questo intervallo.
-                    </p>
-                </div>
-
-                <!-- Tab: Sync -->
-                <div class="settings-section" id="settingsTab_sync">
-                    <h3>Sincronizzazione Dati</h3>
-                    <div class="settings-field">
-                        <label>Intervallo sincronizzazione (secondi)</label>
-                        <input type="number" min="30" max="3600" id="settings_intervallo_sync">
-                    </div>
-                    <p style="font-size: 12px; color: var(--text-secondary); margin-top: 8px;">
-                        Ogni quanti secondi il server controlla modifiche sul foglio Google. Minimo 30s, consigliato 180s.
                     </p>
                 </div>
 

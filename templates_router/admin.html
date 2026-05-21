@@ -675,6 +675,19 @@
         </div>
       </div>
 
+      <div class="form-row">
+        <div class="form-group">
+          <label>Velocità media (km/h)</label>
+          <input name="velocita_media_kmh" type="number" min="1" max="130" value="35">
+          <div class="help">Usata per stimare i tempi di guida tra contatori.</div>
+        </div>
+        <div class="form-group">
+          <label>Tempo intervento (minuti)</label>
+          <input name="tempo_intervento_min" type="number" min="1" max="120" value="20">
+          <div class="help">Durata stimata di ogni intervento sul contatore.</div>
+        </div>
+      </div>
+
       <div class="form-group">
         <label style="display:flex; align-items:center; gap:8px; text-transform:none; font-size:13px;">
           <input type="checkbox" name="usa_localita_come_comune" style="width:auto;"> Usa la colonna "Località" al posto di "Comune"
@@ -1604,6 +1617,8 @@ function apriFormModifica(p) {
   form.querySelector('[name=deposito_nome]').value = d.Nome || '';
   form.querySelector('[name=deposito_lat]').value = d.Lat != null ? d.Lat : '';
   form.querySelector('[name=deposito_lon]').value = d.Lon != null ? d.Lon : '';
+  form.querySelector('[name=velocita_media_kmh]').value = p.velocita_media_kmh != null ? p.velocita_media_kmh : 35;
+  form.querySelector('[name=tempo_intervento_min]').value = p.tempo_intervento_min != null ? p.tempo_intervento_min : 20;
   form.querySelector('[name=ora_inizio_giornata]').value = minutiToHHMM(p.ora_inizio_giornata != null ? p.ora_inizio_giornata : 480);
   form.querySelector('[name=ora_fine_giornata]').value = minutiToHHMM(p.ora_fine_giornata != null ? p.ora_fine_giornata : 1020);
   form.querySelector('[name=usa_localita_come_comune]').checked = !!p.usa_localita_come_comune;
@@ -1640,6 +1655,8 @@ async function submitForm(ev) {
     },
     ora_inizio_giornata: hhmmToMinuti(fd.get('ora_inizio_giornata')),
     ora_fine_giornata: hhmmToMinuti(fd.get('ora_fine_giornata')),
+    velocita_media_kmh: parseInt(fd.get('velocita_media_kmh')) || 35,
+    tempo_intervento_min: parseInt(fd.get('tempo_intervento_min')) || 20,
     usa_localita_come_comune: fd.get('usa_localita_come_comune') === 'on',
   };
   const porta = fd.get('porta');

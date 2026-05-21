@@ -289,8 +289,11 @@ DATA_FINE = ''  # Vuoto = illimitata (mostra tutti i contatori fino all'ultima d
 # Per usare il server locale: "http://localhost:5000"
 OSRM_SERVER = "http://localhost:5000"
 OSRM_TIMEOUT = 30
-VELOCITA_MEDIA_KMH = 35
-TEMPO_INTERVENTO_MIN = 20
+# Velocità media e tempo intervento: default per provincia (override in
+# provinces.json sotto la chiave del slug, eventualmente sovrascritto da
+# settings.json per compatibilità con i vecchi config).
+VELOCITA_MEDIA_KMH = _provincia.get('velocita_media_kmh', 35)
+TEMPO_INTERVENTO_MIN = _provincia.get('tempo_intervento_min', 20)
 FATTORE_CORREZIONE_HAVERSINE = 1.35
 USA_OSRM = True
 
@@ -306,7 +309,11 @@ FILE_CACHE_DISTANZE = os.path.join('cache', f'cache_distanze_{PROVINCIA_ATTIVA.l
 FILE_CACHE_HASH = os.path.join('cache', f'cache_hash_{PROVINCIA_ATTIVA.lower()}.json')
 
 # --- CONFIGURAZIONE LOOP ---
-INTERVALLO_SYNC_SECONDI = 60  # 1 minuto - check periodico per modifiche sul foglio
+# Post-disconnessione Sheets (21/05/2026) il loop principale è event-driven:
+# le modifiche utente / import Excel risvegliano subito il sync. Questo valore
+# resta solo come fallback per il polling client (refreshInterval mappa) nei
+# casi rari di disconnessione SSE prolungata.
+INTERVALLO_SYNC_SECONDI = 300  # 5 minuti - fallback polling client se SSE down
 
 # --- CONFIGURAZIONE DB LOCALE (SQLite) ---
 # Post-disconnessione Google Sheets (2026-05-21) il DB è l'unica fonte di
@@ -365,10 +372,8 @@ if os.path.exists(_settings_file):
             VELOCITA_MEDIA_KMH = _user_settings['velocita_media_kmh']
         if 'tempo_intervento_min' in _user_settings:
             TEMPO_INTERVENTO_MIN = _user_settings['tempo_intervento_min']
-        # 'raggio_microzona_km' e 'ottimizza_per_tempo' (deprecati): se
-        # presenti in vecchi settings.json vengono ignorati silenziosamente.
-        if 'intervallo_sync_secondi' in _user_settings:
-            INTERVALLO_SYNC_SECONDI = _user_settings['intervallo_sync_secondi']
+        # 'raggio_microzona_km', 'ottimizza_per_tempo', 'intervallo_sync_secondi'
+        # (deprecati): se presenti in vecchi settings.json vengono ignorati.
         if 'data_inizio' in _user_settings:
             DATA_INIZIO = _user_settings['data_inizio']
         if 'data_fine' in _user_settings:

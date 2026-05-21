@@ -999,6 +999,8 @@ def _admin_create_province():
         'file_mappa': os.path.join('templates', f'mappa_{slug.lower()}.html'),
         'ora_inizio_giornata': int(body.get('ora_inizio_giornata') or 480),
         'ora_fine_giornata': int(body.get('ora_fine_giornata') or 1020),
+        'velocita_media_kmh': int(body.get('velocita_media_kmh') or 35),
+        'tempo_intervento_min': int(body.get('tempo_intervento_min') or 20),
         'sottodominio': body.get('sottodominio') or f'{slug.lower()}.mappa-algeco.com',
         'porta': int(body.get('porta') or porta_libera_successiva(province)),
     }
@@ -1042,7 +1044,8 @@ def _admin_update_province(slug):
     for k in ('nome', 'sottodominio', 'file_mappa'):
         if k in body:
             aggiornato[k] = body[k]
-    for k in ('ora_inizio_giornata', 'ora_fine_giornata', 'porta'):
+    for k in ('ora_inizio_giornata', 'ora_fine_giornata', 'porta',
+              'velocita_media_kmh', 'tempo_intervento_min'):
         if k in body and body[k] is not None and body[k] != '':
             try:
                 aggiornato[k] = int(body[k])
@@ -1080,6 +1083,7 @@ def _admin_update_province(slug):
     # Rileva se serve riavviare il backend
     STRUTTURALI = {'porta', 'sottodominio', 'file_mappa',
                    'deposito', 'ora_inizio_giornata', 'ora_fine_giornata',
+                   'velocita_media_kmh', 'tempo_intervento_min',
                    'operatori_vip', 'operatori_dict', 'colori_operatori',
                    'usa_localita_come_comune'}
     cambi = [k for k in STRUTTURALI if aggiornato.get(k) != current.get(k)]

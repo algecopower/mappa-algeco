@@ -59,5 +59,21 @@
     "ora_fine_giornata": 1020,
     "sottodominio": "pavia.mappa-algeco.com",
     "porta": 5002
+  },
+  "LECCO": {
+    "nome": "Lecco",
+    "deposito": {
+      "Nome": "DEPOSITO LECCO",
+      "Lat": 45.681701,
+      "Lon": 9.3544143
+    },
+    "operatori_vip": [],
+    "colori_operatori": {},
+    "operatori_dict": {},
+    "file_mappa": "templates/mappa_lecco.html",
+    "ora_inizio_giornata": 480,
+    "ora_fine_giornata": 1020,
+    "sottodominio": "lecco.mappa-algeco.com",
+    "porta": 5003
   }
 }

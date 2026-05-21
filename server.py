@@ -2378,40 +2378,45 @@ def sincronizza_dati():
 
 
 def background_sync_loop():
-    """Loop di sincronizzazione in background.
-    
-    Esegue sync periodiche ogni INTERVALLO_SYNC_SECONDI.
-    Si risveglia anticipatamente se _sync_needed viene segnalato (dopo modifica utente).
-    Salta l'iterazione se un altro sync è già in corso.
+    """Loop di rigenerazione mappa in background, SOLO event-driven.
+
+    Post-disconnessione Sheets (21/05/2026) non c'è più ragione di un
+    timer periodico: tutti i dati vivono nel DB locale e ogni modifica
+    via UI / import Excel triggera `_sync_needed.set()` per rigenerare
+    immediatamente mappa_data.json. Il loop quindi aspetta solo eventi.
+
+    Al primo avvio esegue un sync iniziale per popolare la mappa.
     """
     global _sync_running
-    
-    logger.info(f"[SYNC] 🔄 Thread di sync avviato (intervallo: {INTERVALLO_SYNC_SECONDI}s)")
-    
+
+    logger.info("[SYNC] 🔄 Thread di rigenerazione mappa avviato (event-driven)")
+
+    # Primo sync al boot per generare mappa_data.json subito disponibile.
+    _sync_needed.set()
+
     while _sync_running:
-        # Prova ad acquisire il lock senza bloccare
-        acquired = _sync_lock.acquire(blocking=False)
-        if acquired:
-            try:
-                _do_sincronizza_dati()
-            except Exception as e:
-                logger.error(f"[SYNC] ❌ Errore nel loop: {e}")
-                traceback.print_exc()
-            finally:
-                _sync_lock.release()
-        else:
-            logger.info("[SYNC] ⏳ Sync periodico saltato (altro sync in corso)")
-        
-        # Sleep interrompibile — si risveglia se c'è un sync pendente
+        # Aspetta indefinitamente che qualcuno chieda un sync
+        # (POST modifica, import Excel, ecc.). Wakeup ogni 5s solo per
+        # poter chiudere pulitamente al SIGTERM (_sync_running=False).
+        triggered = _sync_needed.wait(timeout=5.0)
+        if not _sync_running:
+            break
+        if not triggered:
+            continue
         _sync_needed.clear()
-        for _ in range(INTERVALLO_SYNC_SECONDI):
-            if not _sync_running:
-                break
-            if _sync_needed.wait(timeout=1.0):
-                _sync_needed.clear()
-                logger.info("[SYNC] ⚡ Risveglio anticipato per modifica dati")
-                break
-    
+
+        acquired = _sync_lock.acquire(blocking=False)
+        if not acquired:
+            logger.info("[SYNC] ⏳ Sync saltato (altro sync in corso)")
+            continue
+        try:
+            _do_sincronizza_dati()
+        except Exception as e:
+            logger.error(f"[SYNC] ❌ Errore nel loop: {e}")
+            traceback.print_exc()
+        finally:
+            _sync_lock.release()
+
     logger.info("[SYNC] 🛑 Thread di sync terminato")
 
 

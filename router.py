@@ -589,11 +589,6 @@ def _admin_dispatch(path):
         })
     if p == 'api/logs' and method == 'GET':
         return _admin_check() or _admin_logs()
-    if p == 'api/probe-sheet' and method == 'POST':
-        return _admin_check() or _admin_probe_sheet()
-    m = re.match(r'^api/provinces/([A-Z0-9_]+)/bootstrap$', p)
-    if m and method == 'POST':
-        return _admin_check() or _admin_bootstrap(m.group(1))
     if p == 'api/health-overview' and method == 'GET':
         return _admin_check() or _admin_health_overview()
     m = re.match(r'^api/provinces/([A-Z0-9_]+)/db-action$', p)
@@ -602,17 +597,46 @@ def _admin_dispatch(path):
     m = re.match(r'^api/provinces/([A-Z0-9_]+)/dump-eneltel/(.+)$', p)
     if m and method == 'GET':
         return _admin_check() or _admin_dump_eneltel(m.group(1), m.group(2))
-    m = re.match(r'^api/provinces/([A-Z0-9_]+)/recovery-reports$', p)
+
+    m = re.match(r'^api/provinces/([A-Z0-9_]+)/import-excel$', p)
+    if m and method == 'POST':
+        return _admin_check() or _admin_import_excel(m.group(1))
+
+    m = re.match(r'^api/provinces/([A-Z0-9_]+)/outbox$', p)
     if m and method == 'GET':
-        return _admin_check() or _admin_recovery_reports(m.group(1))
-    m = re.match(r'^api/provinces/([A-Z0-9_]+)/backup-diff$', p)
+        return _admin_check() or _admin_outbox_stats(m.group(1))
+    m = re.match(r'^api/provinces/([A-Z0-9_]+)/outbox/excel$', p)
     if m and method == 'GET':
-        return _admin_check() or _admin_backup_diff(m.group(1))
-    m = re.match(r'^api/provinces/([A-Z0-9_]+)/validation-rules$', p)
+        return _admin_check() or _admin_outbox_excel(m.group(1))
+    m = re.match(r'^api/provinces/([A-Z0-9_]+)/outbox/mark-delivered$', p)
+    if m and method == 'POST':
+        return _admin_check() or _admin_outbox_mark_delivered(m.group(1))
+    m = re.match(r'^api/provinces/([A-Z0-9_]+)/export-full-excel$', p)
     if m and method == 'GET':
-        return _admin_check() or _admin_validation_rules_get(m.group(1))
+        return _admin_check() or _admin_export_full_excel(m.group(1))
+
+    m = re.match(r'^api/provinces/([A-Z0-9_]+)/column-mapping$', p)
+    if m and method == 'GET':
+        return _admin_check() or _admin_proxy_simple(m.group(1), '/api/admin/column-mapping', 'GET')
     if m and method == 'PUT':
-        return _admin_check() or _admin_validation_rules_put(m.group(1))
+        return _admin_check() or _admin_proxy_simple(m.group(1), '/api/admin/column-mapping', 'PUT')
+
+    m = re.match(r'^api/provinces/([A-Z0-9_]+)/columns$', p)
+    if m and method == 'GET':
+        return _admin_check() or _admin_proxy_simple(m.group(1), '/api/admin/columns', 'GET')
+    if m and method == 'POST':
+        return _admin_check() or _admin_proxy_simple(m.group(1), '/api/admin/columns', 'POST')
+
+    m = re.match(r'^api/provinces/([A-Z0-9_]+)/columns/(.+)/rename$', p)
+    if m and method == 'PUT':
+        return _admin_check() or _admin_proxy_simple(
+            m.group(1), f'/api/admin/columns/{m.group(2)}/rename', 'PUT'
+        )
+    m = re.match(r'^api/provinces/([A-Z0-9_]+)/columns/(.+)$', p)
+    if m and method == 'DELETE':
+        return _admin_check() or _admin_proxy_simple(
+            m.group(1), f'/api/admin/columns/{m.group(2)}', 'DELETE'
+        )
 
     return jsonify({'error': 'admin endpoint non trovato', 'path': p}), 404
 
@@ -622,7 +646,7 @@ def _admin_dispatch(path):
 # ============================================================================
 def _proxy_admin_to_backend(slug, path, method='GET', body=None, timeout=130):
     """Forward request admin verso il backend della provincia, preservando
-    cookie sessione (per @admin_required nel backend)."""
+    cookie sessione + CSRF + Origin (per @admin_required e csrf_check)."""
     try:
         province = carica_province()
     except Exception as e:
@@ -635,7 +659,12 @@ def _proxy_admin_to_backend(slug, path, method='GET', body=None, timeout=130):
         return None, jsonify({'error': f'backend {slug} non in esecuzione',
                               'stato': pm.stato().get(slug, 'stopped')}), 503
     url = f'http://127.0.0.1:{cfg["porta"]}{path}'
-    headers = {'Cookie': request.headers.get('Cookie', '')}
+    headers = {
+        'Cookie': request.headers.get('Cookie', ''),
+        # Inoltra CSRF + Origin (richiesti dal backend su POST/PUT/DELETE)
+        'X-CSRF-Token': request.headers.get('X-CSRF-Token', ''),
+        'Origin': request.headers.get('Origin', '') or request.headers.get('Referer', ''),
+    }
     try:
         r = requests.request(method, url, headers=headers, json=body, timeout=timeout)
     except requests.RequestException as e:
@@ -668,6 +697,7 @@ def _admin_health_overview():
                 item['stats'] = data.get('stats', {})
                 item['integrity'] = data.get('integrity', 'unknown')
                 item['health'] = data.get('health', {})
+                item['outbox'] = data.get('outbox', {})
         except requests.RequestException as e:
             item['reachable'] = False
             item['error'] = str(e)
@@ -694,49 +724,127 @@ def _admin_dump_eneltel(slug, eneltel):
     return (r.text, r.status_code, {'Content-Type': r.headers.get('Content-Type', 'application/json')})
 
 
-def _admin_recovery_reports(slug):
-    date = request.args.get('date', '')
-    limit = request.args.get('limit', '')
-    qs = []
-    if date:
-        qs.append(f'date={date}')
-    if limit:
-        qs.append(f'limit={limit}')
-    path = '/api/admin/recovery-reports' + (('?' + '&'.join(qs)) if qs else '')
-    r, err_resp, err_code = _proxy_admin_to_backend(slug, path, method='GET', timeout=15)
-    if r is None:
-        return err_resp, err_code
-    return (r.text, r.status_code, {'Content-Type': r.headers.get('Content-Type', 'application/json')})
-
-
-def _admin_backup_diff(slug):
-    date = request.args.get('date', '')
-    qs = [f'date={date}'] if date else []
-    path = '/api/admin/backup-diff' + (('?' + '&'.join(qs)) if qs else '')
-    # Timeout alto: il diff scarica e processa l'intero foglio
-    r, err_resp, err_code = _proxy_admin_to_backend(slug, path, method='GET', timeout=120)
-    if r is None:
-        return err_resp, err_code
-    return (r.text, r.status_code, {'Content-Type': r.headers.get('Content-Type', 'application/json')})
-
-
-def _admin_validation_rules_get(slug):
+def _admin_outbox_stats(slug):
     r, err_resp, err_code = _proxy_admin_to_backend(
-        slug, '/api/admin/validation-rules', method='GET', timeout=10,
+        slug, '/api/admin/outbox', method='GET', timeout=10,
     )
     if r is None:
         return err_resp, err_code
     return (r.text, r.status_code, {'Content-Type': r.headers.get('Content-Type', 'application/json')})
 
 
-def _admin_validation_rules_put(slug):
+def _admin_outbox_excel(slug):
+    """Forward del download Excel preservando binary content + filename."""
+    try:
+        province = carica_province()
+    except Exception as e:
+        return jsonify({'error': f'lettura provinces.json: {e}'}), 500
+    slug = slug.upper()
+    if slug not in province:
+        return jsonify({'error': f'provincia {slug} non trovata'}), 404
+    cfg = province[slug]
+    if pm.stato().get(slug) != 'running':
+        return jsonify({'error': f'backend {slug} non in esecuzione',
+                        'stato': pm.stato().get(slug, 'stopped')}), 503
+    url = f'http://127.0.0.1:{cfg["porta"]}/api/admin/outbox/excel'
+    headers = {'Cookie': request.headers.get('Cookie', '')}
+    try:
+        r = requests.get(url, headers=headers, timeout=60, stream=True)
+    except requests.RequestException as e:
+        return jsonify({'error': f'backend non raggiungibile: {e}'}), 502
+    # Preserva content-type, content-disposition, e custom headers
+    fwd_headers = {}
+    for h in ('Content-Type', 'Content-Disposition', 'X-Outbox-Rows', 'X-Outbox-Cells'):
+        v = r.headers.get(h)
+        if v:
+            fwd_headers[h] = v
+    return (r.content, r.status_code, fwd_headers)
+
+
+def _admin_proxy_simple(slug, backend_path, method, timeout=30):
+    """Proxy admin generico per endpoint JSON (no upload/download binari)."""
+    body = request.get_json(silent=True) if method in ('POST', 'PUT', 'PATCH') else None
+    r, err_resp, err_code = _proxy_admin_to_backend(
+        slug, backend_path, method=method, body=body, timeout=timeout,
+    )
+    if r is None:
+        return err_resp, err_code
+    return (r.text, r.status_code, {'Content-Type': r.headers.get('Content-Type', 'application/json')})
+
+
+def _admin_export_full_excel(slug):
+    """Forward download dell'Excel completo dal backend (binary)."""
+    try:
+        province = carica_province()
+    except Exception as e:
+        return jsonify({'error': f'lettura provinces.json: {e}'}), 500
+    slug = slug.upper()
+    if slug not in province:
+        return jsonify({'error': f'provincia {slug} non trovata'}), 404
+    cfg = province[slug]
+    if pm.stato().get(slug) != 'running':
+        return jsonify({'error': f'backend {slug} non in esecuzione',
+                        'stato': pm.stato().get(slug, 'stopped')}), 503
+    url = f'http://127.0.0.1:{cfg["porta"]}/api/admin/export-full-excel'
+    headers = {'Cookie': request.headers.get('Cookie', '')}
+    try:
+        r = requests.get(url, headers=headers, timeout=120, stream=True)
+    except requests.RequestException as e:
+        return jsonify({'error': f'backend non raggiungibile: {e}'}), 502
+    fwd_headers = {}
+    for h in ('Content-Type', 'Content-Disposition', 'X-Filone-Rows', 'X-Filone-Cols'):
+        v = r.headers.get(h)
+        if v:
+            fwd_headers[h] = v
+    return (r.content, r.status_code, fwd_headers)
+
+
+def _admin_outbox_mark_delivered(slug):
     body = request.get_json(silent=True) or {}
     r, err_resp, err_code = _proxy_admin_to_backend(
-        slug, '/api/admin/validation-rules', method='PUT', body=body, timeout=10,
+        slug, '/api/admin/outbox/mark-delivered', method='POST', body=body, timeout=15,
     )
     if r is None:
         return err_resp, err_code
     return (r.text, r.status_code, {'Content-Type': r.headers.get('Content-Type', 'application/json')})
+
+
+def _admin_import_excel(slug):
+    """Forward del file Excel + form-data verso il backend della provincia."""
+    try:
+        province = carica_province()
+    except Exception as e:
+        return jsonify({'error': f'lettura provinces.json: {e}'}), 500
+    slug = slug.upper()
+    if slug not in province:
+        return jsonify({'error': f'provincia {slug} non trovata'}), 404
+    cfg = province[slug]
+    if pm.stato().get(slug) != 'running':
+        return jsonify({'error': f'backend {slug} non in esecuzione',
+                        'stato': pm.stato().get(slug, 'stopped')}), 503
+
+    f = request.files.get('file')
+    if not f or not f.filename:
+        return jsonify({'success': False, 'message': 'File mancante'}), 400
+
+    # Inoltra il multipart al backend
+    files = {'file': (f.filename, f.stream, f.mimetype or 'application/octet-stream')}
+    data = {k: v for k, v in request.form.items()}
+    url = f'http://127.0.0.1:{cfg["porta"]}/api/admin/import-excel'
+    headers = {
+        'Cookie': request.headers.get('Cookie', ''),
+        # Inoltra anche CSRF e Origin: il backend li richiede su POST/PUT/DELETE
+        # (vedi `csrf_check` in server.py)
+        'X-CSRF-Token': request.headers.get('X-CSRF-Token', ''),
+        'Origin': request.headers.get('Origin', '') or request.headers.get('Referer', ''),
+    }
+    try:
+        # Timeout largo: parse Excel + merge possono richiedere 30-60s
+        r = requests.post(url, headers=headers, files=files, data=data, timeout=300)
+    except requests.RequestException as e:
+        return jsonify({'error': f'backend non raggiungibile: {e}'}), 502
+    return (r.text, r.status_code,
+            {'Content-Type': r.headers.get('Content-Type', 'application/json')})
 
 
 # ============================================================================
@@ -844,137 +952,6 @@ def _admin_logs():
     })
 
 
-# ============================================================================
-# ADMIN — probe Google Sheet (validazione + suggerimento mapping colonne)
-# ============================================================================
-def _admin_probe_sheet():
-    """Apre il foglio Google indicato e ritorna headers + mapping suggerito.
-
-    Body: { id_foglio, gid_scheda }
-    Risposta: {
-      ok: bool, headers: [str], suggested_mapping: { chiave_interna: nome_colonna_o_null },
-      missing: [chiave_interna], errore: str|null
-    }
-    """
-    body = request.get_json(silent=True) or {}
-    id_foglio = (body.get('id_foglio') or '').strip()
-    gid_scheda = body.get('gid_scheda')
-    if not id_foglio:
-        return jsonify({'ok': False, 'errore': 'id_foglio mancante'}), 400
-
-    try:
-        import gspread
-        from oauth2client.service_account import ServiceAccountCredentials
-    except ImportError as e:
-        return jsonify({'ok': False, 'errore': f'gspread non disponibile: {e}'}), 500
-
-    creds_path = os.path.join(SCRIPT_DIR, 'credenziali.json')
-    if not os.path.exists(creds_path):
-        return jsonify({'ok': False, 'errore': 'credenziali.json non trovato'}), 500
-
-    try:
-        scope = [
-            'https://spreadsheets.google.com/feeds',
-            'https://www.googleapis.com/auth/drive',
-        ]
-        creds = ServiceAccountCredentials.from_json_keyfile_name(creds_path, scope)
-        client = gspread.authorize(creds)
-        ss = client.open_by_key(id_foglio)
-        # Risolvi worksheet via gid se fornito, altrimenti primo
-        ws = None
-        if gid_scheda is not None and gid_scheda != '':
-            try:
-                gid = int(gid_scheda)
-                for w in ss.worksheets():
-                    if w.id == gid:
-                        ws = w
-                        break
-            except (ValueError, TypeError):
-                pass
-        if ws is None:
-            ws = ss.sheet1
-        headers = ws.row_values(1)
-    except Exception as e:
-        return jsonify({'ok': False, 'errore': f'lettura foglio fallita: {e.__class__.__name__}: {e}'}), 400
-
-    # Suggerisci mapping via MAPPATURA_COLONNE_DEFAULT
-    try:
-        from config import MAPPATURA_COLONNE_DEFAULT
-    except ImportError:
-        MAPPATURA_COLONNE_DEFAULT = {}
-
-    headers_lower = {h.strip().lower(): h for h in headers if h}
-    suggested = {}
-    missing = []
-    for chiave, info in MAPPATURA_COLONNE_DEFAULT.items():
-        sinonimi = info.get('nomi_default', [])
-        match = None
-        for nome in sinonimi:
-            if nome.strip().lower() in headers_lower:
-                match = headers_lower[nome.strip().lower()]
-                break
-        suggested[chiave] = match
-        if match is None and chiave in ('eneltel', 'pod', 'nominativo'):
-            # campi critici
-            missing.append(chiave)
-
-    return jsonify({
-        'ok': True,
-        'foglio': ss.title,
-        'sheet_name': ws.title,
-        'headers': headers,
-        'n_colonne': len(headers),
-        'suggested_mapping': suggested,
-        'missing_critici': missing,
-    })
-
-
-# ============================================================================
-# ADMIN — bootstrap DB iniziale per nuova provincia
-# ============================================================================
-def _admin_bootstrap(slug):
-    """Esegue tools/migrate_to_sqlite.py come subprocess per la provincia.
-
-    Sincrono: aspetta il completamento + ritorna stdout/stderr. Per province
-    grandi il pull iniziale può richiedere 30-60s — il client deve usare
-    timeout adeguato (almeno 120s).
-    """
-    slug = slug.upper()
-    try:
-        province = carica_province()
-    except Exception as e:
-        return jsonify({'ok': False, 'errore': f'lettura provinces.json fallita: {e}'}), 500
-    if slug not in province:
-        return jsonify({'ok': False, 'errore': f'provincia {slug} non trovata'}), 404
-
-    env = os.environ.copy()
-    env['PROVINCIA'] = slug
-
-    log.info(f"[admin] bootstrap DB per {slug}")
-    try:
-        result = subprocess.run(
-            [sys.executable, os.path.join(SCRIPT_DIR, 'tools', 'migrate_to_sqlite.py')],
-            env=env, cwd=SCRIPT_DIR,
-            capture_output=True, text=True, timeout=300,
-        )
-    except subprocess.TimeoutExpired:
-        return jsonify({'ok': False, 'errore': 'bootstrap timeout (>5min)'}), 504
-
-    output = result.stdout + ('\n[STDERR]\n' + result.stderr if result.stderr else '')
-    if result.returncode != 0:
-        return jsonify({
-            'ok': False,
-            'errore': f'bootstrap fallito (exit {result.returncode})',
-            'output': output[-4000:],
-        }), 500
-    return jsonify({
-        'ok': True,
-        'slug': slug,
-        'output': output[-4000:],
-        'note': 'DB inizializzato. Clicca "Avvia" per partire il backend.',
-    })
-
-
 def _admin_check():
     """Helper: ritorna response 401/403 se non admin, None altrimenti.
     Usato dai handler API che rispondono in JSON.
@@ -1015,8 +992,6 @@ def _admin_create_province():
 
     cfg = {
         'nome': body.get('nome') or slug.capitalize(),
-        'id_foglio': body.get('id_foglio') or '',
-        'gid_scheda': int(body.get('gid_scheda') or 0),
         'deposito': body.get('deposito') or {'Nome': '', 'Lat': 0.0, 'Lon': 0.0},
         'operatori_vip': body.get('operatori_vip') or [],
         'colori_operatori': body.get('colori_operatori') or {},
@@ -1030,16 +1005,13 @@ def _admin_create_province():
     if body.get('usa_localita_come_comune'):
         cfg['usa_localita_come_comune'] = True
 
-    # Valida campi minimi
-    if not cfg['id_foglio']:
-        return jsonify({'error': 'id_foglio mancante (ID del Google Sheet)'}), 400
-
     province[slug] = cfg
     salva_province(province)
     log.info(f"[admin] provincia {slug} aggiunta (porta {cfg['porta']})")
 
-    # Creiamo la dir locale; il bootstrap completo (DB, settings) avviene in
-    # Step 4. Per ora: dir vuota + provincia spawn-abile via "Avvia".
+    # Crea la cartella dati. Il DB SQLite verrà inizializzato vuoto al
+    # primo avvio del backend (db.py crea lo schema on-demand). I dati
+    # entrano successivamente via import Excel dalla dashboard admin.
     data_dir = os.path.join(SCRIPT_DIR, 'data', slug.lower())
     os.makedirs(data_dir, exist_ok=True)
 
@@ -1067,10 +1039,10 @@ def _admin_update_province(slug):
     aggiornato = dict(current)
 
     # Campi merge-abili: copia se presenti nel body
-    for k in ('nome', 'id_foglio', 'sottodominio', 'file_mappa'):
+    for k in ('nome', 'sottodominio', 'file_mappa'):
         if k in body:
             aggiornato[k] = body[k]
-    for k in ('gid_scheda', 'ora_inizio_giornata', 'ora_fine_giornata', 'porta'):
+    for k in ('ora_inizio_giornata', 'ora_fine_giornata', 'porta'):
         if k in body and body[k] is not None and body[k] != '':
             try:
                 aggiornato[k] = int(body[k])
@@ -1106,7 +1078,7 @@ def _admin_update_province(slug):
                 return jsonify({'error': f"porta {nuova_porta} già usata da {altro_slug}"}), 409
 
     # Rileva se serve riavviare il backend
-    STRUTTURALI = {'porta', 'id_foglio', 'gid_scheda', 'sottodominio', 'file_mappa',
+    STRUTTURALI = {'porta', 'sottodominio', 'file_mappa',
                    'deposito', 'ora_inizio_giornata', 'ora_fine_giornata',
                    'operatori_vip', 'operatori_dict', 'colori_operatori',
                    'usa_localita_come_comune'}
@@ -1136,6 +1108,9 @@ def _admin_update_province(slug):
 
 
 def _admin_delete_province(slug):
+    """Elimina una provincia. Query param ?wipe_data=1 cancella anche tutta
+    la cartella data/{slug}/ (DB, backup, settings). Senza ?wipe_data, la
+    cartella resta come precauzione."""
     slug = slug.upper()
     try:
         province = carica_province()
@@ -1143,13 +1118,50 @@ def _admin_delete_province(slug):
         return jsonify({'error': f'lettura provinces.json fallita: {e}'}), 500
     if slug not in province:
         return jsonify({'error': f'provincia {slug} non trovata'}), 404
+    wipe_data = (request.args.get('wipe_data') or '').strip().lower() in ('1', 'true', 'yes')
     # Ferma il backend prima di rimuovere
     pm.termina_provincia(slug)
     del province[slug]
     salva_province(province)
+
+    deleted_paths = []
+    if wipe_data:
+        import shutil
+        # Cancella TUTTI gli artefatti su disco relativi al slug
+        candidates = [
+            os.path.join(SCRIPT_DIR, 'data', slug.lower()),
+            os.path.join(SCRIPT_DIR, 'backup', slug.lower()),
+            os.path.join(SCRIPT_DIR, 'cache', f'cache_distanze_{slug.lower()}.json'),
+            os.path.join(SCRIPT_DIR, 'cache', f'cache_hash_{slug.lower()}.json'),
+            os.path.join(SCRIPT_DIR, 'templates', f'mappa_{slug.lower()}.html'),
+        ]
+        for p in candidates:
+            try:
+                if os.path.isdir(p):
+                    shutil.rmtree(p)
+                    deleted_paths.append(p)
+                elif os.path.isfile(p):
+                    os.remove(p)
+                    deleted_paths.append(p)
+            except Exception as e:
+                log.warning(f"[admin] wipe {p} fallito: {e}")
+        log.warning(
+            f"[admin] provincia {slug} ELIMINATA + dati rimossi "
+            f"({len(deleted_paths)} percorsi su disco)"
+        )
+        return jsonify({
+            'ok': True, 'slug': slug,
+            'wiped': True,
+            'deleted_paths': deleted_paths,
+            'note': f'Provincia {slug} eliminata completamente, inclusi tutti i dati.',
+        })
+
     log.info(f"[admin] provincia {slug} rimossa da provinces.json (data/{slug.lower()}/ NON eliminato per sicurezza)")
-    return jsonify({'ok': True, 'slug': slug,
-                    'note': f'data/{slug.lower()}/ conservato — elimina manualmente se vuoi liberare lo spazio'})
+    return jsonify({
+        'ok': True, 'slug': slug,
+        'wiped': False,
+        'note': f'data/{slug.lower()}/ conservato — elimina manualmente se vuoi liberare lo spazio',
+    })
 
 
 def _admin_lifecycle(slug, action):

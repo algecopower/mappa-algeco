@@ -1,9 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-Stato condiviso e helper per la connessione a Google Sheets.
+Stato condiviso e helper per l'accesso al filone.
 
-Tutte le route Blueprint importano da qui anziché ridefinire
-get_worksheet(), find_row_by_*, _header_map, ecc.
+Post-disconnessione Google Sheets (2026-05-21): la fonte di verità è il DB
+locale SQLite. Le funzioni storicamente legate a gspread (get_worksheet,
+get_headers, force_refresh_headers, ecc.) sono state riconvertite per
+leggere dalla tabella `filone` / `column_registry`. L'API esposta resta
+invariata così le route Blueprint non hanno bisogno di cambiare.
 """
 import re
 import time
@@ -11,92 +14,44 @@ import logging
 import threading
 import traceback as _traceback_mod
 
-import gspread
-from gspread.exceptions import APIError
-from oauth2client.service_account import ServiceAccountCredentials
 from flask import session, jsonify
 
-from config import (
-    ID_FOGLIO_GOOGLE,
-    GID_SCHEDA,
-    CREDENZIALI_JSON,
-    PROVINCIA_ATTIVA,
-)
+from config import PROVINCIA_ATTIVA
 
 logger = logging.getLogger('mappa_algeco')
 
 # ============================================================================
-# GOOGLE SHEETS — cache, retry e connessione
+# HEADER REGISTRY — cache locale degli header colonna
 # ============================================================================
-_sheets_client = None
-_worksheet = None
+# Mantenuto in memoria per compatibilità API: le route leggono `_header_map`
+# come dict {nome_colonna: indice_1based}. Il backing store è
+# `column_registry` nel DB SQLite, popolato dall'importer Excel.
 _headers = None
 _header_map = None        # {col_name: 1-based index}
 _worksheet_initialized = False
-_headers_ts = 0           # timestamp ultima rilettura di row 1 dal foglio
-# TTL CORTO per i path di sola lettura (UI). Per le SCRITTURE non ci affidiamo
-# mai a questo cache: leggiamo sempre la row 1 fresca dentro al lock di scrittura.
-# Senza questa precauzione, se la collega aggiunge/rimuove/sposta una colonna,
-# le scritture finiscono nelle colonne sbagliate finché il TTL non scade
-# (era 30s = finestra in cui i dati venivano "spanati").
-_HEADERS_TTL = 5
+_headers_ts = 0
+_HEADERS_TTL = 60         # secondi: refresh periodico (le colonne cambiano via import)
 _sheets_lock = threading.Lock()
-_gsheets_write_lock = threading.RLock()  # Serializza operazioni di scrittura su Google Sheets (rientrante)
+_gsheets_write_lock = threading.RLock()  # Serializza operazioni di scrittura (rientrante)
 
 # ============================================================================
-# CACHE VALORI FOGLIO (evita ri-download su ogni richiesta)
+# CACHE VALORI FILONE
 # ============================================================================
 _cached_all_values = None
 _cached_all_values_ts = 0
 _values_cache_lock = threading.Lock()
-_VALUES_CACHE_TTL = 30  # secondi — non ri-scaricare entro questo intervallo
+_VALUES_CACHE_TTL = 30
 
 
 def _sheets_retry(func, *args, max_retries=3, **kwargs):
-    """
-    Esegue una chiamata gspread con retry + backoff esponenziale.
-    Gestisce rate-limit Google (429), errori di rete e token scaduti.
-    """
-    delay = 2
-    last_exc = None
-    for attempt in range(1, max_retries + 1):
-        try:
-            return func(*args, **kwargs)
-        except APIError as e:
-            last_exc = e
-            status = e.response.status_code if hasattr(e, 'response') else 0
-            if status == 429:
-                wait = delay * (2 ** (attempt - 1))
-                logger.warning(f"[GSheets] Rate limit 429, tentativo {attempt}/{max_retries}, attesa {wait}s")
-                time.sleep(wait)
-            elif status in (401, 403):
-                logger.warning(f"[GSheets] Auth error {status}, rinnovo client...")
-                _reset_sheets_client()
-                time.sleep(1)
-            elif status >= 500:
-                wait = delay * (2 ** (attempt - 1))
-                logger.warning(f"[GSheets] Server error {status}, tentativo {attempt}/{max_retries}, attesa {wait}s")
-                time.sleep(wait)
-            else:
-                raise
-        except (ConnectionError, TimeoutError, OSError) as e:
-            last_exc = e
-            wait = delay * (2 ** (attempt - 1))
-            logger.warning(f"[GSheets] Errore rete: {e}, tentativo {attempt}/{max_retries}, attesa {wait}s")
-            time.sleep(wait)
-    logger.error(f"[GSheets] Fallito dopo {max_retries} tentativi: {last_exc}")
-    raise last_exc
+    """Passthrough storico: ora chiama solo `func(*args, **kwargs)`.
 
-
-def _reset_sheets_client():
-    """Invalida il client GSheets per forzare re-autenticazione."""
-    global _sheets_client, _worksheet, _worksheet_initialized, _headers_ts
-    with _sheets_lock:
-        _sheets_client = None
-        _worksheet = None
-        _worksheet_initialized = False
-        _headers_ts = 0
-    invalidate_values_cache()
+    Mantenuto perché tante route lo importano. Senza Google Sheets, niente
+    rate-limit / 5xx da gestire, quindi nessuna logica di retry. Lasciato
+    come funzione invece che alias così se serve ri-aggiungere logica di
+    retry attorno a operazioni DB lente, c'è già il punto.
+    """
+    return func(*args, **kwargs)
 
 
 def invalidate_values_cache():
@@ -122,13 +77,14 @@ def invalidate_values_cache():
 
 
 def get_all_values_cached(force=False):
-    """Ritorna tutti i valori del foglio con cache in memoria (thread-safe).
+    """Ritorna tutti i valori del filone come lista di liste (headers + righe).
 
-    Se la cache è fresca (< _VALUES_CACHE_TTL secondi), ritorna i dati
-    in cache senza contattare Google Sheets.
+    Post-disconnessione Sheets (2026-05-21): legge SOLO dal DB locale
+    tramite `db.dump_filone_as_rows`. Mantiene la cache breve in memoria
+    per non rifare il dump a ogni chiamata.
 
     Args:
-        force: Se True, scarica sempre dal foglio.
+        force: Se True, invalida la cache e rilegge subito dal DB.
     """
     global _cached_all_values, _cached_all_values_ts
     now = time.time()
@@ -136,11 +92,15 @@ def get_all_values_cached(force=False):
     if not force:
         with _values_cache_lock:
             if _cached_all_values is not None and (now - _cached_all_values_ts) < _VALUES_CACHE_TTL:
-                logger.debug("[Cache] Valori foglio serviti da cache in memoria")
+                logger.debug("[Cache] Filone servito da cache in memoria")
                 return _cached_all_values
 
-    ws = get_worksheet()
-    values = _sheets_retry(ws.get_all_values)
+    from . import db as _db
+    headers, rows = _db.dump_filone_as_rows(
+        include_orphans=False,
+        apply_pending_overlay=True,
+    )
+    values = [list(headers)] + [[r.get(h, '') for h in headers] for r in rows]
 
     with _values_cache_lock:
         _cached_all_values = values
@@ -149,165 +109,186 @@ def get_all_values_cached(force=False):
     return values
 
 
-def get_sheets_client():
-    """Ottiene o crea il client Google Sheets (thread-safe)."""
-    global _sheets_client
+def _load_headers_from_db():
+    """Carica gli header dal `column_registry` del DB SQLite.
+
+    De-duplica per `last_index` mantenendo l'entry con `last_seen_ts` più
+    recente (può capitare di avere alias stale dopo rename di colonne).
+    Ritorna (headers_list, header_map_dict).
+    """
+    from . import db as _db
+    conn = _db.get_conn()
+    cur = conn.execute('''
+        SELECT cr.column_name, cr.last_index
+        FROM column_registry cr
+        WHERE cr.last_seen_ts = (
+            SELECT MAX(cr2.last_seen_ts)
+            FROM column_registry cr2
+            WHERE cr2.last_index = cr.last_index
+        )
+        ORDER BY cr.last_index
+    ''')
+    rows = cur.fetchall()
+    headers = [r['column_name'] for r in rows]
+    header_map = {r['column_name']: r['last_index'] for r in rows}
+    return headers, header_map
+
+
+def _ensure_headers_loaded():
+    """Inizializza/refresha la cache header dal DB."""
+    global _headers, _header_map, _headers_ts, _worksheet_initialized
+    now = time.time()
+    if _worksheet_initialized and (now - _headers_ts) < _HEADERS_TTL:
+        return
     with _sheets_lock:
-        if _sheets_client is None:
-            scope = [
-                'https://spreadsheets.google.com/feeds',
-                'https://www.googleapis.com/auth/drive'
-            ]
-            creds = ServiceAccountCredentials.from_json_keyfile_name(CREDENZIALI_JSON, scope)
-            _sheets_client = gspread.authorize(creds)
-    return _sheets_client
+        try:
+            headers, header_map = _load_headers_from_db()
+        except Exception as e:
+            logger.warning(f"[Headers] Caricamento dal DB fallito: {e}")
+            return
+        _headers = headers
+        _header_map = header_map
+        _headers_ts = now
+        _worksheet_initialized = True
+
+
+class _DBWorksheetProxy:
+    """Imita la parte read-only di `gspread.Worksheet`, leggendo dal DB.
+
+    Le route che storicamente facevano `ws = get_worksheet()` e poi
+    `ws.row_values(N)` / `ws.col_values(N)` / `ws.acell('B5')` continuano
+    a funzionare senza modifiche. Le scritture dirette su `ws.*` (update_acell,
+    format, batch_update, append_rows, clear, resize) sollevano
+    NotImplementedError esplicito: chi voleva scrivere DEVE passare da
+    safe_batch_update_by_name() che instrada al DB.
+
+    Attributi `id`, `spreadsheet_id`, `client` sono stub.
+    """
+
+    @property
+    def id(self):
+        return 0
+
+    @property
+    def spreadsheet_id(self):
+        return ''
+
+    @property
+    def client(self):
+        raise NotImplementedError(
+            "ws.client.batch_update() non è più supportato (Sheets disconnesso). "
+            "Le formattazioni/note cella vivono solo lato UI (cell_log.json)."
+        )
+
+    def _all_rows(self):
+        """Cache rows + headers in un'unica chiamata (TTL via get_all_values_cached)."""
+        return get_all_values_cached()
+
+    def row_values(self, row_num):
+        """Ritorna i valori della riga 1-based. row_num=1 → headers."""
+        rows = self._all_rows()
+        if row_num < 1 or row_num > len(rows):
+            return []
+        return list(rows[row_num - 1])
+
+    def col_values(self, col_idx):
+        """Ritorna i valori della colonna 1-based, inclusa la cella header."""
+        rows = self._all_rows()
+        out = []
+        for r in rows:
+            if col_idx - 1 < len(r):
+                out.append(r[col_idx - 1])
+            else:
+                out.append('')
+        return out
+
+    def get_all_values(self):
+        return self._all_rows()
+
+    def acell(self, cell_ref):
+        """Singola cella in notazione A1 ('B5'). Ritorna proxy con .value."""
+        import re as _re
+        m = _re.match(r'^([A-Z]+)(\d+)$', cell_ref.strip().upper())
+        if not m:
+            raise ValueError(f"Cell ref non valido: {cell_ref}")
+        col_letters = m.group(1)
+        row_num = int(m.group(2))
+        col_idx = 0
+        for ch in col_letters:
+            col_idx = col_idx * 26 + (ord(ch) - ord('A') + 1)
+        rows = self._all_rows()
+        if row_num < 1 or row_num > len(rows):
+            value = ''
+        else:
+            r = rows[row_num - 1]
+            value = r[col_idx - 1] if col_idx - 1 < len(r) else ''
+        return type('Cell', (), {'value': value})()
+
+    # ── Scritture dirette: NON supportate ────────────────────────────────
+    def _write_disabled(self, method_name, *_, **__):
+        raise NotImplementedError(
+            f"ws.{method_name}() non è più supportato (Sheets disconnesso). "
+            "Usa safe_batch_update_by_name() che instrada al DB locale."
+        )
+
+    def update_acell(self, *a, **k):    return self._write_disabled('update_acell')
+    def update_cell(self, *a, **k):     return self._write_disabled('update_cell')
+    def update(self, *a, **k):          return self._write_disabled('update')
+    def batch_update(self, *a, **k):    return self._write_disabled('batch_update')
+    def format(self, *a, **k):          return self._write_disabled('format')
+    def append_rows(self, *a, **k):     return self._write_disabled('append_rows')
+    def clear(self, *a, **k):           return self._write_disabled('clear')
+    def resize(self, *a, **k):          return self._write_disabled('resize')
+
+
+_ws_proxy_singleton = None
 
 
 def get_worksheet(force_refresh=False):
-    """Ottiene il worksheet attivo (con cache thread-safe).
+    """Ritorna il proxy DB. La firma resta compatibile con la chiamata storica.
 
-    Se force_refresh è True o il worksheet non è inizializzato, ricrea tutto.
-    Altrimenti delega il refresh periodico degli header a _refresh_headers_if_needed.
+    Lettura cella/riga/colonna funzionano (leggono dal DB). Le scritture
+    sollevano NotImplementedError: chi voleva scrivere deve usare
+    safe_batch_update_by_name().
     """
-    global _worksheet, _headers, _header_map, _worksheet_initialized, _headers_ts
-
-    with _sheets_lock:
-        if _worksheet_initialized and not force_refresh and _worksheet is not None:
-            ws_cached = _worksheet
-
-        else:
-            ws_cached = None
-
-    if ws_cached is not None and not force_refresh:
-        _refresh_headers_if_needed()
-        return ws_cached
-
-    client = get_sheets_client()
-    spreadsheet = _sheets_retry(client.open_by_key, ID_FOGLIO_GOOGLE)
-
-    target_ws = None
-    for ws in spreadsheet.worksheets():
-        if ws.id == GID_SCHEDA:
-            target_ws = ws
-            break
-
-    if target_ws is None:
-        target_ws = spreadsheet.sheet1
-
-    headers = _sheets_retry(target_ws.row_values, 1)
-    header_map = {h: i + 1 for i, h in enumerate(headers)}
-
-    with _sheets_lock:
-        _worksheet = target_ws
-        _headers = headers
-        _header_map = header_map
-        _worksheet_initialized = True
-        _headers_ts = time.time()
-
-    return _worksheet
-
-
-def _refresh_headers_if_needed():
-    """Rilegge la row 1 del foglio se è scaduto il TTL.
-
-    Serve a intercettare colonne aggiunte/rimosse/rinominate senza
-    dover riavviare il server: senza questo refresh, _header_map
-    resterebbe congelato al primo avvio e le scritture andrebbero
-    su colonne sbagliate (spanamento del filone).
-    """
-    global _headers, _header_map, _headers_ts
-    now = time.time()
-
-    with _sheets_lock:
-        if _worksheet is None:
-            return
-        if (now - _headers_ts) < _HEADERS_TTL:
-            return
-        ws = _worksheet
-
-    try:
-        headers = _sheets_retry(ws.row_values, 1)
-    except Exception as e:
-        logger.warning(f"[GSheets] Refresh header fallito: {e}")
-        return
-
-    header_map = {h: i + 1 for i, h in enumerate(headers)}
-
-    with _sheets_lock:
-        if headers != _headers:
-            logger.info(f"[GSheets] Header foglio cambiati: {len(_headers or [])} → {len(headers)} colonne, rimappatura applicata")
-        _headers = headers
-        _header_map = header_map
-        _headers_ts = time.time()
+    global _ws_proxy_singleton
+    _ensure_headers_loaded()
+    if _ws_proxy_singleton is None:
+        _ws_proxy_singleton = _DBWorksheetProxy()
+    return _ws_proxy_singleton
 
 
 def get_spreadsheet():
-    """Ottiene l'oggetto Spreadsheet (per chiamate API dirette)."""
-    client = get_sheets_client()
-    return _sheets_retry(client.open_by_key, ID_FOGLIO_GOOGLE)
+    raise NotImplementedError("Google Sheets disconnesso (2026-05-21).")
+
+
+def get_sheets_client():
+    raise NotImplementedError("Google Sheets disconnesso (2026-05-21).")
 
 
 def get_header_map():
-    """Restituisce la mappa header corrente (inizializza se necessario).
-
-    Se il worksheet è già inizializzato applica il refresh periodico (TTL)
-    così le colonne aggiunte al foglio vengono viste senza riavviare il server.
-    """
-    if not _worksheet_initialized:
-        get_worksheet()
-    else:
-        _refresh_headers_if_needed()
-    return _header_map
+    """Mappa header → indice 1-based, dal DB locale."""
+    _ensure_headers_loaded()
+    return _header_map or {}
 
 
 def get_headers():
-    """Restituisce la lista header corrente (con refresh periodico)."""
-    if not _worksheet_initialized:
-        get_worksheet()
-    else:
-        _refresh_headers_if_needed()
-    return _headers
+    """Lista degli header del filone, dal DB locale."""
+    _ensure_headers_loaded()
+    return list(_headers or [])
 
 
 def force_refresh_headers():
-    """Legge SEMPRE la row 1 dal foglio (no caching) e aggiorna la mappa globale.
+    """No-op semantico: forza il reload dal DB (TTL ignorato).
 
-    DEVE essere chiamata da TUTTI i path di scrittura, dentro il
-    `_gsheets_write_lock`, così la mappa nome-colonna -> indice è garantita
-    fresca al momento della scrittura. Se la collega ha aggiunto/rimosso/spostato
-    colonne sul foglio, questa funzione lo rileva e rigenera la mappa, evitando
-    che le scritture finiscano nelle colonne sbagliate ("spanamento").
-
-    Restituisce la nuova `header_map` (dict {nome_colonna: indice_1based}).
+    Storicamente rileggeva la row 1 del foglio per intercettare le
+    modifiche fatte dai colleghi. Ora le colonne entrano via import Excel,
+    che aggiorna direttamente `column_registry`.
     """
-    global _headers, _header_map, _headers_ts
-    ws = get_worksheet()  # assicura inizializzazione
-    headers = _sheets_retry(ws.row_values, 1)
-    header_map = {h: i + 1 for i, h in enumerate(headers)}
-
-    with _sheets_lock:
-        if _headers and headers != _headers:
-            # Diagnostica: log il delta per facilitare il debugging.
-            old_set = set(_headers)
-            new_set = set(headers)
-            aggiunte = new_set - old_set
-            rimosse = old_set - new_set
-            riordinate = old_set & new_set
-            riordinate_diff = [
-                h for h in riordinate
-                if (_header_map or {}).get(h) != header_map.get(h)
-            ]
-            logger.warning(
-                f"[GSheets] ⚠️ Header foglio modificati subito prima di una scrittura "
-                f"({len(_headers)} → {len(headers)} col). "
-                f"Aggiunte: {sorted(aggiunte)} | Rimosse: {sorted(rimosse)} | "
-                f"Riordinate: {sorted(riordinate_diff)}. Mappa rigenerata."
-            )
-        _headers = headers
-        _header_map = header_map
-        _headers_ts = time.time()
-
-    return header_map
+    global _headers_ts
+    _headers_ts = 0
+    _ensure_headers_loaded()
+    return _header_map or {}
 
 
 # ============================================================================
@@ -388,137 +369,14 @@ def safe_batch_update_by_name(items, *, anchor_col=None, anchor_normalize='upper
         }
 
     # ────────────────────────────────────────────────────────────────────────
-    # FASE 2: branch "primary" — DB-only.
-    # Non si scrive direttamente su Sheets: si registra la modifica nel DB
-    # locale (state='pending') e il drainer la pusherà su Sheets in background.
-    # Ritorna immediatamente alla route con success=True, latenza ~10ms.
-    # _force_sheets=True (drainer) bypassa il branch primary.
+    # POST-DISCONNESSIONE SHEETS (2026-05-21):
+    # ogni scrittura va SOLO al DB locale. Il parametro `_force_sheets`,
+    # storicamente usato dal drainer per saltare il branch DB e scrivere
+    # direttamente su Sheets, è ignorato: il drainer non esiste più.
+    # Le route continuano a chiamare questa funzione invariate.
     # ────────────────────────────────────────────────────────────────────────
-    if not _force_sheets:
-        return _route_to_db_primary(items, anchor_col=anchor_col,
-                                    anchor_normalize=anchor_normalize)
-
-    invalid_cols = set()
-    lost_anchors = []
-    n_remapped = 0
-    n_skipped = 0
-    n_written = 0
-
-    def _normalize(v):
-        s = str(v if v is not None else '').strip()
-        if anchor_normalize == 'upper':
-            return s.upper()
-        if anchor_normalize == 'lstrip0':
-            return s.lstrip('0')
-        return s
-
-    with _gsheets_write_lock:
-        # 1. Refresh atomico degli header DENTRO il lock di scrittura.
-        header_map = force_refresh_headers()
-        ws = get_worksheet()
-
-        # 2. Costruisci la mappa ancore (col_values fresco) se richiesto.
-        anchor_pos_to_value = {}
-        anchor_value_to_pos = {}
-        any_anchor_request = any(it.get('anchor') for it in items)
-        if anchor_col and any_anchor_request:
-            if anchor_col not in header_map:
-                logger.error(
-                    f"[SafeWrite] Colonna ancora '{anchor_col}' non trovata "
-                    f"negli header attuali. Tutte le scritture richiedenti "
-                    f"verifica sono saltate."
-                )
-                return {
-                    'success': False, 'written': 0, 'skipped': len(items),
-                    'remapped': 0, 'invalid_cols': [], 'lost_anchors': [],
-                    'error': f"Anchor column '{anchor_col}' missing",
-                }
-            col_idx_anchor = header_map[anchor_col]
-            anchor_values = _sheets_retry(ws.col_values, col_idx_anchor)
-            for i, v in enumerate(anchor_values):
-                pos = i + 1
-                if pos == 1:
-                    continue
-                key = _normalize(v)
-                anchor_pos_to_value[pos] = key
-                if key:
-                    anchor_value_to_pos[key] = pos
-
-        # 3. Costruisci updates A1 con indici FRESCHI.
-        gspread_updates = []
-        for u in items:
-            row = u.get('row')
-            col_name = u.get('col')
-            value = u.get('value')
-            expected_anchor = u.get('anchor')
-            if row is None or row < 2 or not col_name:
-                n_skipped += 1
-                continue
-
-            col_idx = header_map.get(col_name)
-            if col_idx is None:
-                invalid_cols.add(col_name)
-                n_skipped += 1
-                continue
-
-            # Verifica/rimappa via ancora
-            if anchor_col and expected_anchor:
-                expected = _normalize(expected_anchor)
-                actual = anchor_pos_to_value.get(row, '')
-                if actual != expected:
-                    new_row = anchor_value_to_pos.get(expected)
-                    if new_row is None:
-                        lost_anchors.append({
-                            'row': row, 'col': col_name,
-                            'anchor': expected_anchor,
-                        })
-                        n_skipped += 1
-                        continue
-                    if new_row != row:
-                        n_remapped += 1
-                        row = new_row
-
-            gspread_updates.append({
-                'range': gspread.utils.rowcol_to_a1(row, col_idx),
-                'values': [[value if value is not None else '']],
-            })
-
-        if invalid_cols:
-            logger.error(
-                f"[SafeWrite] ⚠️ Colonne mancanti negli header freschi: "
-                f"{sorted(invalid_cols)}. Le relative scritture sono state "
-                f"SALTATE per non corrompere il filone."
-            )
-        if lost_anchors:
-            logger.error(
-                f"[SafeWrite] ⚠️ {len(lost_anchors)} ancore non più "
-                f"presenti nel foglio: scritture saltate."
-            )
-        if n_remapped:
-            logger.warning(
-                f"[SafeWrite] {n_remapped} righe rimappate "
-                f"(foglio riordinato dalla collega)."
-            )
-
-        # 4. Esegui in chunk con retry.
-        if gspread_updates:
-            CHUNK = 500
-            for i in range(0, len(gspread_updates), CHUNK):
-                chunk = gspread_updates[i:i + CHUNK]
-                _sheets_retry(ws.batch_update, chunk)
-                n_written += len(chunk)
-
-    invalidate_values_cache()
-
-    success = (not invalid_cols) and (not lost_anchors)
-    return {
-        'success': success,
-        'written': n_written,
-        'skipped': n_skipped,
-        'remapped': n_remapped,
-        'invalid_cols': sorted(invalid_cols),
-        'lost_anchors': lost_anchors,
-    }
+    return _route_to_db_primary(items, anchor_col=anchor_col,
+                                anchor_normalize=anchor_normalize)
 
 
 def _route_to_db_primary(items, *, anchor_col=None, anchor_normalize='upper'):

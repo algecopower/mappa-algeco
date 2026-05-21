@@ -3,19 +3,22 @@
     "AE101392",
     "AG49808",
     "AG18966",
-    "AG63397"
+    "AG63397",
+    "AE94428"
   ],
   "colori_operatori": {
     "AE101392": "#e74c3c",
     "AG49808": "#f1c40f",
     "AG18966": "#2ecc71",
-    "AG63397": "#3498db"
+    "AG63397": "#a633db",
+    "AE94428": "#baf44e"
   },
   "operatori_dict": {
     "PAUL": "AE101392",
     "MIHAI": "AG49808",
     "SIDI": "AG18966",
-    "MOHAMED": "AG63397"
+    "MOHAMED": "AG63397",
+    "ALECCI": "AE94428"
   },
   "deposito": {
     "Nome": "DEPOSITO VOLPIANO",

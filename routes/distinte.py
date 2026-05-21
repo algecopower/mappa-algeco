@@ -15,7 +15,6 @@ from email.mime.base import MIMEBase
 from email import encoders
 from email.utils import formataddr
 
-import gspread.utils
 from flask import Blueprint, request, jsonify, send_file
 
 from moduli.auth import login_required
@@ -1034,6 +1033,13 @@ def strikethrough_telefono():
     Anti-spanamento: risolve sia la colonna TELEFONO sia la riga (via ancora
     POD) con header freschi sotto write-lock.
     """
+    return jsonify({
+        'success': False,
+        'unsupported': True,
+        'error': 'Funzione non più disponibile: la formattazione cella '
+                 '(strikethrough telefono) era una feature di Google Sheets, '
+                 'che è stato disconnesso il 21/05/2026.',
+    }), 410
     try:
         data = request.json
         pod = data.get('pod', '').strip().upper()
@@ -1105,6 +1111,12 @@ def segna_numero_errato():
     write-lock con header freschi e ancora POD, così non scrive in colonne
     sbagliate se la collega ha modificato il foglio.
     """
+    return jsonify({
+        'success': False,
+        'unsupported': True,
+        'error': 'Funzione non più disponibile: marcare un telefono come '
+                 'ERRATO scriveva sulla cella Sheets, che è stata disconnessa.',
+    }), 410
     try:
         data = request.json
         pod = data.get('pod', '').strip().upper()

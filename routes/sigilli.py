@@ -7,7 +7,6 @@ Gestione inserimento sigilli e matricole per contatori installati.
 import logging
 from datetime import datetime
 
-import gspread.utils
 from flask import Blueprint, request, jsonify
 
 from moduli.auth import login_required
@@ -17,6 +16,18 @@ from moduli.shared import (
     _trova_indice_multi, _api_error, _resolve_anchor_col_name,
 )
 from config import PROVINCIA_ATTIVA, COLONNE_SIGILLI
+
+
+def _rowcol_to_a1(row, col):
+    """Converte (row, col) 1-based in notazione A1 (es. 5,2 → 'B5')."""
+    if col < 1 or row < 1:
+        return ''
+    letters = ''
+    c = col
+    while c > 0:
+        c, rem = divmod(c - 1, 26)
+        letters = chr(65 + rem) + letters
+    return f'{letters}{row}'
 
 logger = logging.getLogger('mappa_algeco')
 bp = Blueprint('sigilli', __name__)
@@ -193,7 +204,7 @@ def salva_sigillo(eneltel):
                 return jsonify({'error': f'ENELTEL {eneltel} non più presente nel foglio'}), 404
             return jsonify({'error': 'Scrittura non completata'}), 500
 
-        cell_ref = gspread.utils.rowcol_to_a1(
+        cell_ref = _rowcol_to_a1(
             row_num, get_header_map().get(col_name_sigillo, 0)
         )
         logger.info(
@@ -395,7 +406,7 @@ def salva_matricola(eneltel):
                 return jsonify({'error': f'ENELTEL {eneltel} non più presente nel foglio'}), 404
             return jsonify({'error': 'Scrittura non completata'}), 500
 
-        cell_ref = gspread.utils.rowcol_to_a1(
+        cell_ref = _rowcol_to_a1(
             row_num, get_header_map().get(col_name_mat, 0)
         )
         log_extra = f" + SMART TEST='{smart_test_valore}'" if smart_test_valore else ''

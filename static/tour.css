@@ -25,15 +25,23 @@
 .tour-tooltip {
     position: fixed;
     z-index: 100001;
-    background: var(--tour-bg, #1e293b);
-    color: var(--tour-text, #f1f5f9);
-    border: 1px solid var(--tour-border, #334155);
-    border-radius: 12px;
+    /* Glass coerente con il design system: usa i token theme.css.
+       Su overlay scuro il blur è poco visibile ma il vetro rende
+       comunque le finiture (bordo + highlight inset) percepibili. */
+    background: var(--panel-bg-strong);
+    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    color: var(--text-primary);
+    border: var(--panel-border);
+    border-radius: 14px;
     padding: 20px 22px 16px;
     max-width: 380px;
     min-width: 240px;
     width: max-content;
-    box-shadow: 0 20px 60px rgba(0,0,0,.4), 0 0 0 1px rgba(255,255,255,.05);
+    box-shadow:
+        0 20px 60px rgba(0, 0, 0, 0.5),
+        0 0 0 1px rgba(var(--accent-rgb), 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.10);
     font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
     font-size: 14px;
     line-height: 1.55;
@@ -47,12 +55,13 @@
     transform: translateY(0);
 }
 
-/* Light theme overrides */
+/* Light theme: il glass usa i token light di theme.css automaticamente.
+   L'unico override resta la shadow, più morbida su sfondo chiaro. */
 [data-theme="light"] .tour-tooltip {
-    --tour-bg: #ffffff;
-    --tour-text: #1e293b;
-    --tour-border: #e2e8f0;
-    box-shadow: 0 20px 60px rgba(0,0,0,.15), 0 0 0 1px rgba(0,0,0,.05);
+    box-shadow:
+        0 20px 60px rgba(37, 99, 235, 0.15),
+        0 0 0 1px rgba(37, 99, 235, 0.10),
+        inset 0 1px 0 rgba(255, 255, 255, 0.95);
 }
 
 /* Arrow pointing from tooltip to target */
@@ -66,13 +75,13 @@
 }
 .tour-arrow path {
     fill: none;
-    stroke: var(--tour-accent, #e94560);
+    stroke: var(--tour-accent, var(--accent, #3b82f6));
     stroke-width: 2.5;
     stroke-linecap: round;
     stroke-linejoin: round;
 }
 .tour-arrow polygon {
-    fill: var(--tour-accent, #e94560);
+    fill: var(--tour-accent, var(--accent, #3b82f6));
 }
 
 /* Step indicator */
@@ -90,11 +99,11 @@
     transition: background .2s, transform .2s;
 }
 .tour-step-dot.active {
-    background: var(--tour-accent, #e94560);
+    background: var(--tour-accent, var(--accent, #3b82f6));
     transform: scale(1.3);
 }
 .tour-step-dot.done {
-    background: var(--tour-accent, #e94560);
+    background: var(--tour-accent, var(--accent, #3b82f6));
     opacity: .5;
 }
 .tour-step-count {
@@ -108,7 +117,7 @@
     font-size: 16px;
     font-weight: 700;
     margin-bottom: 8px;
-    color: var(--tour-accent, #e94560);
+    color: var(--tour-accent, var(--accent, #3b82f6));
     display: flex;
     align-items: center;
     gap: 8px;
@@ -162,21 +171,21 @@
 [data-theme="light"] .tour-btn-prev:hover { background: #cbd5e1; }
 
 .tour-btn-next {
-    background: var(--tour-accent, #e94560);
+    background: var(--tour-accent, var(--accent, #3b82f6));
     color: #fff;
 }
-.tour-btn-next:hover { background: #ff6b6b; }
+.tour-btn-next:hover { background: var(--accent-hover, #60a5fa); }
 
 /* Pulse ring on highlighted element */
 @keyframes tour-pulse {
-    0% { box-shadow: 0 0 0 0 rgba(233,69,96,.5); }
-    70% { box-shadow: 0 0 0 12px rgba(233,69,96,0); }
-    100% { box-shadow: 0 0 0 0 rgba(233,69,96,0); }
+    0% { box-shadow: 0 0 0 0 rgba(var(--accent-rgb, 59, 130, 246), 0.5); }
+    70% { box-shadow: 0 0 0 12px rgba(var(--accent-rgb, 59, 130, 246), 0); }
+    100% { box-shadow: 0 0 0 0 rgba(var(--accent-rgb, 59, 130, 246), 0); }
 }
 .tour-highlight-ring {
     position: fixed;
     z-index: 99999;
-    border: 2px solid var(--tour-accent, #e94560);
+    border: 2px solid var(--tour-accent, var(--accent, #3b82f6));
     border-radius: 8px;
     pointer-events: none;
     animation: tour-pulse 2s infinite;
@@ -200,9 +209,9 @@
     white-space: nowrap;
 }
 .tour-replay-btn:hover {
-    color: var(--tour-accent, #e94560);
-    border-color: var(--tour-accent, #e94560);
-    background: rgba(233,69,96,.08);
+    color: var(--tour-accent, var(--accent, #3b82f6));
+    border-color: var(--tour-accent, var(--accent, #3b82f6));
+    background: rgba(var(--accent-rgb, 59, 130, 246), 0.08);
 }
 [data-theme="light"] .tour-replay-btn {
     border-color: #d1d5db;
@@ -225,21 +234,26 @@
     transition: opacity .3s;
 }
 .tour-welcome-card {
-    background: var(--tour-bg, #1e293b);
-    color: var(--tour-text, #f1f5f9);
-    border: 1px solid var(--tour-border, #334155);
+    background: var(--panel-bg-strong);
+    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    color: var(--text-primary);
+    border: var(--panel-border);
     border-radius: 16px;
     padding: 36px 32px 28px;
     max-width: 440px;
     text-align: center;
-    box-shadow: 0 20px 60px rgba(0,0,0,.5);
+    box-shadow:
+        0 24px 60px rgba(0, 0, 0, 0.5),
+        0 0 0 1px rgba(var(--accent-rgb), 0.10),
+        inset 0 1px 0 rgba(255, 255, 255, 0.12);
     font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
 }
 [data-theme="light"] .tour-welcome-card {
-    background: #ffffff;
-    color: #1e293b;
-    border-color: #e2e8f0;
-    box-shadow: 0 20px 60px rgba(0,0,0,.15);
+    box-shadow:
+        0 24px 60px rgba(37, 99, 235, 0.18),
+        0 0 0 1px rgba(37, 99, 235, 0.10),
+        inset 0 1px 0 rgba(255, 255, 255, 0.95);
 }
 .tour-welcome-emoji {
     font-size: 48px;

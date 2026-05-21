@@ -1041,6 +1041,12 @@ def update_filone_notes():
     Aggiorna le note delle celle su Sheets.
     Body: {"notes": {"row:colName": "testo", ...}, "cleared": ["row:colName", ...]}
     """
+    return jsonify({
+        'success': False,
+        'unsupported': True,
+        'error': 'Le note cella vivevano su Google Sheets, che è stato '
+                 'disconnesso il 21/05/2026. La feature è disabilitata.',
+    }), 410
     try:
         body = request.json
         if not body:
@@ -1298,6 +1304,13 @@ def update_filone_formats():
     Body JSON: {"formats": {"row:colName": {bold, italic, underline, strikethrough, textColor, bgColor}}}
     Supporta anche "cleared": ["row:colName", ...] per celle da resettare.
     """
+    return jsonify({
+        'success': False,
+        'unsupported': True,
+        'error': 'La formattazione cella (colori, grassetto, sfondo) vivevano '
+                 'su Google Sheets, che è stato disconnesso il 21/05/2026. '
+                 'La feature è disabilitata.',
+    }), 410
     try:
         body = request.json
         if not body:
@@ -1846,6 +1859,13 @@ def append_filone_rows():
     posizionare i valori nelle colonne giuste anche se la collega ha appena
     modificato la struttura del foglio.
     """
+    return jsonify({
+        'success': False,
+        'unsupported': True,
+        'error': 'Per aggiungere nuovi contatori usa l\'import Excel '
+                 'dalla dashboard admin. L\'append diretto su Sheets non '
+                 'è più disponibile (Sheets disconnesso il 21/05/2026).',
+    }), 410
     try:
         data = request.json
         if not data or 'rows' not in data:
@@ -2104,11 +2124,15 @@ def genera_orari_lettere():
 
         # safe_batch_update_by_name acquisirà di nuovo il write-lock
         # (è una RLock, quindi rientrante sicura) e ricontrollerà gli header.
+        # In modalità sola lettura ritorna read_only=True e written=0: l'Excel
+        # viene comunque generato sotto.
+        read_only_attivo = False
         if items:
             res = safe_batch_update_by_name(
                 items, anchor_col=pod_anchor_col, anchor_normalize='upper',
             )
             scritti = res['written']
+            read_only_attivo = bool(res.get('read_only'))
             if res['lost_anchors']:
                 logger.warning(
                     f"[Orari Lettere] {len(res['lost_anchors'])} righe POD non più presenti, saltate."
@@ -2118,7 +2142,8 @@ def genera_orari_lettere():
                     f"[Orari Lettere] {res['remapped']} righe rimappate (foglio riordinato)."
                 )
 
-        # Genera anche il file Excel lettere
+        # Genera SEMPRE il file Excel lettere — anche in modalità sola lettura,
+        # perché il file su disco non è una scrittura verso Sheets.
         file_excel = None
         try:
             logger.info("📄 Generazione file Excel lettere...")
@@ -2128,9 +2153,15 @@ def genera_orari_lettere():
         except Exception as ex_excel:
             logger.warning(f"   ⚠️ Errore generazione Excel: {ex_excel}")
 
+        if read_only_attivo:
+            msg = ('Excel generato. Modalità sola lettura attiva: '
+                   'gli orari NON sono stati scritti sul foglio.')
+        else:
+            msg = 'Orari lettere generati con successo'
         risultato = {
             'success': True,
-            'message': 'Orari lettere generati con successo',
+            'read_only': read_only_attivo,
+            'message': msg,
             'dettagli': {
                 'periodo': f'{data_da} → {data_a}',
                 'giorni': len(date_da_elaborare),

@@ -23,8 +23,6 @@ import logging
 import time as _time_module
 import threading
 import pandas as pd
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
 
 logger = logging.getLogger('mappa_algeco')
 
@@ -53,12 +51,7 @@ _COLONNE_STRUTTURALI = [
     'COMUNE',             # comune (influenza analisi zone)
 ]
 
-from config import (
-    ID_FOGLIO_GOOGLE,
-    GID_SCHEDA,
-    CREDENZIALI_JSON,
-    MATRICOLE_VIP
-)
+from config import MATRICOLE_VIP
 
 # Mappatura colonne personalizzata
 try:
@@ -371,33 +364,22 @@ def carica_dati_google_sheets(force=False):
     logger.info("=" * 60)
 
     # ================================================================
-    # CONNESSIONE GOOGLE SHEETS
+    # CARICAMENTO DATI DAL DB LOCALE
     # ================================================================
-    # Usa la cache centralizzata di shared.get_all_values_cached (TTL 30s):
-    # così sync_engine.pull_once() riusa lo stesso dump invece di scaricare
-    # il foglio una seconda volta (doppia letture = quota 429).
-    #
-    # Ignoriamo `force=True`: i valori utente vivono nel DB locale e vengono
-    # applicati in-memory da _apply_pending_to_values, quindi non c'è bisogno
-    # di forzare un download Sheets ad ogni POST utente. La cache TTL 30s
-    # scade da sola al sync periodico (180s).
-    try:
-        from . import shared as _shared
-        values = _shared.get_all_values_cached(force=False)
-    except Exception:
-        # Fallback al path legacy se shared non è disponibile
-        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-        creds = ServiceAccountCredentials.from_json_keyfile_name(CREDENZIALI_JSON, scope)
-        client = gspread.authorize(creds)
-        sheet = client.open_by_key(ID_FOGLIO_GOOGLE).get_worksheet_by_id(GID_SCHEDA)
-        values = sheet.get_all_values()
-
-    # Applica le pending_writes del DB locale ai raw values. Le scritture
-    # utente vivono nel DB ma potrebbero NON essere ancora state pushate su
-    # Sheets dal drainer (~10-30s di ritardo). Per non mostrare uno stato
-    # vecchio in UI, sovrascriviamo i valori cella con quelli del DB prima
-    # del processing.
-    values = _apply_pending_to_values(values)
+    # Post-disconnessione Sheets (2026-05-21): la fonte di verità è il DB
+    # locale. Ricostruiamo qui il formato "values" (lista di liste, con
+    # header in riga 0) che il resto del processing si aspetta.
+    from . import db as _db
+    headers_db, rows_db = _db.dump_filone_as_rows(
+        include_orphans=False,
+        apply_pending_overlay=True,
+    )
+    if not headers_db:
+        logger.error("📊 DB filone vuoto: nessun header registrato")
+        return None
+    values = [list(headers_db)]
+    for r in rows_db:
+        values.append([r.get(h, '') for h in headers_db])
 
     # ================================================================
     # HASH-BASED CHANGE DETECTION

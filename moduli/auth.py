@@ -356,11 +356,36 @@ def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if 'user' not in session:
+            # Debug: log se serve diagnosticare cookie mancanti/scaduti
+            try:
+                import logging as _l
+                _l.getLogger('mappa_algeco').warning(
+                    f"[admin_required] 401 path={request.path} "
+                    f"session_keys={list(session.keys())} "
+                    f"cookie_count={len(request.headers.get('Cookie', '').split(';'))} "
+                    f"cookie_preview={(request.headers.get('Cookie','') or '')[:200]!r}"
+                )
+            except Exception:
+                pass
             if request.path.startswith('/api/'):
                 return jsonify({'error': 'Autenticazione richiesta'}), 401
             return redirect(url_for('login_page'))
         if session['user'].get('ruolo') != 'admin':
-            return jsonify({'error': 'Permessi insufficienti'}), 403
+            try:
+                import logging as _l
+                _l.getLogger('mappa_algeco').warning(
+                    f"[admin_required] 403 path={request.path} "
+                    f"user={session['user'].get('username')!r} "
+                    f"ruolo={session['user'].get('ruolo')!r} "
+                    f"cookie_count={len(request.headers.get('Cookie', '').split(';'))}"
+                )
+            except Exception:
+                pass
+            return jsonify({
+                'error': 'Permessi insufficienti',
+                'utente': session['user'].get('username'),
+                'ruolo': session['user'].get('ruolo'),
+            }), 403
         return f(*args, **kwargs)
     return decorated_function
 

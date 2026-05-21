@@ -574,7 +574,7 @@
     <button class="btn secondary" onclick="caricaTutto()" title="Ricarica la pagina con i dati più recenti">🔄 Aggiorna pagina</button>
     <div style="flex:1"></div>
     <select id="searchProvSel" class="search-prov-select" title="Provincia in cui cercare"></select>
-    <input id="searchEneltel" class="search-eneltel" type="text" placeholder="Cerca un contatore per codice Eneltel…">
+    <input id="searchEneltel" class="search-eneltel" type="text" placeholder="Codice Eneltel…" title="Cerca un contatore per codice Eneltel">
     <button class="btn secondary" onclick="ispezionaEneltel()" title="Mostra dettagli del contatore (dati, modifiche, storico)">🔍 Cerca</button>
   </div>
 
@@ -584,39 +584,6 @@
     <h2>Nessuna provincia configurata</h2>
     <p>Clicca "Aggiungi provincia" per crearne una.</p>
   </div>
-
-  <!-- Regole di validazione (admin configurable) -->
-  <section class="logs-section">
-    <div class="logs-head">
-      <h2>🛡️ Regole di validazione</h2>
-      <label>Provincia
-        <select id="vrProvSel"></select>
-      </label>
-      <button class="btn secondary" onclick="caricaValidationRules()" title="Ricarica regole">🔄</button>
-      <button class="btn" onclick="salvaValidationRules()" title="Salva modifiche">💾 Salva</button>
-    </div>
-    <div id="vrContainer" class="logs-container" style="max-height: 460px; padding: 8px;">
-      <div class="log-empty">Seleziona una provincia per caricare le regole.</div>
-    </div>
-  </section>
-
-  <!-- Report anomalie span -->
-  <section class="logs-section">
-    <div class="logs-head">
-      <h2>📋 Report anomalie span</h2>
-      <label>Provincia
-        <select id="recProvSel"></select>
-      </label>
-      <label>Data
-        <input id="recDate" type="date" />
-      </label>
-      <button class="btn secondary" onclick="caricaRecoveryReports()" title="Carica report del giorno">🔄</button>
-      <button class="btn warn" onclick="confrontaConBackup()" title="Confronta il foglio attuale con il backup del giorno selezionato (rileva celle ancora 'fuori posto')">🔍 Confronta con backup</button>
-    </div>
-    <div id="recContainer" class="logs-container" style="max-height: 320px;">
-      <div class="log-empty">Seleziona provincia e data per caricare il report.</div>
-    </div>
-  </section>
 
   <!-- Live log viewer -->
   <section class="logs-section">
@@ -631,9 +598,9 @@
       <label>Livello
         <select id="logsLevel">
           <option value="error">Solo errori</option>
-          <option value="warn" selected>Avvisi+</option>
+          <option value="warn">Avvisi+</option>
           <option value="info">Info+</option>
-          <option value="all">Tutto (debug)</option>
+          <option value="all" selected>Tutto (debug)</option>
         </select>
       </label>
       <label>Mostra
@@ -641,10 +608,12 @@
           <option value="100">100 righe</option>
           <option value="200" selected>200 righe</option>
           <option value="500">500 righe</option>
+          <option value="2000">2000 righe</option>
         </select>
       </label>
       <button class="logs-pause-btn" id="logsPauseBtn" onclick="toggleLogsPause()" title="Mette in pausa l'auto-refresh">⏸ Pausa</button>
       <button class="btn secondary" onclick="caricaLogs(true)" title="Ricarica i log">🔄</button>
+      <button class="btn secondary" onclick="scaricaLogs()" title="Scarica i log attualmente visibili come file di testo">💾 Scarica</button>
     </div>
     <div class="logs-container" id="logsContainer">
       <div class="log-empty">Caricamento log…</div>
@@ -677,24 +646,6 @@
         <label>Indirizzo web</label>
         <input name="sottodominio" required placeholder="lecco.mappa-algeco.com">
         <div class="help">Il programma sarà accessibile a questo indirizzo. Cloudflare gestisce automaticamente i nuovi sottodomini.</div>
-      </div>
-
-      <div class="form-row">
-        <div class="form-group">
-          <label>ID del foglio Google</label>
-          <input name="id_foglio" required placeholder="1ABCdef...">
-          <div class="help">Si trova nell'URL del foglio: docs.google.com/spreadsheets/d/<b>ID</b>/edit</div>
-        </div>
-        <div class="form-group">
-          <label>ID della scheda</label>
-          <input name="gid_scheda" type="number" required placeholder="0">
-          <div class="help">Si trova nell'URL come <b>#gid=…</b> (in fondo)</div>
-        </div>
-      </div>
-
-      <div class="form-group">
-        <button type="button" class="btn secondary" onclick="verificaFoglio()" title="Controlla che il foglio sia raggiungibile e mostra le colonne trovate">🔍 Controlla il foglio</button>
-        <div id="probe-result"></div>
       </div>
 
       <div class="form-group">
@@ -759,6 +710,93 @@
   </div>
 </div>
 
+<div class="modal" id="modalColonne">
+  <div class="modal-content wide">
+    <div class="modal-head">
+      <h2 id="colonneTitle">Gestione colonne del filone</h2>
+      <button class="close" onclick="chiudiColonne()">&times;</button>
+    </div>
+    <div style="padding:8px 16px 0;border-bottom:1px solid var(--border);display:flex;gap:4px;flex-wrap:wrap;">
+      <button class="btn secondary" id="tabBtnMapping" onclick="switchTabColonne('mapping')" style="border-bottom-left-radius:0;border-bottom-right-radius:0;">🔗 Sinonimi colonne</button>
+      <button class="btn secondary" id="tabBtnElenco" onclick="switchTabColonne('elenco')" style="border-bottom-left-radius:0;border-bottom-right-radius:0;">📋 Tutte le colonne</button>
+    </div>
+
+    <div id="tabMapping" style="padding:16px;">
+      <div style="background:var(--bg-tertiary);padding:12px 14px;border-radius:8px;margin-bottom:14px;border-left:3px solid var(--ok);">
+        <div style="font-weight:600;margin-bottom:6px;">💡 A cosa serve questa pagina</div>
+        <div style="font-size:13px;color:var(--text-secondary);line-height:1.5;">
+          Il programma usa nomi standard per i suoi campi (Telefono, Email, ecc.).
+          Se sul tuo foglio Google quella colonna si chiama in modo diverso
+          (es. <b>"CELL CLIENTE"</b> invece di <b>"TELEFONO"</b>), scrivilo qui
+          nella casella del campo Telefono e il programma lo riconoscerà automaticamente
+          a ogni importazione. <i>Lascia vuoto se il foglio usa già uno dei nomi
+          standard a destra.</i>
+        </div>
+      </div>
+      <div id="mappingContainer"><div class="log-empty"><span class="spinner"></span> Caricamento…</div></div>
+      <div class="form-actions" style="margin-top:14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <button class="btn" onclick="salvaMapping()">💾 Salva</button>
+        <button class="btn secondary" onclick="caricaMapping()">🔄 Annulla modifiche</button>
+        <small style="color:var(--text-muted);margin-left:8px;">⚠️ Dopo aver salvato, riavvia la provincia per applicare</small>
+      </div>
+    </div>
+
+    <div id="tabElenco" style="padding:16px;display:none;">
+      <div style="background:var(--bg-tertiary);padding:12px 14px;border-radius:8px;margin-bottom:14px;border-left:3px solid var(--ok);">
+        <div style="font-weight:600;margin-bottom:6px;">💡 A cosa serve questa pagina</div>
+        <div style="font-size:13px;color:var(--text-secondary);line-height:1.5;">
+          Vedi tutte le colonne presenti nel foglio. Da qui puoi <b>rinominare</b> o
+          <b>cancellare</b> una colonna se è cambiata sul foglio Google o se non
+          la usi più.<br>
+          <span style="color:var(--warn);">⚠️ Attenzione</span>: le colonne contrassegnate
+          come <b>"standard del programma"</b> sono usate internamente — modificale
+          solo se sai cosa stai facendo.
+        </div>
+      </div>
+      <div id="elencoContainer"><div class="log-empty"><span class="spinner"></span> Caricamento…</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="modalImportExcel">
+  <div class="modal-content wide">
+    <div class="modal-head">
+      <h2 id="importTitle">Importa file Excel</h2>
+      <button class="close" onclick="chiudiImport()">&times;</button>
+    </div>
+    <div style="padding:8px 16px 4px;font-size:13px;color:var(--text-secondary);">
+      Scarica il foglio Google come <b>.xlsx</b> e caricalo qui. Il programma
+      farà un confronto cella per cella col DB locale: dove tu (o i colleghi
+      via programma) avete modificato qualcosa <b>dopo</b> la data dell'export,
+      vince la versione locale; altrimenti vincono i valori dell'Excel.
+    </div>
+    <form id="formImportExcel" onsubmit="submitImportExcel(event)" style="padding:16px;">
+      <div class="form-group">
+        <label>File Excel (.xlsx)</label>
+        <input name="file" type="file" accept=".xlsx" required>
+        <div class="help">Solo file Excel moderni (.xlsx). Limite suggerito ~50MB.</div>
+      </div>
+      <div class="form-group">
+        <label>Data e ora dell'export</label>
+        <input name="export_ts" type="datetime-local" required>
+        <div class="help">Quando hai scaricato il file da Google Sheets. Importante per il merge: le modifiche fatte nel programma DOPO questo momento vincono sull'Excel.</div>
+      </div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:8px;font-weight:normal;">
+          <input name="dry_run" type="checkbox" checked style="width:auto;">
+          Solo simulazione (controlla cosa cambierebbe ma non scrive)
+        </label>
+        <div class="help">Tieni attivo la prima volta per vedere il riepilogo. Disattiva per applicare davvero.</div>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn" id="importSubmitBtn">📥 Esegui</button>
+        <button type="button" class="btn secondary" onclick="chiudiImport()">Annulla</button>
+      </div>
+    </form>
+    <div id="importResult" style="padding:0 16px 16px;"></div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -797,8 +835,21 @@ function toast(msg, type) {
   toast._t = setTimeout(() => toastEl.classList.remove('show'), 4500);
 }
 
+function _getCsrfToken() {
+  // Legge il cookie 'csrf_token' (non-HttpOnly) settato dal backend al login.
+  // Visibile da admin.* grazie al SESSION_COOKIE_DOMAIN=.mappa-algeco.com.
+  const m = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : '';
+}
+
 async function api(method, url, body) {
-  const opts = { method, headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin' };
+  const headers = { 'Content-Type': 'application/json' };
+  // Il backend richiede X-CSRF-Token su POST/PUT/DELETE (verifica double-cookie).
+  if (method !== 'GET') {
+    const tok = _getCsrfToken();
+    if (tok) headers['X-CSRF-Token'] = tok;
+  }
+  const opts = { method, headers, credentials: 'same-origin' };
   if (body) opts.body = JSON.stringify(body);
   const r = await fetch(url, opts);
   let data;
@@ -832,6 +883,19 @@ async function caricaHealth() {
   try {
     const data = await api('GET', '/api/health-overview');
     rendiHealth(data.province || []);
+    // Arricchisce le card con dati outbox/health (se _province è già stato caricato)
+    if (_province.length && data.province) {
+      const byslug = {};
+      for (const h of data.province) byslug[h.slug] = h;
+      for (const p of _province) {
+        const h = byslug[p.slug];
+        if (h) {
+          p.outbox = h.outbox || {};
+          p.health = h.health || {};
+        }
+      }
+      rendiGrid(_province);
+    }
   } catch (e) {
     bar.innerHTML = '<div class="health-card alert"><span class="label">Errore health</span><span class="value">!</span><span class="detail">' + escapeHtml(e.message) + '</span></div>';
   }
@@ -892,7 +956,7 @@ async function caricaProvince() {
 
 function aggiornaSelectInspector(province) {
   const opts = province.map(p => `<option value="${escapeHtml(p.slug)}">${escapeHtml(p.slug)}</option>`).join('');
-  for (const id of ['searchProvSel', 'recProvSel', 'vrProvSel']) {
+  for (const id of ['searchProvSel']) {
     const sel = document.getElementById(id);
     if (!sel) continue;
     const cur = sel.value;
@@ -922,15 +986,37 @@ function rendiGrid(province) {
 
     let actionsHtml = '';
     if (dbNotInit) {
-      actionsHtml = `<button class="btn success" onclick="bootstrap('${p.slug}')" title="Scarica per la prima volta tutti i contatori dal foglio Google">📥 Carica dati iniziali</button>`;
+      // Provincia appena creata o senza dati: serve avviare il backend
+      // (che crea lo schema DB vuoto) PRIMA di poter importare l'Excel.
+      if (stato === 'running') {
+        actionsHtml = `
+          <button class="btn warn" onclick="apriImportExcel('${p.slug}')" title="Importa il primo file Excel per popolare il filone">📥 Importa Excel</button>
+          <button class="btn secondary" onclick="azione('${p.slug}','stop')" title="Ferma il programma">⏸ Ferma</button>
+        `;
+      } else {
+        actionsHtml = `<button class="btn success" onclick="azione('${p.slug}','start')" title="Avvia il programma. Al primo avvio viene creato un database vuoto pronto a ricevere l'import Excel.">▶ Avvia</button>`;
+      }
     } else if (stato === 'running') {
+      const obCount = (p.outbox && p.outbox.n_pending_unique_cells) || 0;
+      const obEneltel = (p.outbox && p.outbox.n_eneltel_touched) || 0;
+      const obLabel = obCount > 0 ? ` (${obCount} celle / ${obEneltel} contatori)` : '';
+      const obClass = obCount > 0 ? 'btn warn' : 'btn secondary';
+      const obDisabled = obCount > 0 ? '' : 'disabled';
+      const baseUrl = p.sottodominio ? `https://${p.sottodominio}` : '';
+      const openButtons = baseUrl ? `
+        <a class="btn success" href="${baseUrl}/" target="_blank" rel="noopener" title="Apri la mappa di ${escapeHtml(p.nome)} in una nuova scheda">🗺️ Apri mappa</a>
+        <a class="btn success" href="${baseUrl}/filone" target="_blank" rel="noopener" title="Apri il filone (vista tabellare tipo Excel) di ${escapeHtml(p.nome)} in una nuova scheda">📊 Apri filone</a>
+      ` : '';
       actionsHtml = `
+        ${openButtons}
         <button class="btn secondary" onclick="azione('${p.slug}','restart')" title="Riavvia il programma di questa provincia">🔄 Riavvia</button>
         <button class="btn danger" onclick="azione('${p.slug}','stop')" title="Ferma il programma di questa provincia">⏸ Ferma</button>
-        <button class="btn warn" onclick="dbAction('${p.slug}','sync')" title="Rilegge subito i dati dal foglio Google">⬇️ Leggi dal foglio</button>
-        <button class="btn warn" onclick="dbAction('${p.slug}','drain')" title="Spinge subito le modifiche locali sul foglio Google">⬆️ Salva sul foglio</button>
-        <button class="btn warn" onclick="dbAction('${p.slug}','snapshot-db')" title="Crea una copia di sicurezza dei dati locali">💾 Backup</button>
-        <button class="btn warn" onclick="dbAction('${p.slug}','validate')" title="Controlla che i dati locali corrispondano al foglio Google">✓ Verifica dati</button>
+        <button class="btn warn" onclick="apriImportExcel('${p.slug}')" title="Importa un nuovo file Excel scaricato dal foglio Google">📥 Importa Excel</button>
+        <button class="${obClass}" ${obDisabled} onclick="scaricaOutbox('${p.slug}')" title="Scarica il file Excel con le modifiche fatte dal programma da inviare alla collega">📤 Scarica delta${obLabel}</button>
+        ${obCount > 0 ? `<button class="btn secondary" onclick="segnaConsegnate('${p.slug}', ${obCount})" title="Marca tutte le modifiche correnti come gi&agrave; consegnate alla collega">✓ Segna consegnate</button>` : ''}
+        <button class="btn secondary" onclick="scaricaFiloneCompleto('${p.slug}')" title="Scarica l'intero filone (snapshot completo dei dati nel DB)">📋 Scarica completo</button>
+        <button class="btn secondary" onclick="apriColonne('${p.slug}')" title="Gestisci la mappatura nomi colonne e l'elenco delle colonne registrate">🗂️ Colonne</button>
+        <button class="btn secondary" onclick="dbAction('${p.slug}','snapshot-db')" title="Crea una copia di sicurezza dei dati locali">💾 Backup</button>
       `;
     } else {
       actionsHtml = `<button class="btn success" onclick="azione('${p.slug}','start')" title="Avvia il programma di questa provincia">▶ Avvia</button>`;
@@ -944,15 +1030,16 @@ function rendiGrid(province) {
         </div>
         <span class="badge ${badgeClass}" title="${escapeHtml(stato)}">${statoLabel}</span>
       </div>
-      <div class="field"><span class="k">Indirizzo</span><span class="v">${escapeHtml(p.sottodominio || '—')}</span></div>
-      <div class="field"><span class="k">Foglio Google</span><span class="v mono" title="${escapeHtml(p.id_foglio || '')}">${escapeHtml((p.id_foglio || '').slice(0, 18))}…</span></div>
+      <div class="field"><span class="k">Indirizzo</span><span class="v">${p.sottodominio ? `<a href="https://${escapeHtml(p.sottodominio)}" target="_blank" rel="noopener" title="Apri ${escapeHtml(p.sottodominio)} in una nuova scheda">${escapeHtml(p.sottodominio)}</a>` : '—'}</span></div>
       <div class="field"><span class="k">Deposito</span><span class="v">${escapeHtml(p.deposito && p.deposito.Nome || '—')}</span></div>
       <div class="actions">
         ${actionsHtml}
-        <button class="btn secondary" onclick='apriFormModifica(${JSON.stringify(p).replace(/'/g, "&apos;")})' title="Modifica configurazione (foglio, deposito, orari…)">✏️ Modifica</button>
+        <button class="btn secondary" onclick='apriFormModifica(${JSON.stringify(p).replace(/'/g, "&apos;")})' title="Modifica configurazione (deposito, orari…)">✏️ Modifica</button>
         <button class="btn danger" onclick="elimina('${p.slug}')" title="Elimina la provincia">🗑️</button>
       </div>
-      ${dbNotInit ? '<div class="alert-banner">⚠️ Dati non ancora caricati dal foglio. Clicca "Carica dati iniziali" per la prima sincronizzazione.</div>' : ''}
+      ${dbNotInit ? (stato === 'running'
+        ? '<div class="alert-banner">⚠️ Programma avviato ma vuoto. Clicca "Importa Excel" per caricare il primo file.</div>'
+        : '<div class="alert-banner">⚠️ Provincia nuova. Clicca "Avvia" per avviare il programma (crea un database vuoto), poi importa il primo Excel.</div>') : ''}
     `;
     grid.appendChild(card);
   }
@@ -973,42 +1060,515 @@ async function azione(slug, action) {
 
 async function dbAction(slug, action) {
   const labels = {
-    'sync': 'Lettura dal foglio',
-    'drain': 'Salvataggio sul foglio',
     'snapshot-db': 'Backup dati',
-    'validate': 'Verifica integrità',
   };
-  toast(`${slug}: ${labels[action]} in corso…`);
+  const label = labels[action] || action;
+  toast(`${slug}: ${label} in corso…`);
   try {
     const r = await api('POST', `/api/provinces/${slug}/db-action`, { action });
     if (r.success) {
-      toast(`${slug}: ${labels[action]} completata. ${r.message || ''}`, 'success');
+      toast(`${slug}: ${label} completata. ${r.message || ''}`, 'success');
     } else {
-      toast(`${slug}: ${labels[action]} fallita. ${r.message || ''}`, 'error');
+      toast(`${slug}: ${label} fallita. ${r.message || ''}`, 'error');
     }
     setTimeout(caricaHealth, 800);
   } catch (e) {
-    toast(`Errore ${labels[action]}: ${e.message}`, 'error');
+    toast(`Errore ${label}: ${e.message}`, 'error');
   }
 }
 
-async function bootstrap(slug) {
-  if (!confirm(`Caricare per la prima volta tutti i dati di ${slug} dal foglio Google? L'operazione può richiedere 30-60 secondi.`)) return;
-  toast(`⏳ Caricamento dati ${slug} in corso (30-60s)…`);
+// ============================================================
+// OUTBOX (modifiche locali da consegnare alla collega)
+// ============================================================
+async function scaricaOutbox(slug) {
   try {
-    await api('POST', `/api/provinces/${slug}/bootstrap`);
-    toast(`✅ Dati ${slug} caricati. Ora puoi avviare la provincia.`, 'success');
-    setTimeout(caricaTutto, 800);
+    const r = await fetch(`/api/provinces/${slug}/outbox/excel`, {
+      method: 'GET', credentials: 'same-origin',
+    });
+    if (!r.ok) {
+      let msg = `HTTP ${r.status}`;
+      try { const j = await r.json(); msg = j.message || j.error || msg; } catch (_) {}
+      toast(`Scarica delta fallito: ${msg}`, 'error');
+      return;
+    }
+    // Estrai filename dal Content-Disposition
+    let fname = `modifiche_${slug.toLowerCase()}.xlsx`;
+    const cd = r.headers.get('Content-Disposition');
+    if (cd) {
+      const m = cd.match(/filename="([^"]+)"/);
+      if (m) fname = m[1];
+    }
+    const nRows = r.headers.get('X-Outbox-Rows') || '?';
+    const nCells = r.headers.get('X-Outbox-Cells') || '?';
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = fname; document.body.appendChild(a);
+    a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast(`📤 Scaricato: ${nRows} contatori, ${nCells} celle. Inviare alla collega.`, 'success');
   } catch (e) {
-    toast('Errore caricamento dati: ' + e.message, 'error');
+    toast('Errore download: ' + e.message, 'error');
   }
+}
+
+// ============================================================
+// COLONNE & MAPPATURA
+// ============================================================
+let _colonneSlug = null;
+let _mappingRows = [];
+
+function apriColonne(slug) {
+  _colonneSlug = slug;
+  document.getElementById('colonneTitle').textContent = `Colonne & Mappatura — ${slug}`;
+  switchTabColonne('mapping');
+  document.getElementById('modalColonne').classList.add('open');
+  caricaMapping();
+}
+
+function chiudiColonne() {
+  document.getElementById('modalColonne').classList.remove('open');
+  _colonneSlug = null;
+}
+
+function switchTabColonne(which) {
+  for (const k of ['mapping', 'elenco']) {
+    document.getElementById('tab' + (k === 'mapping' ? 'Mapping' : 'Elenco')).style.display = (k === which) ? 'block' : 'none';
+    const btn = document.getElementById('tabBtn' + (k === 'mapping' ? 'Mapping' : 'Elenco'));
+    btn.className = (k === which) ? 'btn' : 'btn secondary';
+  }
+  if (which === 'elenco') caricaElencoColonne();
+}
+
+async function caricaMapping() {
+  if (!_colonneSlug) return;
+  const cont = document.getElementById('mappingContainer');
+  cont.innerHTML = '<div class="log-empty"><span class="spinner"></span> Caricamento…</div>';
+  try {
+    const r = await api('GET', `/api/provinces/${_colonneSlug}/column-mapping`);
+    _mappingRows = r.rows || [];
+    rendiMapping();
+  } catch (e) {
+    cont.innerHTML = `<div class="log-empty" style="color:var(--error)">Errore: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function rendiMapping() {
+  const cont = document.getElementById('mappingContainer');
+  if (!_mappingRows.length) {
+    cont.innerHTML = '<div class="log-empty">Nessun campo configurabile.</div>';
+    return;
+  }
+  let html = `<table class="inspector-table" style="font-size:13px;width:100%;">
+    <thead><tr>
+      <th style="width:25%">Campo del programma</th>
+      <th style="width:30%">Come si chiama sul tuo foglio</th>
+      <th style="width:45%">Nomi già riconosciuti</th>
+    </tr></thead><tbody>`;
+  for (let i = 0; i < _mappingRows.length; i++) {
+    const m = _mappingRows[i];
+    const descr = m.descrizione ? `<br><small style="color:var(--text-muted);font-weight:normal;">${escapeHtml(m.descrizione)}</small>` : '';
+    const placeholder = (m.nomi_default && m.nomi_default[0]) || 'es. NOME COLONNA';
+    html += `<tr>
+      <td style="vertical-align:top;padding:10px 8px;"><b>${escapeHtml(m.label)}</b>${descr}</td>
+      <td style="vertical-align:top;padding:10px 8px;">
+        <input type="text" data-idx="${i}" class="vrCustomInput"
+          value="${escapeHtml(m.override_custom || '')}"
+          placeholder="(usa nomi automatici →)"
+          style="width:100%;padding:6px 8px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);border-radius:4px;font-size:13px;">
+      </td>
+      <td style="vertical-align:top;padding:10px 8px;"><small style="color:var(--text-muted);">${escapeHtml((m.nomi_default || []).join(' · ')) || '—'}</small></td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  cont.innerHTML = html;
+}
+
+async function salvaMapping() {
+  if (!_colonneSlug) return;
+  const mapping = {};
+  for (const inp of document.querySelectorAll('.vrCustomInput')) {
+    const i = parseInt(inp.dataset.idx);
+    const m = _mappingRows[i];
+    const val = inp.value.trim();
+    if (val) mapping[m.chiave_interna] = val;
+  }
+  try {
+    const r = await api('PUT', `/api/provinces/${_colonneSlug}/column-mapping`, { mapping });
+    const msg = r.count > 0
+      ? `✓ Salvati ${r.count} sinonimi per ${_colonneSlug}. Riavvia la provincia per applicare le modifiche.`
+      : `✓ Nessun sinonimo personalizzato per ${_colonneSlug}: il programma userà i nomi automatici.`;
+    toast(msg, 'success');
+  } catch (e) {
+    toast('Errore: ' + e.message, 'error');
+  }
+}
+
+async function caricaElencoColonne() {
+  if (!_colonneSlug) return;
+  const cont = document.getElementById('elencoContainer');
+  cont.innerHTML = '<div class="log-empty"><span class="spinner"></span> Caricamento…</div>';
+  try {
+    const r = await api('GET', `/api/provinces/${_colonneSlug}/columns`);
+    rendiElencoColonne(r.columns || []);
+  } catch (e) {
+    cont.innerHTML = `<div class="log-empty" style="color:var(--error)">Errore: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function rendiElencoColonne(cols) {
+  const cont = document.getElementById('elencoContainer');
+  const headerHtml = `
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px;">
+      <button class="btn success" onclick="apriCreaColonna()" title="Aggiungi una nuova colonna al filone (sarà visibile anche nella vista Excel)">➕ Aggiungi colonna</button>
+      <div id="colonneStats" style="display:flex;gap:10px;flex-wrap:wrap;font-size:12px;"></div>
+    </div>`;
+  if (!cols.length) {
+    cont.innerHTML = headerHtml + '<div class="log-empty">Nessuna colonna ancora registrata. Importa un Excel per popolare la lista, oppure creane una nuova qui sopra.</div>';
+    return;
+  }
+  // Riepilogo veloce
+  const nStd = cols.filter(c => c.is_typed).length;
+  const nLib = cols.filter(c => !c.is_typed).length;
+  const nVuote = cols.filter(c => c.n_values === 0).length;
+  const statsHtml = `
+    <div style="background:var(--bg-tertiary);padding:6px 12px;border-radius:6px;"><b>${cols.length}</b> colonne totali</div>
+    <div style="background:var(--bg-tertiary);padding:6px 12px;border-radius:6px;color:var(--ok);"><b>${nStd}</b> standard del programma</div>
+    <div style="background:var(--bg-tertiary);padding:6px 12px;border-radius:6px;color:var(--text-secondary);"><b>${nLib}</b> personalizzate</div>
+    ${nVuote > 0 ? `<div style="background:var(--bg-tertiary);padding:6px 12px;border-radius:6px;color:var(--warn);"><b>${nVuote}</b> vuote (mai usate)</div>` : ''}
+  `;
+  let html = headerHtml.replace('<div id="colonneStats" style="display:flex;gap:10px;flex-wrap:wrap;font-size:12px;"></div>',
+    `<div id="colonneStats" style="display:flex;gap:10px;flex-wrap:wrap;font-size:12px;">${statsHtml}</div>`);
+  html += `<table class="inspector-table" style="font-size:13px;width:100%;">
+    <thead><tr>
+      <th style="width:5%">N°</th>
+      <th style="width:32%">Nome colonna sul foglio</th>
+      <th style="width:25%">Tipo</th>
+      <th style="width:14%;text-align:right;">Contatori con valore</th>
+      <th style="width:24%">Azioni</th>
+    </tr></thead><tbody>`;
+  for (const c of cols) {
+    const lockBadge = c.is_protected
+      ? '<br><span class="badge" style="background:#3a2f15;color:#f0a14a;font-size:10px;">🔒 protetta</span>'
+      : '';
+    const typeCell = c.is_typed
+      ? `<span class="badge ok" title="Campo standard usato dal programma">⚙️ Standard del programma</span><br><small style="color:var(--text-muted);">campo: ${escapeHtml(c.chiave_interna || '—')}</small>${lockBadge}`
+      : `<span class="badge" style="background:var(--bg-tertiary);color:var(--text-secondary);">Personalizzata</span><br><small style="color:var(--text-muted);">aggiunta dal foglio</small>${lockBadge}`;
+    const safeNameAttr = c.column_name.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
+    const vuotaCss = c.n_values === 0 ? 'color:var(--text-muted);font-style:italic;' : '';
+    // Bottoni: se la colonna è protetta, disabilita con tooltip esplicativo
+    let actionsHtml;
+    if (c.is_protected) {
+      const protMsg = 'Colonna protetta: usata da pannelli del programma (contatori, distinte, sigilli, ecc.). Per rinominarla usa la scheda "Sinonimi colonne".';
+      actionsHtml = `
+        <button class="btn secondary" style="font-size:12px;padding:4px 10px;opacity:0.5;cursor:not-allowed;" disabled title="${escapeHtml(protMsg)}">✏️ Rinomina</button>
+        <button class="btn danger" style="font-size:12px;padding:4px 10px;opacity:0.5;cursor:not-allowed;" disabled title="${escapeHtml(protMsg)}">🔒 Protetta</button>`;
+    } else {
+      actionsHtml = `
+        <button class="btn secondary" style="font-size:12px;padding:4px 10px;" onclick="rinominaColonna('${safeNameAttr}')" title="Cambia il nome di questa colonna">✏️ Rinomina</button>
+        <button class="btn danger" style="font-size:12px;padding:4px 10px;" onclick="eliminaColonna('${safeNameAttr}', ${c.is_typed}, ${c.n_values})" title="${c.is_typed ? 'Svuota tutti i valori (mantiene il campo)' : 'Elimina la colonna e tutti i suoi valori'}">🗑️ ${c.is_typed ? 'Svuota' : 'Elimina'}</button>`;
+    }
+    html += `<tr>
+      <td class="mono" style="vertical-align:top;padding-top:12px;">${c.last_index}</td>
+      <td style="vertical-align:top;padding:10px 8px;"><b>${escapeHtml(c.column_name)}</b></td>
+      <td style="vertical-align:top;padding:10px 8px;">${typeCell}</td>
+      <td class="mono" style="text-align:right;vertical-align:top;padding-top:12px;${vuotaCss}">${c.n_values || '0'}</td>
+      <td style="vertical-align:top;padding:8px;">${actionsHtml}</td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  cont.innerHTML = html;
+}
+
+async function apriCreaColonna() {
+  if (!_colonneSlug) return;
+  const name = prompt(
+    `Aggiungi una nuova colonna al filone di ${_colonneSlug}.\n\n` +
+    `Scrivi il nome esattamente come vuoi che appaia nel foglio Excel\n` +
+    `(es. "NOTE INTERNE", "STATO PRATICA", "BACK OFFICE").\n\n` +
+    `La colonna sarà visibile nella vista Excel del filone e potrai\n` +
+    `inserire valori cella per cella. Eliminala in qualunque momento\n` +
+    `dalla stessa pagina.`,
+    ''
+  );
+  if (!name || !name.trim()) return;
+  // Chiedi posizione (default: in fondo)
+  const posStr = prompt(
+    `Posizione della colonna "${name.trim()}":\n\n` +
+    `Lascia vuoto per metterla in fondo, oppure scrivi il numero\n` +
+    `(es. "3" la mette in 3ª posizione, spostando le successive di 1).`,
+    ''
+  );
+  const body = { name: name.trim() };
+  if (posStr && posStr.trim()) {
+    const n = parseInt(posStr.trim());
+    if (!isNaN(n) && n >= 1) body.position = n;
+  }
+  try {
+    const r = await api('POST', `/api/provinces/${_colonneSlug}/columns`, body);
+    toast(`✓ Colonna "${r.column_name}" aggiunta in posizione ${r.last_index}. Apri la vista Excel del filone per usarla.`, 'success');
+    caricaElencoColonne();
+  } catch (e) {
+    toast('Errore: ' + e.message, 'error');
+  }
+}
+
+
+async function rinominaColonna(oldName) {
+  const newName = prompt(
+    `Come vuoi rinominare la colonna "${oldName}"?\n\n` +
+    `(Esempio: se sul foglio Google l'hai rinominata in modo diverso,\n` +
+    `inserisci qui il nuovo nome così il programma la riconoscerà.)\n`,
+    oldName
+  );
+  if (!newName || newName.trim() === '' || newName.trim() === oldName) return;
+  try {
+    const r = await api('PUT',
+      `/api/provinces/${_colonneSlug}/columns/${encodeURIComponent(oldName)}/rename`,
+      { new_name: newName.trim() }
+    );
+    const dettaglio = (r.n_extra_migrated || 0) + (r.n_pending_migrated || 0) > 0
+      ? ` (aggiornati ${r.n_extra_migrated || 0} valori${r.n_pending_migrated ? ' e ' + r.n_pending_migrated + ' modifiche in coda' : ''})`
+      : '';
+    toast(`✓ "${oldName}" rinominata in "${newName.trim()}"${dettaglio}`, 'success');
+    caricaElencoColonne();
+  } catch (e) {
+    toast('Errore: ' + e.message, 'error');
+  }
+}
+
+async function eliminaColonna(name, isTyped, nValues) {
+  let msg;
+  if (isTyped) {
+    msg = `⚠️ SVUOTARE la colonna "${name}"?\n\n` +
+      `Questa è una colonna STANDARD del programma. Il campo resta, ` +
+      `ma tutti i ${nValues} valori attualmente presenti verranno ` +
+      `azzerati su tutti i contatori.\n\n` +
+      `Questa azione NON si può annullare.`;
+  } else {
+    msg = `⚠️ ELIMINARE la colonna "${name}"?\n\n` +
+      `Questa è una colonna personalizzata (l'ha aggiunta la collega sul foglio). ` +
+      `Verrà rimossa completamente, insieme ai ${nValues} valori che contiene.\n\n` +
+      `Questa azione NON si può annullare.`;
+  }
+  if (!confirm(msg)) return;
+  try {
+    const r = await api('DELETE', `/api/provinces/${_colonneSlug}/columns/${encodeURIComponent(name)}`);
+    const azione = isTyped ? 'svuotata' : 'eliminata';
+    const dettaglio = isTyped
+      ? `(${nValues} valori azzerati)`
+      : `(${r.n_extra_deleted || 0} valori rimossi)`;
+    toast(`🗑️ Colonna "${name}" ${azione} ${dettaglio}`, 'success');
+    caricaElencoColonne();
+  } catch (e) {
+    toast('Errore: ' + e.message, 'error');
+  }
+}
+
+
+async function scaricaFiloneCompleto(slug) {
+  toast(`Generazione filone ${slug} in corso…`);
+  try {
+    const r = await fetch(`/api/provinces/${slug}/export-full-excel`, {
+      method: 'GET', credentials: 'same-origin',
+    });
+    if (!r.ok) {
+      let msg = `HTTP ${r.status}`;
+      try { const j = await r.json(); msg = j.message || j.error || msg; } catch (_) {}
+      toast(`Download fallito: ${msg}`, 'error');
+      return;
+    }
+    let fname = `filone_${slug.toLowerCase()}.xlsx`;
+    const cd = r.headers.get('Content-Disposition');
+    if (cd) {
+      const m = cd.match(/filename="([^"]+)"/);
+      if (m) fname = m[1];
+    }
+    const nRows = r.headers.get('X-Filone-Rows') || '?';
+    const nCols = r.headers.get('X-Filone-Cols') || '?';
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = fname; document.body.appendChild(a);
+    a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast(`📋 Scaricato filone ${slug}: ${nRows} righe × ${nCols} colonne`, 'success');
+  } catch (e) {
+    toast('Errore download: ' + e.message, 'error');
+  }
+}
+
+async function segnaConsegnate(slug, count) {
+  if (!confirm(
+    `Segnare come consegnate le ${count} modifiche pendenti di ${slug}?\n\n` +
+    `Da qui in poi il contatore "delta" riparte da zero. Usa questa azione DOPO ` +
+    `aver inviato l'Excel alla collega e averla vista applicarlo al foglio.\n\n` +
+    `Tip: se importi un Excel scaricato dopo che la collega ha applicato le tue ` +
+    `modifiche, il programma marca automaticamente come consegnate quelle ` +
+    `precedenti alla data di export — quindi non sempre serve cliccare qui.`
+  )) return;
+  try {
+    const r = await api('POST', `/api/provinces/${slug}/outbox/mark-delivered`);
+    toast(`✓ ${r.marked || 0} modifiche segnate come consegnate per ${slug}`, 'success');
+    setTimeout(caricaHealth, 800);
+  } catch (e) {
+    toast('Errore: ' + e.message, 'error');
+  }
+}
+
+
+// ============================================================
+// IMPORT EXCEL
+// ============================================================
+let _importingSlug = null;
+
+function apriImportExcel(slug) {
+  _importingSlug = slug;
+  document.getElementById('importTitle').textContent = `Importa file Excel — ${slug}`;
+  const form = document.getElementById('formImportExcel');
+  form.reset();
+  // Pre-imposta data/ora corrente come default per export_ts
+  const now = new Date();
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  document.querySelector('[name=export_ts]').value = now.toISOString().slice(0, 16);
+  // Dry-run di default
+  document.querySelector('[name=dry_run]').checked = true;
+  document.getElementById('importResult').innerHTML = '';
+  document.getElementById('importSubmitBtn').disabled = false;
+  document.getElementById('importSubmitBtn').textContent = '📥 Esegui';
+  document.getElementById('modalImportExcel').classList.add('open');
+}
+
+function chiudiImport() {
+  document.getElementById('modalImportExcel').classList.remove('open');
+  _importingSlug = null;
+}
+
+async function submitImportExcel(ev) {
+  ev.preventDefault();
+  if (!_importingSlug) return;
+  const form = document.getElementById('formImportExcel');
+  const fd = new FormData(form);
+  const dryRun = document.querySelector('[name=dry_run]').checked;
+  // Converti datetime-local "2026-05-21T14:30" → "2026-05-21 14:30:00"
+  const tsRaw = fd.get('export_ts');
+  if (tsRaw) fd.set('export_ts', tsRaw.replace('T', ' ') + ':00');
+  fd.set('dry_run', dryRun ? 'true' : 'false');
+
+  // Conferma se NON è dry-run
+  if (!dryRun) {
+    if (!confirm(
+      `Applicare l'import al DB di ${_importingSlug}?\n\n` +
+      `L'operazione modifica i dati locali in modo permanente. ` +
+      `Le righe modificate nel programma DOPO la data export resteranno intatte.\n\n` +
+      `Suggerimento: prova prima con "Solo simulazione" per vedere cosa cambierà.`
+    )) return;
+  }
+
+  const btn = document.getElementById('importSubmitBtn');
+  const out = document.getElementById('importResult');
+  btn.disabled = true;
+  btn.textContent = dryRun ? '⏳ Simulazione…' : '⏳ Importazione…';
+  out.innerHTML = '<div class="log-empty"><span class="spinner"></span> Elaborazione in corso (può richiedere 30-60s per file grossi)…</div>';
+
+  try {
+    const csrf = _getCsrfToken();
+    const r = await fetch(`/api/provinces/${_importingSlug}/import-excel`, {
+      method: 'POST', body: fd, credentials: 'same-origin',
+      headers: csrf ? { 'X-CSRF-Token': csrf } : {},
+    });
+    let data;
+    try { data = await r.json(); } catch { data = {}; }
+    if (!r.ok) {
+      data.success = false;
+      data._http_status = r.status;
+    }
+    rendiImportResult(data, dryRun);
+    if (data.success) {
+      if (dryRun) {
+        toast(`Simulazione completata: ${data.rows_aggiornate} righe verrebbero aggiornate, ${data.rows_nuove} nuove`, 'success');
+      } else {
+        toast(`✅ Import applicato: ${data.rows_aggiornate} aggiornate, ${data.rows_nuove} nuove, ${data.celle_modificate} celle`, 'success');
+        setTimeout(caricaHealth, 1500);
+      }
+    } else {
+      toast('❌ Import fallito (vedi dettagli nel modale)', 'error');
+    }
+  } catch (e) {
+    out.innerHTML = `<div class="log-empty" style="color:var(--error)">Errore di rete: ${escapeHtml(e.message)}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '📥 Esegui';
+  }
+}
+
+function rendiImportResult(data, wasDryRun) {
+  const out = document.getElementById('importResult');
+  if (!data.success) {
+    const errMsg = data.error || data.message
+      || (data.errori && data.errori.length ? data.errori.join(' / ') : null)
+      || (data._http_status ? `HTTP ${data._http_status}` : 'errore sconosciuto');
+    const extra = [];
+    if (data.utente) extra.push(`utente: ${data.utente}`);
+    if (data.ruolo) extra.push(`ruolo: ${data.ruolo}`);
+    if (data._http_status) extra.push(`HTTP ${data._http_status}`);
+    const extraHtml = extra.length ? `<div style="font-size:11px;opacity:0.8;margin-top:6px;">${extra.map(escapeHtml).join(' · ')}</div>` : '';
+    out.innerHTML = `<div class="alert-banner" style="background:#fee;border-color:#f99;color:#900;">❌ Import fallito:<br>${escapeHtml(errMsg)}${extraHtml}</div>`;
+    return;
+  }
+  const badge = wasDryRun
+    ? '<span class="badge warn">SIMULAZIONE</span>'
+    : '<span class="badge success">APPLICATO</span>';
+  const sample = (data.sample_db_vince || []).slice(0, 10).map(escapeHtml).join(', ');
+  out.innerHTML = `
+    <div style="padding:14px 16px;background:var(--bg-tertiary);border-radius:8px;margin-top:8px;">
+      <div style="font-size:14px;margin-bottom:10px;">${badge} Import del ${escapeHtml(data.export_ts_iso || '')}</div>
+      <table style="width:100%;font-size:13px;border-collapse:collapse;">
+        <tr><td>📄 Righe nell'Excel</td><td><b>${data.rows_excel}</b></td></tr>
+        <tr><td>➕ Righe nuove (aggiunte)</td><td><b style="color:var(--ok)">${data.rows_nuove}</b></td></tr>
+        <tr><td>✏️ Righe aggiornate</td><td><b>${data.rows_aggiornate}</b> (${data.celle_modificate} celle)</td></tr>
+        <tr><td>🛡️ Righe protette (DB più recente)</td><td><b style="color:var(--warn)">${data.rows_db_vince}</b></td></tr>
+        <tr><td>⚠️ Righe Excel senza Eneltel</td><td>${data.rows_skip_no_eneltel}</td></tr>
+        <tr><td>📦 Eneltel solo in DB (non in Excel)</td><td>${data.eneltel_solo_db}</td></tr>
+        <tr><td>🔢 Colonne riconosciute</td><td>${data.n_headers}</td></tr>
+      </table>
+      ${sample ? `<div style="font-size:11px;color:var(--text-muted);margin-top:10px;">Esempi righe protette (DB vince): <span class="mono">${sample}</span></div>` : ''}
+      ${wasDryRun ? '<div style="margin-top:12px;padding:10px;background:var(--bg-primary);border-left:3px solid var(--warn);font-size:12px;">Era una simulazione. Per applicare davvero, togli la spunta "Solo simulazione" e clicca di nuovo.</div>' : ''}
+    </div>`;
 }
 
 async function elimina(slug) {
-  if (!confirm(`Eliminare la provincia ${slug}?\nIl programma viene fermato e la provincia rimossa dalla lista.\nI dati locali (cartella data/${slug.toLowerCase()}/) restano salvati come precauzione.`)) return;
+  // STEP 1: conferma rimozione dalla lista (i dati restano)
+  if (!confirm(
+    `Eliminare la provincia ${slug}?\n\n` +
+    `Il programma viene fermato e la provincia rimossa dalla lista.\n` +
+    `I dati locali (DB, backup, settings) per ORA restano salvati ` +
+    `come precauzione.`
+  )) return;
+
+  // STEP 2: chiedi se vuole anche cancellare i dati su disco
+  const wipe = confirm(
+    `Vuoi cancellare anche TUTTI i dati su disco di ${slug}?\n\n` +
+    `Verranno eliminati definitivamente:\n` +
+    `  • data/${slug.toLowerCase()}/ (database SQLite, settings)\n` +
+    `  • backup/${slug.toLowerCase()}/ (backup giornalieri)\n` +
+    `  • cache/cache_*_${slug.toLowerCase()}.json\n` +
+    `  • templates/mappa_${slug.toLowerCase()}.html\n\n` +
+    `⚠️ AZIONE IRREVERSIBILE.\n\n` +
+    `OK = elimina tutto (utile per test).\n` +
+    `Annulla = mantieni i dati (potrai ricreare la provincia in futuro ` +
+    `e ritrovarli).`
+  );
+
   try {
-    const r = await api('DELETE', `/api/provinces/${slug}`);
-    toast(`${slug} eliminato. ${r.note || ''}`, 'success');
+    const url = wipe
+      ? `/api/provinces/${slug}?wipe_data=1`
+      : `/api/provinces/${slug}`;
+    const r = await api('DELETE', url);
+    const msg = r.wiped
+      ? `${slug} eliminata completamente (${(r.deleted_paths || []).length} percorsi rimossi).`
+      : `${slug} rimossa dalla lista. ${r.note || ''}`;
+    toast(msg, 'success');
     setTimeout(caricaTutto, 500);
   } catch (e) {
     toast('Errore eliminazione: ' + e.message, 'error');
@@ -1027,7 +1587,6 @@ function apriFormAggiungi() {
   form.querySelector('[name=slug]').readOnly = false;
   document.querySelector('[name=ora_inizio_giornata]').value = '08:00';
   document.querySelector('[name=ora_fine_giornata]').value = '17:00';
-  document.getElementById('probe-result').innerHTML = '';
   document.getElementById('modalAggiungi').classList.add('open');
 }
 
@@ -1041,8 +1600,6 @@ function apriFormModifica(p) {
   form.querySelector('[name=slug]').readOnly = true;
   form.querySelector('[name=nome]').value = p.nome || '';
   form.querySelector('[name=sottodominio]').value = p.sottodominio || '';
-  form.querySelector('[name=id_foglio]').value = p.id_foglio || '';
-  form.querySelector('[name=gid_scheda]').value = p.gid_scheda != null ? p.gid_scheda : '';
   const d = p.deposito || {};
   form.querySelector('[name=deposito_nome]').value = d.Nome || '';
   form.querySelector('[name=deposito_lat]').value = d.Lat != null ? d.Lat : '';
@@ -1051,7 +1608,6 @@ function apriFormModifica(p) {
   form.querySelector('[name=ora_fine_giornata]').value = minutiToHHMM(p.ora_fine_giornata != null ? p.ora_fine_giornata : 1020);
   form.querySelector('[name=usa_localita_come_comune]').checked = !!p.usa_localita_come_comune;
   form.querySelector('[name=porta]').value = p.porta != null ? p.porta : '';
-  document.getElementById('probe-result').innerHTML = '';
   document.getElementById('modalAggiungi').classList.add('open');
 }
 
@@ -1070,29 +1626,6 @@ function onSlugChange(input) {
 }
 document.querySelector('[name=sottodominio]').addEventListener('input', e => e.target._edited = true);
 
-async function verificaFoglio() {
-  const id_foglio = document.querySelector('[name=id_foglio]').value.trim();
-  const gid_scheda = document.querySelector('[name=gid_scheda]').value.trim();
-  const out = document.getElementById('probe-result');
-  if (!id_foglio) { out.innerHTML = '<div class="probe-box error">Inserisci prima l\'ID del foglio Google.</div>'; return; }
-  out.innerHTML = '<div class="probe-box"><span class="spinner"></span> Controllo in corso…</div>';
-  try {
-    const r = await api('POST', '/api/probe-sheet', { id_foglio, gid_scheda: gid_scheda || null });
-    let html = `<div class="probe-box ok">✅ Foglio trovato: <b>${escapeHtml(r.foglio)}</b> — scheda <b>${escapeHtml(r.sheet_name)}</b> (${r.n_colonne} colonne)`;
-    if (r.missing_critici && r.missing_critici.length) {
-      html += `<div class="probe-box error" style="margin-top:6px;">⚠️ Mancano colonne essenziali: <b>${r.missing_critici.join(', ')}</b><br>Andranno mappate manualmente nelle impostazioni della provincia dopo l'avvio.</div>`;
-    }
-    const mapped = Object.entries(r.suggested_mapping || {}).filter(([k,v]) => v).map(([k,v]) => `${k}→${v}`);
-    if (mapped.length) {
-      html += `<details><summary>Colonne riconosciute automaticamente (${mapped.length})</summary><div class="map-list">${escapeHtml(mapped.join(' · '))}</div></details>`;
-    }
-    html += '</div>';
-    out.innerHTML = html;
-  } catch (e) {
-    out.innerHTML = `<div class="probe-box error">❌ ${escapeHtml(e.message)}</div>`;
-  }
-}
-
 async function submitForm(ev) {
   ev.preventDefault();
   const f = ev.target;
@@ -1100,8 +1633,6 @@ async function submitForm(ev) {
   const body = {
     nome: fd.get('nome'),
     sottodominio: fd.get('sottodominio'),
-    id_foglio: fd.get('id_foglio'),
-    gid_scheda: parseInt(fd.get('gid_scheda')) || 0,
     deposito: {
       Nome: fd.get('deposito_nome'),
       Lat: parseFloat(fd.get('deposito_lat')),
@@ -1253,216 +1784,6 @@ document.getElementById('searchEneltel').addEventListener('keydown', e => {
 });
 
 // ============================================================
-// REGOLE DI VALIDAZIONE
-// ============================================================
-let _vrCurrent = null;  // ultime regole caricate {provincia, columns, rules}
-
-async function caricaValidationRules() {
-  const slug = document.getElementById('vrProvSel').value;
-  const cont = document.getElementById('vrContainer');
-  if (!slug) { cont.innerHTML = '<div class="log-empty">Seleziona una provincia.</div>'; return; }
-  cont.innerHTML = '<div class="log-empty"><span class="spinner"></span> Caricamento regole…</div>';
-  try {
-    const r = await api('GET', `/api/provinces/${slug}/validation-rules`);
-    _vrCurrent = r;
-    rendiValidationRules(r);
-  } catch (e) {
-    cont.innerHTML = `<div class="log-empty" style="color:var(--error)">Errore: ${escapeHtml(e.message)}</div>`;
-  }
-}
-
-function rendiValidationRules(data) {
-  const cont = document.getElementById('vrContainer');
-  if (!data.rules) { cont.innerHTML = '<div class="log-empty">Dati non disponibili.</div>'; return; }
-  let html = `<div style="padding:6px 4px 14px;font-size:12px;color:var(--text-secondary);">
-    Per ogni colonna controllata, scegli se attivare la validazione e l'auto-correzione.
-    Aggiungi valori "validi extra" per autorizzare formati nuovi (uno per riga).
-  </div>`;
-  for (const col of data.columns) {
-    const r = data.rules[col] || {enabled:true, auto_correct:true, extra_valid_values:[]};
-    const enabledId = `vr_${col}_enabled`;
-    const autoId = `vr_${col}_auto`;
-    const extraId = `vr_${col}_extra`;
-    html += `<div style="border:1px solid var(--border); border-radius:8px; padding:12px 14px; margin-bottom:10px; background:var(--bg-tertiary);">
-      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:8px;">
-        <strong style="font-size:14px;">${escapeHtml(col)}</strong>
-        <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:normal;">
-          <input type="checkbox" id="${enabledId}" ${r.enabled?'checked':''} data-col="${escapeHtml(col)}" data-field="enabled" style="width:auto;">
-          Validazione attiva
-        </label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:normal;">
-          <input type="checkbox" id="${autoId}" ${r.auto_correct?'checked':''} data-col="${escapeHtml(col)}" data-field="auto_correct" style="width:auto;">
-          Auto-correzione su Sheets
-        </label>
-      </div>
-      <label style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.4px;">Valori extra sempre accettati (uno per riga)</label>
-      <textarea id="${extraId}" data-col="${escapeHtml(col)}" data-field="extra_valid_values"
-        rows="2" style="width:100%; padding:6px 8px; background:var(--bg-primary); border:1px solid var(--border); color:var(--text-primary); border-radius:4px; font-size:12px; font-family:'JetBrains Mono',Consolas,monospace; resize:vertical;"
-        placeholder="es. B1234567">${escapeHtml((r.extra_valid_values || []).join('\\n'))}</textarea>
-    </div>`;
-  }
-  cont.innerHTML = html;
-}
-
-async function salvaValidationRules() {
-  if (!_vrCurrent) { toast('Carica prima le regole', 'error'); return; }
-  const slug = document.getElementById('vrProvSel').value;
-  if (!slug) return;
-  // Raccogli i valori dal form
-  const newRules = {};
-  for (const col of _vrCurrent.columns) {
-    const enabledEl = document.getElementById(`vr_${col}_enabled`);
-    const autoEl = document.getElementById(`vr_${col}_auto`);
-    const extraEl = document.getElementById(`vr_${col}_extra`);
-    const extraLines = (extraEl?.value || '').split('\n').map(s => s.trim()).filter(Boolean);
-    newRules[col] = {
-      enabled: !!enabledEl?.checked,
-      auto_correct: !!autoEl?.checked,
-      extra_valid_values: extraLines,
-    };
-  }
-  try {
-    const r = await api('PUT', `/api/provinces/${slug}/validation-rules`, {rules: newRules});
-    toast(`Regole ${slug} salvate (cache refresh in 60s).`, 'success');
-  } catch (e) {
-    toast('Errore salvataggio: ' + e.message, 'error');
-  }
-}
-
-document.getElementById('vrProvSel').addEventListener('change', caricaValidationRules);
-
-
-// ============================================================
-// REPORT ANOMALIE SPAN
-// ============================================================
-async function caricaRecoveryReports() {
-  const slug = document.getElementById('recProvSel').value;
-  const date = document.getElementById('recDate').value;
-  const cont = document.getElementById('recContainer');
-  if (!slug) { cont.innerHTML = '<div class="log-empty">Seleziona una provincia.</div>'; return; }
-  cont.innerHTML = '<div class="log-empty"><span class="spinner"></span> Caricamento…</div>';
-  try {
-    const params = date ? `?date=${encodeURIComponent(date)}` : '';
-    const r = await api('GET', `/api/provinces/${slug}/recovery-reports${params}`);
-    rendiRecoveryReports(r);
-  } catch (e) {
-    cont.innerHTML = `<div class="log-empty" style="color:var(--error)">Errore: ${escapeHtml(e.message)}</div>`;
-  }
-}
-
-function rendiRecoveryReports(data) {
-  const cont = document.getElementById('recContainer');
-  if (!data.file_exists) {
-    let msg = `<div class="log-empty">Nessun report per ${escapeHtml(data.date)}.`;
-    if (data.available_dates && data.available_dates.length) {
-      msg += `<br><small>Date disponibili: ${data.available_dates.slice(0, 10).map(d => `<a href="#" onclick="document.getElementById('recDate').value='${d}';caricaRecoveryReports();return false">${d}</a>`).join(' · ')}</small>`;
-    }
-    msg += '</div>';
-    cont.innerHTML = msg;
-    return;
-  }
-  if (!data.entries.length) {
-    cont.innerHTML = `<div class="log-empty">Nessuna anomalia rilevata il ${escapeHtml(data.date)}.</div>`;
-    return;
-  }
-  // Tabella eventi
-  let html = `<table class="inspector-table" style="font-size:11px;">
-    <thead><tr>
-      <th>Ora</th><th>Tipo</th><th>Eneltel</th><th>Colonna</th>
-      <th>Sheets aveva</th><th>DB aveva</th><th>Azione</th>
-    </tr></thead><tbody>`;
-  for (const e of data.entries) {
-    const dt = new Date(e.ts * 1000);
-    const ora = dt.toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
-    const eventLabel = {
-      'pattern_auto_correct': '🔧 Auto-correzione',
-      'note_rescue_from_span': '💾 Nota recuperata',
-      'value_relocated': '➡️ Valore spostato',
-      'value_relocation_skipped': '⚠️ Ambiguità',
-    }[e.event] || e.event;
-    html += `<tr>
-      <td class="mono">${escapeHtml(ora)}</td>
-      <td>${escapeHtml(eventLabel)}</td>
-      <td class="mono">${escapeHtml(e.eneltel_key || '—')}</td>
-      <td>${escapeHtml(e.column || '—')}</td>
-      <td class="mono" title="${escapeHtml(e.sheets_aveva || e.valore_in_arrivo || '')}">${escapeHtml((e.sheets_aveva || e.valore_in_arrivo || '').slice(0, 30))}</td>
-      <td class="mono" title="${escapeHtml(e.db_aveva || e.dest_attuale || '')}">${escapeHtml((e.db_aveva || e.dest_attuale || '').slice(0, 30))}</td>
-      <td>${escapeHtml(e.azione || '—')}</td>
-    </tr>`;
-  }
-  html += `</tbody></table>
-    <div style="font-size:11px; color:var(--text-muted); padding:8px;">
-      ${data.entries.length} eventi · file: <span class="mono">recovery_${escapeHtml(data.date)}.jsonl</span>
-    </div>`;
-  cont.innerHTML = html;
-}
-
-document.getElementById('recDate').valueAsDate = new Date();
-document.getElementById('recDate').addEventListener('change', caricaRecoveryReports);
-document.getElementById('recProvSel').addEventListener('change', caricaRecoveryReports);
-
-
-// ============================================================
-// CONFRONTO CON BACKUP
-// ============================================================
-async function confrontaConBackup() {
-  const slug = document.getElementById('recProvSel').value;
-  const date = document.getElementById('recDate').value;
-  const cont = document.getElementById('recContainer');
-  if (!slug) { toast('Seleziona una provincia', 'error'); return; }
-  cont.innerHTML = `<div class="log-empty"><span class="spinner"></span> Confronto col backup del ${escapeHtml(date || '(ieri)')} in corso (può richiedere 30-60s)…</div>`;
-  try {
-    const params = date ? `?date=${encodeURIComponent(date)}` : '';
-    const r = await api('GET', `/api/provinces/${slug}/backup-diff${params}`);
-    rendiConfrontoBackup(r);
-  } catch (e) {
-    cont.innerHTML = `<div class="log-empty" style="color:var(--error)">Errore confronto: ${escapeHtml(e.message)}</div>`;
-  }
-}
-
-function rendiConfrontoBackup(data) {
-  const cont = document.getElementById('recContainer');
-  if (!data.backup_file_exists) {
-    let html = `<div class="log-empty">Backup non trovato per ${escapeHtml(data.date)}.`;
-    if (data.available_dates && data.available_dates.length) {
-      html += `<br><small>Date backup disponibili: ${data.available_dates.slice(0, 10).map(d => `<a href="#" onclick="document.getElementById('recDate').value='${d}';return false">${d}</a>`).join(' · ')}</small>`;
-    }
-    html += '</div>';
-    cont.innerHTML = html;
-    return;
-  }
-  const s = data.stats || {};
-  let html = `<div style="padding:10px 12px;background:var(--bg-tertiary);border-radius:6px;margin-bottom:8px;font-size:12px;">
-    📅 <b>Backup del ${escapeHtml(data.date)}</b> · ${s.eneltel_nel_backup || 0} eneltel ·
-    ${s.totale_celle_diverse_dal_backup || 0} celle diverse dal backup ·
-    <span style="color:var(--error);font-weight:600;">${s.celle_sospette || 0} sospette</span>
-  </div>`;
-  if (!data.sospetti || !data.sospetti.length) {
-    html += '<div class="log-empty" style="color:var(--ok)">✅ Nessuna cella sospetta. Tutte le differenze dal backup sembrano modifiche legittime.</div>';
-    cont.innerHTML = html;
-    return;
-  }
-  html += `<table class="inspector-table" style="font-size:11px;">
-    <thead><tr><th>Eneltel</th><th>Colonna</th><th>Backup aveva</th><th>Attuale</th><th>Motivo</th></tr></thead><tbody>`;
-  for (const it of data.sospetti) {
-    html += `<tr>
-      <td class="mono">${escapeHtml(it.eneltel_key)}</td>
-      <td>${escapeHtml(it.colonna)}</td>
-      <td class="mono" title="${escapeHtml(it.backup_aveva)}">${escapeHtml(it.backup_aveva.slice(0, 40))}</td>
-      <td class="mono" title="${escapeHtml(it.attuale)}">${escapeHtml(it.attuale.slice(0, 40))}</td>
-      <td style="color:var(--warn);font-size:10px;">${escapeHtml(it.motivo)}</td>
-    </tr>`;
-  }
-  html += `</tbody></table>
-    <div style="font-size:11px; color:var(--text-muted); padding:8px;">
-      Le righe sopra hanno valore "fuori pattern" rispetto al backup di ${escapeHtml(data.date)}.
-      Verifica manualmente sul foglio. Colonne controllate: ${escapeHtml((s.colonne_controllate || []).join(', '))}.
-    </div>`;
-  cont.innerHTML = html;
-}
-
-
-// ============================================================
 // LIVE LOG VIEWER
 // ============================================================
 let _logsPaused = false;
@@ -1520,7 +1841,11 @@ async function caricaLogs(force) {
   }
 }
 
+// Cache dei log correnti (per il download)
+let _logsCorrenti = [];
+
 function rendiLogs(logs) {
+  _logsCorrenti = logs || [];
   const cont = document.getElementById('logsContainer');
   if (!logs.length) {
     cont.innerHTML = '<div class="log-empty">Nessun log nel periodo selezionato.</div>';
@@ -1541,10 +1866,47 @@ function rendiLogs(logs) {
       <span class="log-msg">${escapeHtml(l.message)}</span>
     </div>`;
   }).join('');
-  // Mantieni posizione di scroll solo se l'utente sta in fondo
-  const wasAtBottom = (cont.scrollTop + cont.clientHeight) >= (cont.scrollHeight - 30);
+  // Scroll-lock intelligente:
+  //   - se l'utente sta in cima (i log nuovi sono in alto), resta in cima.
+  //   - altrimenti preserva la posizione corrente compensando l'altezza
+  //     dei nuovi log aggiunti in testa.
+  const oldScrollTop = cont.scrollTop;
+  const oldScrollHeight = cont.scrollHeight;
+  const wasAtTop = oldScrollTop < 30;
   cont.innerHTML = html;
-  if (wasAtBottom) cont.scrollTop = 0;  // log più recenti sono in alto (-r di journalctl)
+  if (wasAtTop) {
+    cont.scrollTop = 0;
+  } else {
+    const delta = cont.scrollHeight - oldScrollHeight;
+    cont.scrollTop = oldScrollTop + Math.max(0, delta);
+  }
+}
+
+function scaricaLogs() {
+  if (!_logsCorrenti.length) {
+    toast('Nessun log da scaricare', 'error');
+    return;
+  }
+  // Inverto l'ordine: nel viewer i più recenti sono in cima, nel file è
+  // più naturale avere il cronologico in alto, ma manteniamo lo stesso
+  // ordine visualizzato per coerenza. L'utente può sempre reverse via riga di comando.
+  const lines = _logsCorrenti.map(l => {
+    const dt = new Date(l.ts * 1000);
+    const ts = dt.toISOString().replace('T', ' ').slice(0, 19);
+    const lvl = _logLevelLabel(l.priority).label;
+    const src = l.source === '?' ? '—' : l.source;
+    return `${ts}  ${lvl.padEnd(5)}  ${src.padEnd(10)}  ${l.message}`;
+  });
+  const txt = lines.join('\n') + '\n';
+  const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
+  const dt = new Date();
+  const fname = `mappa-algeco_log_${dt.getFullYear()}${String(dt.getMonth()+1).padStart(2,'0')}${String(dt.getDate()).padStart(2,'0')}_${String(dt.getHours()).padStart(2,'0')}${String(dt.getMinutes()).padStart(2,'0')}.txt`;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = fname; document.body.appendChild(a);
+  a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast(`💾 Scaricate ${_logsCorrenti.length} righe di log`, 'success');
 }
 
 function _startLogsAutoRefresh() {

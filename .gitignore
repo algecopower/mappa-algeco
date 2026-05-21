@@ -26,6 +26,30 @@ templates/mappa_pavia.html
 # Dati mappa rigenerati automaticamente
 data/*/mappa_data.json
 
+# Database SQLite di ogni provincia (binari, rigenerati al boot/import)
+data/*/state.db
+data/*/state.db-shm
+data/*/state.db-wal
+
+# Config statica frontend, rigenerata da mappa_html.py a ogni sync
+data/*/config.json
+
+# Backup giornalieri (JSON + snapshot DB), generati da moduli/backup.py
+backup/*/
+
+# Report del vecchio sistema validation/pull (rimosso 21/05/2026)
+data/*/shadow_reports/
+data/*/span_reports/
+
+# File temporanei o di output operativo
+data/boxbeat_*.xlsx
+data/boxbeat_excel.json
+data/calendario.json
+output/
+
+# Settings di Claude Code locali
+.claude/settings.local.json
+
 # Anagrafe nazionale numeri civici (ANNCSU) - file troppo grandi per git.
 # Rigenerabili: scarica da fonte ufficiale e lancia tools/build_indir_db.py
 data/anagrafe_indirizzi/*.csv

@@ -84,9 +84,6 @@ if PROVINCIA_ATTIVA not in PROVINCE:
 # ============================================================================
 _provincia = PROVINCE[PROVINCIA_ATTIVA]
 
-ID_FOGLIO_GOOGLE = _provincia['id_foglio']
-
-GID_SCHEDA = _provincia['gid_scheda']
 DEPOSITO = _provincia['deposito']
 MATRICOLE_VIP = _provincia['operatori_vip']
 COLORI_TECNICI = _provincia['colori_operatori']
@@ -281,7 +278,6 @@ MAPPATURA_COLONNE = {}
 # ============================================================================
 # CONFIGURAZIONI COMUNI (uguali per tutte le province)
 # ============================================================================
-CREDENZIALI_JSON = 'credenziali.json'
 
 # --- FILTRO DATE ---
 DATA_INIZIO = '2025-10-01'
@@ -313,21 +309,9 @@ FILE_CACHE_HASH = os.path.join('cache', f'cache_hash_{PROVINCIA_ATTIVA.lower()}.
 INTERVALLO_SYNC_SECONDI = 60  # 1 minuto - check periodico per modifiche sul foglio
 
 # --- CONFIGURAZIONE DB LOCALE (SQLite) ---
-# Vedi /root/.claude/plans/bisognerebbe-ripensare-il-sistema-warm-moonbeam.md
-# Il DB locale è la fonte di verità lavorativa: le route scrivono qui e un
-# worker asincrono propaga le modifiche su Google Sheets.
+# Post-disconnessione Google Sheets (2026-05-21) il DB è l'unica fonte di
+# verità. I dati esterni entrano via import Excel manuale.
 DB_PATH = os.path.join('data', PROVINCIA_ATTIVA.lower(), 'state.db')
-
-# Modalità di funzionamento del DB:
-#   'shadow'  → DB popolato in parallelo, ma scritture e letture passano dal flusso attuale
-#               (Fase 1 della migrazione - validazione)
-#   'primary' → DB è la fonte di verità: route → DB → drainer → Sheets
-#               (Fase 2 - swap, default attuale)
-#   'off'     → DB disabilitato (rollback di emergenza)
-USE_DB_BACKEND = os.environ.get('USE_DB_BACKEND', 'primary').lower()
-if USE_DB_BACKEND not in ('shadow', 'primary', 'off'):
-    print(f"⚠️  USE_DB_BACKEND='{USE_DB_BACKEND}' non valido, fallback a 'shadow'")
-    USE_DB_BACKEND = 'shadow'
 
 # Worker asincrono che drena pending_writes verso Sheets
 # 30s = compromesso tra latenza per chi guarda Sheets direttamente e quota 429.

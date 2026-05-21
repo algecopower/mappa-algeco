@@ -8,7 +8,11 @@
       "Lat": 45.1964682,
       "Lon": 7.7888303
     },
-    "operatori_vip": ["AE101392", "AG49808", "AG18966"],
+    "operatori_vip": [
+      "AE101392",
+      "AG49808",
+      "AG18966"
+    ],
     "colori_operatori": {
       "AE101392": "#e74c3c",
       "AG49808": "#f1c40f",
@@ -34,7 +38,11 @@
       "Lat": 45.2221001,
       "Lon": 9.2254115
     },
-    "operatori_vip": ["ALESSANDRO", "MELEK", "BRAHIM"],
+    "operatori_vip": [
+      "ALESSANDRO",
+      "MELEK",
+      "BRAHIM"
+    ],
     "colori_operatori": {
       "ALESSANDRO": "#e74c3c",
       "MELEK": "#f1c40f",

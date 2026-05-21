@@ -1,12 +1,15 @@
 # -*- coding: utf-8 -*-
 """
-Modulo per backup e ripristino periodico del FILONE (Google Sheet).
+Modulo per backup e ripristino del filone (DB locale SQLite).
+
+Post-disconnessione Google Sheets (2026-05-21) la fonte di verità è il DB
+locale. Il backup giornaliero produce un dump JSON del filone direttamente
+dal DB. Lo snapshot binario .db (VACUUM INTO) è gestito da `esegui_backup_db`.
 
 Funzionalità:
-- Backup giornaliero automatico del FILONE in locale (cartella backup/)
-- Salta il backup se già presente per la data odierna
-- Pulizia automatica a fine mese (cancella tutti i backup accumulati)
-- Ripristino di una versione di backup su Google Drive
+- Backup giornaliero automatico (dump JSON dal DB)
+- Pulizia automatica a fine mese
+- Snapshot binario del DB SQLite (per restore rapidi)
 """
 import os
 import json
@@ -14,17 +17,9 @@ import threading
 from datetime import datetime, date
 import traceback
 
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-
 from .safe_json import json_read
 
-from config import (
-    ID_FOGLIO_GOOGLE,
-    GID_SCHEDA,
-    CREDENZIALI_JSON,
-    PROVINCIA_ATTIVA,
-)
+from config import PROVINCIA_ATTIVA
 
 # Directory base dello script (dove sta server.py)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -56,55 +51,26 @@ def backup_esiste(data: date = None) -> bool:
     return os.path.exists(_percorso_backup(data))
 
 
-def _connetti_google_sheets():
-    """Crea una connessione autenticata a Google Sheets."""
-    scope = [
-        'https://spreadsheets.google.com/feeds',
-        'https://www.googleapis.com/auth/drive'
-    ]
-    creds = ServiceAccountCredentials.from_json_keyfile_name(
-        os.path.join(BASE_DIR, CREDENZIALI_JSON), scope
-    )
-    client = gspread.authorize(creds)
-    return client
-
-
-def _get_worksheet(client=None):
-    """Ottiene il worksheet del FILONE."""
-    if client is None:
-        client = _connetti_google_sheets()
-    spreadsheet = client.open_by_key(ID_FOGLIO_GOOGLE)
-    
-    # Trova il worksheet con il GID corretto
-    for ws in spreadsheet.worksheets():
-        if ws.id == GID_SCHEDA:
-            return ws, client
-    
-    # Fallback al primo foglio
-    return spreadsheet.sheet1, client
-
-
 def esegui_backup(data: date = None, forza: bool = False) -> dict:
     """
-    Esegue il backup del FILONE per la data specificata.
-    
+    Esegue il dump JSON del filone per la data specificata, leggendo dal DB locale.
+
     Args:
         data: Data per il backup (default: oggi)
         forza: Se True, sovrascrive un backup esistente
-        
+
     Returns:
         dict con risultato: {'success': bool, 'message': str, 'file': str}
     """
     if data is None:
         data = date.today()
-    
+
     with _backup_lock:
         try:
             _assicura_cartella_backup()
-            
+
             percorso = _percorso_backup(data)
-            
-            # Controlla se esiste già
+
             if not forza and os.path.exists(percorso):
                 return {
                     'success': True,
@@ -112,48 +78,48 @@ def esegui_backup(data: date = None, forza: bool = False) -> dict:
                     'file': percorso,
                     'skipped': True
                 }
-            
-            print(f"[BACKUP] 📦 Scaricamento FILONE per {data.strftime('%d/%m/%Y')}...")
-            
-            # Scarica tutti i dati dal FILONE
-            ws, _ = _get_worksheet()
-            all_data = ws.get_all_values()
-            
-            if not all_data:
+
+            print(f"[BACKUP] 📦 Dump filone per {data.strftime('%d/%m/%Y')}...")
+
+            from . import db as _db
+            headers, rows = _db.dump_filone_as_rows(
+                include_orphans=False,
+                apply_pending_overlay=True,
+            )
+            if not headers:
                 return {
                     'success': False,
-                    'message': 'FILONE vuoto - nessun dato da salvare',
+                    'message': 'DB filone vuoto - nessun dato da salvare',
                     'file': None
                 }
-            
-            # Salva come JSON (headers + righe)
+
+            righe = [[r.get(h, '') for h in headers] for r in rows]
+
             backup_data = {
                 'provincia': PROVINCIA_ATTIVA,
                 'data_backup': data.isoformat(),
                 'timestamp': datetime.now().isoformat(),
-                'id_foglio': ID_FOGLIO_GOOGLE,
-                'gid_scheda': GID_SCHEDA,
-                'headers': all_data[0],
-                'righe': all_data[1:],
-                'totale_righe': len(all_data) - 1
+                'source': 'db_local',
+                'headers': headers,
+                'righe': righe,
+                'totale_righe': len(righe),
             }
-            
+
             with open(percorso, 'w', encoding='utf-8') as f:
                 json.dump(backup_data, f, ensure_ascii=False, indent=2)
-            
+
             dimensione_mb = os.path.getsize(percorso) / (1024 * 1024)
-            
-            print(f"[BACKUP] ✅ Backup salvato: {percorso} ({dimensione_mb:.1f} MB, {backup_data['totale_righe']} righe)")
-            
+            print(f"[BACKUP] ✅ Salvato: {percorso} ({dimensione_mb:.1f} MB, {len(righe)} righe)")
+
             return {
                 'success': True,
-                'message': f'Backup completato: {backup_data["totale_righe"]} righe ({dimensione_mb:.1f} MB)',
+                'message': f'Backup completato: {len(righe)} righe ({dimensione_mb:.1f} MB)',
                 'file': percorso,
                 'skipped': False,
-                'righe': backup_data['totale_righe'],
+                'righe': len(righe),
                 'dimensione_mb': round(dimensione_mb, 2)
             }
-            
+
         except Exception as e:
             print(f"[BACKUP] ❌ Errore: {e}")
             traceback.print_exc()
@@ -262,83 +228,20 @@ def lista_backup() -> list:
 
 
 def ripristina_backup(filename: str) -> dict:
+    """Restore non più supportato post-disconnessione Sheets.
+
+    I file JSON in backup/ restano come storico ispezionabile a mano.
+    Per ricostruire il DB da un backup binario .db (creato da
+    `esegui_backup_db`), usa `sqlite3` direttamente: il file è un DB
+    SQLite completo, basta copiarlo come `data/{provincia}/state.db`.
     """
-    Ripristina un backup sul FILONE (Google Drive).
-    
-    ATTENZIONE: Questa operazione sovrascrive TUTTI i dati del FILONE!
-    
-    Args:
-        filename: Nome del file di backup da ripristinare
-        
-    Returns:
-        dict con risultato del ripristino
-    """
-    percorso = os.path.realpath(os.path.join(BACKUP_DIR, filename))
-    if not percorso.startswith(os.path.realpath(BACKUP_DIR) + os.sep):
-        return {
-            'success': False,
-            'message': 'Percorso non valido'
-        }
-    
-    if not os.path.exists(percorso):
-        return {
-            'success': False,
-            'message': f'File di backup non trovato: {filename}'
-        }
-    
-    with _backup_lock:
-        try:
-            # Carica il backup
-            print(f"[BACKUP] 🔄 Ripristino da: {filename}")
-            
-            with open(percorso, 'r', encoding='utf-8') as f:
-                backup_data = json.load(f)
-            
-            headers = backup_data.get('headers', [])
-            righe = backup_data.get('righe', [])
-            
-            if not headers or not righe:
-                return {
-                    'success': False,
-                    'message': 'File di backup vuoto o corrotto'
-                }
-            
-            # Connettiti a Google Sheets
-            ws, _ = _get_worksheet()
-            
-            # Prepara i dati: header + righe
-            tutti_i_dati = [headers] + righe
-            
-            # Pulisci il foglio e riscrivi tutto
-            print(f"[BACKUP] 📤 Scrittura {len(righe)} righe sul FILONE...")
-            
-            # Ridimensiona il foglio se necessario
-            ws.resize(rows=len(tutti_i_dati) + 10, cols=len(headers))
-            
-            # Pulisci tutto il foglio
-            ws.clear()
-            
-            # Scrivi tutti i dati in batch (molto più veloce)
-            # gspread supporta update con matrice di valori
-            cell_range = f'A1:{gspread.utils.rowcol_to_a1(len(tutti_i_dati), len(headers))}'
-            ws.update(cell_range, tutti_i_dati)
-            
-            print(f"[BACKUP] ✅ Ripristino completato: {len(righe)} righe scritte")
-            
-            return {
-                'success': True,
-                'message': f'Ripristino completato: {len(righe)} righe scritte sul FILONE',
-                'righe_ripristinate': len(righe),
-                'data_backup': backup_data.get('data_backup', ''),
-            }
-            
-        except Exception as e:
-            print(f"[BACKUP] ❌ Errore ripristino: {e}")
-            traceback.print_exc()
-            return {
-                'success': False,
-                'message': f'Errore durante il ripristino: {str(e)}'
-            }
+    return {
+        'success': False,
+        'unsupported': True,
+        'message': 'Restore del filone non più disponibile (Sheets disconnesso). '
+                   'Per ripristinare uno stato precedente, sostituire '
+                   'data/{provincia}/state.db con uno snapshot da backup/.',
+    }
 
 
 def elimina_backup(filename: str) -> dict:

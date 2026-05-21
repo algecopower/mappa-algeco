@@ -639,11 +639,12 @@ app.register_blueprint(verifica_indirizzi_bp)
 import secrets as _secrets
 
 _TRUSTED_ORIGINS = set()
-for _port in [5001, 5002]:
+for _port in [5001, 5002, 5050]:
     _TRUSTED_ORIGINS.add(f'http://localhost:{_port}')
     _TRUSTED_ORIGINS.add(f'http://127.0.0.1:{_port}')
 _TRUSTED_ORIGINS.add(f'https://torino.{DOMINIO_BASE}')
 _TRUSTED_ORIGINS.add(f'https://pavia.{DOMINIO_BASE}')
+_TRUSTED_ORIGINS.add(f'https://admin.{DOMINIO_BASE}')
 _TRUSTED_ORIGINS.add(f'https://{DOMINIO_BASE}')
 
 
@@ -659,6 +660,8 @@ def set_csrf_cookie(response):
     """Riflette il CSRF token come cookie leggibile da JS (per il frontend).
 
     Genera il token se manca, così è disponibile dal primo request autenticato.
+    Domain allineato a SESSION_COOKIE_DOMAIN (es. '.mappa-algeco.com') così
+    il cookie è visibile anche su admin.* (UI router).
     """
     if 'user' in session:
         token = _get_or_create_csrf_token()
@@ -669,6 +672,7 @@ def set_csrf_cookie(response):
             samesite='Lax',
             secure=app.config.get('SESSION_COOKIE_SECURE', False),
             max_age=24 * 60 * 60,
+            domain=app.config.get('SESSION_COOKIE_DOMAIN'),
         )
     return response
 
@@ -1369,23 +1373,33 @@ def api_admin_db_stats():
             warnings.append(f'Backlog pending anomalo: {backlog} (soglia 500)')
         if max_attempts >= 10:
             warnings.append(f'Pending con {max_attempts} tentativi falliti (soglia 10)')
-        # Anomalie strutturali del foglio rilevate nelle ultime 24h
+        # Anomalie ancora rilevanti post-disconnessione Sheets (es. duplicate
+        # eneltel rilevati durante un import Excel). Quelle del vecchio pull
+        # engine (header_changed / canary_failed / invalid_pattern_skipped /
+        # sheet_id_changed) non vengono più generate e non vanno mostrate.
         anom_recent = conn.execute(
             "SELECT kind, COUNT(*) AS c, MAX(ts) AS last_ts FROM filone_anomalies "
-            "WHERE kind IN ('header_changed','canary_failed','sheet_id_changed',"
-            "'invalid_pattern_skipped') "
+            "WHERE kind IN ('duplicate_eneltel','orphan_eneltel') "
             "AND ts > ? GROUP BY kind",
             (_db._now_ts() - 24 * 3600,),
         ).fetchall()
         for a in anom_recent:
             warnings.append(
-                f"Anomalia foglio: {a['kind']} ({a['c']}x nelle ultime 24h)"
+                f"Anomalia: {a['kind']} ({a['c']}x nelle ultime 24h)"
             )
+        # Outbox stats (modifiche locali da consegnare alla collega)
+        outbox_info = {}
+        try:
+            from moduli import outbox as _ob
+            outbox_info = _ob.stats()
+        except Exception:
+            pass
         return jsonify({
             'success': True,
-            'use_db_backend': USE_DB_BACKEND,
+            'use_db_backend': 'db_only',
             'stats': stats,
             'integrity': _db.integrity_check(),
+            'outbox': outbox_info,
             'health': {
                 'backlog': backlog,
                 'max_attempts': max_attempts,
@@ -1556,282 +1570,549 @@ def api_admin_db_action():
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
-@app.route('/api/admin/validation-rules', methods=['GET'])
+@app.route('/api/admin/outbox', methods=['GET'])
 @admin_required
-def api_admin_get_validation_rules():
-    """Ritorna le regole di validazione attuali della provincia + metadata."""
+def api_admin_outbox_stats():
+    """Statistiche outbox: quante modifiche locali sono da consegnare alla collega."""
     try:
-        from moduli import sync_engine as _se
-        rules = _se._load_validation_rules()
-        # Lista colonne validate (default)
-        columns = [
-            'Operatore', 'SIGILLO', 'Matricola CE inst', 'cod.',
-            'Data Installazione', 'EMAIL',
-        ]
-        # Garantisci che ogni colonna abbia un'entry (default)
-        out = {}
-        for col in columns:
-            r = rules.get(col, {}) if isinstance(rules, dict) else {}
-            out[col] = {
-                'enabled': r.get('enabled', True),
-                'auto_correct': r.get('auto_correct', True),
-                'extra_valid_values': r.get('extra_valid_values') or [],
-            }
+        from moduli import outbox as _ob
+        return jsonify({'success': True, **_ob.stats()})
+    except Exception as e:
+        logger.exception('[admin] errore /api/admin/outbox')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/admin/outbox/excel', methods=['GET'])
+@admin_required
+def api_admin_outbox_excel():
+    """Scarica il file Excel "delta" da consegnare alla collega."""
+    try:
+        from moduli import outbox as _ob
+        data, n_rows, n_cells = _ob.build_outbox_xlsx()
+        if not data:
+            return jsonify({'success': False, 'message': 'Nessuna modifica da consegnare'}), 404
+        import datetime as _dt
+        fname = f"modifiche_{PROVINCIA_ATTIVA.lower()}_{_dt.datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+        resp = make_response(data)
+        resp.headers['Content-Type'] = (
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        resp.headers['Content-Disposition'] = f'attachment; filename="{fname}"'
+        resp.headers['X-Outbox-Rows'] = str(n_rows)
+        resp.headers['X-Outbox-Cells'] = str(n_cells)
+        return resp
+    except Exception as e:
+        logger.exception('[admin] errore /api/admin/outbox/excel')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/admin/column-mapping', methods=['GET'])
+@admin_required
+def api_admin_column_mapping_get():
+    """Ritorna la mappatura colonne (default + override custom della provincia)."""
+    try:
+        import config as _cfg
+        out = []
+        for chiave, info in _cfg.MAPPATURA_COLONNE_DEFAULT.items():
+            current = _cfg.MAPPATURA_COLONNE.get(chiave) or ''
+            out.append({
+                'chiave_interna': chiave,
+                'label': info.get('label', chiave),
+                'descrizione': info.get('descrizione', ''),
+                'nomi_default': info.get('nomi_default', []),
+                'override_custom': current if isinstance(current, str) else (
+                    current[0] if isinstance(current, list) and current else ''
+                ),
+            })
         return jsonify({
             'success': True,
             'provincia': PROVINCIA_ATTIVA,
-            'columns': columns,
-            'rules': out,
+            'rows': out,
         })
     except Exception as e:
-        logger.exception('[admin] errore GET /api/admin/validation-rules')
+        logger.exception('[admin] errore GET /api/admin/column-mapping')
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
-@app.route('/api/admin/validation-rules', methods=['PUT'])
+@app.route('/api/admin/column-mapping', methods=['PUT'])
 @admin_required
-def api_admin_put_validation_rules():
-    """Aggiorna le regole di validazione della provincia.
+def api_admin_column_mapping_put():
+    """Aggiorna la mappatura colonne custom in settings.json.
 
-    Body: {'rules': {colonna: {enabled, auto_correct, extra_valid_values[]}}}
-    Salva atomicamente in data/{provincia}/validation_rules.json.
+    Body: {mapping: {chiave_interna: 'nome_excel'}}.
+    Sostituisce completamente la sezione `mappatura_colonne` del settings.
+    Per applicare al programma serve restart della provincia.
     """
     try:
-        from moduli import sync_engine as _se
-        import json as _j
+        import json as _json
         body = request.get_json(silent=True) or {}
-        new_rules = body.get('rules')
-        if not isinstance(new_rules, dict):
-            return jsonify({'success': False, 'message': "campo 'rules' mancante o non valido"}), 400
-        # Normalizza ogni entry
+        new_map = body.get('mapping') or {}
+        if not isinstance(new_map, dict):
+            return jsonify({'success': False, 'message': "campo 'mapping' non valido"}), 400
+        # Sanifica: rimuovi entry con valore vuoto/spazi
         clean = {}
-        for col, r in new_rules.items():
-            if not isinstance(r, dict):
-                continue
-            clean[col] = {
-                'enabled': bool(r.get('enabled', True)),
-                'auto_correct': bool(r.get('auto_correct', True)),
-                'extra_valid_values': [str(v).strip() for v in (r.get('extra_valid_values') or []) if str(v).strip()],
-            }
-        path = os.path.join(SCRIPT_DIR, 'data', PROVINCIA_ATTIVA.lower(),
-                             'validation_rules.json')
+        for k, v in new_map.items():
+            if v and str(v).strip():
+                clean[str(k).strip()] = str(v).strip()
+        # Path settings
+        path = os.path.join(SCRIPT_DIR, 'data', PROVINCIA_ATTIVA.lower(), 'settings.json')
         os.makedirs(os.path.dirname(path), exist_ok=True)
+        # Leggi current settings + aggiorna sezione
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                settings = _json.load(f)
+        except (FileNotFoundError, _json.JSONDecodeError):
+            settings = {}
+        settings['mappatura_colonne'] = clean
         tmp = path + '.tmp'
         with open(tmp, 'w', encoding='utf-8') as f:
-            _j.dump(clean, f, indent=2, ensure_ascii=False)
+            _json.dump(settings, f, indent=2, ensure_ascii=False)
         os.replace(tmp, path)
-        # Forza il refresh della cache nel sync_engine
-        _se.reset_rules_cache()
-        logger.info(f"[admin] validation_rules aggiornate: {list(clean.keys())}")
-        return jsonify({'success': True, 'rules': clean, 'path': path})
+        # Aggiorna anche in memoria (db.py rilegge config dinamicamente; data_loader
+        # invece importa al boot — quindi serve restart per propagare ovunque).
+        try:
+            import config as _cfg
+            _cfg.MAPPATURA_COLONNE = clean
+        except Exception:
+            pass
+        logger.info(f"[admin] column-mapping aggiornata: {len(clean)} override")
+        return jsonify({
+            'success': True,
+            'count': len(clean),
+            'restart_required': True,
+            'path': path,
+        })
     except Exception as e:
-        logger.exception('[admin] errore PUT /api/admin/validation-rules')
+        logger.exception('[admin] errore PUT /api/admin/column-mapping')
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
-@app.route('/api/admin/backup-diff', methods=['GET'])
-@admin_required
-def api_admin_backup_diff():
-    """Confronta lo stato ATTUALE del foglio con un backup JSON.
-
-    Per ogni eneltel/colonna critica, segnala le celle dove backup ≠ attuale
-    e il valore attuale è "sospetto" (cioè non matcha il pattern atteso per
-    la sua colonna). Utile per identificare valori ancora fuori posto dopo
-    uno span risolto solo in parte.
-
-    Query params:
-      - date: YYYY-MM-DD del backup da confrontare (default: ieri)
-      - limit: max risultati (default 500)
-
-    Risposta: {date, backup_file, sospetti: [...], stats: {...}}
+def _get_protected_columns_set():
+    """Ritorna l'insieme (lowercase) delle colonne protette dalla
+    rimozione/rinomina, allineato a `routes.contatori.COLONNE_PROTETTE_FILONE`.
     """
     try:
-        import datetime as _dt
-        import json as _j
-        from moduli import shared as _shared
-        from moduli import sync_engine as _se
+        from routes.contatori import COLONNE_PROTETTE_FILONE
+        prot = COLONNE_PROTETTE_FILONE.get(PROVINCIA_ATTIVA, []) or []
+        return {p.strip().lower() for p in prot if p}
+    except Exception:
+        return set()
+
+
+@app.route('/api/admin/columns', methods=['GET'])
+@admin_required
+def api_admin_columns_list():
+    """Lista tutte le colonne registrate nel filone + statistiche di uso.
+
+    Per ogni colonna:
+      - column_name (sul foglio)
+      - chiave_interna (se nota al programma)
+      - last_index (ordine sul foglio)
+      - is_typed (True se è una colonna fissa di filone, False se vive in filone_extra)
+      - n_values (numero di righe con valore non vuoto)
+      - last_seen_ts
+    """
+    try:
         from moduli import db as _db
-
-        date_str = request.args.get('date', '').strip()
-        if not date_str:
-            date_str = (_dt.date.today() - _dt.timedelta(days=1)).isoformat()
-        limit = min(int(request.args.get('limit', 500)), 5000)
-
-        backup_dir = os.path.join(SCRIPT_DIR, 'backup', PROVINCIA_ATTIVA.lower())
-        backup_path = os.path.join(backup_dir,
-                                    f'filone_{PROVINCIA_ATTIVA.lower()}_{date_str}.json')
-        if not os.path.exists(backup_path):
-            # Lista date disponibili
-            available = []
-            if os.path.isdir(backup_dir):
-                import re as _re
-                for f in sorted(os.listdir(backup_dir), reverse=True):
-                    m = _re.match(rf'filone_{PROVINCIA_ATTIVA.lower()}_(\d{{4}}-\d{{2}}-\d{{2}})\.json$', f)
-                    if m:
-                        available.append(m.group(1))
-            return jsonify({
-                'date': date_str,
-                'backup_file_exists': False,
-                'available_dates': available[:30],
-                'sospetti': [], 'stats': {},
+        conn = _db.get_conn()
+        cols = conn.execute('''
+            SELECT cr.column_name, cr.chiave_interna, cr.last_index, cr.last_seen_ts
+            FROM column_registry cr
+            WHERE cr.last_seen_ts = (
+                SELECT MAX(cr2.last_seen_ts) FROM column_registry cr2
+                WHERE cr2.last_index = cr.last_index
+            )
+            ORDER BY cr.last_index
+        ''').fetchall()
+        protected_set = _get_protected_columns_set()
+        out = []
+        for c in cols:
+            chiave = c['chiave_interna']
+            # 'eneltel' è un campo standard speciale: nel DB si chiama
+            # `eneltel_key` (PK), non c'è in COLONNE_NOTE ma è comunque
+            # tipato e ha tutti i valori.
+            is_typed = bool(chiave and (chiave in _db.COLONNE_NOTE or chiave == 'eneltel'))
+            # Count
+            if chiave == 'eneltel':
+                n = conn.execute(
+                    "SELECT COUNT(*) AS n FROM filone WHERE eneltel_key IS NOT NULL "
+                    "AND TRIM(eneltel_key) != ''"
+                ).fetchone()['n']
+            elif is_typed:
+                n = conn.execute(
+                    f"SELECT COUNT(*) AS n FROM filone WHERE {chiave} IS NOT NULL AND TRIM({chiave}) != ''"
+                ).fetchone()['n']
+            else:
+                n = conn.execute(
+                    "SELECT COUNT(*) AS n FROM filone_extra WHERE column_name=? AND value IS NOT NULL AND TRIM(value) != ''",
+                    (c['column_name'],),
+                ).fetchone()['n']
+            is_protected = (
+                chiave == 'eneltel'
+                or c['column_name'].strip().lower() in protected_set
+            )
+            out.append({
+                'column_name': c['column_name'],
+                'chiave_interna': chiave,
+                'last_index': c['last_index'],
+                'last_seen_ts': c['last_seen_ts'],
+                'is_typed': is_typed,
+                'is_protected': is_protected,
+                'n_values': n,
             })
-
-        with open(backup_path, 'r', encoding='utf-8') as f:
-            bk = _j.load(f)
-        bk_headers = bk.get('headers', [])
-        bk_rows = bk.get('righe', [])
-
-        # Mappa eneltel → dict critici dal backup
-        def _bk_idx(name):
-            for i, h in enumerate(bk_headers):
-                if h.strip().upper() == name.upper():
-                    return i
-            return None
-        bk_ek_i = _bk_idx('Eneltel')
-        if bk_ek_i is None:
-            return jsonify({'error': 'colonna Eneltel non trovata nel backup'}), 500
-        # Indici nel backup delle colonne critiche
-        critical_idx_bk = {}
-        for col_name in _se._CRITICAL_COL_TO_CHIAVE.keys():
-            i = _bk_idx(col_name)
-            if i is not None:
-                critical_idx_bk[col_name] = i
-
-        # Costruzione mappa backup
-        bk_map = {}
-        for row in bk_rows:
-            if bk_ek_i >= len(row):
-                continue
-            ek = str(row[bk_ek_i]).lstrip('0').upper()
-            entry = {}
-            for col_name, i in critical_idx_bk.items():
-                entry[col_name] = (row[i] if i < len(row) else '').strip()
-            bk_map[ek] = entry
-
-        # Stato ATTUALE dal foglio (force fresh)
-        _shared.invalidate_values_cache()
-        all_vals = _shared.get_all_values_cached(force=True)
-        sh_headers = all_vals[0]
-        def _sh_idx(name):
-            for i, h in enumerate(sh_headers):
-                if h.strip().upper() == name.upper():
-                    return i
-            return None
-        sh_ek_i = _sh_idx('Eneltel')
-        critical_idx_sh = {}
-        for col_name in critical_idx_bk:
-            i = _sh_idx(col_name)
-            if i is not None:
-                critical_idx_sh[col_name] = i
-
-        sospetti = []
-        n_diversi_totali = 0
-        for row in all_vals[1:]:
-            if sh_ek_i >= len(row):
-                continue
-            ek = str(row[sh_ek_i]).lstrip('0').upper()
-            if ek not in bk_map:
-                continue
-            bk_entry = bk_map[ek]
-            for col_name, i in critical_idx_sh.items():
-                attuale = (row[i] if i < len(row) else '').strip()
-                bk_val = bk_entry.get(col_name, '').strip()
-                if attuale == bk_val:
-                    continue
-                n_diversi_totali += 1
-                # È sospetto SE il valore attuale non matcha il pattern atteso
-                # per quella colonna (segno che è ancora "spanato"/sbagliato).
-                pattern = _se._COLUMN_PATTERN_VALIDATORS.get(col_name)
-                if pattern is not None and attuale and not pattern.match(attuale):
-                    sospetti.append({
-                        'eneltel_key': ek,
-                        'colonna': col_name,
-                        'backup_aveva': bk_val,
-                        'attuale': attuale,
-                        'motivo': f'attuale non matcha pattern di {col_name}',
-                    })
-                    if len(sospetti) >= limit:
-                        break
-            if len(sospetti) >= limit:
-                break
-
-        return jsonify({
-            'date': date_str,
-            'backup_file_exists': True,
-            'backup_file': os.path.basename(backup_path),
-            'sospetti': sospetti,
-            'stats': {
-                'totale_celle_diverse_dal_backup': n_diversi_totali,
-                'celle_sospette': len(sospetti),
-                'eneltel_nel_backup': len(bk_map),
-                'colonne_controllate': list(critical_idx_sh.keys()),
-            },
-        })
+        return jsonify({'success': True, 'columns': out, 'total': len(out)})
     except Exception as e:
-        logger.exception('[admin] errore /api/admin/backup-diff')
+        logger.exception('[admin] errore GET /api/admin/columns')
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
-@app.route('/api/admin/recovery-reports', methods=['GET'])
+@app.route('/api/admin/columns', methods=['POST'])
 @admin_required
-def api_admin_recovery_reports():
-    """Ritorna gli eventi del file JSONL giornaliero degli span recovery.
+def api_admin_column_create():
+    """Aggiunge una nuova colonna libera (non tipata) al filone.
 
-    Query params:
-      - date: YYYY-MM-DD (default oggi)
-      - limit: max entries (default 500, max 5000)
+    Body: {name: str, position?: int}
+      - name: nome della colonna come apparirà nel foglio / vista Excel
+      - position: indice 1-based (default: in coda). Se duplicato, le entry
+        successive vengono shiftate di +1.
 
-    Risposta: {date, file_exists, count, entries: [...]}
+    La colonna viene aggiunta a `column_registry` con `chiave_interna=NULL`.
+    Diventa subito visibile nella vista `/filone` (Excel-like) e i valori
+    inseriti dagli utenti finiscono in `filone_extra`.
     """
     try:
-        import datetime as _dt
-        date_str = request.args.get('date', _dt.date.today().isoformat())
-        limit = min(int(request.args.get('limit', 500)), 5000)
-        report_dir = os.path.join(SCRIPT_DIR, 'data', PROVINCIA_ATTIVA.lower(),
-                                  'span_reports')
-        path = os.path.join(report_dir, f'recovery_{date_str}.jsonl')
-        if not os.path.exists(path):
-            # Lista date disponibili come fallback
-            available = []
-            if os.path.isdir(report_dir):
-                for f in sorted(os.listdir(report_dir), reverse=True):
-                    if f.startswith('recovery_') and f.endswith('.jsonl'):
-                        available.append(f[len('recovery_'):-len('.jsonl')])
-            return jsonify({
-                'date': date_str,
-                'file_exists': False,
-                'count': 0,
-                'entries': [],
-                'available_dates': available[:30],
-            })
-        entries = []
-        with open(path, 'r', encoding='utf-8') as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
+        from moduli import db as _db
+        body = request.get_json(silent=True) or {}
+        name = (body.get('name') or '').strip()
+        if not name:
+            return jsonify({'success': False, 'message': 'Nome colonna mancante'}), 400
+        if len(name) > 100:
+            return jsonify({'success': False, 'message': 'Nome troppo lungo (max 100 caratteri)'}), 400
+        position = body.get('position')
+        conn = _db.get_conn()
+        with conn:
+            conn.execute('BEGIN IMMEDIATE')
+            # Verifica che non esista già (case-insensitive)
+            exists = conn.execute(
+                "SELECT column_name FROM column_registry "
+                "WHERE LOWER(TRIM(column_name)) = LOWER(TRIM(?))",
+                (name,),
+            ).fetchone()
+            if exists:
+                return jsonify({
+                    'success': False,
+                    'message': f"Esiste già una colonna chiamata '{exists['column_name']}'",
+                }), 409
+            # Calcola posizione
+            max_idx = conn.execute(
+                "SELECT COALESCE(MAX(last_index), 0) AS m FROM column_registry"
+            ).fetchone()['m']
+            if position is None or position > max_idx:
+                new_idx = max_idx + 1
+            else:
                 try:
-                    import json as _j
-                    entries.append(_j.loads(line))
+                    new_idx = max(1, int(position))
                 except (ValueError, TypeError):
-                    continue
-                if len(entries) >= limit:
-                    break
-        # Date disponibili
-        available = []
-        for f in sorted(os.listdir(report_dir), reverse=True):
-            if f.startswith('recovery_') and f.endswith('.jsonl'):
-                available.append(f[len('recovery_'):-len('.jsonl')])
+                    new_idx = max_idx + 1
+                # Shift delle colonne >= new_idx
+                conn.execute(
+                    "UPDATE column_registry SET last_index = last_index + 1 "
+                    "WHERE last_index >= ?",
+                    (new_idx,),
+                )
+            now = _db._now_ts()
+            conn.execute(
+                'INSERT INTO column_registry(column_name, chiave_interna, last_index, last_seen_ts) '
+                'VALUES (?, NULL, ?, ?)',
+                (name, new_idx, now),
+            )
+            user = ((session.get('user') or {}).get('username')
+                    or session.get('utente') or 'admin')
+            _db.audit(conn, eneltel_key=None, column_name=name,
+                      old_value=None, new_value=None,
+                      source='column_created', user=user,
+                      detail={'position': new_idx, 'manual': True})
+        logger.info(f"[admin] colonna '{name}' creata (posizione {new_idx})")
         return jsonify({
-            'date': date_str,
-            'file_exists': True,
-            'count': len(entries),
-            'entries': entries,
-            'available_dates': available[:30],
+            'success': True,
+            'column_name': name,
+            'last_index': new_idx,
         })
     except Exception as e:
-        logger.exception('[admin] errore /api/admin/recovery-reports')
+        logger.exception('[admin] errore POST columns')
         return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/admin/columns/<path:column_name>', methods=['DELETE'])
+@admin_required
+def api_admin_column_delete(column_name):
+    """Elimina una colonna dal registry + tutti i suoi dati.
+
+    Per colonne FREE (filone_extra): cancella column_registry row + tutti i valori in filone_extra.
+    Per colonne TIPATE (filone fisso): SET NULL nella colonna (mantiene la struttura).
+    Cancella anche eventuali pending_writes correlati.
+    """
+    try:
+        from moduli import db as _db
+        col = (column_name or '').strip()
+        if not col:
+            return jsonify({'success': False, 'message': 'nome colonna mancante'}), 400
+        conn = _db.get_conn()
+        with conn:
+            conn.execute('BEGIN IMMEDIATE')
+            reg = conn.execute(
+                "SELECT chiave_interna FROM column_registry WHERE column_name=?",
+                (col,),
+            ).fetchone()
+            chiave = reg['chiave_interna'] if reg else None
+            # Eneltel è la chiave primaria: non si può eliminare
+            if chiave == 'eneltel':
+                return jsonify({
+                    'success': False,
+                    'message': 'La colonna Eneltel è la chiave primaria del filone e '
+                               'non può essere eliminata. Senza Eneltel ogni riga '
+                               'perderebbe la sua identità.',
+                }), 400
+            # Colonne protette nella vista Excel: non si possono eliminare
+            # dall'admin (sono usate da pannelli del programma: distinte, sigilli,
+            # contatori, ecc.). Lista in routes.contatori.COLONNE_PROTETTE_FILONE.
+            if col.strip().lower() in _get_protected_columns_set():
+                return jsonify({
+                    'success': False,
+                    'message': f"La colonna '{col}' è una colonna protetta del programma "
+                               "(usata in più pannelli: contatori, distinte, sigilli, ecc.). "
+                               "Non può essere eliminata. Se vuoi azzerare i valori "
+                               "uno per uno, modificalo dalla vista Excel del filone.",
+                }), 400
+            is_typed = bool(chiave and chiave in _db.COLONNE_NOTE)
+            n_extra = 0
+            if is_typed:
+                # SET NULL sulla colonna tipata (non eliminiamo il campo SQL,
+                # solo i valori). La struttura resta per backwards-compat.
+                conn.execute(f"UPDATE filone SET {chiave} = NULL")
+            else:
+                cur = conn.execute(
+                    "DELETE FROM filone_extra WHERE column_name=?", (col,)
+                )
+                n_extra = cur.rowcount
+            # Pending writes correlate
+            n_pend = conn.execute(
+                "DELETE FROM pending_writes WHERE column_name=?", (col,)
+            ).rowcount
+            # Rimuovi dal registry (tutte le entry con questo nome)
+            n_reg = conn.execute(
+                "DELETE FROM column_registry WHERE column_name=?", (col,)
+            ).rowcount
+            user = ((session.get('user') or {}).get('username')
+                    or session.get('utente') or 'admin')
+            _db.audit(conn, eneltel_key=None, column_name=col,
+                      old_value=None, new_value=None,
+                      source='column_deleted', user=user,
+                      detail={'is_typed': is_typed, 'n_extra': n_extra,
+                              'n_pending': n_pend, 'chiave': chiave})
+        logger.warning(
+            f"[admin] colonna '{col}' eliminata "
+            f"(typed={is_typed}, extras={n_extra}, pending={n_pend}, registry={n_reg})"
+        )
+        return jsonify({
+            'success': True,
+            'column_name': col,
+            'is_typed': is_typed,
+            'n_extra_deleted': n_extra,
+            'n_pending_deleted': n_pend,
+        })
+    except Exception as e:
+        logger.exception('[admin] errore DELETE column')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/admin/columns/<path:column_name>/rename', methods=['PUT'])
+@admin_required
+def api_admin_column_rename(column_name):
+    """Rinomina una colonna: aggiorna column_registry, filone_extra, pending_writes.
+
+    Body: {new_name: 'NuovoNome'}.
+    Niente cambia per colonne TIPATE (il nome SQL resta; cambia solo la
+    label visibile sul foglio). Per colonne FREE migra anche i valori.
+    """
+    try:
+        from moduli import db as _db
+        body = request.get_json(silent=True) or {}
+        old = (column_name or '').strip()
+        new = (body.get('new_name') or '').strip()
+        if not old or not new:
+            return jsonify({'success': False, 'message': 'old/new mancante'}), 400
+        if old == new:
+            return jsonify({'success': True, 'message': 'invariato'})
+        conn = _db.get_conn()
+        with conn:
+            conn.execute('BEGIN IMMEDIATE')
+            # Verifica esistenza
+            row = conn.execute(
+                "SELECT chiave_interna FROM column_registry WHERE column_name=?",
+                (old,),
+            ).fetchone()
+            if not row:
+                return jsonify({'success': False, 'message': f"colonna '{old}' non trovata"}), 404
+            # Eneltel: se la collega la rinomina sul foglio, gestiscilo dalla
+            # sezione 'Sinonimi colonne' (più sicuro che rinominarla qui).
+            if row['chiave_interna'] == 'eneltel':
+                return jsonify({
+                    'success': False,
+                    'message': "La colonna Eneltel è la chiave primaria del filone. "
+                               "Se sul foglio si chiama in modo diverso, dichiaralo "
+                               "nella scheda 'Sinonimi colonne' invece di rinominarla qui.",
+                }), 400
+            # Colonne protette nella vista Excel: stesso ragionamento.
+            # Sono usate in più pannelli; rinominarle direttamente rischia
+            # di rompere riferimenti. Usa i sinonimi.
+            if old.strip().lower() in _get_protected_columns_set():
+                return jsonify({
+                    'success': False,
+                    'message': f"La colonna '{old}' è una colonna protetta del programma "
+                               "(usata da contatori, distinte, sigilli, ecc.). "
+                               "Se sul foglio è stata rinominata, dichiara il nuovo nome "
+                               "nella scheda 'Sinonimi colonne'.",
+                }), 400
+            # Verifica che il nuovo nome non sia già occupato
+            collision = conn.execute(
+                "SELECT 1 FROM column_registry WHERE column_name=?", (new,)
+            ).fetchone()
+            if collision:
+                return jsonify({'success': False,
+                                'message': f"colonna '{new}' già esistente"}), 409
+            n_extra = conn.execute(
+                "UPDATE filone_extra SET column_name=? WHERE column_name=?",
+                (new, old),
+            ).rowcount
+            n_pend = conn.execute(
+                "UPDATE pending_writes SET column_name=? WHERE column_name=?",
+                (new, old),
+            ).rowcount
+            conn.execute(
+                "UPDATE column_registry SET column_name=? WHERE column_name=?",
+                (new, old),
+            )
+            user = ((session.get('user') or {}).get('username')
+                    or session.get('utente') or 'admin')
+            _db.audit(conn, eneltel_key=None, column_name=new,
+                      old_value=old, new_value=new,
+                      source='column_renamed', user=user,
+                      detail={'n_extra_migrated': n_extra,
+                              'n_pending_migrated': n_pend})
+        logger.warning(
+            f"[admin] colonna '{old}' rinominata in '{new}' "
+            f"(extras={n_extra}, pending={n_pend})"
+        )
+        return jsonify({
+            'success': True,
+            'old_name': old, 'new_name': new,
+            'n_extra_migrated': n_extra,
+            'n_pending_migrated': n_pend,
+        })
+    except Exception as e:
+        logger.exception('[admin] errore PUT column rename')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/admin/export-full-excel', methods=['GET'])
+@admin_required
+def api_admin_export_full_excel():
+    """Scarica l'intero filone come Excel (snapshot completo dal DB)."""
+    try:
+        from moduli import outbox as _ob
+        data, n_rows, n_cols = _ob.build_full_xlsx()
+        if not data:
+            return jsonify({'success': False, 'message': 'DB vuoto'}), 404
+        import datetime as _dt
+        fname = f"filone_{PROVINCIA_ATTIVA.lower()}_{_dt.datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+        resp = make_response(data)
+        resp.headers['Content-Type'] = (
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        resp.headers['Content-Disposition'] = f'attachment; filename="{fname}"'
+        resp.headers['X-Filone-Rows'] = str(n_rows)
+        resp.headers['X-Filone-Cols'] = str(n_cols)
+        return resp
+    except Exception as e:
+        logger.exception('[admin] errore /api/admin/export-full-excel')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/admin/outbox/mark-delivered', methods=['POST'])
+@admin_required
+def api_admin_outbox_mark_delivered():
+    """Marca TUTTE le pending correnti come consegnate (state='done')."""
+    try:
+        from moduli import outbox as _ob
+        user = ((session.get('user') or {}).get('username')
+                or session.get('utente') or 'admin')
+        r = _ob.mark_delivered(user=user)
+        return jsonify({'success': True, **r})
+    except Exception as e:
+        logger.exception('[admin] errore /api/admin/outbox/mark-delivered')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/admin/import-excel', methods=['POST'])
+@admin_required
+def api_admin_import_excel():
+    """Importa il filone da un file Excel (.xlsx) caricato dall'admin.
+
+    Accetta multipart/form-data:
+      - file: il file .xlsx da importare
+      - export_ts: (opzionale) timestamp dell'export, formato
+                   'YYYY-MM-DD HH:MM:SS' o 'YYYY-MM-DD'. Default: now.
+      - dry_run: 'true' per simulare senza scrivere (default: 'false').
+      - sheet_name: (opzionale) nome scheda Excel da leggere (default: prima).
+
+    Merge: "vince il più recente". Per ogni eneltel, se il DB ha
+    `last_local_change_ts > export_ts`, vince il DB (riga non toccata).
+    Altrimenti vincono i valori Excel cella per cella.
+    """
+    import tempfile
+    f = request.files.get('file')
+    if not f or not f.filename:
+        return jsonify({'success': False, 'message': 'File mancante (campo "file")'}), 400
+    if not f.filename.lower().endswith('.xlsx'):
+        return jsonify({'success': False, 'message': 'Atteso file .xlsx'}), 400
+
+    export_ts = request.form.get('export_ts') or None
+    sheet_name = request.form.get('sheet_name') or None
+    dry_run = (request.form.get('dry_run') or '').strip().lower() in ('1', 'true', 'yes')
+
+    user = ((session.get('user') or {}).get('username')
+            or session.get('utente') or 'admin')
+
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx')
+    try:
+        f.save(tmp.name)
+        tmp.close()
+        from moduli import excel_importer as _ei
+        result = _ei.import_excel(
+            tmp.name, export_ts=export_ts, sheet_name=sheet_name,
+            dry_run=dry_run, user=user,
+        )
+        # Se è stato un import reale (non dry-run), invalida la cache e triggera sync
+        if not dry_run and result.get('success'):
+            from moduli import shared as _shared
+            _shared.invalidate_values_cache()
+            try:
+                _sync_needed.set()
+            except Exception:
+                pass
+        # Riduci la dimensione della risposta: rimuovi headers_excel (può essere lungo)
+        result_compact = {k: v for k, v in result.items() if k != 'headers_excel'}
+        result_compact['n_headers'] = len(result.get('headers_excel', []))
+        return jsonify(result_compact)
+    except Exception as e:
+        logger.exception('[admin] errore /api/admin/import-excel')
+        return jsonify({'success': False, 'message': str(e)}), 500
+    finally:
+        try:
+            os.unlink(tmp.name)
+        except Exception:
+            pass
 
 
 @app.route('/api/admin/db-dump/anomalies', methods=['GET'])
@@ -1943,7 +2224,6 @@ from moduli import (
 from config import (
     DEPOSITO,
     INTERVALLO_SYNC_SECONDI,
-    USE_DB_BACKEND,
 )
 
 _sync_running = False
@@ -1976,20 +2256,8 @@ _last_risultato_zone = None
 
 
 def _shadow_db_pull():
-    """Aggiorna il DB locale leggendo da Sheets (Fase 1 shadow).
-
-    Idempotente, non bloccante: errori qui non devono mai bloccare il sync
-    principale o sse_notify. In modalità 'off' è un no-op.
-    """
-    if USE_DB_BACKEND == 'off':
-        return
-    try:
-        from moduli import sync_engine as _se
-        res = _se.pull_once()
-        if res.get('changed') or res.get('new') or res.get('conflicts') or res.get('orphans'):
-            logger.info(f"[DB-{USE_DB_BACKEND}] pull: {res}")
-    except Exception as e:
-        logger.warning(f"[DB-{USE_DB_BACKEND}] pull fallito (non bloccante): {e}")
+    """No-op storico: il programma non legge più da Google Sheets."""
+    return
 
 
 def _do_sincronizza_dati():
@@ -2159,42 +2427,31 @@ def avvia_sync_background():
     _sync_thread.start()
     logger.info("[SYNC] ✅ Sync in background avviato")
 
-    # Avvia worker DB locale (drainer pending_writes → Sheets).
-    # In Fase 1 shadow è idle ma utile averlo già running per testing /
-    # eventuali pending_writes inseriti manualmente.
-    if USE_DB_BACKEND != 'off':
-        try:
-            from moduli import sync_engine as _se
-            _se.start_workers()
-        except Exception as e:
-            logger.warning(f"[DB] start_workers fallito (non bloccante): {e}")
+    # Integrity check del DB locale (l'unica fonte di verità post-Sheets).
+    try:
+        from moduli import sync_engine as _se
+        _se.start_workers()
+    except Exception as e:
+        logger.warning(f"[DB] start_workers fallito (non bloccante): {e}")
 
 
 def trigger_sync_after_edit():
-    """Triggera un sync il prima possibile dopo una modifica utente.
+    """Triggera un re-render della mappa dopo una modifica utente.
 
-    In primary mode (Fase 2), prima di risvegliare il sync_loop completo
-    proviamo una "patch in-place" di mappa_data.json: se la modifica utente
-    riguarda SOLO campi cosmetici (email, telefono, nominativo, indirizzo,
-    posizione_mis, ecc.) non c'è motivo di ricalcolare percorsi/zone/HTML.
-    Aggiorniamo direttamente il JSON sul disco (~50ms) e inviamo subito SSE
-    'sync_complete' al frontend.
-
-    Per cambi STRUTTURALI (data, operatore, lat/lon, comune, note APP, esito)
-    si va sul flusso classico: SSE 'data_changing' + wake del background loop.
+    Per modifiche cosmetiche (email, telefono, nominativo, indirizzo, ecc.)
+    fa una patch in-place di mappa_data.json (~50ms). Per cambi strutturali
+    (data, operatore, lat/lon, ecc.) sveglia il background loop che ricalcola
+    percorsi/zone.
     """
-    if USE_DB_BACKEND == 'primary':
-        try:
-            from moduli.mappa_data_patcher import try_patch_inplace
-            if try_patch_inplace():
-                # Patch riuscita: niente full sync, niente flicker UI
-                sse_notify_all('sync_complete', {'source': 'inplace_patch'})
-                logger.info("[SYNC] ⚡ Patch in-place applicata (no full sync)")
-                return
-        except Exception as e:
-            logger.warning(f"[SYNC] patch in-place fallita ({e}), fallback al sync_loop")
+    try:
+        from moduli.mappa_data_patcher import try_patch_inplace
+        if try_patch_inplace():
+            sse_notify_all('sync_complete', {'source': 'inplace_patch'})
+            logger.info("[SYNC] ⚡ Patch in-place applicata (no full sync)")
+            return
+    except Exception as e:
+        logger.warning(f"[SYNC] patch in-place fallita ({e}), fallback al sync_loop")
 
-    # Path classico: notifica e wake del background loop
     sse_notify_all('data_changing', {'status': 'sync_started'})
     _sync_needed.set()
     logger.info("[SYNC] ⚡ Sync richiesto dopo modifica")

@@ -665,13 +665,18 @@ body {
     top: calc(100% + 4px);
     left: 0;
     right: 0;
-    background: var(--bg-secondary);
-    border: 2px solid var(--accent);
+    background: var(--panel-bg-strong);
+    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    border: 1px solid rgba(var(--accent-rgb), 0.45);
     border-radius: 12px;
     z-index: 1000;
     max-height: 260px;
     overflow-y: auto;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+    box-shadow:
+        0 12px 32px rgba(0, 0, 0, 0.35),
+        0 0 0 1px rgba(var(--accent-rgb), 0.10),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .detail-operatore-dropdown.open {
@@ -705,8 +710,6 @@ body {
 .detail-operatore-item input[type="checkbox"] {
     width: 15px;
     height: 15px;
-    cursor: pointer;
-    accent-color: var(--accent);
     flex-shrink: 0;
 }
 
@@ -742,7 +745,6 @@ body {
     width: 12px;
     height: 12px;
     margin: 0;
-    accent-color: var(--accent);
 }
 
 .filter-chip:has(input:checked) {
@@ -915,13 +917,18 @@ body {
     top: calc(100% + 4px);
     left: 0;
     right: 0;
-    background: var(--bg-secondary);
-    border: 2px solid var(--accent);
+    background: var(--panel-bg-strong);
+    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    border: 1px solid rgba(var(--accent-rgb), 0.45);
     border-radius: 12px;
     z-index: 1000;
     max-height: 260px;
     overflow-y: auto;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+    box-shadow:
+        0 12px 32px rgba(0, 0, 0, 0.35),
+        0 0 0 1px rgba(var(--accent-rgb), 0.10),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .operatore-multi-dropdown.open {
@@ -955,8 +962,6 @@ body {
 .operatore-multi-item input[type="checkbox"] {
     width: 16px;
     height: 16px;
-    cursor: pointer;
-    accent-color: var(--accent);
     flex-shrink: 0;
 }
 
@@ -970,8 +975,6 @@ body {
 .toggle-label input[type="checkbox"] {
     width: 20px;
     height: 20px;
-    cursor: pointer;
-    accent-color: var(--accent);
 }
 
 .toggle-text {
@@ -995,12 +998,11 @@ body {
     flex: 1;
     overflow-y: auto;
     padding: 10px;
+    /* Spazio in basso per far scorrere il contenuto dietro alla .stats-bar
+       (che è absolute in fondo alla sidebar → backdrop-filter visibile). */
+    padding-bottom: 60px;
 }
-
-.results::-webkit-scrollbar { width: 8px; }
-.results::-webkit-scrollbar-track { background: var(--bg-secondary); }
-.results::-webkit-scrollbar-thumb { background: var(--bg-tertiary); border-radius: 4px; }
-.results::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+/* Scrollbar gestita dal tema globale (theme.css) — glass accent. */
 
 /* Zone Cards */
 .zone-card {
@@ -1350,29 +1352,60 @@ body {
     font-size: 0.85em;
 }
 
-/* Stats bar */
+/* Stats bar — glass coerente con il resto della sidebar.
+   Posizionata absolute in fondo: il contenuto di .results scorre DIETRO
+   alla stats-bar attraverso il backdrop-filter (effetto blur live). */
 .stats-bar {
-    background: var(--bg-tertiary);
-    padding: 8px 14px;
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--panel-bg);
+    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    padding: 6px 10px;
     display: flex;
     justify-content: space-around;
+    gap: 6px;
     border-top: 1px solid var(--border);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.12),
+        0 -8px 24px rgba(0, 0, 0, 0.22);
+    z-index: 5;
 }
 
 .stat-item {
+    flex: 1;
     text-align: center;
+    padding: 4px 6px;
+    border-radius: 8px;
+    /* Tinta accent translucida: visibile su entrambi i temi (chiaro + scuro)
+       perché non dipende dal contrasto bianco-su-bianco. */
+    background: rgba(var(--accent-rgb), 0.08);
+    border: 1px solid rgba(var(--accent-rgb), 0.18);
+    transition: background 0.18s, border-color 0.18s, transform 0.18s;
+}
+
+.stat-item:hover {
+    background: rgba(var(--accent-rgb), 0.18);
+    border-color: rgba(var(--accent-rgb), 0.40);
+    transform: translateY(-1px);
 }
 
 .stat-value {
-    font-size: 1.1em;
+    font-size: 0.95em;
     font-weight: 700;
-    color: var(--accent);
+    color: var(--accent-hover);
+    line-height: 1.15;
+    text-shadow: 0 0 10px rgba(var(--accent-rgb), 0.30);
 }
 
 .stat-label {
-    font-size: 0.68em;
+    font-size: 0.6em;
     color: var(--text-muted);
     text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 1px;
 }
 
 /* Map: occupa tutto il container, la sidebar è in overlay (vedi .sidebar). */
@@ -1385,7 +1418,7 @@ body {
     background: var(--bg-primary);
 }
 
-/* Zoom Slider */
+/* Zoom Slider — pill glassmorfica coerente con il design system */
 .zoom-slider-container {
     position: absolute;
     bottom: 20px;
@@ -1393,47 +1426,58 @@ body {
     transform: translateX(-50%);
     display: flex;
     align-items: center;
-    gap: 10px;
-    background: var(--bg-secondary);
-    padding: 10px 20px;
-    border-radius: 25px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+    gap: 12px;
+    background: var(--panel-bg-strong);
+    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    padding: 10px 18px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow:
+        0 8px 28px rgba(0, 0, 0, 0.35),
+        inset 0 1px 0 rgba(255, 255, 255, 0.10);
     z-index: 1000;
-    border: 1px solid var(--border-color);
 }
 
 .zoom-slider-container .zoom-label {
     font-size: 18px;
-    font-weight: bold;
+    font-weight: 700;
     color: var(--text-secondary);
     user-select: none;
-    width: 28px;
-    height: 28px;
-    text-align: center;
-    line-height: 28px;
+    width: 30px;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     cursor: pointer;
     border-radius: 50%;
-    transition: background 0.2s, color 0.2s;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    transition: background 0.18s, color 0.18s, transform 0.18s, box-shadow 0.18s;
 }
 
 .zoom-slider-container .zoom-label:hover {
-    background: var(--bg-tertiary);
+    background: rgba(var(--accent-rgb), 0.22);
+    border-color: rgba(var(--accent-rgb), 0.45);
     color: var(--text-primary);
+    box-shadow: 0 0 12px rgba(var(--accent-rgb), 0.25);
 }
 
 .zoom-slider-container .zoom-label:active {
-    transform: scale(0.9);
+    transform: scale(0.92);
 }
 
 .zoom-slider-container .zoom-value {
     font-size: 12px;
-    font-weight: 600;
+    font-weight: 700;
     color: var(--text-primary);
-    min-width: 45px;
+    min-width: 48px;
     text-align: center;
-    background: var(--bg-primary);
-    padding: 4px 8px;
-    border-radius: 12px;
+    background: rgba(var(--accent-rgb), 0.18);
+    border: 1px solid rgba(var(--accent-rgb), 0.32);
+    padding: 5px 10px;
+    border-radius: 999px;
+    letter-spacing: 0.02em;
 }
 
 #zoomSlider, #printZoomSlider {
@@ -1442,17 +1486,21 @@ body {
     width: 200px;
     height: 8px;
     border-radius: 4px;
-    background: #4a5568;
+    background: transparent;
     outline: none;
     cursor: pointer;
-    border: 1px solid rgba(255,255,255,0.2);
+    padding: 0;
 }
 
 #zoomSlider::-webkit-slider-runnable-track,
 #printZoomSlider::-webkit-slider-runnable-track {
     height: 8px;
     border-radius: 4px;
-    background: linear-gradient(to right, var(--bg-tertiary) 0%, var(--accent) 100%);
+    background: linear-gradient(to right,
+        rgba(var(--accent-rgb), 0.18) 0%,
+        rgba(var(--accent-rgb), 0.85) 100%);
+    background-clip: padding-box;
+    border: none;
 }
 
 #zoomSlider::-webkit-slider-thumb,
@@ -1464,10 +1512,10 @@ body {
     border-radius: 50%;
     background: linear-gradient(135deg, var(--accent) 0%, var(--accent-deep) 100%);
     cursor: pointer;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
     border: 3px solid white;
     transition: transform 0.15s ease;
-    margin-top: -7px;
+    margin-top: -8px;
 }
 
 #zoomSlider::-webkit-slider-thumb:hover,
@@ -1479,18 +1527,28 @@ body {
 #printZoomSlider::-moz-range-track {
     height: 8px;
     border-radius: 4px;
-    background: linear-gradient(to right, var(--bg-tertiary) 0%, var(--accent) 100%);
+    background: linear-gradient(to right,
+        rgba(var(--accent-rgb), 0.18) 0%,
+        rgba(var(--accent-rgb), 0.85) 100%);
+    background-clip: padding-box;
+    border: none;
 }
 
 #zoomSlider::-moz-range-thumb,
 #printZoomSlider::-moz-range-thumb {
-    width: 16px;
-    height: 16px;
+    width: 22px;
+    height: 22px;
     border-radius: 50%;
     background: linear-gradient(135deg, var(--accent) 0%, var(--accent-deep) 100%);
     cursor: pointer;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
     border: 3px solid white;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    transition: transform 0.15s ease;
+}
+
+#zoomSlider::-moz-range-thumb:hover,
+#printZoomSlider::-moz-range-thumb:hover {
+    transform: scale(1.15);
 }
 
 /* Markers */
@@ -1542,29 +1600,42 @@ body {
     100% { box-shadow: 0 0 0 0 rgba(233, 69, 96, 0); }
 }
 
-/* Toast aggiornamento mappa */
+/* Toast (notifica flottante).
+   Pill glass coerente con il design system.
+   Varianti: .mappa-toast--success (default), --error, --warn, --info.
+   Per retro-compat, .mappa-toast da solo = success. */
 .mappa-toast {
     position: fixed;
     bottom: 24px;
     left: 50%;
     transform: translateX(-50%) translateY(80px);
-    background: rgba(37, 211, 102, 0.95);
-    color: #fff;
-    padding: 10px 22px;
-    border-radius: 30px;
+    background: var(--panel-bg-strong);
+    backdrop-filter: blur(18px) saturate(var(--panel-saturate));
+    -webkit-backdrop-filter: blur(18px) saturate(var(--panel-saturate));
+    color: var(--text-primary);
+    padding: 12px 22px;
+    border-radius: 999px;
+    border: 1px solid rgba(var(--toast-accent-rgb, 39, 174, 96), 0.45);
     font-size: 0.88em;
     font-weight: 600;
-    box-shadow: 0 6px 24px rgba(0,0,0,0.25);
+    box-shadow:
+        0 10px 32px rgba(0, 0, 0, 0.35),
+        0 0 0 1px rgba(var(--toast-accent-rgb, 39, 174, 96), 0.18),
+        inset 0 1px 0 rgba(255, 255, 255, 0.10);
     z-index: 20000;
     pointer-events: none;
     opacity: 0;
     transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease;
-    backdrop-filter: blur(6px);
+    --toast-accent-rgb: 39, 174, 96;  /* default success */
 }
 .mappa-toast.visible {
     transform: translateX(-50%) translateY(0);
     opacity: 1;
 }
+.mappa-toast--success { --toast-accent-rgb: 39, 174, 96; }
+.mappa-toast--error   { --toast-accent-rgb: 231, 76, 60; }
+.mappa-toast--warn    { --toast-accent-rgb: 243, 156, 18; }
+.mappa-toast--info    { --toast-accent-rgb: var(--accent-rgb); }
 
 /* Marker sovrapposti (cluster) */
 .marker-cluster {
@@ -1589,12 +1660,18 @@ body {
     box-shadow: 0 2px 4px rgba(0,0,0,0.3);
 }
 
-/* Popup multi-contatore */
+/* Popup multi-contatore: header glass tintato accent (resta leggibile
+   sopra al popup Leaflet già vetroso, ma con un velo che lo identifica). */
 .popup-multi-header {
-    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-deep) 100%);
+    background:
+        linear-gradient(135deg, rgba(var(--accent-rgb), 0.55) 0%, rgba(29, 78, 216, 0.45) 100%);
+    backdrop-filter: blur(10px) saturate(180%);
+    -webkit-backdrop-filter: blur(10px) saturate(180%);
     color: white;
     padding: 12px;
-    border-radius: 8px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15);
     margin-bottom: 12px;
     text-align: center;
 }
@@ -3350,7 +3427,7 @@ body {
     color: var(--text);
 }
 .planning-toggle-label input[type="checkbox"] {
-    accent-color: var(--accent-secondary, #06b6d4);
+    accent-color: var(--accent-secondary);  /* variante indigo, override del default accent */
     width: 14px;
     height: 14px;
 }
@@ -3696,20 +3773,47 @@ body {
     padding: 0;  /* il content occupa l'intero viewport, niente bordo */
 }
 
-.ui-modal--fullscreen .ui-modal-content {
-    max-width: none;
-    max-height: 100vh;
-    width: 100vw;
-    height: 100vh;
-    border-radius: 0;
-    border: 0;
-    /* Fullscreen modali (sigilli/matricole, modifica contatore):
-       contenuto può essere alto > 100vh. Override del .ui-modal-content
-       base che è flex column + overflow:hidden. */
+/* Fullscreen modali (sigilli/matricole, modifica contatore):
+   contenuto può essere alto > 100vh. La struttura HTML può variare:
+   alcuni hanno .ui-modal-content come wrapper (sigilli), altri hanno
+   il container direttamente come child (fullscreenEditModal).
+   Soluzione: rendiamo il .ui-modal stesso scrollabile, e disattiviamo
+   il centering flex che impedisce di accedere al contenuto > 100vh.
+   Niente backdrop-filter: copriamo già tutta la viewport, il blur sarebbe
+   solo overhead durante lo scroll. */
+.ui-modal--fullscreen.visible {
     display: block;
     overflow-y: auto;
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    scroll-behavior: smooth;
+    /* Sfondo "acrylic" simulato: gradient + glow radiali — costa zero
+       ma dà profondità ai layer trasparenti sopra (header, card). */
+    background:
+        radial-gradient(1200px 600px at 15% -10%, rgba(59, 130, 246, 0.18), transparent 60%),
+        radial-gradient(1000px 500px at 110% 20%, rgba(139, 92, 246, 0.14), transparent 60%),
+        var(--bg-primary);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    contain: layout paint;
+}
+
+.ui-modal--fullscreen .ui-modal-content {
+    max-width: none;
+    max-height: none;
+    width: 100vw;
+    height: auto;
+    min-height: 100vh;
+    border-radius: 0;
+    border: 0;
+    display: block;
+    overflow: visible;
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    box-shadow: none;
+    animation: none;
 }
 
 .ui-modal-header {

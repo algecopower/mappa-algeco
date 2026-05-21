@@ -419,15 +419,20 @@ def genera_css_gestionale():
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 15px 20px;
-            margin: 0 -20px 20px -20px;  /* tira il bg fino al bordo del container */
+            padding: 18px 28px;
+            margin: 0 0 20px 0;
+            border: 1px solid rgba(255, 255, 255, 0.08);
             border-bottom: 2px solid #f39c12;
+            border-radius: 14px;
             position: sticky;
-            top: 0;
-            /* Acrylic locale: copre lo scroll sotto ma si confonde con la card. */
+            top: 12px;
+            /* Glass leggero: blur ridotto (10px) su area piccola → costo
+               trascurabile anche durante lo scroll. Lo sfondo del modal
+               ha gradients radiali, così il blur ha qualcosa da sfumare. */
             background: var(--panel-bg-strong);
-            backdrop-filter: blur(8px) saturate(var(--panel-saturate));
-            -webkit-backdrop-filter: blur(8px) saturate(var(--panel-saturate));
+            backdrop-filter: blur(10px) saturate(180%);
+            -webkit-backdrop-filter: blur(10px) saturate(180%);
+            box-shadow: 0 4px 18px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.06);
             z-index: 10;
         }
         
@@ -566,16 +571,28 @@ def genera_css_gestionale():
         }
         
         .sigilli-card {
-            background: var(--bg-secondary);
+            /* Acrylic: semi-trasparente sopra i gradient del modal,
+               con highlight inset sul top per il "bordo bagnato". Non è
+               sticky, quindi il blur è ricalcolato solo durante lo scroll
+               della parte di card visibile → costo basso. */
+            background: var(--panel-bg);
+            backdrop-filter: blur(14px) saturate(180%);
+            -webkit-backdrop-filter: blur(14px) saturate(180%);
             border-radius: 12px;
-            border: 1px solid var(--border);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow:
+                0 4px 14px rgba(0, 0, 0, 0.18),
+                inset 0 1px 0 rgba(255, 255, 255, 0.06);
             padding: 15px;
-            transition: all 0.2s;
+            transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
         }
-        
+
         .sigilli-card:hover {
-            border-color: #f39c12;
-            box-shadow: 0 4px 12px rgba(243, 156, 18, 0.1);
+            border-color: rgba(243, 156, 18, 0.55);
+            box-shadow:
+                0 8px 24px rgba(243, 156, 18, 0.15),
+                inset 0 1px 0 rgba(255, 255, 255, 0.08);
+            transform: translateY(-1px);
         }
         
         .sigilli-card-header {
@@ -849,18 +866,25 @@ def genera_css_gestionale():
             max-width: 700px;
             margin: 0 auto;
             padding: 20px;
+            min-height: 100vh;
+            box-sizing: border-box;
         }
         
         .fullscreen-edit-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 15px 0;
+            padding: 18px 28px;
             margin-bottom: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
             border-bottom: 2px solid var(--accent);
+            border-radius: 14px;
             position: sticky;
-            top: 0;
-            background: var(--bg-primary);
+            top: 12px;
+            background: var(--panel-bg-strong);
+            backdrop-filter: blur(10px) saturate(180%);
+            -webkit-backdrop-filter: blur(10px) saturate(180%);
+            box-shadow: 0 4px 18px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.06);
             z-index: 10;
         }
         
@@ -900,9 +924,14 @@ def genera_css_gestionale():
         
         /* Info card stile sidebar */
         .fullscreen-info-card {
-            background: var(--bg-secondary);
+            background: var(--panel-bg);
+            backdrop-filter: blur(14px) saturate(180%);
+            -webkit-backdrop-filter: blur(14px) saturate(180%);
             border-radius: 12px;
-            border: 1px solid var(--border);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow:
+                0 4px 14px rgba(0, 0, 0, 0.18),
+                inset 0 1px 0 rgba(255, 255, 255, 0.06);
             padding: 20px;
             margin-bottom: 20px;
         }
@@ -1125,6 +1154,7 @@ def genera_css_gestionale():
             border: 1px solid var(--border);
             position: sticky;
             bottom: 20px;
+            z-index: 50;
         }
         
         .btn-fullscreen-save {
@@ -1474,6 +1504,9 @@ def genera_css_gestionale():
             background: var(--bg-tertiary);
             margin-bottom: 12px;
             cursor: crosshair;
+            position: relative;
+            isolation: isolate;
+            overflow: hidden;
         }
         .access-point-map .leaflet-container {
             border-radius: 10px;

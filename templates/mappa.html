@@ -521,7 +521,6 @@
                 <button class="settings-tab" data-tab="deposito" onclick="switchSettingsTab('deposito')">🏢 Deposito</button>
                 <button class="settings-tab" data-tab="percorso" onclick="switchSettingsTab('percorso')">🛣️ Percorso</button>
                 <button class="settings-tab" data-tab="date" onclick="switchSettingsTab('date')">📅 Date</button>
-                <button class="settings-tab" data-tab="colonne" onclick="switchSettingsTab('colonne')">📋 Colonne</button>
                 <button class="settings-tab" data-tab="sync" onclick="switchSettingsTab('sync')">🔄 Sync</button>
                 <button class="settings-tab settings-tab-admin" data-tab="utenti" onclick="switchSettingsTab('utenti')" id="tabUtentiBtn" style="display:none">🔑 Utenti</button>
             </div>
@@ -615,24 +614,6 @@
                     <p style="font-size: 12px; color: var(--text-secondary); margin-top: 8px;">
                         Verranno caricati solo i contatori con data programmata in questo intervallo.
                     </p>
-                </div>
-
-                <!-- Tab: Colonne -->
-                <div class="settings-section" id="settingsTab_colonne">
-                    <h3>Mappatura Colonne Filone</h3>
-                    <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px;">
-                        
-                    </p>Associa le colonne del foglio Google ai campi utilizzati dal programma.
-                    <div class="settings-colonne-info" id="colonneInfoLegend">
-                        <span>✅ Trovata automaticamente</span>
-                        <span>🔵 Mappata manualmente</span>
-                        <span>⚠️ Non trovata</span>
-                    </div>
-                    <div id="colonneTableContainer">
-                    </div>
-                    <button class="settings-btn-reset-colonne" onclick="resetMappaturaColonne()" id="btnResetColonne" style="display:none;">
-                        🔄 Ripristina mappatura predefinita
-                    </button>
                 </div>
 
                 <!-- Tab: Sync -->

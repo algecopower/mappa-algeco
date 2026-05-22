@@ -21,11 +21,9 @@ from moduli.auth import login_required
 from moduli.safe_json import json_read, json_write
 from moduli.shared import (
     get_worksheet, get_header_map, find_row_by_pod,
-    build_pod_row_map, invalidate_values_cache,
-    safe_batch_update_by_name, force_refresh_headers,
-    _imposta_appuntamento_su_filone, _rimuovi_appuntamento_da_filone,
+    build_pod_row_map, safe_batch_update_by_name, _imposta_appuntamento_su_filone, _rimuovi_appuntamento_da_filone,
     _api_error, _get_colonna_note, _trova_indice_multi, _resolve_anchor_col_name,
-    _callbacks, _sheets_retry, _gsheets_write_lock,
+    _callbacks,
 )
 from moduli.distinte_manager import (
     parse_pdf_auto,
@@ -1036,66 +1034,8 @@ def strikethrough_telefono():
     return jsonify({
         'success': False,
         'unsupported': True,
-        'error': 'Funzione non più disponibile: la formattazione cella '
-                 '(strikethrough telefono) era una feature di Google Sheets, '
-                 'che è stato disconnesso il 21/05/2026.',
+        'error': 'Funzione non più disponibile (Google Sheets disconnesso il 21/05/2026).',
     }), 410
-    try:
-        data = request.json
-        pod = data.get('pod', '').strip().upper()
-        barrato = data.get('strikethrough', True)
-
-        if not pod:
-            return jsonify({'error': 'POD mancante'}), 400
-
-        cell_ref = ''
-        with _gsheets_write_lock:
-            header_map = force_refresh_headers()
-
-            col_tel = None
-            for col_name in ['TELEFONO', 'Telefono', 'telefono', 'TEL', 'Tel', 'tel', 'PHONE', 'Phone']:
-                if col_name in header_map:
-                    col_tel = header_map[col_name]
-                    break
-            if col_tel is None:
-                for h, idx in header_map.items():
-                    if h.strip().lower() in ['telefono', 'tel', 'phone']:
-                        col_tel = idx
-                        break
-            if col_tel is None:
-                logger.warning(f"[DISTINTE] Colonna TELEFONO non trovata. Headers disponibili: {list(header_map.keys())}")
-                return jsonify({'error': 'Colonna TELEFONO non trovata'}), 400
-
-            pod_anchor_col = _resolve_anchor_col_name('pod')
-            if pod_anchor_col is None:
-                return jsonify({'error': 'Colonna POD non trovata'}), 400
-            ws = get_worksheet()
-            pod_col_idx = header_map[pod_anchor_col]
-            pod_values = _sheets_retry(ws.col_values, pod_col_idx)
-            row = None
-            for i, v in enumerate(pod_values[1:], start=2):
-                if str(v).strip().upper() == pod:
-                    row = i
-                    break
-            if row is None:
-                return jsonify({'error': f'POD {pod} non trovato'}), 404
-
-            col_letter = gspread.utils.rowcol_to_a1(1, col_tel)[:-1]
-            cell_ref = f"{col_letter}{row}"
-
-            _sheets_retry(ws.format, cell_ref, {
-                'textFormat': {'strikethrough': barrato}
-            })
-
-        logger.info(f"[DISTINTE] {'Barrato' if barrato else 'Rimosso barrato'} telefono per POD {pod} (cella {cell_ref})")
-
-        return jsonify({
-            'success': True,
-            'message': f'Formattazione applicata per {pod}'
-        })
-
-    except Exception as e:
-        return _api_error(e, 'formattazione telefono')
 
 
 @bp.route('/api/distinte/segna-errato', methods=['POST'])
@@ -1114,73 +1054,9 @@ def segna_numero_errato():
     return jsonify({
         'success': False,
         'unsupported': True,
-        'error': 'Funzione non più disponibile: marcare un telefono come '
-                 'ERRATO scriveva sulla cella Sheets, che è stata disconnessa.',
+        'error': 'Funzione non più disponibile (Google Sheets disconnesso il 21/05/2026).',
     }), 410
-    try:
-        data = request.json
-        pod = data.get('pod', '').strip().upper()
 
-        if not pod:
-            return jsonify({'error': 'POD mancante'}), 400
-
-        cell_ref = ''
-        with _gsheets_write_lock:
-            header_map = force_refresh_headers()
-
-            # Trova nome colonna TELEFONO
-            col_tel_name = None
-            for col_name in ['TELEFONO', 'Telefono', 'telefono', 'TEL', 'Tel', 'tel']:
-                if col_name in header_map:
-                    col_tel_name = col_name
-                    break
-            if col_tel_name is None:
-                for h in header_map:
-                    if h.strip().lower() in ['telefono', 'tel']:
-                        col_tel_name = h
-                        break
-            if col_tel_name is None:
-                logger.warning(f"[DISTINTE] Colonna TELEFONO non trovata. Headers: {list(header_map.keys())}")
-                return jsonify({'error': 'Colonna TELEFONO non trovata'}), 400
-
-            # Trova riga via POD con header freschi
-            pod_anchor_col = _resolve_anchor_col_name('pod')
-            if pod_anchor_col is None:
-                return jsonify({'error': 'Colonna POD non trovata'}), 400
-            ws = get_worksheet()
-            pod_col_idx = header_map[pod_anchor_col]
-            pod_values = _sheets_retry(ws.col_values, pod_col_idx)
-            row = None
-            for i, v in enumerate(pod_values[1:], start=2):
-                if str(v).strip().upper() == pod:
-                    row = i
-                    break
-            if row is None:
-                return jsonify({'error': f'POD {pod} non trovato'}), 404
-
-            col_tel = header_map[col_tel_name]
-            col_letter = gspread.utils.rowcol_to_a1(1, col_tel)[:-1]
-            cell_ref = f"{col_letter}{row}"
-
-            valore_attuale = str(_sheets_retry(ws.acell, cell_ref).value or '').strip()
-            if 'ERRATO' not in valore_attuale.upper():
-                nuovo_valore = f"{valore_attuale} ERRATO" if valore_attuale else "ERRATO"
-                _sheets_retry(ws.update_acell, cell_ref, nuovo_valore)
-                invalidate_values_cache()
-
-            _sheets_retry(ws.format, cell_ref, {
-                'textFormat': {'strikethrough': True}
-            })
-
-        logger.info(f"[DISTINTE] Numero segnato come ERRATO per POD {pod} (cella {cell_ref})")
-
-        return jsonify({
-            'success': True,
-            'message': f'Numero segnato come errato per {pod}'
-        })
-
-    except Exception as e:
-        return _api_error(e, 'segnalazione numero errato')
 
 
 @bp.route('/api/distinte/appuntamento', methods=['POST'])

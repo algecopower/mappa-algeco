@@ -15,6 +15,7 @@ POLITICA DI MERGE: "vince il più recente".
   Granularità: a livello RIGA. Una sola modifica locale post-export
   protegge tutta la riga dall'import. È la scelta più sicura.
 """
+import json
 import logging
 import os
 import time
@@ -69,6 +70,25 @@ _KEYS_DATE = {'data_pianificata', 'data_installazione'}
 # Date ISO YYYY-MM-DD (eventualmente con HH:MM:SS dopo)
 import re as _re
 _ISO_DATE_RE = _re.compile(r'^(\d{4})-(\d{2})-(\d{2})(?:\s+(\d{2}:\d{2}:\d{2}))?$')
+
+
+def _normalize_for_compare(s):
+    """Normalizzazione aggressiva PER IL CONFRONTO (non per il salvataggio).
+
+    Riduce le differenze "rumorose" che non corrispondono a un cambio reale:
+      - strip iniziale/finale
+      - sequenze di whitespace collassate in un singolo spazio
+      - None → ''
+    Restituisce sempre una stringa. Non altera maiuscole/minuscole né punteggiatura
+    (cambi tipo "Mario" → "MARIO" sono comunque cambi reali e li riportiamo).
+    """
+    if s is None:
+        return ''
+    s = str(s)
+    if not s:
+        return ''
+    # Strip + collasso whitespace
+    return ' '.join(s.split())
 
 
 def _normalize_for_db(value, chiave_interna):
@@ -225,14 +245,45 @@ def import_excel(file_path, *, export_ts=None, sheet_name=None, dry_run=False, u
         pass
 
     eneltel_visti_excel = set()
+    t0 = time.time()
 
     with conn:
         if not dry_run:
             conn.execute('BEGIN IMMEDIATE')
-            # Aggiorna column_registry con eventuali nuove colonne dell'Excel
             _db.update_column_registry(conn, headers_xlsx)
 
-        for row_excel_idx, row in enumerate(rows_xlsx, start=2):  # +2 perché riga 1 = header
+        # ────────────────────────────────────────────────────────────────
+        # PRE-LOAD BATCH (riduce ~2N query SELECT in N=righe_db a 2 query totali)
+        # ────────────────────────────────────────────────────────────────
+        filone_by_key = {}  # (eneltel_key, lcl) -> dict riga
+        for r in conn.execute('SELECT * FROM filone WHERE is_orphan=0'):
+            d = dict(r)
+            key = (d['eneltel_key'], d.get('lcl') or '')
+            filone_by_key[key] = d
+        extras_by_key = {}  # (eneltel_key, lcl) -> {column_name: value}
+        for r in conn.execute(
+            "SELECT eneltel_key, COALESCE(lcl,'') AS lcl, column_name, value FROM filone_extra"
+        ):
+            key = (r['eneltel_key'], r['lcl'])
+            extras_by_key.setdefault(key, {})[r['column_name']] = r['value'] or ''
+        # Index by eneltel only (per il fallback "primo LCL" se lcl=='')
+        first_lcl_by_eneltel = {}
+        for (ek, lcl), _row in filone_by_key.items():
+            if ek not in first_lcl_by_eneltel:
+                first_lcl_by_eneltel[ek] = lcl
+        logger.info(
+            f"[excel-import] preload: {len(filone_by_key)} righe filone, "
+            f"{sum(len(v) for v in extras_by_key.values())} extras "
+            f"in {time.time() - t0:.2f}s"
+        )
+
+        # Audit batch: accumuliamo tutto e flushiamo con executemany alla fine
+        audit_batch = []  # list of (ts, eneltel_key, column_name, old, new, source, user, detail_json)
+        # Updates per filone (un'unica UPDATE per riga con N campi)
+        # Mantenuti come (eneltel_key, lcl, {chiave: new_value}) in lista,
+        # eseguiti uno per uno (UPDATE filone con set dinamico è già veloce
+        # grazie all'index PK).
+        for row_excel_idx, row in enumerate(rows_xlsx, start=2):
             eneltel_raw = row[eneltel_idx] if eneltel_idx < len(row) else ''
             eneltel_key = _db.normalize_eneltel(eneltel_raw)
             if not eneltel_key:
@@ -250,12 +301,18 @@ def import_excel(file_path, *, export_ts=None, sheet_name=None, dry_run=False, u
                     continue
                 fields[h] = row[i] if i < len(row) else ''
 
-            # Cerca riga DB matching (eneltel + lcl). Se non esiste con quel LCL
-            # specifico, prova fallback alla prima riga dell'eneltel.
-            db_row = _db.get_filone_row(eneltel_key, lcl=lcl if lcl else None)
+            # Lookup riga DB (memoria, no SELECT)
+            key = (eneltel_key, lcl)
+            db_row = filone_by_key.get(key)
+            if db_row is None and not lcl:
+                # Fallback alla prima riga dell'eneltel (per backward-compat)
+                fallback_lcl = first_lcl_by_eneltel.get(eneltel_key)
+                if fallback_lcl is not None:
+                    key = (eneltel_key, fallback_lcl)
+                    db_row = filone_by_key.get(key)
+                    lcl = fallback_lcl
 
             if db_row is None:
-                # Riga NUOVA: crea
                 summary['rows_nuove'] += 1
                 if not dry_run:
                     _insert_new_row(conn, eneltel_key, lcl, row_excel_idx,
@@ -263,35 +320,95 @@ def import_excel(file_path, *, export_ts=None, sheet_name=None, dry_run=False, u
                                     export_ts=export_ts_int, user=user)
                 continue
 
-            # Riga ESISTENTE: regola most-recent-wins
+            # Most-recent-wins a livello riga
             db_last_local = db_row.get('last_local_change_ts') or 0
             if db_last_local > export_ts_int:
-                # DB ha modifiche locali successive all'export → DB vince
                 summary['rows_db_vince'] += 1
                 if len(summary['sample_db_vince']) < 20:
                     summary['sample_db_vince'].append(eneltel_key)
                 continue
 
-            # Excel vince: applica le celle che differiscono
-            n_changed = _apply_excel_to_row(
-                conn, eneltel_key, db_row.get('lcl') or '',
-                row_excel_idx, fields, header_mapping,
-                export_ts=export_ts_int, user=user, dry_run=dry_run,
+            # Diff cella-per-cella usando i dict in memoria
+            cur_extra = extras_by_key.get(key, {})
+            filone_updates = {}  # {chiave: new_val}
+            extra_updates = {}   # {col_name: new_val}
+            for col_name, new_val_raw in fields.items():
+                chiave = header_mapping.get(col_name)
+                new_val = _normalize_for_db(new_val_raw, chiave)
+                if chiave == 'eneltel':
+                    continue
+                if chiave and chiave in _db.COLONNE_NOTE:
+                    old_val_raw = db_row.get(chiave)
+                    old_val_db = '' if old_val_raw is None else str(old_val_raw).strip()
+                    # Confronto aggressivo: ignora differenze "rumorose" (spazi)
+                    if _normalize_for_compare(old_val_db) == _normalize_for_compare(new_val):
+                        continue
+                    filone_updates[chiave] = (old_val_db, new_val)
+                else:
+                    old_val_db = cur_extra.get(col_name, '')
+                    if _normalize_for_compare(old_val_db) == _normalize_for_compare(new_val):
+                        continue
+                    extra_updates[col_name] = (old_val_db, new_val)
+
+            n_changed = len(filone_updates) + len(extra_updates)
+            if n_changed == 0:
+                continue
+            summary['rows_aggiornate'] += 1
+            summary['celle_modificate'] += n_changed
+
+            if dry_run:
+                continue
+
+            # Applica updates su filone (1 UPDATE con set dinamico)
+            if filone_updates:
+                set_clause = ', '.join(f'{k}=?' for k in filone_updates)
+                vals = [v[1] for v in filone_updates.values()]
+                vals.extend([export_ts_int, eneltel_key, lcl])
+                conn.execute(
+                    f"UPDATE filone SET {set_clause}, last_remote_pull_ts=? "
+                    f"WHERE eneltel_key=? AND COALESCE(lcl,'')=?",
+                    vals,
+                )
+                # In-memory: aggiorna anche il dict per coerenza
+                for chiave, (_old, new) in filone_updates.items():
+                    db_row[chiave] = new
+                for chiave, (old, new) in filone_updates.items():
+                    audit_batch.append((
+                        export_ts_int, eneltel_key, chiave, old, new,
+                        'excel_import', user,
+                        json.dumps({'lcl': lcl, 'export_ts': export_ts_int}, ensure_ascii=False),
+                    ))
+
+            # Applica updates su filone_extra (INSERT OR REPLACE per cella)
+            for col_name, (old, new) in extra_updates.items():
+                conn.execute(
+                    'INSERT OR REPLACE INTO filone_extra(eneltel_key, lcl, column_name, value) '
+                    'VALUES (?, ?, ?, ?)',
+                    (eneltel_key, lcl, col_name, new),
+                )
+                cur_extra[col_name] = new
+                audit_batch.append((
+                    export_ts_int, eneltel_key, col_name, old, new,
+                    'excel_import', user,
+                    json.dumps({'lcl': lcl, 'export_ts': export_ts_int}, ensure_ascii=False),
+                ))
+
+        # Flush audit log in batch (executemany è ~10x più veloce di N exec)
+        if not dry_run and audit_batch:
+            now_ts = _db._now_ts()
+            # audit_log columns: ts, eneltel_key, column_name, old_value,
+            # new_value, source, user, detail
+            conn.executemany(
+                'INSERT INTO audit_log(ts, eneltel_key, column_name, old_value, '
+                'new_value, source, user, detail) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                [(now_ts, ek, col, old, new, src, usr, det)
+                 for (_ts_eff, ek, col, old, new, src, usr, det) in audit_batch],
             )
-            if n_changed > 0:
-                summary['rows_aggiornate'] += 1
-                summary['celle_modificate'] += n_changed
 
         # Conteggio eneltel solo in DB (in Excel non presenti)
-        all_db = conn.execute(
-            'SELECT eneltel_key FROM filone WHERE is_orphan=0'
-        ).fetchall()
-        all_db_keys = {r['eneltel_key'] for r in all_db}
-        summary['eneltel_solo_db'] = len(all_db_keys - eneltel_visti_excel)
-
-        if dry_run:
-            # Rollback transparente (with conn aprirebbe TX, ma noi non l'abbiamo aperta)
-            pass
+        summary['eneltel_solo_db'] = len(
+            {ek for (ek, _lcl) in filone_by_key.keys()} - eneltel_visti_excel
+        )
 
     # Auto-mark-delivered: tutte le pending create PRIMA dell'export_ts si
     # considerano già applicate sul foglio (perché il file Excel le riflette).
@@ -305,6 +422,7 @@ def import_excel(file_path, *, export_ts=None, sheet_name=None, dry_run=False, u
         except Exception:
             logger.exception('[excel-import] auto-mark-delivered fallito (non bloccante)')
     summary['auto_marked_delivered'] = auto_marked
+    summary['elapsed_seconds'] = round(time.time() - t0, 2)
 
     if not dry_run:
         logger.info(
@@ -312,7 +430,8 @@ def import_excel(file_path, *, export_ts=None, sheet_name=None, dry_run=False, u
             f"export_ts={summary['export_ts_iso']} "
             f"nuove={summary['rows_nuove']} aggiornate={summary['rows_aggiornate']} "
             f"db_vince={summary['rows_db_vince']} celle={summary['celle_modificate']} "
-            f"solo_db={summary['eneltel_solo_db']} auto_marked={auto_marked}"
+            f"solo_db={summary['eneltel_solo_db']} auto_marked={auto_marked} "
+            f"elapsed={summary['elapsed_seconds']}s"
         )
 
     return summary

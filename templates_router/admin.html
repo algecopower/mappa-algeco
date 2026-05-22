@@ -2169,6 +2169,7 @@ function rendiImportResult(data, wasDryRun) {
         <tr><td>⚠️ Righe Excel senza Eneltel</td><td>${data.rows_skip_no_eneltel}</td></tr>
         <tr><td>📦 Eneltel solo in DB (non in Excel)</td><td>${data.eneltel_solo_db}</td></tr>
         <tr><td>🔢 Colonne riconosciute</td><td>${data.n_headers}</td></tr>
+        ${data.elapsed_seconds != null ? `<tr><td>⏱️ Tempo elaborazione</td><td><b>${data.elapsed_seconds}s</b></td></tr>` : ''}
       </table>
       ${sample ? `<div style="font-size:11px;color:var(--text-muted);margin-top:10px;">Esempi righe protette (DB vince): <span class="mono">${sample}</span></div>` : ''}
       ${wasDryRun ? '<div style="margin-top:12px;padding:10px;background:var(--bg-primary);border-left:3px solid var(--warn);font-size:12px;">Era una simulazione. Per applicare davvero, togli la spunta "Solo simulazione" e clicca di nuovo.</div>' : ''}

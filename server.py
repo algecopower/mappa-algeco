@@ -551,8 +551,8 @@ logger = logging.getLogger('mappa_algeco')
 from moduli.auth import (
     init_auth, login_required, admin_required, authenticate, load_users,
     create_user, delete_user, reset_password, toggle_user_active,
-    list_users, set_user_province, set_user_role,
-    PROVINCE_DISPONIBILI, RUOLI_DISPONIBILI
+    list_users, set_user_role,
+    get_available_provinces, RUOLI_DISPONIBILI
 )
 
 # Modulo calendario condiviso
@@ -757,7 +757,7 @@ def check_provincia_access():
         username = session['user'].get('username', '')
         users = load_users()
         if username in users:
-            province_utente = users[username].get('province', list(PROVINCE_DISPONIBILI))
+            province_utente = users[username].get('province', get_available_provinces())
             session['user']['province'] = province_utente
         else:
             province_utente = session['user'].get('province', [])
@@ -801,20 +801,23 @@ def sse_notify_all(event_type='update', data=None):
 def sse_stream():
     """Generator per lo stream SSE."""
     client_queue = queue.Queue(maxsize=10)
-    
+
     with _sse_lock:
         _sse_clients.append(client_queue)
-    
+
     logger.info(f"[SSE] ✅ Nuovo client connesso (totale: {len(_sse_clients)})")
-    
+
     try:
         # Invia evento iniziale di connessione
         yield f"event: connected\ndata: {json.dumps({'status': 'ok'})}\n\n"
-        
+
         while True:
             try:
-                # Attendi messaggi con timeout per keep-alive
-                message = client_queue.get(timeout=30)
+                # Attendi messaggi con timeout per keep-alive. Timeout corto
+                # (10s vs 30s) per rilevare prima i client morti: il GeneratorExit
+                # arriva solo al prossimo yield fallito, quindi più keepalive
+                # = liberazione più rapida del thread gthread bloccato qui.
+                message = client_queue.get(timeout=10)
                 yield message
             except queue.Empty:
                 # Invia keep-alive per mantenere connessione
@@ -975,7 +978,7 @@ def api_current_user():
         username = user_data.get('username', '')
         if username in users:
             user_data['ruolo'] = users[username].get('ruolo', 'user')
-            user_data['province'] = users[username].get('province', list(PROVINCE_DISPONIBILI))
+            user_data['province'] = users[username].get('province', get_available_provinces())
             # Aggiorna anche la sessione
             session['user'] = user_data
         return jsonify({'authenticated': True, 'user': user_data})
@@ -1284,7 +1287,12 @@ def update_settings():
 def api_admin_list_users():
     """Lista tutti gli utenti (solo admin)."""
     utenti = list_users()
-    return jsonify({'success': True, 'users': utenti, 'province_disponibili': PROVINCE_DISPONIBILI, 'ruoli_disponibili': RUOLI_DISPONIBILI})
+    return jsonify({
+        'success': True,
+        'users': utenti,
+        'province_disponibili': get_available_provinces(),
+        'ruoli_disponibili': RUOLI_DISPONIBILI,
+    })
 
 
 @app.route('/api/admin/users', methods=['POST'])
@@ -1371,10 +1379,10 @@ def api_admin_reset_password(username):
     nuova = body.get('password')
     if nuova is not None:
         nuova = str(nuova).strip()
-        if len(nuova) < 6:
+        if len(nuova) < 8:
             return jsonify({
                 'success': False,
-                'message': 'La password deve essere lunga almeno 6 caratteri',
+                'message': 'La password deve essere lunga almeno 8 caratteri',
             }), 400
     success, msg, new_pass = reset_password(username, new_password=nuova)
     if success:
@@ -1398,20 +1406,6 @@ def api_admin_toggle_user(username):
     if success:
         return jsonify({'success': True, 'message': msg, 'active': new_state})
     return jsonify({'success': False, 'message': msg}), 404
-
-
-@app.route('/api/admin/users/<username>/province', methods=['PUT'])
-@admin_required
-def api_admin_set_province(username):
-    """Imposta le province di un utente (solo admin)."""
-    data = request.get_json()
-    if not data or 'province' not in data:
-        return jsonify({'success': False, 'message': 'Province richieste'}), 400
-
-    success, msg = set_user_province(username, data['province'])
-    if success:
-        return jsonify({'success': True, 'message': msg})
-    return jsonify({'success': False, 'message': msg}), 400
 
 
 @app.route('/api/admin/users/<username>/ruolo', methods=['PUT'])

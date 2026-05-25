@@ -29,12 +29,13 @@ import sys
 import json
 import time
 import hashlib
+import hmac
 import signal
 import socket
 import logging
 import subprocess
 import threading
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 import requests
 from flask import Flask, request, Response, jsonify, redirect
@@ -119,15 +120,22 @@ _auth_cache_lock = threading.Lock()
 
 def _backend_up_per_validazione():
     """Ritorna (slug, cfg) del primo backend running, o (None, None)."""
+    backends = _backends_running_per_validazione()
+    return backends[0] if backends else (None, None)
+
+
+def _backends_running_per_validazione():
+    """Ritorna tutti i backend running candidati alla validazione sessione."""
     try:
         province = carica_province()
     except Exception:
-        return (None, None)
+        return []
     stato = pm.stato()
+    out = []
     for slug, cfg in province.items():
         if stato.get(slug) == 'running':
-            return (slug, cfg)
-    return (None, None)
+            out.append((slug, cfg))
+    return out
 
 
 def _validate_session():
@@ -147,25 +155,26 @@ def _validate_session():
         if cached and cached[0] > now:
             return cached[1]
 
-    slug, cfg = _backend_up_per_validazione()
-    if not cfg:
+    backends = _backends_running_per_validazione()
+    if not backends:
         log.warning("nessun backend running per validare sessione admin")
         return None
 
-    try:
-        r = requests.get(
-            f'http://127.0.0.1:{cfg["porta"]}/api/user',
-            headers={'Cookie': cookie_header},
-            timeout=3,
-        )
-        user = None
-        if r.status_code == 200:
-            data = r.json()
-            if data.get('authenticated'):
-                user = data.get('user')
-    except requests.RequestException as e:
-        log.warning(f"errore validazione sessione: {e}")
-        user = None
+    user = None
+    for slug, cfg in backends:
+        try:
+            r = requests.get(
+                f'http://127.0.0.1:{cfg["porta"]}/api/user',
+                headers={'Cookie': cookie_header},
+                timeout=3,
+            )
+            if r.status_code == 200:
+                data = r.json()
+                if data.get('authenticated'):
+                    user = data.get('user')
+                    break
+        except requests.RequestException as e:
+            log.warning(f"[{slug}] errore validazione sessione: {e}")
 
     with _auth_cache_lock:
         _auth_cache[h] = (now + _AUTH_CACHE_TTL_S, user)
@@ -550,6 +559,83 @@ def catch_all(path):
 # ADMIN — dispatcher + endpoints (servito solo via admin.* hostname)
 # ============================================================================
 SLUG_RE = re.compile(r'^[A-Z][A-Z0-9_]{1,30}$')
+HOST_LABEL_RE = re.compile(r'^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$')
+RESERVED_SLUGS = {'ADMIN', 'ROUTER', 'WWW'}
+
+
+def _admin_csrf_check():
+    """Protegge le API admin native del router da CSRF.
+
+    I backend provinciali fanno gia' un controllo equivalente; qui serve per
+    le mutazioni gestite direttamente dal router (province, lifecycle, wipe).
+    """
+    origin = request.headers.get('Origin')
+    if not origin:
+        referer = request.headers.get('Referer', '')
+        if referer:
+            p = urlparse(referer)
+            if p.scheme and p.netloc:
+                origin = f'{p.scheme}://{p.netloc}'
+
+    if origin:
+        p = urlparse(origin)
+        req_host = (request.headers.get('Host') or '').split(':', 1)[0].lower()
+        if not p.hostname or p.hostname.lower() != req_host:
+            return jsonify({'error': 'Richiesta bloccata: origine non autorizzata'}), 403
+
+    header_token = request.headers.get('X-CSRF-Token', '')
+    cookie_token = request.cookies.get('csrf_token', '')
+    if not header_token or not cookie_token or not hmac.compare_digest(header_token, cookie_token):
+        return jsonify({'error': 'Token CSRF mancante o non valido'}), 403
+    return None
+
+
+def _normalize_sottodominio(value, slug):
+    """Normalizza il sottodominio configurato per una provincia."""
+    host = (value or '').strip().lower()
+    if not host:
+        return f'{slug.lower()}.mappa-algeco.com'
+    if '://' in host:
+        parsed = urlparse(host)
+        host = parsed.netloc
+    host = host.split('/', 1)[0].split(':', 1)[0].strip()
+    return host
+
+
+def _validate_sottodominio(slug, host, province, current_slug=None):
+    """Valida host pubblico evitando collisioni con admin.* e altre province."""
+    labels = [p for p in (host or '').split('.') if p]
+    if len(labels) < 2 or any(not HOST_LABEL_RE.match(label) for label in labels):
+        return "sottodominio non valido"
+    if labels[0] == ADMIN_HOST_PREFIX:
+        return "sottodominio riservato all'admin"
+    current_slug = (current_slug or '').upper()
+    for other_slug, other_cfg in province.items():
+        if other_slug.upper() == current_slug:
+            continue
+        other_host = _normalize_sottodominio(other_cfg.get('sottodominio'), other_slug)
+        if other_host == host or other_host.split('.', 1)[0] == labels[0]:
+            return f"sottodominio gia' usato da {other_slug}"
+    return None
+
+
+def _parse_port(value, province, current_slug=None):
+    """Valida una porta backend dichiarata dall'admin."""
+    try:
+        port = int(value)
+    except (TypeError, ValueError):
+        return None, 'porta non valida'
+    if port <= 0 or port > 65535:
+        return None, 'porta fuori range (1-65535)'
+    if port == ROUTER_PORT:
+        return None, f'porta {port} riservata al router'
+    current_slug = (current_slug or '').upper()
+    for other_slug, other_cfg in province.items():
+        if other_slug.upper() == current_slug:
+            continue
+        if int(other_cfg.get('porta', 0) or 0) == port:
+            return None, f'porta {port} gia\' usata da {other_slug}'
+    return port, None
 
 
 def _admin_dispatch(path):
@@ -570,6 +656,16 @@ def _admin_dispatch(path):
         return _admin_render_ui()
 
     # 2. API
+    if method in ('POST', 'PUT', 'PATCH', 'DELETE'):
+        guard = _admin_check()
+        if guard is not None:
+            return guard
+        csrf_guard = _admin_csrf_check()
+        if csrf_guard is not None:
+            return csrf_guard
+
+    if p == 'api/user' and method == 'GET':
+        return _admin_check() or _admin_current_user()
     if p == 'api/provinces' and method == 'GET':
         return _admin_check() or _admin_list_provinces()
     if p == 'api/provinces' and method == 'POST':
@@ -995,6 +1091,14 @@ def _admin_check():
     return _require_admin_or_redirect()
 
 
+def _admin_current_user():
+    """Ritorna l'utente admin corrente per l'header della dashboard."""
+    user = _validate_session()
+    if not user:
+        return jsonify({'authenticated': False}), 401
+    return jsonify({'authenticated': True, 'user': user})
+
+
 def _admin_list_provinces():
     try:
         province = carica_province()
@@ -1019,12 +1123,23 @@ def _admin_create_province():
     slug = (body.get('slug') or '').strip().upper()
     if not SLUG_RE.match(slug):
         return jsonify({'error': "slug non valido (A-Z, 0-9, _, 2-31 chars, deve iniziare con lettera)"}), 400
+    if slug in RESERVED_SLUGS:
+        return jsonify({'error': f"slug '{slug}' riservato"}), 400
     try:
         province = carica_province()
     except Exception as e:
         return jsonify({'error': f'lettura provinces.json fallita: {e}'}), 500
     if slug in province:
         return jsonify({'error': f'provincia {slug} già esistente'}), 409
+
+    sottodominio = _normalize_sottodominio(body.get('sottodominio'), slug)
+    err = _validate_sottodominio(slug, sottodominio, province)
+    if err:
+        return jsonify({'error': err}), 400
+    porta_raw = body.get('porta') or porta_libera_successiva(province)
+    porta, err = _parse_port(porta_raw, province)
+    if err:
+        return jsonify({'error': err}), 400
 
     cfg = {
         'nome': body.get('nome') or slug.capitalize(),
@@ -1039,8 +1154,8 @@ def _admin_create_province():
         'tempo_intervento_min': int(body.get('tempo_intervento_min') or 20),
         'data_inizio': body.get('data_inizio') or '',
         'data_fine': body.get('data_fine') or '',
-        'sottodominio': body.get('sottodominio') or f'{slug.lower()}.mappa-algeco.com',
-        'porta': int(body.get('porta') or porta_libera_successiva(province)),
+        'sottodominio': sottodominio,
+        'porta': porta,
     }
     if body.get('usa_localita_come_comune'):
         cfg['usa_localita_come_comune'] = True
@@ -1121,9 +1236,11 @@ def _admin_update_province(slug):
     aggiornato = dict(current)
 
     # Campi merge-abili: copia se presenti nel body
-    for k in ('nome', 'sottodominio', 'file_mappa', 'data_inizio', 'data_fine'):
+    for k in ('nome', 'file_mappa', 'data_inizio', 'data_fine'):
         if k in body:
             aggiornato[k] = body[k]
+    if 'sottodominio' in body:
+        aggiornato['sottodominio'] = _normalize_sottodominio(body.get('sottodominio'), slug)
     for k in ('ora_inizio_giornata', 'ora_fine_giornata', 'porta',
               'velocita_media_kmh', 'tempo_intervento_min'):
         if k in body and body[k] is not None and body[k] != '':
@@ -1151,14 +1268,18 @@ def _admin_update_province(slug):
         if k in body:
             aggiornato[k] = body[k]
 
-    # Controllo conflitti porta
+    # Controlli su campi che impattano il routing pubblico/backend.
     if aggiornato.get('porta') != current.get('porta'):
-        nuova_porta = aggiornato.get('porta')
-        for altro_slug, altro_cfg in province.items():
-            if altro_slug == slug:
-                continue
-            if int(altro_cfg.get('porta', 0)) == int(nuova_porta or 0):
-                return jsonify({'error': f"porta {nuova_porta} già usata da {altro_slug}"}), 409
+        porta, err = _parse_port(aggiornato.get('porta'), province, current_slug=slug)
+        if err:
+            return jsonify({'error': err}), 400
+        aggiornato['porta'] = porta
+    if aggiornato.get('sottodominio') != current.get('sottodominio'):
+        err = _validate_sottodominio(
+            slug, aggiornato.get('sottodominio'), province, current_slug=slug,
+        )
+        if err:
+            return jsonify({'error': err}), 400
 
     # Rileva se serve riavviare il backend
     STRUTTURALI = {'porta', 'sottodominio', 'file_mappa',

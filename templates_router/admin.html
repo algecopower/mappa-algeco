@@ -1,60 +1,164 @@
 <!DOCTYPE html>
-<html lang="it" data-theme="dark">
+<html lang="it" data-theme="dark" data-design="glass">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Gestione Province — Mappa Algeco</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script>
+  // Bootstrap pre-paint: legge tema + design da cookie (cross-subdominio,
+  // domain=.mappa-algeco.com) e poi da localStorage come fallback. In questo
+  // modo la scelta fatta in admin si propaga automaticamente alle mappe.
+  (function() {
+    function getCookie(name) {
+      var m = document.cookie.match(new RegExp('(?:^|;\\s*)' + name + '=([^;]+)'));
+      return m ? decodeURIComponent(m[1]) : null;
+    }
+    var t = getCookie('algeco_theme');
+    if (!t) { try { t = localStorage.getItem('admin_theme') || localStorage.getItem('algeco_theme'); } catch (_) {} }
+    if (t) document.documentElement.setAttribute('data-theme', t);
+    var d = getCookie('algeco_design');
+    if (!d) { try { d = localStorage.getItem('algeco_design'); } catch (_) {} }
+    if (d) document.documentElement.setAttribute('data-design', d);
+  })();
+</script>
 <style>
-  /* Stessa palette del programma principale (mappa_html.py) */
+  /* ============================================================
+     Palette e token glassmorfici allineati a /static/theme.css.
+     Inlined qui perché admin.html è servito dal router su un altro
+     hostname (admin.mappa-algeco.com) e non monta /static.
+     ============================================================ */
   :root {
-    --bg-primary: #1a1a2e;
-    --bg-secondary: #16213e;
-    --bg-tertiary: #0f3460;
-    --text-primary: #eee;
-    --text-secondary: #aaa;
-    --text-muted: #666;
-    --accent: #e94560;
-    --accent-hover: #ff6b6b;
-    --border: #0f3460;
-    --shadow: rgba(0,0,0,0.3);
+    --bg-primary: #0b1220;
+    --bg-secondary: #111b30;
+    --bg-tertiary: #1e2a47;
+    --text-primary: #eef2ff;
+    --text-secondary: #b8c2d6;
+    --text-muted: #6c7898;
+    --accent: #3b82f6;
+    --accent-hover: #60a5fa;
+    --accent-deep: #1d4ed8;
+    --accent-rgb: 59, 130, 246;
+    --border: rgba(99, 124, 168, 0.18);
+    --shadow: rgba(0, 8, 32, 0.45);
     --ok: #2ecc71;
     --warn: #f39c12;
     --error: #e74c3c;
+
+    /* Acrylic glass */
+    --panel-blur: 28px;
+    --panel-saturate: 220%;
+    --panel-bg: rgba(17, 27, 48, 0.42);
+    --panel-bg-strong: rgba(30, 42, 71, 0.58);
+    --panel-border: 1px solid rgba(255, 255, 255, 0.22);
+    --panel-shadow:
+        0 12px 40px rgba(0, 8, 32, 0.5),
+        0 0 0 1px rgba(255, 255, 255, 0.04),
+        inset 0 1px 0 rgba(255, 255, 255, 0.14),
+        inset 0 0 24px rgba(59, 130, 246, 0.06);
+    --header-bg: linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0) 60%),
+                 linear-gradient(135deg, rgba(30, 64, 175, 0.55) 0%, rgba(17, 27, 48, 0.45) 100%);
+    --modal-overlay-bg: rgba(0, 4, 16, 0.55);
+
+    --body-bg:
+        radial-gradient(ellipse at 18% 0%, rgba(59, 130, 246, 0.32) 0%, transparent 55%),
+        radial-gradient(ellipse at 82% 100%, rgba(99, 102, 241, 0.22) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 50%, rgba(14, 165, 233, 0.10) 0%, transparent 60%),
+        var(--bg-primary);
+    color-scheme: dark;
   }
   [data-theme="light"] {
-    --bg-primary: #f5f5f5;
+    --bg-primary: #eef2ff;
     --bg-secondary: #ffffff;
-    --bg-tertiary: #e8e8e8;
-    --text-primary: #333;
-    --text-secondary: #666;
-    --text-muted: #999;
-    --accent: #9b59b6;
-    --accent-hover: #a855f7;
-    --border: #ddd;
-    --shadow: rgba(0,0,0,0.1);
+    --bg-tertiary: #e0e7ff;
+    --text-primary: #1e293b;
+    --text-secondary: #475569;
+    --text-muted: #94a3b8;
+    --accent: #2563eb;
+    --accent-hover: #3b82f6;
+    --accent-deep: #1e40af;
+    --accent-rgb: 37, 99, 235;
+    --border: rgba(37, 99, 235, 0.18);
+    --shadow: rgba(15, 23, 42, 0.10);
     --ok: #27ae60;
     --warn: #e67e22;
     --error: #c0392b;
+    color-scheme: light;
+
+    --panel-saturate: 240%;
+    --panel-bg: rgba(255, 255, 255, 0.55);
+    --panel-bg-strong: rgba(255, 255, 255, 0.78);
+    --panel-border: 1px solid rgba(255, 255, 255, 0.7);
+    --panel-shadow:
+        0 12px 40px rgba(37, 99, 235, 0.10),
+        0 0 0 1px rgba(37, 99, 235, 0.05),
+        inset 0 1px 0 rgba(255, 255, 255, 0.95),
+        inset 0 0 32px rgba(37, 99, 235, 0.04);
+    --header-bg: linear-gradient(135deg, rgba(255,255,255,0.7), rgba(255,255,255,0) 60%),
+                 linear-gradient(135deg, rgba(219, 234, 254, 0.65) 0%, rgba(255, 255, 255, 0.55) 100%);
+    --modal-overlay-bg: rgba(255, 255, 255, 0.6);
+
+    --body-bg:
+        radial-gradient(ellipse at 18% 0%, rgba(59, 130, 246, 0.16) 0%, transparent 55%),
+        radial-gradient(ellipse at 82% 100%, rgba(99, 102, 241, 0.12) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 50%, rgba(14, 165, 233, 0.06) 0%, transparent 60%),
+        var(--bg-primary);
   }
+  /* Override design solid: disattiva blur + sfondo tinta unita */
+  [data-design="solid"] {
+    --panel-blur: 0;
+    --panel-saturate: 100%;
+    --panel-bg: var(--bg-secondary);
+    --panel-bg-strong: var(--bg-tertiary);
+    --panel-border: 1px solid var(--border);
+    --panel-shadow: 0 4px 16px var(--shadow);
+    --header-bg: linear-gradient(135deg, var(--bg-tertiary) 0%, var(--bg-secondary) 100%);
+    --modal-overlay-bg: rgba(0, 0, 0, 0.6);
+    --body-bg: var(--bg-primary);
+  }
+  @media (max-width: 768px) { :root { --panel-blur: 6px; } }
+  @supports not (backdrop-filter: blur(1px)) {
+    :root { --panel-bg: var(--bg-secondary); --panel-bg-strong: var(--bg-tertiary); }
+  }
+
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
     font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
+    /* Aurora applicata su uno pseudo-elemento fisso così non viene ridipinta
+       a ogni scroll come accadrebbe con background-attachment: fixed. */
     background: var(--bg-primary);
     color: var(--text-primary);
     transition: background 0.3s ease, color 0.3s ease;
     min-height: 100vh;
+    position: relative;
+  }
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background: var(--body-bg);
+    pointer-events: none;
   }
   a { color: var(--accent); }
 
-  /* Header */
+  /* Header — acrylic. translateZ(0) lo promuove a layer dedicato così il
+     compositor non rivaluta il blur sul resto del DOM ad ogni scroll. */
   header.app-header {
-    background: linear-gradient(135deg, var(--bg-tertiary) 0%, var(--bg-secondary) 100%);
-    border-bottom: 1px solid var(--border);
+    background: var(--header-bg);
+    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    border-bottom: var(--panel-border);
     padding: 12px 20px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    box-shadow: 0 2px 8px var(--shadow);
+    box-shadow: var(--panel-shadow);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    transform: translateZ(0);
+    will-change: backdrop-filter;
   }
   .app-header .brand {
     display: flex; align-items: center; gap: 10px;
@@ -62,7 +166,7 @@
   .app-header h1 {
     font-size: 17px;
     font-weight: 700;
-    color: var(--accent);
+    color: var(--text-primary);
     letter-spacing: -0.2px;
   }
   .app-header .meta {
@@ -70,10 +174,12 @@
     color: var(--text-secondary);
     font-size: 13px;
   }
-  .theme-toggle {
-    background: var(--bg-tertiary);
+  .icon-toggle {
+    background: var(--panel-bg);
+    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
     color: var(--text-primary);
-    border: 1px solid var(--border);
+    border: var(--panel-border);
     width: 34px; height: 34px;
     border-radius: 50%;
     cursor: pointer;
@@ -81,18 +187,24 @@
     display: inline-flex; align-items: center; justify-content: center;
     transition: all 0.2s ease;
   }
-  .theme-toggle:hover { background: var(--accent); color: white; }
+  .icon-toggle:hover { background: var(--accent); color: white; border-color: var(--accent); }
+  .icon-toggle.design-toggle.active { background: var(--accent); color: white; border-color: var(--accent); }
+  /* Alias retro per markup pre-esistente */
+  .theme-toggle { background: var(--panel-bg); backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate)); -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate)); color: var(--text-primary); border: var(--panel-border); width: 34px; height: 34px; border-radius: 50%; cursor: pointer; font-size: 15px; display: inline-flex; align-items: center; justify-content: center; transition: all 0.2s ease; }
+  .theme-toggle:hover { background: var(--accent); color: white; border-color: var(--accent); }
 
   main { max-width: 1280px; margin: 0 auto; padding: 20px 16px 40px; }
 
   /* Sezione health dashboard */
   .health-bar {
-    background: var(--bg-secondary);
-    border: 1px solid var(--border);
-    border-radius: 10px;
+    background: var(--panel-bg-strong);
+    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    border: var(--panel-border);
+    border-radius: 16px;
     padding: 14px 16px;
     margin-bottom: 16px;
-    box-shadow: 0 2px 8px var(--shadow);
+    box-shadow: var(--panel-shadow);
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: 12px;
@@ -102,10 +214,14 @@
     flex-direction: column;
     gap: 4px;
     padding: 10px 12px;
-    background: var(--bg-tertiary);
-    border-radius: 8px;
+    /* Traslucido senza backdrop-filter: è già figlio di .health-bar che ha
+       il blur, ripeterlo qui costa caro su scroll. */
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
     transition: transform 0.15s ease;
   }
+  [data-theme="light"] .health-card { border-color: rgba(0,0,0,0.05); }
   .health-card.alert { border-left: 3px solid var(--error); }
   .health-card.warn { border-left: 3px solid var(--warn); }
   .health-card.ok { border-left: 3px solid var(--ok); }
@@ -131,56 +247,65 @@
     display: flex; gap: 8px; align-items: center;
     margin-bottom: 16px; flex-wrap: wrap;
   }
-  .toolbar input.search-eneltel {
-    background: var(--bg-secondary);
-    border: 1px solid var(--border);
+  .toolbar input.search-eneltel,
+  .toolbar select.search-prov-select {
+    /* Niente backdrop-filter qui: gli input sono troppi/ripetuti e il blur
+       per ognuno è costoso. Bg traslucido statico è visivamente equivalente. */
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.14);
     color: var(--text-primary);
     padding: 8px 12px;
-    border-radius: 6px;
+    border-radius: 8px;
     font-size: 14px;
-    width: 200px;
-    transition: border-color 0.2s;
+    transition: border-color 0.2s, box-shadow 0.2s;
   }
-  .toolbar input.search-eneltel:focus {
+  [data-theme="light"] .toolbar input.search-eneltel,
+  [data-theme="light"] .toolbar select.search-prov-select {
+    background: rgba(255, 255, 255, 0.6);
+    border-color: rgba(0, 0, 0, 0.10);
+  }
+  .toolbar input.search-eneltel { width: 200px; }
+  .toolbar input.search-eneltel:focus,
+  .toolbar select.search-prov-select:focus {
     outline: none;
     border-color: var(--accent);
-  }
-  .toolbar select.search-prov-select {
-    background: var(--bg-secondary);
-    border: 1px solid var(--border);
-    color: var(--text-primary);
-    padding: 8px 10px;
-    border-radius: 6px;
-    font-size: 14px;
+    box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.25);
   }
 
-  /* Bottoni in stile programma */
+  /* Bottoni acrylic */
   .btn {
-    background: var(--accent);
+    background: linear-gradient(135deg, var(--accent-hover) 0%, var(--accent-deep) 100%);
     color: white;
     border: none;
     padding: 8px 14px;
-    border-radius: 6px;
+    border-radius: 8px;
     cursor: pointer;
     font-size: 13px;
-    font-weight: 500;
-    transition: all 0.2s ease;
+    font-weight: 600;
+    transition: transform 0.15s ease, box-shadow 0.2s ease, filter 0.2s ease;
     display: inline-flex; align-items: center; gap: 6px;
   }
-  .btn:hover { background: var(--accent-hover); transform: translateY(-1px); }
-  .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+  .btn:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(var(--accent-rgb), 0.40); }
+  .btn:active { transform: translateY(0) scale(0.98); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
   .btn.secondary {
-    background: var(--bg-tertiary);
+    background: rgba(255, 255, 255, 0.06);
     color: var(--text-primary);
-    border: 1px solid var(--border);
+    border: 1px solid rgba(255, 255, 255, 0.14);
   }
-  .btn.secondary:hover { background: var(--border); color: var(--text-primary); transform: translateY(-1px); }
-  .btn.success { background: var(--ok); }
-  .btn.success:hover { background: var(--ok); filter: brightness(1.1); }
-  .btn.warn { background: var(--warn); color: white; }
-  .btn.warn:hover { background: var(--warn); filter: brightness(1.1); }
-  .btn.danger { background: var(--error); }
-  .btn.danger:hover { background: var(--error); filter: brightness(1.1); }
+  [data-theme="light"] .btn.secondary { background: rgba(255, 255, 255, 0.6); }
+  [data-theme="light"] .btn.secondary { border-color: rgba(0, 0, 0, 0.10); }
+  .btn.secondary:hover {
+    background: var(--panel-bg-strong);
+    border-color: rgba(var(--accent-rgb), 0.55);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  }
+  .btn.success { background: linear-gradient(135deg, #4ade80 0%, #15803d 100%); }
+  .btn.success:hover { box-shadow: 0 6px 18px rgba(46, 204, 113, 0.40); filter: none; }
+  .btn.warn { background: linear-gradient(135deg, #fbbf24 0%, #b45309 100%); color: white; }
+  .btn.warn:hover { box-shadow: 0 6px 18px rgba(245, 158, 11, 0.40); filter: none; }
+  .btn.danger { background: linear-gradient(135deg, #f87171 0%, #b91c1c 100%); }
+  .btn.danger:hover { box-shadow: 0 6px 18px rgba(239, 68, 68, 0.40); filter: none; }
   .btn-icon-only {
     padding: 6px 8px;
     font-size: 13px;
@@ -193,14 +318,17 @@
     gap: 16px;
   }
   .card {
-    background: var(--bg-secondary);
-    border: 1px solid var(--border);
-    border-radius: 10px;
+    background: var(--panel-bg-strong);
+    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    border: var(--panel-border);
+    border-radius: 16px;
     padding: 16px;
-    box-shadow: 0 2px 8px var(--shadow);
+    box-shadow: var(--panel-shadow);
     transition: transform 0.2s ease, box-shadow 0.2s ease;
   }
-  .card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px var(--shadow); }
+  .card:hover { transform: translateY(-2px); box-shadow: 0 18px 48px rgba(0, 8, 32, 0.55); }
+  [data-theme="light"] .card:hover { box-shadow: 0 18px 48px rgba(37, 99, 235, 0.15); }
   .card-head {
     display: flex;
     justify-content: space-between;
@@ -286,7 +414,9 @@
   /* Modal */
   .modal {
     position: fixed; inset: 0;
-    background: rgba(0,0,0,0.6);
+    background: var(--modal-overlay-bg);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     display: none;
     align-items: center; justify-content: center;
     z-index: 100;
@@ -294,15 +424,17 @@
   }
   .modal.open { display: flex; }
   .modal-content {
-    background: var(--bg-secondary);
-    border: 1px solid var(--border);
-    border-radius: 12px;
+    background: var(--panel-bg-strong);
+    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    border: var(--panel-border);
+    border-radius: 18px;
     padding: 24px;
     max-width: 640px;
     width: 100%;
     max-height: 90vh;
     overflow-y: auto;
-    box-shadow: 0 12px 48px rgba(0,0,0,0.4);
+    box-shadow: var(--panel-shadow);
   }
   .modal-content.wide { max-width: 880px; }
   .modal-head {
@@ -338,19 +470,25 @@
   .form-group select {
     width: 100%;
     padding: 9px 12px;
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border);
-    border-radius: 6px;
+    /* Bg traslucido senza blur: il modal genitore ha già il backdrop-filter. */
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
     color: var(--text-primary);
     font-size: 14px;
     font-family: inherit;
-    transition: border-color 0.2s ease;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
   }
+  [data-theme="light"] .form-group input,
+  [data-theme="light"] .form-group select { background: rgba(255, 255, 255, 0.7); }
+  [data-theme="light"] .form-group input,
+  [data-theme="light"] .form-group select { border-color: rgba(0,0,0,0.10); }
   .form-group input[type="time"] { font-family: 'JetBrains Mono', Consolas, monospace; }
   .form-group input:focus,
   .form-group select:focus {
     outline: none;
     border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.25);
   }
   .form-group input[readonly] {
     opacity: 0.6;
@@ -374,13 +512,15 @@
   /* Toast */
   .toast {
     position: fixed; bottom: 24px; right: 24px;
-    background: var(--bg-secondary);
+    background: var(--panel-bg-strong);
+    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
     color: var(--text-primary);
-    border: 1px solid var(--border);
+    border: var(--panel-border);
     border-left: 3px solid var(--accent);
     padding: 12px 18px;
-    border-radius: 8px;
-    box-shadow: 0 8px 24px var(--shadow);
+    border-radius: 12px;
+    box-shadow: var(--panel-shadow);
     z-index: 200;
     transform: translateY(20px);
     opacity: 0;
@@ -481,11 +621,13 @@
   /* Pannello live log */
   .logs-section {
     margin-top: 24px;
-    background: var(--bg-secondary);
-    border: 1px solid var(--border);
-    border-radius: 10px;
+    background: var(--panel-bg-strong);
+    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    border: var(--panel-border);
+    border-radius: 16px;
     padding: 14px 16px;
-    box-shadow: 0 2px 8px var(--shadow);
+    box-shadow: var(--panel-shadow);
   }
   .logs-head {
     display: flex; align-items: center; gap: 10px;
@@ -495,22 +637,29 @@
     font-size: 14px; font-weight: 600; color: var(--text-primary);
     text-transform: uppercase; letter-spacing: 0.5px; margin-right: auto;
   }
-  .logs-head select {
-    background: var(--bg-tertiary); border: 1px solid var(--border);
-    color: var(--text-primary); padding: 5px 10px; border-radius: 5px;
+  .logs-head select,
+  .logs-pause-btn {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: var(--text-primary); padding: 5px 10px; border-radius: 6px;
     font-size: 12px; font-family: inherit;
   }
-  .logs-pause-btn {
-    background: var(--bg-tertiary); border: 1px solid var(--border);
-    color: var(--text-primary); padding: 5px 10px; border-radius: 5px;
-    font-size: 12px; cursor: pointer;
-  }
+  [data-theme="light"] .logs-head select,
+  [data-theme="light"] .logs-pause-btn { background: rgba(255, 255, 255, 0.7); }
+  [data-theme="light"] .logs-head select,
+  [data-theme="light"] .logs-pause-btn { border-color: rgba(0,0,0,0.10); }
+  .logs-pause-btn { cursor: pointer; }
   .logs-pause-btn.paused { background: var(--accent); color: white; border-color: var(--accent); }
   .logs-container {
-    background: var(--bg-primary); border: 1px solid var(--border);
-    border-radius: 6px; max-height: 360px; overflow-y: auto;
+    /* I log scrollano internamente: niente backdrop-filter qui o ogni log row
+       in scroll forza re-blur. Bg solido opaco, leggibilità migliore. */
+    background: rgba(0, 4, 16, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px; max-height: 360px; overflow-y: auto;
     font-family: 'JetBrains Mono', Consolas, monospace; font-size: 11px; line-height: 1.55;
   }
+  [data-theme="light"] .logs-container { background: rgba(255,255,255,0.45); border-color: rgba(0,0,0,0.08); }
+  [data-design="solid"] .logs-container { background: var(--bg-primary); }
   .log-row {
     padding: 3px 10px;
     display: grid; grid-template-columns: 130px 56px 78px 1fr; gap: 10px;
@@ -573,6 +722,7 @@
   </div>
   <div class="meta">
     <span id="userInfo">…</span>
+    <button class="icon-toggle design-toggle" id="designToggle" onclick="toggleDesign()" title="Passa tra effetto vetro e tema solido">✨</button>
     <button class="theme-toggle" onclick="toggleTheme()" title="Cambia tema chiaro/scuro">🌙</button>
   </div>
 </header>
@@ -963,21 +1113,60 @@ let editingSlug = null;
 let _province = [];
 
 // ============================================================
-// THEME
+// THEME + DESIGN (glass/solid)
+// Le preferenze vengono persistite in cookie con domain=.mappa-algeco.com
+// così la scelta fatta in admin si propaga alle mappe per provincia.
+// localStorage rimane come fallback per device senza cookie cross-subdominio.
 // ============================================================
+function _setCrossDomainCookie(name, value) {
+  // 1 anno, domain wildcard sul parent → visibile da admin.* e da ogni provincia.*
+  const maxAge = 60 * 60 * 24 * 365;
+  const isSecure = location.protocol === 'https:';
+  const host = location.hostname;
+  // Calcola il dominio parent (es. admin.mappa-algeco.com → .mappa-algeco.com).
+  // Su localhost / IP scrive senza domain (il browser rifiuta domain= per host non-FQDN).
+  let domainPart = '';
+  if (host.includes('.') && !/^\d+\.\d+\.\d+\.\d+$/.test(host)) {
+    const parts = host.split('.');
+    const parent = parts.length >= 2 ? '.' + parts.slice(-2).join('.') : '';
+    if (parent) domainPart = `; domain=${parent}`;
+  }
+  document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=${maxAge}; SameSite=Lax${isSecure ? '; Secure' : ''}${domainPart}`;
+}
+
+function _syncToggleButtons() {
+  const tBtn = document.querySelector('.theme-toggle');
+  if (tBtn) tBtn.textContent = document.documentElement.dataset.theme === 'dark' ? '🌙' : '☀️';
+  const dBtn = document.getElementById('designToggle');
+  if (dBtn) {
+    const cur = document.documentElement.dataset.design || 'glass';
+    dBtn.textContent = cur === 'glass' ? '✨' : '◻️';
+    dBtn.classList.toggle('active', cur === 'solid');
+    dBtn.title = cur === 'glass'
+      ? 'Passa a tema solido (zero blur, più leggero su mobile)'
+      : 'Passa a tema vetro (effetto glassmorfico)';
+  }
+}
+
 function toggleTheme() {
   const html = document.documentElement;
   const next = html.dataset.theme === 'dark' ? 'light' : 'dark';
   html.dataset.theme = next;
-  document.querySelector('.theme-toggle').textContent = next === 'dark' ? '🌙' : '☀️';
-  try { localStorage.setItem('admin_theme', next); } catch (_) {}
+  _setCrossDomainCookie('algeco_theme', next);
+  try { localStorage.setItem('algeco_theme', next); localStorage.setItem('admin_theme', next); } catch (_) {}
+  _syncToggleButtons();
 }
-(function initTheme() {
-  let t = 'dark';
-  try { t = localStorage.getItem('admin_theme') || 'dark'; } catch (_) {}
-  document.documentElement.dataset.theme = t;
-  document.querySelector('.theme-toggle').textContent = t === 'dark' ? '🌙' : '☀️';
-})();
+
+function toggleDesign() {
+  const html = document.documentElement;
+  const next = (html.dataset.design || 'glass') === 'glass' ? 'solid' : 'glass';
+  html.dataset.design = next;
+  _setCrossDomainCookie('algeco_design', next);
+  try { localStorage.setItem('algeco_design', next); } catch (_) {}
+  _syncToggleButtons();
+}
+
+_syncToggleButtons();
 
 // ============================================================
 // HELPERS
@@ -1633,8 +1822,8 @@ async function apriCreaUtente() {
   const username = prompt('Nome utente (lowercase, no spazi):');
   if (!username || !username.trim()) return;
   const password = prompt(`Password iniziale per "${username.trim()}":`);
-  if (!password || password.length < 6) {
-    toast('Password troppo corta (min 6 caratteri)', 'error');
+  if (!password || password.length < 8) {
+    toast('Password troppo corta (min 8 caratteri)', 'error');
     return;
   }
   const ruolo = confirm('Vuoi che sia un AMMINISTRATORE?\n\nOK = admin (può gestire tutto)\nAnnulla = utente normale') ? 'admin' : 'user';
@@ -1661,8 +1850,8 @@ async function utenteToggle(username, attivo) {
 
 async function utenteReset(username) {
   const password = prompt(`Nuova password per "${username}":`);
-  if (!password || password.length < 6) {
-    if (password !== null) toast('Password troppo corta (min 6)', 'error');
+  if (!password || password.length < 8) {
+    if (password !== null) toast('Password troppo corta (min 8)', 'error');
     return;
   }
   try {
@@ -1892,7 +2081,6 @@ function rendiElencoColonne(cols) {
     const typeCell = c.is_typed
       ? `<span class="badge ok" title="Campo standard usato dal programma">⚙️ Standard del programma</span><br><small style="color:var(--text-muted);">campo: ${escapeHtml(c.chiave_interna || '—')}</small>${lockBadge}`
       : `<span class="badge" style="background:var(--bg-tertiary);color:var(--text-secondary);">Personalizzata</span><br><small style="color:var(--text-muted);">aggiunta dal foglio</small>${lockBadge}`;
-    const safeNameAttr = c.column_name.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
     const vuotaCss = c.n_values === 0 ? 'color:var(--text-muted);font-style:italic;' : '';
     // Bottoni: se la colonna è protetta, disabilita con tooltip esplicativo
     let actionsHtml;
@@ -1903,8 +2091,13 @@ function rendiElencoColonne(cols) {
         <button class="btn danger" style="font-size:12px;padding:4px 10px;opacity:0.5;cursor:not-allowed;" disabled title="${escapeHtml(protMsg)}">🔒 Protetta</button>`;
     } else {
       actionsHtml = `
-        <button class="btn secondary" style="font-size:12px;padding:4px 10px;" onclick="rinominaColonna('${safeNameAttr}')" title="Cambia il nome di questa colonna">✏️ Rinomina</button>
-        <button class="btn danger" style="font-size:12px;padding:4px 10px;" onclick="eliminaColonna('${safeNameAttr}', ${c.is_typed}, ${c.n_values})" title="${c.is_typed ? 'Svuota tutti i valori (mantiene il campo)' : 'Elimina la colonna e tutti i suoi valori'}">🗑️ ${c.is_typed ? 'Svuota' : 'Elimina'}</button>`;
+        <button class="btn secondary" style="font-size:12px;padding:4px 10px;"
+          data-col-action="rename" data-col-name="${escapeHtml(c.column_name)}"
+          title="Cambia il nome di questa colonna">✏️ Rinomina</button>
+        <button class="btn danger" style="font-size:12px;padding:4px 10px;"
+          data-col-action="delete" data-col-name="${escapeHtml(c.column_name)}"
+          data-col-typed="${c.is_typed ? '1' : '0'}" data-col-values="${parseInt(c.n_values || 0)}"
+          title="${c.is_typed ? 'Svuota tutti i valori (mantiene il campo)' : 'Elimina la colonna e tutti i suoi valori'}">🗑️ ${c.is_typed ? 'Svuota' : 'Elimina'}</button>`;
     }
     html += `<tr>
       <td class="mono" style="vertical-align:top;padding-top:12px;">${c.last_index}</td>
@@ -1916,6 +2109,16 @@ function rendiElencoColonne(cols) {
   }
   html += '</tbody></table>';
   cont.innerHTML = html;
+  for (const btn of cont.querySelectorAll('[data-col-action]')) {
+    btn.addEventListener('click', () => {
+      const name = btn.dataset.colName || '';
+      if (btn.dataset.colAction === 'rename') {
+        rinominaColonna(name);
+      } else if (btn.dataset.colAction === 'delete') {
+        eliminaColonna(name, btn.dataset.colTyped === '1', parseInt(btn.dataset.colValues || '0'));
+      }
+    });
+  }
 }
 
 async function apriCreaColonna() {
@@ -2301,7 +2504,7 @@ async function submitForm(ev) {
     } else {
       body.slug = fd.get('slug').toUpperCase();
       const r = await api('POST', '/api/provinces', body);
-      toast(`Provincia ${r.slug} creata. Ora clicca "📥 Carica dati iniziali" e poi "▶ Avvia".`, 'success');
+      toast(`Provincia ${r.slug} creata. Ora clicca "▶ Avvia", poi usa il wizard o importa l'Excel iniziale.`, 'success');
     }
     chiudiModal();
     caricaTutto();

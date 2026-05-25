@@ -22,6 +22,7 @@ _ph = PasswordHasher()
 # Directory base per i dati
 SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 USERS_FILE = os.path.join(SCRIPT_DIR, 'users.json')
+PROVINCES_FILE = os.path.join(SCRIPT_DIR, 'data', 'provinces.json')
 
 # Configurazione sessioni
 SESSION_LIFETIME_HOURS = 24
@@ -93,8 +94,16 @@ def save_users(users: dict) -> bool:
     return json_write(USERS_FILE, users, indent=2)
 
 
-# Province disponibili nel sistema
-PROVINCE_DISPONIBILI = ['TORINO', 'PAVIA']
+def get_available_provinces() -> list:
+    """Ritorna gli slug provincia configurati in data/provinces.json."""
+    raw = json_read(PROVINCES_FILE, default={}) or {}
+    if isinstance(raw, dict) and raw:
+        return sorted(str(k).strip().upper() for k in raw.keys() if str(k).strip())
+    return ['TORINO', 'PAVIA']
+
+
+# Province disponibili nel sistema (compat: preferire get_available_provinces()).
+PROVINCE_DISPONIBILI = get_available_provinces()
 
 # Ruoli disponibili
 RUOLI_DISPONIBILI = ['admin', 'user']
@@ -118,11 +127,13 @@ def create_user(username: str, password: str = None, province: list = None, ruol
     if username in users:
         return False, f"Utente '{username}' già esistente", None
     
-    # Province di default: tutte
+    province_disponibili = get_available_provinces()
+
+    # Province di default: tutte quelle configurate
     if province is None:
-        province = list(PROVINCE_DISPONIBILI)
+        province = list(province_disponibili)
     else:
-        province = [p.upper() for p in province if p.upper() in PROVINCE_DISPONIBILI]
+        province = [p.upper() for p in province if p.upper() in province_disponibili]
         if not province:
             return False, "Nessuna provincia valida specificata", None
     
@@ -228,7 +239,7 @@ def authenticate(username: str, password: str, provincia_attiva: str = None) -> 
 
     # Verifica accesso alla provincia
     if provincia_attiva:
-        province_utente = user.get('province', list(PROVINCE_DISPONIBILI))
+        province_utente = user.get('province', get_available_provinces())
         if provincia_attiva.upper() not in province_utente:
             return False, None, f"Non hai accesso alla provincia {provincia_attiva}"
 
@@ -244,7 +255,7 @@ def authenticate(username: str, password: str, provincia_attiva: str = None) -> 
     
     return True, {
         'username': username,
-        'province': user.get('province', list(PROVINCE_DISPONIBILI)),
+        'province': user.get('province', get_available_provinces()),
         'ruolo': user.get('ruolo', 'user'),
     }, "Login effettuato"
 
@@ -258,7 +269,7 @@ def list_users() -> list:
             'created_at': data.get('created_at'),
             'last_login': data.get('last_login'),
             'active': data.get('active', True),
-            'province': data.get('province', list(PROVINCE_DISPONIBILI)),
+            'province': data.get('province', get_available_provinces()),
             'ruolo': data.get('ruolo', 'user')
         }
         for username, data in users.items()
@@ -271,7 +282,7 @@ def get_user_province(username: str) -> list:
     username = username.strip().lower()
     if username not in users:
         return []
-    return users[username].get('province', list(PROVINCE_DISPONIBILI))
+    return users[username].get('province', get_available_provinces())
 
 
 def set_user_province(username: str, province: list) -> tuple:
@@ -283,7 +294,8 @@ def set_user_province(username: str, province: list) -> tuple:
         return False, f"Utente '{username}' non trovato"
     
     # Valida province
-    province_valide = [p.upper() for p in province if p.upper() in PROVINCE_DISPONIBILI]
+    province_disponibili = get_available_provinces()
+    province_valide = [p.upper() for p in province if p.upper() in province_disponibili]
     if not province_valide:
         return False, "Nessuna provincia valida specificata"
     

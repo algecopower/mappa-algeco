@@ -1,9 +1,14 @@
 # -*- coding: utf-8 -*-
 """
 Route Dashboard — vista riepilogativa con statistiche operative.
-Legge i dati dal backup locale più recente (nessuna chiamata extra a Google Sheets).
+
+Sorgente dati: DB SQLite locale (`dump_filone_as_rows`), con overlay dei
+`pending_writes`. Le modifiche fatte dall'utente sono quindi visibili
+immediatamente, senza dover aspettare il backup giornaliero.
+Fallback al backup JSON solo se il DB è irraggiungibile.
 """
 import os
+import time
 import logging
 from datetime import datetime, date, timedelta
 from collections import Counter, defaultdict
@@ -23,21 +28,194 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BACKUP_DIR = os.path.join(BASE_DIR, 'backup', PROVINCIA_ATTIVA.lower())
 
 
-def _carica_ultimo_backup() -> dict | None:
-    """Carica il backup locale più recente del FILONE."""
+# ---------------------------------------------------------------------------
+# Cache in-memory per /api/dashboard.
+#
+# Sorgente PRIMARIA: DB SQLite live (`dump_filone_as_rows`). Iterare ~30k
+# righe + calcolare cento aggregazioni costa diversi secondi: la cache rende
+# istantanee le request ravvicinate (es. F5 ripetuti).
+#
+# Chiave cache stats: (data_version, today_iso).
+#   - data_version: PRAGMA SQLite che incrementa ad ogni write da un'altra
+#     connessione (in WAL mode funziona cross-thread). Appena qualcuno
+#     modifica il DB, la nostra cache si invalida da sola alla prossima
+#     request — quindi i cambi sono live entro al massimo `_STATS_TTL_S`.
+#   - today_iso: invalida automaticamente a mezzanotte (i conteggi
+#     "oggi/domani" cambiano significato).
+#
+# In più applichiamo un TTL massimo (`_STATS_TTL_S`) come safety net: se per
+# qualche motivo data_version non cambia (es. write nel nostro stesso
+# thread/connessione), comunque dopo N secondi rilegge.
+#
+# Il vecchio _BACKUP_CACHE rimane come fallback se il DB è giù.
+# ---------------------------------------------------------------------------
+_BACKUP_CACHE: dict[str, tuple[float, dict]] = {}
+_STATS_CACHE: dict[tuple, tuple[float, dict]] = {}  # key -> (created_at, payload)
+_STATS_TTL_S = 10.0  # safety net oltre data_version
+
+
+def _ultimo_backup_path() -> tuple[str, float] | None:
+    """Restituisce (path, mtime) del backup più recente, o None."""
     if not os.path.isdir(BACKUP_DIR):
         return None
-    files = sorted(
-        [f for f in os.listdir(BACKUP_DIR) if f.endswith('.json')],
-        reverse=True,
-    )
+    try:
+        files = [f for f in os.listdir(BACKUP_DIR) if f.endswith('.json')]
+    except OSError:
+        return None
     if not files:
         return None
+    files.sort(reverse=True)
+    path = os.path.join(BACKUP_DIR, files[0])
     try:
-        return json_read(os.path.join(BACKUP_DIR, files[0]), default=None)
-    except Exception as e:
-        logger.warning(f"[Dashboard] Errore lettura backup {files[0]}: {e}")
+        return path, os.path.getmtime(path)
+    except OSError:
+        return path, 0.0
+
+
+def _carica_ultimo_backup() -> dict | None:
+    """Fallback: carica il backup JSON più recente se il DB è giù.
+
+    Memoizzato per (path, mtime). Usato solo in emergenza — di norma la
+    dashboard legge dal DB live (vedi `_carica_filone_live`).
+    """
+    info = _ultimo_backup_path()
+    if info is None:
         return None
+    path, mtime = info
+    cached = _BACKUP_CACHE.get(path)
+    if cached and cached[0] == mtime:
+        return cached[1]
+    try:
+        payload = json_read(path, default=None)
+    except Exception as e:
+        logger.warning(f"[Dashboard] Errore lettura backup {os.path.basename(path)}: {e}")
+        return None
+    if payload is not None:
+        _BACKUP_CACHE.clear()
+        _BACKUP_CACHE[path] = (mtime, payload)
+    return payload
+
+
+def _db_data_version() -> int:
+    """PRAGMA data_version: incrementa ad ogni write committed da un'altra
+    connessione. In WAL mode è il segnale più rapido (~µs) per sapere se
+    il DB è cambiato dal nostro ultimo snapshot."""
+    try:
+        from moduli import db as _db
+        row = _db.get_conn().execute('PRAGMA data_version').fetchone()
+        return row[0] if row else 0
+    except Exception:
+        return 0
+
+
+# Colonne strettamente necessarie alla dashboard. 7 sono native nella tabella
+# filone (mapping da column_registry → chiave_interna), 1 sta in filone_extra.
+# Limitare la SELECT a queste colonne riduce ~10× il lavoro di materializzazione
+# rispetto al generico dump_filone_as_rows (22k righe × 28 colonne).
+_DASH_NATIVE_COLS = [
+    # (header_name, sql_column_in_filone)
+    ('LCL',                'lcl'),
+    ('DATA PIAN',          'data_pianificata'),
+    ('Operatore',          'operatore'),
+    ('Esito',              'esito'),
+    ('NOTE APP',           'note_appuntamento'),
+    ('Comune',             'comune'),
+    ('Data Installazione', 'data_installazione'),
+]
+_DASH_EXTRA_COLS = ['Mot. Rich.']
+_DASH_HEADERS = [h for h, _ in _DASH_NATIVE_COLS] + _DASH_EXTRA_COLS
+
+
+def _carica_filone_live() -> dict | None:
+    """Legge dal DB SQLite solo le colonne necessarie alla dashboard.
+
+    Ritorna lo stesso schema del backup JSON (`{headers, righe, data_backup}`)
+    così le funzioni di calcolo (_calcola_statistiche_filone /
+    _calcola_andamento_lcl) funzionano senza modifiche. `righe` è
+    list[list[str]] con indice posizionale allineato a `headers`.
+
+    Applica l'overlay dei `pending_writes` (state pending/in_flight) sulle
+    sole colonne dashboard: scritture utente non ancora pushate a Sheets
+    sono comunque visibili nei KPI.
+    """
+    try:
+        from moduli import db as _db
+        conn = _db.get_conn()
+
+        # 1. Native columns dalla tabella filone (escludi orphan).
+        sql_cols = ['eneltel_key', 'lcl'] + [c for _, c in _DASH_NATIVE_COLS if c != 'lcl']
+        sql = (
+            "SELECT " + ', '.join(sql_cols) +
+            " FROM filone WHERE is_orphan=0 ORDER BY sheets_row"
+        )
+        native_rows = conn.execute(sql).fetchall()
+
+        # 2. Mot. Rich. da filone_extra (chiave: (eneltel_key, lcl)).
+        extra_motrich = {}
+        cur = conn.execute(
+            "SELECT eneltel_key, COALESCE(lcl,'') AS lcl, value "
+            "FROM filone_extra WHERE column_name = ?",
+            ('Mot. Rich.',),
+        )
+        for r in cur:
+            extra_motrich[(r['eneltel_key'], r['lcl'])] = r['value']
+
+        # 3. pending_writes overlay solo per le colonne che ci interessano.
+        #    column_name nel DB è il nome originale del foglio (case-sensitive
+        #    storico): usiamo IN su tutti gli header dashboard.
+        pending_by_key: dict = {}
+        placeholders = ','.join('?' for _ in _DASH_HEADERS)
+        cur = conn.execute(
+            "SELECT eneltel_key, COALESCE(lcl,'') AS lcl, column_name, new_value "
+            "FROM pending_writes "
+            f"WHERE state IN ('pending','in_flight') AND column_name IN ({placeholders})",
+            _DASH_HEADERS,
+        )
+        for r in cur:
+            pending_by_key.setdefault((r['eneltel_key'], r['lcl']), {})[r['column_name']] = r['new_value']
+    except Exception as e:
+        logger.warning(f"[Dashboard] Lettura DB fallita, uso backup: {e}")
+        return None
+
+    if not native_rows:
+        return None
+
+    # 4. Materializza ogni riga come lista nello stesso ordine di _DASH_HEADERS.
+    #    Hot loop: usa accesso diretto al Row + valori puri (no isinstance, no
+    #    iterazione headers per ogni riga).
+    righe: list[list[str]] = []
+    for fr in native_rows:
+        ek = fr['eneltel_key']
+        lcl_val = fr['lcl'] or ''
+        row_pending = pending_by_key.get((ek, lcl_val))
+
+        # 7 valori nativi nell'ordine di _DASH_NATIVE_COLS
+        vals = [
+            lcl_val,
+            fr['data_pianificata'] or '',
+            fr['operatore'] or '',
+            fr['esito'] or '',
+            fr['note_appuntamento'] or '',
+            fr['comune'] or '',
+            fr['data_installazione'] or '',
+        ]
+        # + Mot. Rich.
+        vals.append(extra_motrich.get((ek, lcl_val), '') or '')
+
+        # Pending overlay: solo se ci sono pending per questa riga.
+        if row_pending:
+            for i, h in enumerate(_DASH_HEADERS):
+                if h in row_pending:
+                    pv = row_pending[h]
+                    vals[i] = '' if pv is None else str(pv)
+        righe.append(vals)
+
+    return {
+        'headers': _DASH_HEADERS,
+        'righe': righe,
+        'data_backup': datetime.now().isoformat(timespec='seconds'),
+        'source': 'db_live',
+    }
 
 
 def _col_index(headers: list, nomi: list) -> int | None:
@@ -57,15 +235,48 @@ def _cell(row: list, idx: int | None) -> str:
     return str(row[idx]).strip()
 
 
+# Pre-compilato una volta sola (vs `import re` dentro la funzione hot path).
+_DATE_RE = __import__('re').compile(r'^(\d{1,4})[/\-.](\d{1,2})[/\-.](\d{1,4})$')
+
+
+@__import__('functools').lru_cache(maxsize=16384)
 def _parse_data(val: str) -> str | None:
-    """Converte una data grezza in YYYY-MM-DD (best-effort)."""
-    val = val.strip()
-    if not val or len(val) < 6 or 'annullat' in val.lower():
+    """Converte una data grezza in YYYY-MM-DD (best-effort).
+
+    Implementazione fast-path: parsing puro Python senza pandas. Sul dump
+    FILONE (~22k righe × ~2 date a riga) `pd.to_datetime` scalar costa ~7-8 s
+    totali; questo parser costa ~50 ms. lru_cache deduplicizza i valori
+    ripetuti (molti contatori condividono la stessa data pianificata).
+    """
+    if not val:
         return None
-    import re
-    val_clean = re.split(r'\s+', val)[0]
-    from moduli.data_loader import parse_data_flessibile
-    return parse_data_flessibile(val_clean)
+    val = val.strip()
+    if len(val) < 6 or 'annullat' in val.lower():
+        return None
+    # Strip orario (es. "26/05/2026 08:00" → "26/05/2026"), keepa solo il pezzo data.
+    sp = val.find(' ')
+    val_clean = val[:sp] if sp != -1 else val
+    m = _DATE_RE.match(val_clean)
+    if not m:
+        return None
+    a, b, c = m.groups()
+    # Indovina ordine in base alla lunghezza dei campi
+    if len(a) == 4:                    # YYYY-MM-DD
+        y, mo, d = a, b, c
+    elif len(c) == 4:                  # dd/mm/yyyy o dd-mm-yyyy
+        d, mo, y = a, b, c
+    elif len(c) == 2:                  # dd/mm/yy → 20yy
+        d, mo, y = a, b, '20' + c
+    else:
+        return None
+    try:
+        di, moi, yi = int(d), int(mo), int(y)
+        # Validazione minimale: range plausibili
+        if not (1 <= di <= 31 and 1 <= moi <= 12 and 1900 <= yi <= 2999):
+            return None
+    except ValueError:
+        return None
+    return f"{yi:04d}-{moi:02d}-{di:02d}"
 
 
 def _calcola_statistiche_filone(backup: dict) -> dict:
@@ -483,18 +694,45 @@ def dashboard_page():
 @bp.route('/api/dashboard', methods=['GET'])
 @login_required
 def api_dashboard():
-    """Restituisce i dati aggregati per la dashboard."""
+    """Restituisce i dati aggregati per la dashboard.
+
+    Legge dal DB live così le modifiche utente sono visibili subito; la
+    cache è invalidata da PRAGMA data_version (qualunque write nel DB)
+    oltre che da un TTL di sicurezza. Vedi commento su _STATS_CACHE.
+    """
     try:
-        # 1. Statistiche da backup FILONE
-        backup = _carica_ultimo_backup()
-        if backup:
-            filone_stats = _calcola_statistiche_filone(backup)
-            andamento_lcl = _calcola_andamento_lcl(backup)
-            data_backup = backup.get('data_backup', '?')
+        today_iso = date.today().isoformat()
+        data_ver = _db_data_version()
+        stats_key = (data_ver, today_iso)
+
+        cached_entry = _STATS_CACHE.get(stats_key)
+        cached_stats = None
+        if cached_entry is not None:
+            created_at, payload = cached_entry
+            if (time.monotonic() - created_at) < _STATS_TTL_S:
+                cached_stats = payload
+
+        if cached_stats is not None:
+            filone_stats = cached_stats['filone']
+            andamento_lcl = cached_stats['andamento_lcl']
+            data_backup = cached_stats['data_backup']
         else:
-            filone_stats = {}
-            andamento_lcl = {}
-            data_backup = None
+            filone = _carica_filone_live() or _carica_ultimo_backup()
+            if filone:
+                filone_stats = _calcola_statistiche_filone(filone)
+                andamento_lcl = _calcola_andamento_lcl(filone)
+                data_backup = filone.get('data_backup', '?')
+            else:
+                filone_stats = {}
+                andamento_lcl = {}
+                data_backup = None
+            # Cap dimensione: tieni un solo set di stats (l'ultimo).
+            _STATS_CACHE.clear()
+            _STATS_CACHE[stats_key] = (time.monotonic(), {
+                'filone': filone_stats,
+                'andamento_lcl': andamento_lcl,
+                'data_backup': data_backup,
+            })
 
         # 2. Attività calendario (oggi e prossime)
         oggi_str = date.today().isoformat()

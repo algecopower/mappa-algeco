@@ -26,11 +26,20 @@
 </head>
 <body data-theme="dark" data-design="glass">
     <script>
-        // Applica tema + design salvati prima del primo paint per evitare FOUC
-        var st = localStorage.getItem('algeco_theme');
-        if (st) document.body.setAttribute('data-theme', st);
-        var sd = localStorage.getItem('algeco_design');
-        if (sd) document.body.setAttribute('data-design', sd);
+        // Applica tema + design salvati prima del primo paint per evitare FOUC.
+        // Priorità: cookie (impostato dalla dashboard admin con domain=.mappa-algeco.com,
+        // così la scelta admin si propaga a tutte le mappe) → localStorage → default.
+        // Il toggle "Stile" (glass/solid) ora vive solo nella dashboard admin.
+        (function () {
+            function _cookie(n) {
+                var m = document.cookie.match(new RegExp('(?:^|;\\s*)' + n + '=([^;]+)'));
+                return m ? decodeURIComponent(m[1]) : null;
+            }
+            var t = _cookie('algeco_theme') || localStorage.getItem('algeco_theme');
+            if (t) document.body.setAttribute('data-theme', t);
+            var d = _cookie('algeco_design') || localStorage.getItem('algeco_design');
+            if (d) document.body.setAttribute('data-design', d);
+        })();
     </script>
     <div class="page-loading-overlay" id="pageLoadingOverlay">
         <div class="page-loading-spinner"></div>
@@ -49,7 +58,6 @@
                 <div class="toggles">
                     <button class="toggle-btn active" id="viewToggle" onclick="toggleView()"><i data-lucide="map"></i> Zone</button>
                     <button class="toggle-btn" id="themeToggle" onclick="toggleTheme()"><i data-lucide="moon"></i> Tema</button>
-                    <button class="toggle-btn" id="designToggle" onclick="toggleDesign()" title="Passa tra effetto vetro e tema solido"><i data-lucide="sparkles"></i> Stile</button>
                     <button class="toggle-btn" id="searchModeToggle" onclick="toggleAdvancedSearchModal()"><i data-lucide="search"></i> Ricerca Utente</button>
                     <button class="toggle-btn" id="addressSearchToggle" onclick="toggleAddressSearchModal()"><i data-lucide="map-pin"></i> Cerca Indirizzo</button>
                     <button class="toggle-btn" onclick="AlgecoTour.start(true)" title="Guida interattiva"><i data-lucide="help-circle"></i> Guida</button>

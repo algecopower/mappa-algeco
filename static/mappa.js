@@ -799,45 +799,9 @@ if (document.readyState === 'loading') {
 }
 
 
-// Sincronizza il testo del button "Stile" al caricamento (lo stato è già
-// applicato dal bootstrap inline in mappa.html prima del primo paint).
-function _syncDesignToggleBtn() {
-    const btn = document.getElementById('designToggle');
-    if (!btn) return;
-    const current = document.body.getAttribute('data-design') || 'glass';
-    const iconName = current === 'glass' ? 'sparkles' : 'square';
-    btn.innerHTML = `<i data-lucide="${iconName}"></i> Stile`;
-    btn.classList.toggle('active', current === 'solid');
-    window.refreshLucideIcons();
-}
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', _syncDesignToggleBtn);
-} else {
-    _syncDesignToggleBtn();
-}
-
-
-// Toggle design glassmorfico vs solido (preferenza utente).
-// L'effetto glass è il default; chi preferisce sobrio o ha device
-// poco potente può passare a solid.
-function toggleDesign() {
-    const body = document.body;
-    const current = body.getAttribute('data-design') || 'glass';
-    const next = current === 'glass' ? 'solid' : 'glass';
-    body.setAttribute('data-design', next);
-    localStorage.setItem('algeco_design', next);
-
-    const btn = document.getElementById('designToggle');
-    if (btn) {
-        const iconName = next === 'glass' ? 'sparkles' : 'square';
-        btn.innerHTML = `<i data-lucide="${iconName}"></i> Stile`;
-        btn.classList.toggle('active', next === 'solid');
-        btn.title = next === 'glass'
-            ? 'Passa a tema solido (zero blur, più leggero su mobile)'
-            : 'Passa a tema vetro (effetto glassmorfico)';
-        window.refreshLucideIcons();
-    }
-}
+// Il toggle Stile (glass/solid) ora vive solo nella dashboard admin: la scelta
+// viene propagata via cookie `algeco_design` con domain=.mappa-algeco.com e il
+// bootstrap inline in mappa.html la applica prima del primo paint.
 
 let _refreshWaitingForSSE = false;
 

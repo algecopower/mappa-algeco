@@ -10,14 +10,18 @@ Volutamente 1 worker:
   il carico Sheets API
 - Il volume di traffico è basso (~5 utenti); gthread gestisce concorrenza
 
-threads=8 per gestire SSE long-lived (ogni client tiene 1 thread bloccato).
+threads=32 per gestire SSE long-lived: ogni connessione SSE tiene 1 thread
+bloccato in `queue.get(timeout=...)`, quindi il pool deve essere abbondante.
+Con 5-10 utenti che hanno tab multipli aperti possiamo arrivare facilmente
+a 15-20 SSE attive; servono thread extra per le request HTTP normali
+(API, page loads). 32 è un compromesso: memoria ~150 KB/thread × 32 ≈ 5 MB.
 """
 
 import os
 
 bind = f"0.0.0.0:{os.environ.get('FLASK_PORT', '5001')}"
 workers = 1
-threads = int(os.environ.get('GUNICORN_THREADS', '8'))
+threads = int(os.environ.get('GUNICORN_THREADS', '32'))
 worker_class = 'gthread'
 worker_connections = 100
 

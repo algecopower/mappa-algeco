@@ -47,10 +47,20 @@
             --text-dim: var(--text-muted);
         }
 
-        /* Acrylic sui container principali */
-        header, .panel, .kpi-card, .side-nav {
+        /* Acrylic sui container principali. NB: la dashboard ha 40+ panel/kpi
+           ripetuti — applicare backdrop-filter a tutti li trasforma in altrettanti
+           compositing layer che si ricalcolano ad ogni frame di scroll. Quindi
+           il blur va SOLO su header e .side-nav (statici, pochi); panel e
+           kpi-card usano bg traslucido equivalente visivamente ma economico. */
+        header, .side-nav {
             backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
             -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+            border: var(--panel-border) !important;
+            box-shadow: var(--panel-shadow);
+            transform: translateZ(0);
+            will-change: backdrop-filter;
+        }
+        .panel, .kpi-card {
             border: var(--panel-border) !important;
             box-shadow: var(--panel-shadow);
         }
@@ -901,18 +911,49 @@ function showToast(msg, isError) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// DATA LOADING
+// DATA LOADING — stale-while-revalidate
+//
+// Su reload pagina mostra subito i numeri dell'ultimo fetch (sessionStorage),
+// poi rifa la chiamata in background. Evita gli spinner se l'utente fa F5
+// ogni pochi secondi: vede i dati ~vecchi di qualche secondo immediatamente
+// e si aggiornano quando arriva la risposta del server.
 // ═══════════════════════════════════════════════════════════
+const _CACHE_KEY = 'algeco_dashboard_last';
+const _CACHE_MAX_AGE_MS = 5 * 60 * 1000;  // 5 minuti
+
+function _loadCached() {
+    try {
+        const raw = sessionStorage.getItem(_CACHE_KEY);
+        if (!raw) return null;
+        const wrap = JSON.parse(raw);
+        if (!wrap || !wrap.ts || !wrap.data) return null;
+        if (Date.now() - wrap.ts > _CACHE_MAX_AGE_MS) return null;
+        return wrap.data;
+    } catch (_) { return null; }
+}
+
+function _saveCached(data) {
+    try {
+        sessionStorage.setItem(_CACHE_KEY, JSON.stringify({ ts: Date.now(), data }));
+    } catch (_) {}
+}
+
 async function loadDashboard() {
+    // Render istantaneo da cache locale se disponibile e recente
+    const cached = _loadCached();
+    if (cached) {
+        try { render(cached); } catch (_) {}
+    }
     try {
         const res = await fetch('/api/dashboard');
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         if (!data.success) throw new Error(data.error || 'Errore');
         render(data);
+        _saveCached(data);
     } catch (e) {
         console.error('Dashboard:', e);
-        showToast('Errore caricamento dati', true);
+        if (!cached) showToast('Errore caricamento dati', true);
     }
 }
 

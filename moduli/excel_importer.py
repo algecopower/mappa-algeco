@@ -19,6 +19,7 @@ import json
 import logging
 import os
 import time
+from collections import Counter
 from datetime import datetime
 
 from . import db as _db
@@ -66,10 +67,15 @@ def _cell_to_str(v):
 # tra import successivi (formato italiano vs Python, ISO vs DD/MM/YYYY, ecc.).
 _KEYS_NUMERIC_DOT = {'latitudine', 'longitudine'}
 _KEYS_DATE = {'data_pianificata', 'data_installazione'}
+_INVALID_NUMERIC_TOKENS = {
+    '#REF!', '#VALUE!', '#DIV/0!', '#N/A', '#NAME?', '#NULL!', '#NUM!',
+    'ANNULLATO', 'ANNULLATA',
+}
 
 # Date ISO YYYY-MM-DD (eventualmente con HH:MM:SS dopo)
 import re as _re
 _ISO_DATE_RE = _re.compile(r'^(\d{4})-(\d{2})-(\d{2})(?:\s+(\d{2}:\d{2}:\d{2}))?$')
+_IT_DATE_RE = _re.compile(r'^(\d{1,2})/(\d{1,2})/(\d{4})(?:\s+(\d{2}:\d{2}(?::\d{2})?))?$')
 
 
 def _normalize_for_compare(s):
@@ -91,6 +97,63 @@ def _normalize_for_compare(s):
     return ' '.join(s.split())
 
 
+def _parse_decimal(value):
+    """Ritorna float per confronti numerici, accettando virgola decimale."""
+    s = _normalize_for_compare(value)
+    if not s:
+        return None
+    try:
+        return float(s.replace(',', '.'))
+    except (TypeError, ValueError):
+        return None
+
+
+def _is_invalid_numeric_value(value):
+    """True per errori/formule testuali che non vanno scritti in colonne REAL."""
+    s = _normalize_for_compare(value).upper()
+    if not s:
+        return False
+    return s in _INVALID_NUMERIC_TOKENS or s.startswith('#')
+
+
+def _date_compare_key(value):
+    """Normalizza date italiane/ISO alla stessa chiave di confronto."""
+    s = _normalize_for_compare(value)
+    if not s:
+        return ''
+    m = _ISO_DATE_RE.match(s)
+    if m:
+        tail = m.group(4) or ''
+        if tail in ('', '00:00:00'):
+            tail = ''
+        return f'{m.group(1)}-{m.group(2)}-{m.group(3)}{(" " + tail) if tail else ""}'
+    m = _IT_DATE_RE.match(s)
+    if m:
+        giorno = m.group(1).zfill(2)
+        mese = m.group(2).zfill(2)
+        tail = m.group(4) or ''
+        if tail in ('', '00:00', '00:00:00'):
+            tail = ''
+        return f'{m.group(3)}-{mese}-{giorno}{(" " + tail) if tail else ""}'
+    return s
+
+
+def _values_equivalent(old_value, new_value, chiave_interna):
+    """Confronto semantico per evitare diff rumorosi da Excel/SQLite."""
+    old_cmp = _normalize_for_compare(old_value)
+    new_cmp = _normalize_for_compare(new_value)
+    if old_cmp == new_cmp:
+        return True
+    if chiave_interna in _KEYS_NUMERIC_DOT:
+        old_num = _parse_decimal(old_cmp)
+        new_num = _parse_decimal(new_cmp)
+        if old_num is not None and new_num is not None:
+            return abs(old_num - new_num) < 0.0000001
+    if chiave_interna in _KEYS_DATE:
+        return _date_compare_key(old_cmp) == _date_compare_key(new_cmp)
+    return False
+
+
 def _normalize_for_db(value, chiave_interna):
     """Normalizza un valore Excel per renderlo confrontabile con il DB.
 
@@ -104,6 +167,8 @@ def _normalize_for_db(value, chiave_interna):
     if not s:
         return ''
     if chiave_interna in _KEYS_NUMERIC_DOT:
+        if _is_invalid_numeric_value(s):
+            return s.upper()
         # Solo se sembra un numero con virgola decimale (no virgole multiple)
         if s.count(',') == 1 and s.count('.') == 0:
             return s.replace(',', '.')
@@ -233,6 +298,9 @@ def import_excel(file_path, *, export_ts=None, sheet_name=None, dry_run=False, u
         'rows_db_vince': 0,
         'rows_skip_no_eneltel': 0,
         'celle_modificate': 0,
+        'celle_ignorate_rumorose': 0,
+        'diff_per_colonna': {},
+        'valori_invalidi_per_colonna': {},
         'eneltel_solo_db': 0,
         'dry_run': dry_run,
         'sample_db_vince': [],
@@ -279,6 +347,9 @@ def import_excel(file_path, *, export_ts=None, sheet_name=None, dry_run=False, u
 
         # Audit batch: accumuliamo tutto e flushiamo con executemany alla fine
         audit_batch = []  # list of (ts, eneltel_key, column_name, old, new, source, user, detail_json)
+        diff_counter = Counter()
+        invalid_counter = Counter()
+        noisy_counter = Counter()
         # Updates per filone (un'unica UPDATE per riga con N campi)
         # Mantenuti come (eneltel_key, lcl, {chiave: new_value}) in lista,
         # eseguiti uno per uno (UPDATE filone con set dinamico è già veloce
@@ -340,13 +411,21 @@ def import_excel(file_path, *, export_ts=None, sheet_name=None, dry_run=False, u
                 if chiave and chiave in _db.COLONNE_NOTE:
                     old_val_raw = db_row.get(chiave)
                     old_val_db = '' if old_val_raw is None else str(old_val_raw).strip()
-                    # Confronto aggressivo: ignora differenze "rumorose" (spazi)
-                    if _normalize_for_compare(old_val_db) == _normalize_for_compare(new_val):
+                    if chiave in _KEYS_NUMERIC_DOT and _is_invalid_numeric_value(new_val):
+                        invalid_counter[chiave] += 1
+                        continue
+                    # Confronto semantico: ignora differenze rumorose
+                    # (spazi, date ISO vs italiane, float SQLite vs Excel).
+                    if _values_equivalent(old_val_db, new_val, chiave):
+                        if _normalize_for_compare(old_val_db) != _normalize_for_compare(new_val):
+                            noisy_counter[chiave] += 1
                         continue
                     filone_updates[chiave] = (old_val_db, new_val)
                 else:
                     old_val_db = cur_extra.get(col_name, '')
-                    if _normalize_for_compare(old_val_db) == _normalize_for_compare(new_val):
+                    if _values_equivalent(old_val_db, new_val, chiave):
+                        if _normalize_for_compare(old_val_db) != _normalize_for_compare(new_val):
+                            noisy_counter[col_name] += 1
                         continue
                     extra_updates[col_name] = (old_val_db, new_val)
 
@@ -355,6 +434,7 @@ def import_excel(file_path, *, export_ts=None, sheet_name=None, dry_run=False, u
                 continue
             summary['rows_aggiornate'] += 1
             summary['celle_modificate'] += n_changed
+            diff_counter.update(list(filone_updates.keys()) + list(extra_updates.keys()))
 
             if dry_run:
                 continue
@@ -409,6 +489,10 @@ def import_excel(file_path, *, export_ts=None, sheet_name=None, dry_run=False, u
         summary['eneltel_solo_db'] = len(
             {ek for (ek, _lcl) in filone_by_key.keys()} - eneltel_visti_excel
         )
+        summary['diff_per_colonna'] = dict(diff_counter.most_common())
+        summary['valori_invalidi_per_colonna'] = dict(invalid_counter.most_common())
+        summary['celle_ignorate_rumorose'] = sum(noisy_counter.values())
+        summary['rumore_ignorato_per_colonna'] = dict(noisy_counter.most_common())
 
     # Auto-mark-delivered: tutte le pending create PRIMA dell'export_ts si
     # considerano già applicate sul foglio (perché il file Excel le riflette).

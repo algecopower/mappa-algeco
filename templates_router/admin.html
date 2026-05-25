@@ -2364,13 +2364,10 @@ function rendiImportResult(data, wasDryRun) {
   const diffCols = Object.entries(data.diff_per_colonna || {})
     .sort((a, b) => b[1] - a[1]).slice(0, 8);
   const diffColsHtml = diffCols.length
-    ? diffCols.map(([k, v]) => `<span class="badge" style="background:var(--bg-primary);color:var(--text-secondary);margin-right:4px;">${escapeHtml(k)}: ${v}</span>`).join(' ')
+    ? `<div style="display:flex;gap:8px;row-gap:6px;flex-wrap:wrap;align-items:center;padding:2px 0;">` +
+      diffCols.map(([k, v]) => `<span class="badge" style="background:var(--bg-primary);color:var(--text-secondary);padding:4px 9px;">${escapeHtml(k)}: ${v}</span>`).join('') +
+      `</div>`
     : '—';
-  const invalidCols = Object.entries(data.valori_invalidi_per_colonna || {})
-    .sort((a, b) => b[1] - a[1]).slice(0, 6);
-  const invalidColsHtml = invalidCols.length
-    ? invalidCols.map(([k, v]) => `<span class="badge warn" style="margin-right:4px;">${escapeHtml(k)}: ${v}</span>`).join(' ')
-    : '';
   out.innerHTML = `
     <div style="padding:14px 16px;background:var(--bg-tertiary);border-radius:8px;margin-top:8px;">
       <div style="font-size:14px;margin-bottom:10px;">${badge} Import del ${escapeHtml(data.export_ts_iso || '')}</div>
@@ -2382,9 +2379,7 @@ function rendiImportResult(data, wasDryRun) {
         <tr><td>⚠️ Righe Excel senza Eneltel</td><td>${data.rows_skip_no_eneltel}</td></tr>
         <tr><td>📦 Eneltel solo in DB (non in Excel)</td><td>${data.eneltel_solo_db}</td></tr>
         <tr><td>🔢 Colonne riconosciute</td><td>${data.n_headers}</td></tr>
-        <tr><td>🔎 Colonne più cambiate</td><td>${diffColsHtml}</td></tr>
-        ${data.celle_ignorate_rumorose ? `<tr><td>🧹 Differenze ignorate come rumore</td><td><b>${data.celle_ignorate_rumorose}</b></td></tr>` : ''}
-        ${invalidColsHtml ? `<tr><td>🛑 Valori non validi ignorati</td><td>${invalidColsHtml}</td></tr>` : ''}
+        <tr><td>🔎 Colonne cambiate</td><td>${diffColsHtml}</td></tr>
         ${data.elapsed_seconds != null ? `<tr><td>⏱️ Tempo elaborazione</td><td><b>${data.elapsed_seconds}s</b></td></tr>` : ''}
       </table>
       ${sample ? `<div style="font-size:11px;color:var(--text-muted);margin-top:10px;">Esempi righe protette (DB vince): <span class="mono">${sample}</span></div>` : ''}

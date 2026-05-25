@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-"""Importer del filone da file Excel.
+"""Importer del filone da file Excel/CSV.
 
 Sostituisce il pull periodico da Google Sheets (rimosso il 21/05/2026).
-L'admin scarica manualmente il foglio Sheets come .xlsx e lo carica via
+L'admin scarica manualmente il foglio Sheets come .csv/.xlsx e lo carica via
 endpoint admin; questo modulo lo legge, risolve il mapping colonne, e fa
 un merge cella-per-cella col DB locale.
 
@@ -15,6 +15,8 @@ POLITICA DI MERGE: "vince il più recente".
   Granularità: a livello RIGA. Una sola modifica locale post-export
   protegge tutta la riga dall'import. È la scelta più sicura.
 """
+import csv
+import io
 import json
 import logging
 import os
@@ -218,6 +220,59 @@ def parse_excel(file_path, sheet_name=None):
     return (headers, rows)
 
 
+def _decode_csv_bytes(raw):
+    """Decodifica CSV esportati da Sheets/Excel con encoding comuni."""
+    for enc in ('utf-8-sig', 'utf-8', 'cp1252', 'latin-1'):
+        try:
+            return raw.decode(enc), enc
+        except UnicodeDecodeError:
+            continue
+    return raw.decode('utf-8', errors='replace'), 'utf-8-replace'
+
+
+def parse_csv(file_path):
+    """Apre un .csv e ritorna (headers, rows).
+
+    Rileva delimiter tra virgola, punto e virgola, tab e pipe. Google Sheets
+    esporta normalmente UTF-8 con virgola, ma in Italia capita spesso di
+    ricevere CSV semicolon-separated da Excel.
+    """
+    with open(file_path, 'rb') as f:
+        raw = f.read()
+    text, _encoding = _decode_csv_bytes(raw)
+    if not text.strip():
+        return ([], [])
+
+    sample = text[:65536]
+    try:
+        dialect = csv.Sniffer().sniff(sample, delimiters=',;\t|')
+    except csv.Error:
+        dialect = csv.excel
+
+    reader = csv.reader(io.StringIO(text, newline=''), dialect)
+    parsed = []
+    for row in reader:
+        vals = [_cell_to_str(c) for c in row]
+        if all(v == '' for v in vals):
+            continue
+        parsed.append(vals)
+    if not parsed:
+        return ([], [])
+    return (parsed[0], parsed[1:])
+
+
+def parse_tabular_file(file_path, sheet_name=None):
+    """Legge .csv o .xlsx e ritorna (headers, rows, file_format)."""
+    ext = os.path.splitext(file_path)[1].lower()
+    if ext == '.csv':
+        headers, rows = parse_csv(file_path)
+        return headers, rows, 'csv'
+    if ext == '.xlsx':
+        headers, rows = parse_excel(file_path, sheet_name=sheet_name)
+        return headers, rows, 'xlsx'
+    raise ValueError("Formato file non supportato: usa .csv o .xlsx")
+
+
 def _find_col_idx(headers, candidates):
     """Cerca uno dei candidati in headers (case-insensitive). Ritorna idx o None."""
     lower = {h.strip().lower(): i for i, h in enumerate(headers) if h}
@@ -229,10 +284,10 @@ def _find_col_idx(headers, candidates):
 
 
 def import_excel(file_path, *, export_ts=None, sheet_name=None, dry_run=False, user=None):
-    """Importa il filone da file Excel applicando merge most-recent-wins.
+    """Importa il filone da file Excel/CSV applicando merge most-recent-wins.
 
     Args:
-        file_path: path al .xlsx.
+        file_path: path al .csv/.xlsx.
         export_ts: timestamp dell'export (str o int). Default: now.
         sheet_name: nome scheda Excel da leggere (default: prima scheda).
         dry_run: se True, calcola tutto ma NON scrive sul DB.
@@ -258,7 +313,9 @@ def import_excel(file_path, *, export_ts=None, sheet_name=None, dry_run=False, u
         }
     """
     export_ts_int = _parse_export_ts(export_ts)
-    headers_xlsx, rows_xlsx = parse_excel(file_path, sheet_name=sheet_name)
+    headers_xlsx, rows_xlsx, file_format = parse_tabular_file(
+        file_path, sheet_name=sheet_name,
+    )
 
     if not headers_xlsx:
         return {
@@ -291,6 +348,7 @@ def import_excel(file_path, *, export_ts=None, sheet_name=None, dry_run=False, u
         'export_ts': export_ts_int,
         'export_ts_iso': datetime.fromtimestamp(export_ts_int).strftime('%Y-%m-%d %H:%M:%S'),
         'headers_excel': headers_xlsx,
+        'file_format': file_format,
         'header_mapping': header_mapping,
         'rows_excel': len(rows_xlsx),
         'rows_nuove': 0,

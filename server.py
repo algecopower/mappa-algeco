@@ -2202,10 +2202,10 @@ def api_admin_outbox_mark_delivered():
 @app.route('/api/admin/import-excel', methods=['POST'])
 @admin_required
 def api_admin_import_excel():
-    """Importa il filone da un file Excel (.xlsx) caricato dall'admin.
+    """Importa il filone da un file CSV/Excel caricato dall'admin.
 
     Accetta multipart/form-data:
-      - file: il file .xlsx da importare
+      - file: il file .csv/.xlsx da importare
       - export_ts: (opzionale) timestamp dell'export, formato
                    'YYYY-MM-DD HH:MM:SS' o 'YYYY-MM-DD'. Default: now.
       - dry_run: 'true' per simulare senza scrivere (default: 'false').
@@ -2219,8 +2219,9 @@ def api_admin_import_excel():
     f = request.files.get('file')
     if not f or not f.filename:
         return jsonify({'success': False, 'message': 'File mancante (campo "file")'}), 400
-    if not f.filename.lower().endswith('.xlsx'):
-        return jsonify({'success': False, 'message': 'Atteso file .xlsx'}), 400
+    filename_lower = f.filename.lower()
+    if not filename_lower.endswith(('.csv', '.xlsx')):
+        return jsonify({'success': False, 'message': 'Atteso file .csv o .xlsx'}), 400
 
     export_ts = request.form.get('export_ts') or None
     sheet_name = request.form.get('sheet_name') or None
@@ -2229,7 +2230,8 @@ def api_admin_import_excel():
     user = ((session.get('user') or {}).get('username')
             or session.get('utente') or 'admin')
 
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx')
+    suffix = '.csv' if filename_lower.endswith('.csv') else '.xlsx'
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
     try:
         f.save(tmp.name)
         tmp.close()

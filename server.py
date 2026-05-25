@@ -709,9 +709,7 @@ def csrf_check():
     # - /api/login: nessuna sessione ancora, niente token in sessione.
     # - /api/logout: forzare un logout non causa danno; e se fallisse qui
     #   l'utente resterebbe loggato silenziosamente.
-    # - /api/sync/webhook: server-to-server (Apps Script di Google), già
-    #   autenticato via header X-Sync-Secret.
-    if request.path in ('/api/login', '/api/logout', '/api/sync/webhook'):
+    if request.path in ('/api/login', '/api/logout'):
         return None
 
     # 1) Origin/Referer check

@@ -1,138 +1,39 @@
 # Apps Script — Sync near-realtime da Google Sheets
 
-> Documento per chi vorrà attivare in futuro la notifica push da Google Sheets verso il gestionale, riducendo la latenza delle modifiche sul foglio da ~60s a <5s.
+> **⚠️ DOCUMENTO OBSOLETO — 21/05/2026**
 >
-> Stato attuale: l'endpoint server-side è già pronto, ma Apps Script **non è installato** sui fogli. Il sync funziona via polling ogni 60 secondi.
+> Google Sheets è stato **scollegato** dal gestionale. La fonte di verità è ora il **DB locale SQLite** per provincia, alimentato da:
+>
+> - scritture dirette dalla UI (mappa, distinte, sigilli/matricole)
+> - import Excel manuale del FILONE (`moduli/excel_importer.py`)
+> - report Beat caricati da `📦 Carica installato`
+>
+> Per i dettagli del flusso attuale vedi [DB_LOCALE_README.md](DB_LOCALE_README.md) e la sezione "Import dati esterni" di [DOCUMENTAZIONE.md](DOCUMENTAZIONE.md).
+>
+> Il presente file resta come **riferimento storico** del trigger Apps Script che era stato progettato (ma mai installato) per ridurre la latenza del sync. **Non eseguire i passi descritti sotto**: il webhook server-side è ancora montato in [routes/sync.py](routes/sync.py) ma `moduli/sync_engine.py` è uno stub no-op, quindi una chiamata non produrrebbe alcun effetto reale.
 
-## Architettura
+---
 
-```
-Modifica cella su Google Sheets
-            │
-            ▼
-   Apps Script onEdit  ──POST─▶  /api/sync/webhook (server)
-                                        │
-                                        ▼
-                          _sync_needed.set() → sync immediato
-```
+## Storia (perché era stato pensato)
 
-- **Endpoint:** `POST /api/sync/webhook` definito in [routes/sync.py](routes/sync.py) (function `sync_webhook`).
-- **Autenticazione:** header `X-Sync-Secret` confrontato con env var `SYNC_WEBHOOK_SECRET`.
-- **Secret in produzione:** `/etc/mappa-algeco/sync.env` (file 600, leggibile solo da root). Caricato dal systemd service via `EnvironmentFile=`.
-- **Esclusione CSRF:** registrata in [server.py](server.py) — `csrf_check()` salta questo path.
+L'idea era ridurre la latenza delle modifiche fatte su Google Sheets verso la mappa: il polling girava a ~60 s e un onEdit Apps Script avrebbe portato l'aggiornamento sotto i 5 s, postando a `POST /api/sync/webhook` con un secret in header.
 
-## Cosa serve fare per attivarlo
+Il 21/05/2026 il sistema automatico di dispatch ha causato uno span massivo (numeri di telefono spostati nella colonna SIGILLO perché matchavano il pattern `\d{8,14}`). Per evitare di ripetere l'incidente è stato deciso di:
 
-### Lato server (già fatto)
-- Endpoint webhook ✓
-- Secret generato in `/etc/mappa-algeco/sync.env` ✓
-- `SYNC_WEBHOOK_SECRET` esposto al processo via systemd ✓
+1. scollegare completamente Sheets come fonte di verità
+2. spostare tutto sul DB locale SQLite
+3. far entrare i dati esterni solo via import Excel **manuale** del FILONE (vedi `moduli/excel_importer.py`)
 
-### Lato Google (da fare)
-Va fatto **due volte**, una per il foglio Torino e una per il foglio Pavia. L'unica differenza è l'URL del webhook.
+A quel punto il trigger Apps Script ha perso ogni scopo.
 
-#### 1. Recuperare il secret dal server
+## Se in futuro si volesse ricollegare Sheets
 
-```bash
-sudo grep SYNC_WEBHOOK_SECRET /etc/mappa-algeco/sync.env
-```
+Sconsigliato — la decisione di scollegare era motivata da un incidente reale. Se proprio fosse necessario:
 
-Conserva il valore in modo sicuro per i prossimi passi (NON inviarlo via email/Slack pubblici).
+1. Rimuovere lo stub `moduli/sync_engine.py` e ripristinare il vero motore di sync (l'ultimo commit funzionante è precedente a `b97890f`)
+2. Riallineare `moduli/shared.py` (oggi instrada tutto al DB)
+3. Solo allora reinstallare l'Apps Script come da istruzioni archiviate nella history di questo file (`git log --follow GUIDA_APPS_SCRIPT.md`)
 
-#### 2. Aprire l'editor Apps Script
+## Cleanup eseguito (25/05/2026)
 
-1. Aprire il foglio Google Sheets (Torino o Pavia)
-2. Menu **Estensioni → Apps Script**
-3. Cancellare il codice presente
-
-#### 3. Incollare lo script
-
-```javascript
-// === CONFIGURAZIONE ===
-const SYNC_SECRET = 'INSERIRE_QUI_IL_SECRET_DAL_SERVER';
-
-// Per il foglio di TORINO:
-const WEBHOOK_URL = 'https://torino.mappa-algeco.com/api/sync/webhook';
-// Per il foglio di PAVIA usare invece:
-// const WEBHOOK_URL = 'https://pavia.mappa-algeco.com/api/sync/webhook';
-
-// Debounce: non chiamare il webhook più di 1 volta ogni 5 secondi
-// (evita raffica di chiamate se si fanno più modifiche consecutive).
-const DEBOUNCE_MS = 5000;
-
-function onSheetEdit(e) {
-  const props = PropertiesService.getScriptProperties();
-  const last = parseInt(props.getProperty('last_webhook') || '0', 10);
-  const now = Date.now();
-  if (now - last < DEBOUNCE_MS) return;
-  props.setProperty('last_webhook', String(now));
-
-  try {
-    UrlFetchApp.fetch(WEBHOOK_URL, {
-      method: 'post',
-      headers: { 'X-Sync-Secret': SYNC_SECRET },
-      muteHttpExceptions: true,
-    });
-  } catch (err) {
-    console.error('Webhook fallito:', err);
-  }
-}
-```
-
-#### 4. Salvare e installare il trigger
-
-1. Salvare il progetto (Ctrl+S). Nome suggerito: "Mappa Algeco — sync trigger".
-2. Aprire il pannello **Trigger** (icona orologio nella sidebar sinistra).
-3. Cliccare **"+ Aggiungi trigger"** in basso a destra e impostare:
-   - **Scegli quale funzione eseguire:** `onSheetEdit`
-   - **Scegli quale distribuzione:** `Head`
-   - **Seleziona origine evento:** `Dal foglio di calcolo`
-   - **Seleziona tipo di evento:** `Alla modifica`
-   - Cliccare **Salva**.
-4. Si apre il popup di autorizzazione Google:
-   - Selezionare l'account Google
-   - Avviso "Google non ha verificato questa app" → **"Avanzate"** → **"Vai a Mappa Algeco — sync trigger (non sicuro)"**
-   - **"Consenti"** (richiede permessi di lettura foglio e chiamate HTTP esterne).
-
-#### 5. Test
-
-1. Modificare una cella qualsiasi del foglio.
-2. Sul server, in un'altra shell:
-
-   ```bash
-   journalctl -u mappa-algeco-router -f | grep webhook
-   ```
-
-   Entro 2-3 secondi dovresti vedere:
-
-   ```
-   [webhook] sync trigger ricevuto da <IP_GOOGLE>
-   ```
-
-3. Aprire la mappa nel browser → entro pochi secondi la modifica appare.
-
-## Dopo aver verificato che funziona
-
-Si può alzare il polling fallback a 10 minuti (`INTERVALLO_SYNC_SECONDI = 600` in [config.py](config.py) + nei `data/<provincia>/settings.json`). Il polling resta come ultima rete di sicurezza se Apps Script smettesse di funzionare; il webhook fornisce la latenza reale.
-
-## Note di sicurezza
-
-- Il secret è una **password**. Se viene compromessa, basta rigenerarne uno nuovo:
-  ```bash
-  NEW=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
-  echo "SYNC_WEBHOOK_SECRET=$NEW" | sudo tee /etc/mappa-algeco/sync.env
-  sudo chmod 600 /etc/mappa-algeco/sync.env
-  sudo systemctl restart mappa-algeco-router
-  ```
-  Poi aggiornare la costante `SYNC_SECRET` in entrambi gli script Apps Script.
-- L'endpoint accetta solo POST. È pubblicamente raggiungibile (per consentire la chiamata da IP Google), ma senza il secret risponde sempre 403.
-- Non condividere il file `/etc/mappa-algeco/sync.env` né committarlo in git.
-
-## Troubleshooting
-
-| Sintomo | Causa probabile | Fix |
-|---|---|---|
-| Webhook risponde 403 sempre | Secret in Apps Script ≠ secret nel server | Riallineare `SYNC_SECRET` nello script |
-| Webhook risponde 503 "webhook non configurato" | `SYNC_WEBHOOK_SECRET` non visibile al processo | Verificare `EnvironmentFile=` nel service e riavviare |
-| Nessuna chiamata arriva al server modificando il foglio | Trigger non installato o autorizzazione revocata | Ripetere passi 4-5 |
-| Errore "Service unavailable" in Apps Script | Server offline o Cloudflare giù | Controllare `systemctl status mappa-algeco-router` |
+Rimossi: endpoint `POST /api/sync/webhook` da `routes/sync.py`, esclusione CSRF da `server.py`, `EnvironmentFile=/etc/mappa-algeco/sync.env` dal systemd unit, il file `sync.env` e il vecchio `credenziali.json`. Resta solo il riferimento storico in questo documento.

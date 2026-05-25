@@ -287,11 +287,13 @@ sudo journalctl -u osrm-server -n 50
 sudo systemctl restart osrm-server
 ```
 
-### "Permission denied" su credenziali.json
+### "Permission denied" sul DB locale
 ```bash
-sudo chown mappa:mappa /opt/mappa-algeco/credenziali.json
-chmod 600 /opt/mappa-algeco/credenziali.json
+sudo chown -R mappa:mappa /opt/mappa-algeco/data
+sudo chmod 600 /opt/mappa-algeco/data/*/state.db
 ```
+
+> Nota: `credenziali.json` (Service Account gspread) **non è più usato** dopo lo scollegamento Sheets del 21/05/2026. Se è presente sul VPS può essere rimosso.
 
 ### Il tunnel non si collega
 ```bash

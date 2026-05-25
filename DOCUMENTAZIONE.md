@@ -1,7 +1,7 @@
-﻿# Gestionale Mappa Contatori — Documentazione Completa
+# Gestionale Mappa Contatori — Documentazione
 
-> **Versione:** 2.0
-> **Ultimo aggiornamento:** Febbraio 2026
+> **Versione:** 3.0 (post-disconnessione Google Sheets)
+> **Ultimo aggiornamento:** 2026-05-25
 > **Progetto:** Mappa Algeco — Sistema di gestione e ottimizzazione percorsi per la sostituzione contatori elettrici
 
 ---
@@ -10,33 +10,32 @@
 
 ### Parte 1 — Guida Utente
 
-1. [Cos&#39;è questo programma](#1-cosè-questo-programma)
+1. [Cos'è questo programma](#1-cosè-questo-programma)
 2. [Requisiti di sistema](#2-requisiti-di-sistema)
-3. [Installazione e primo avvio](#3-installazione-e-primo-avvio)
-4. [Avvio del server](#4-avvio-del-server)
-5. [Login e autenticazione](#5-login-e-autenticazione)
-6. [La mappa interattiva](#6-la-mappa-interattiva)
-7. [Il gestionale (sidebar)](#7-il-gestionale-sidebar)
-8. [Gestione distinte e WhatsApp](#8-gestione-distinte-e-whatsapp)
-9. [Import BOXBEAT (Enel)](#9-import-BOXBEAT-enel)
-10. [Gestione sigilli e matricole](#10-gestione-sigilli-e-matricole)
-11. [Vista FILONE (Excel)](#11-vista-filone-excel)
-12. [Accesso remoto (Cloudflare)](#12-accesso-remoto-cloudflare)
-13. [Domande frequenti (FAQ)](#13-domande-frequenti-faq)
+3. [Avvio del server](#3-avvio-del-server)
+4. [Login e autenticazione](#4-login-e-autenticazione)
+5. [La mappa interattiva](#5-la-mappa-interattiva)
+6. [Il gestionale (sidebar)](#6-il-gestionale-sidebar)
+7. [Gestione distinte e WhatsApp](#7-gestione-distinte-e-whatsapp)
+8. [Import dati esterni](#8-import-dati-esterni)
+9. [Gestione sigilli e matricole](#9-gestione-sigilli-e-matricole)
+10. [Vista FILONE (Excel)](#10-vista-filone-excel)
+11. [Accesso remoto (Cloudflare)](#11-accesso-remoto-cloudflare)
+12. [FAQ](#12-faq)
 
 ### Parte 2 — Guida Sviluppatore
 
-14. [Architettura del sistema](#14-architettura-del-sistema)
-15. [Struttura del progetto](#15-struttura-del-progetto)
-16. [Flusso dati](#16-flusso-dati)
-17. [Moduli — Riferimento completo](#17-moduli--riferimento-completo)
-18. [API REST — Riferimento completo](#18-api-rest--riferimento-completo)
-19. [Configurazione (`config.py`)](#19-configurazione-configpy)
-20. [Sistema di cache](#20-sistema-di-cache)
-21. [Algoritmo di ottimizzazione percorsi](#21-algoritmo-di-ottimizzazione-percorsi)
-22. [Sistema di sincronizzazione](#22-sistema-di-sincronizzazione)
-23. [Aggiungere una nuova provincia](#23-aggiungere-una-nuova-provincia)
-24. [Troubleshooting per sviluppatori](#24-troubleshooting-per-sviluppatori)
+13. [Architettura del sistema](#13-architettura-del-sistema)
+14. [Struttura del progetto](#14-struttura-del-progetto)
+15. [Flusso dati](#15-flusso-dati)
+16. [Moduli — Riferimento](#16-moduli--riferimento)
+17. [API REST](#17-api-rest)
+18. [Configurazione](#18-configurazione)
+19. [Cache e performance](#19-cache-e-performance)
+20. [Algoritmo di ottimizzazione percorsi](#20-algoritmo-di-ottimizzazione-percorsi)
+21. [Sistema di refresh mappa](#21-sistema-di-refresh-mappa)
+22. [Aggiungere una nuova provincia](#22-aggiungere-una-nuova-provincia)
+23. [Troubleshooting](#23-troubleshooting)
 
 ---
 
@@ -46,24 +45,28 @@
 
 ## 1. Cos'è questo programma
 
-Il **Gestionale Mappa Contatori** è un sistema web per la gestione operativa della sostituzione di contatori elettrici (Enel/e-distribuzione). È pensato per aziende come **Algeco Power** che coordinano squadre di tecnici sul campo.
+Il **Gestionale Mappa Contatori** è un sistema web per la gestione operativa della sostituzione di contatori elettrici (Enel / e-distribuzione). È pensato per aziende come **Algeco Power** che coordinano squadre di tecnici sul campo.
 
 ### Cosa fa in pratica
 
 - **Visualizza su mappa** tutti i contatori da sostituire, con colori diversi per tecnico e zone
-- **Ottimizza automaticamente i percorsi** giornalieri per ogni tecnico, riducendo i km e il tempo di viaggio
+- **Ottimizza automaticamente i percorsi** giornalieri per ogni tecnico, riducendo km e tempo di viaggio
 - **Gestisce gli appuntamenti** con i clienti, calcolando fasce orarie realistiche
 - **Genera messaggi WhatsApp** per avvisare i clienti della sostituzione
-- **Importa i dati da BOXBEAT** per aggiornare lo stato delle installazioni
+- **Importa dati esterni** (Excel/CSV del foglio commesse, file di ritorno installazioni) con merge sicuro
 - **Traccia sigilli e matricole** dei contatori installati
-- **Si sincronizza in tempo reale** con Google Sheets (il "FILONE"), aggiornandosi ogni 3 minuti
+- **Mantiene la fonte di verità in un DB SQLite locale** (post-disconnessione Google Sheets del 21/05/2026, vedi [DB_LOCALE_README.md](DB_LOCALE_README.md))
 
 ### Province supportate
 
-| Provincia        | Porta | Deposito                      | Orario inizio |
-| ---------------- | ----- | ----------------------------- | ------------- |
-| **Torino** | 5001  | Volpiano (Via Brandizzo 121d) | 09:00         |
-| **Pavia**  | 5002  | Pavia città                  | 08:00         |
+Le province sono definite in `data/provinces.json` e aggiungibili a runtime dalla UI admin. Default storici:
+
+| Provincia | Porta backend | Deposito | Orario inizio |
+| --- | --- | --- | --- |
+| **Torino** | 5001 | Volpiano (Via Brandizzo 121d) | 09:00 |
+| **Pavia**  | 5002 | Pavia città                  | 08:00 |
+
+In produzione il **router** espone una porta unica (5050) e instrada per Host alle province via Cloudflare Tunnel.
 
 ---
 
@@ -71,183 +74,110 @@ Il **Gestionale Mappa Contatori** è un sistema web per la gestione operativa de
 
 ### Software obbligatorio
 
-| Software                  | Versione minima       | Scopo                                          |
-| ------------------------- | --------------------- | ---------------------------------------------- |
-| **Python**          | 3.10+                 | Linguaggio del server                          |
-| **Docker Desktop**  | Qualsiasi recente     | Per il server OSRM (calcolo percorsi stradali) |
-| **Browser moderno** | Chrome, Edge, Firefox | Interfaccia utente                             |
+| Software | Versione minima | Scopo |
+| --- | --- | --- |
+| **Python** | 3.10+ (consigliato 3.12) | Linguaggio del server |
+| **OSRM** (nativo o Docker) | qualsiasi | Calcolo percorsi stradali reali |
+| **Browser moderno** | Chrome, Edge, Firefox | Interfaccia utente |
 
 ### Software opzionale
 
-| Software                                      | Scopo                                             |
-| --------------------------------------------- | ------------------------------------------------- |
-| **Cloudflare Tunnel** (`cloudflared`) | Accesso remoto da Internet                        |
+| Software | Scopo |
+| --- | --- |
+| **Cloudflare Tunnel** (`cloudflared`) | Accesso remoto da Internet |
 
 ### File necessari
 
-| File                 | Descrizione                                                                      |
-| -------------------- | -------------------------------------------------------------------------------- |
-| `credenziali.json` | Credenziali Service Account Google per accesso a Google Sheets                   |
-| `users.json`       | Database utenti per il login (creato automaticamente con `gestione_utenti.py`) |
+| File | Descrizione |
+| --- | --- |
+| `users.json` | Database utenti per il login (creato con `gestione_utenti.py`). Non in git. |
+| `data/provinces.json` | Configurazione province (deposito, operatori, colori). In git. |
+| `data/{prov}/state.db` | DB SQLite per provincia. Generato al primo avvio o via import Excel. |
+| `data/{prov}/settings.json` | Override impostazioni provincia (da UI admin). Opzionale. |
 
-### Server OSRM (Docker)
+> **Nota**: `credenziali.json` (vecchio Service Account Google) **non serve più**. È rimasto in `.gitignore` per precauzione storica ma il programma non lo legge.
 
-Il sistema richiede un server **OSRM** (Open Source Routing Machine) locale per calcolare distanze e tempi di percorrenza reali sulle strade italiane. Deve essere in esecuzione come container Docker sulla porta 5000.
+### Server OSRM
 
-> **Nota:** Senza OSRM il sistema non può calcolare i percorsi ottimizzati. Il server chiederà conferma per continuare comunque, ma le funzionalità saranno limitate.
+Il sistema richiede un server **OSRM** (Open Source Routing Machine) per calcolare distanze e tempi di percorrenza reali. In produzione gira nativo come servizio systemd (`osrm-routed.service`); in locale può girare anche su Docker (porta 5000).
 
----
-
-## 3. Installazione e primo avvio
-
-### Passo 1 — Installa le dipendenze Python
-
-```powershell
-cd "percorso\della\cartella\mappa_algeco_nuova"
-pip install -r requirements.txt
-```
-
-Le dipendenze principali sono:
-
-- `flask` — server web
-- `gspread` + `oauth2client` — collegamento a Google Sheets
-- `pandas` + `openpyxl` — elaborazione dati e generazione Excel
-- `requests` — comunicazione con OSRM
-- `scikit-learn` — clustering geografico (DBSCAN)
-- `beautifulsoup4` — parsing HTML
-- `flask-cors` — gestione CORS per il browser
-
-### Passo 2 — Configura le credenziali Google
-
-1. Crea un **Service Account** nella Google Cloud Console
-2. Abilita la **Google Sheets API** e la **Google Drive API**
-3. Scarica il file JSON delle credenziali
-4. Rinominalo `credenziali.json` e mettilo nella cartella del progetto
-5. **Condividi** il foglio Google Sheets con l'email del Service Account (con permessi di modifica)
-
-### Passo 3 — Crea almeno un utente
-
-```powershell
-python gestione_utenti.py
-```
-
-Scegli l'opzione **1. Crea nuovo utente** dal menu interattivo. Oppure da riga di comando:
-
-```powershell
-python gestione_utenti.py --crea --username admin --password tuapassword
-```
-
-### Passo 4 — Avvia Docker e OSRM
-
-Assicurati che Docker Desktop sia in esecuzione e che il container OSRM sia attivo sulla porta 5000.
-
-### Passo 5 — Avvia il server
-
-```powershell
-python server.py
-```
-
-Il server:
-
-1. Verificherà la connessione OSRM
-2. Avvierà i server Flask per le province configurate
-3. Scaricherà i dati da Google Sheets
-4. Calcolerà le distanze e ottimizzerà i percorsi
-5. Genererà la mappa HTML interattiva
-6. Aprirà automaticamente il browser
-
-> La prima sincronizzazione può richiedere 1-2 minuti. Le successive saranno più veloci grazie alla cache.
+Senza OSRM le distanze sono calcolate in linea d'aria con correzione 1.35× (fallback haversine) e i percorsi NON sono ottimizzati sulla rete stradale reale.
 
 ---
 
-## 4. Avvio del server
+## 3. Avvio del server
 
 ### Modalità di avvio
 
-```powershell
-# Avvia ENTRAMBE le province (Torino + Pavia)
-python server.py
+```bash
+PY=/opt/mappa-algeco/venv/bin/python
 
-# Solo Torino
-python server.py --torino
+# Dev: singola provincia (no router)
+$PY server.py --torino
+$PY server.py --pavia
 
-# Solo Pavia  
-python server.py --pavia
+# Produzione: router multi-tenant
+$PY router.py
 
-# Entrambe + accesso pubblico via Cloudflare Tunnel
-python server.py --pubblico
-
-# Salta il controllo OSRM (utile per debug)
-python server.py --skip-osrm-check
-
-# Non aprire il browser automaticamente
-python server.py --no-browser
+# Oppure via systemd (in produzione)
+sudo systemctl start mappa-algeco-router
+sudo systemctl restart mappa-algeco-router
 ```
 
 ### Cosa succede all'avvio
 
-1. Il **launcher** (processo principale) valida la configurazione
-2. Per ogni provincia, avvia un **processo Flask figlio** separato
+1. Il **router** (in produzione) o `server.py` standalone valida la configurazione.
+2. Per ogni provincia spawna un processo Flask figlio sulla sua porta.
 3. Ogni processo figlio:
-   - Si connette a Google Sheets
-   - Scarica tutti i dati del FILONE
+   - Apre il DB SQLite (`data/{prov}/state.db`)
+   - Esegue `PRAGMA integrity_check` (logga warning se KO)
+   - Carica il DataFrame dei contatori dal DB
    - Calcola distanze e percorsi ottimizzati (OSRM)
    - Genera la mappa HTML interattiva
-   - Avvia il loop di sincronizzazione automatica (ogni 3 minuti)
-4. Il launcher apre il browser sugli URL locali
+   - Avvia il loop event-driven (svegliato da modifiche utente o import Excel)
+4. Il router monta i backend dietro routing per Host.
 
 ### URL di accesso
 
-| Provincia | URL locale            |
-| --------- | --------------------- |
-| Torino    | http://localhost:5001 |
-| Pavia     | http://localhost:5002 |
+| Provincia | URL locale | URL pubblico (con Cloudflare) |
+| --- | --- | --- |
+| Torino | http://localhost:5001 | https://torino.mappa-algeco.com |
+| Pavia | http://localhost:5002 | https://pavia.mappa-algeco.com |
+| Admin | http://localhost:5050/ (Host: `admin.*`) | https://admin.mappa-algeco.com |
 
 ### Arresto
 
-Premi **Ctrl+C** nel terminale per terminare tutti i server.
+In dev: **Ctrl+C** nel terminale. In produzione: `sudo systemctl stop mappa-algeco-router`.
 
 ---
 
-## 5. Login e autenticazione
+## 4. Login e autenticazione
 
-All'apertura del sito, viene mostrata una **pagina di login** con tema scuro.
+All'apertura del sito viene mostrata la pagina di login.
 
-- Inserisci **username** e **password** configurati con `gestione_utenti.py`
-- Dopo 5 tentativi falliti, il login viene bloccato per 30 secondi
+- Inserisci **username** e **password** configurati con `gestione_utenti.py` (vedi [GUIDA_ACCOUNT.md](GUIDA_ACCOUNT.md))
+- Dopo 5 tentativi falliti il login viene bloccato per 30 secondi
 - La sessione dura **24 ore**, poi è necessario rifare il login
-- Per uscire: clicca il pulsante di logout o vai a `/logout`
-
-### Gestione utenti (CLI)
-
-```powershell
-python gestione_utenti.py
-```
-
-Menu interattivo:
-
-1. **Crea nuovo utente** — username + password
-2. **Elimina utente** — rimuove un utente esistente
-3. **Reset password** — cambia la password di un utente
-4. **Attiva/Disattiva** — blocca/sblocca un utente senza eliminarlo
-5. **Lista utenti** — mostra tutti gli utenti e il loro stato
+- Per uscire: pulsante di logout o `/logout`
 
 ---
 
-## 6. La mappa interattiva
+## 5. La mappa interattiva
 
 La mappa è il cuore dell'applicazione. Si apre dopo il login.
 
 ### Viste disponibili
 
-| Vista               | Descrizione                                                                                          |
-| ------------------- | ---------------------------------------------------------------------------------------------------- |
-| **Zone**      | Mostra le zone geografiche come aree colorate (poligoni). Utile per la pianificazione settimanale    |
-| **Dettaglio** | Mostra ogni singolo contatore per una data specifica come segnaposto numerato per ordine di percorso |
+| Vista | Descrizione |
+| --- | --- |
+| **Zone** | Mostra le zone geografiche come aree colorate (poligoni). Utile per la pianificazione settimanale. |
+| **Comuni** | Aggregazione per comune con conteggi e calendario. |
+| **Dettaglio** | Mostra ogni singolo contatore per una data specifica come segnaposto numerato per ordine di percorso. |
+| **Percorso operatore** | Mostra solo il percorso di un tecnico in una data. |
 
 ### Elementi della mappa
 
-- **Marker colorati** — ogni tecnico ha un colore diverso (rosso, giallo, verde, ciano...)
+- **Marker colorati** — un colore per tecnico (rosso, giallo, verde, ciano…)
 - **Numeri nei marker** — indicano l'ordine di visita ottimizzato
 - **Linee colorate** — mostrano il percorso ottimizzato che segue le strade reali
 - **Segnaposto "APP"** — contatori con appuntamento, mostrati con icona speciale
@@ -258,6 +188,7 @@ La mappa è il cuore dell'applicazione. Si apre dopo il login.
 - **Filtro data** — mostra solo i contatori pianificati per una data specifica
 - **Filtro operatore** — mostra solo i contatori di un tecnico
 - **Filtro LCL** — filtra per codice LCL
+- **Filtro appuntamenti** — solo contatori con/senza appuntamento
 - **Barra di ricerca** — cerca per nome cliente, indirizzo, POD, ENELTEL o comune
 - **Temi** — alterna tra tema chiaro e scuro
 
@@ -274,47 +205,43 @@ Cliccando su un contatore si apre un popup con:
 
 ### Aggiornamento automatico
 
-La mappa si aggiorna automaticamente:
-
-- Tramite **SSE** (Server-Sent Events): il server notifica il browser quando ci sono nuovi dati
-- Tramite **polling JSON**: il browser controlla periodicamente se i file JSON sono cambiati
-- Il **sync in background** ricalcola tutto ogni 3 minuti
+La mappa si aggiorna automaticamente tramite **SSE** (Server-Sent Events): dopo ogni modifica utente o import, il server invia un evento `sync_complete` e il browser ricarica i JSON. Quando la connessione SSE è giù, fallback su polling JSON ogni `INTERVALLO_SYNC_SECONDI` (default 300s).
 
 ---
 
-## 7. Il gestionale (sidebar)
+## 6. Il gestionale (sidebar)
 
-La sidebar a destra della mappa contiene gli strumenti gestionali:
+La sidebar contiene gli strumenti gestionali.
 
 ### Modifica contatore
 
-Dal popup di un contatore, puoi modificare:
+Dal popup di un contatore puoi modificare i campi configurati in `CAMPI_MODIFICABILI` (vedi [config.py](config.py)):
 
 - **Data pianificata** — quando il tecnico deve andare
 - **Note/Appuntamento** — annotazioni e orari appuntamento
 - **Nominativo** — nome del cliente
 - **Indirizzo e civico** — correzione indirizzo
-- **Telefono** — numero di contatto
-- **Posizione misuratore** — dove si trova (Nell'appartamento, Accessibile dall'esterno ecc.)
+- **Telefono / Email** — contatti
+- **Posizione misuratore** — dove si trova
 - **Operatore** — tecnico assegnato
 
-Le modifiche vengono scritte direttamente su Google Sheets e triggherano un sync immediato.
+Le modifiche vengono scritte nel DB locale e triggherano un refresh immediato della mappa (patch in-place per soft edit, sync_loop classico per cambi strutturali).
 
-### Pulsanti sidebar
+### Pulsanti sidebar (variabili per provincia)
 
-| Pulsante                 | Funzione                                              |
-| ------------------------ | ----------------------------------------------------- |
-| **Import BOXBEAT** | Carica file Excel Report per aggiornare installazioni |
-| **Sigilli**        | Gestisci sigilli per contatori trifase/fotovoltaici   |
-| **Matricole**      | Inserisci matricole dei contatori installati          |
-| **FILONE**         | Vista Excel del foglio Google Sheets completo         |
-| **Sync**           | Forza sincronizzazione manuale                        |
+| Pulsante | Funzione |
+| --- | --- |
+| **Import Report** | Carica file Excel di ritorno installazioni (BOXBEAT/Beat) |
+| **Sigilli** | Gestisci sigilli per contatori trifase/fotovoltaici |
+| **Matricole** | Inserisci matricole dei contatori installati |
+| **Vista FILONE** | Vista Excel del DB completo |
+| **Sync** | Forza refresh manuale della mappa |
 
 ---
 
-## 8. Gestione distinte e WhatsApp
+## 7. Gestione distinte e WhatsApp
 
-Accessibile da `/distinte` (o dal link nella mappa).
+Accessibile da `/distinte` (link nella mappa).
 
 ### Funzionalità
 
@@ -323,13 +250,13 @@ Accessibile da `/distinte` (o dal link nella mappa).
    - 📱 **Cellulare** — numeri mobili (prefisso 320-399), pronti per WhatsApp
    - 📞 **Fisso** — numeri di rete fissa
    - ❌ **Senza telefono** — nessun numero disponibile
-3. **Genera messaggi WhatsApp** — crea messaggi pre-compilati con data, indirizzo e fascia oraria
-4. **Confronta con FILONE** — evidenzia differenze tra distinta e dati nel foglio Google
+3. **Genera messaggi WhatsApp** — messaggi pre-compilati con data, indirizzo e fascia oraria
+4. **Confronta con FILONE** — evidenzia differenze tra distinta e dati nel DB
 5. **Aggiorna dati** — sovrascrivi telefono, data, note direttamente dal pannello distinte
-6. **Segna numeri errati** — marca numeri non validi con barrato su Google Sheets
+6. **Segna numeri errati** — marca numeri non validi
 7. **Imposta appuntamenti** — direttamente dalla vista distinte
 
-### Flusso di lavoro tipico
+### Flusso tipico
 
 1. Ricevi le distinte PDF da Enel
 2. Caricale nella pagina distinte
@@ -340,115 +267,128 @@ Accessibile da `/distinte` (o dal link nella mappa).
 
 ---
 
-## 9. Import BOXBEAT (Enel)
+## 8. Import dati esterni
 
-Il **Report** è il file scaricabile da Beat per reperire i contatori installati con successo.
+Il sistema importa due tipi di file Excel/CSV:
 
-### Come usarlo
+### A. Import FILONE (foglio commesse)
 
-1. Apri la mappa → sidebar → **Import BOXBEAT**
+Sostituisce il vecchio pull periodico da Google Sheets (rimosso il 21/05/2026).
+
+1. L'admin scarica il foglio Sheets come `.xlsx` o `.csv`
+2. UI admin → **Import FILONE** → seleziona file
+3. Inserisci la data/ora di export (per la politica di merge)
+4. Il sistema:
+   - Legge il file e risolve il mapping colonne
+   - Esegue **merge cella-per-cella** col DB locale
+   - Politica: **"vince il più recente"** a granularità RIGA — se una riga è stata modificata nel programma dopo l'export Excel, il DB protegge l'intera riga
+5. Riepilogo: righe nuove, aggiornate, ignorate (per protezione locale), anomalie
+
+Vedi [moduli/excel_importer.py](moduli/excel_importer.py) e [DB_LOCALE_README.md](DB_LOCALE_README.md).
+
+### B. Import Report installazioni (BOXBEAT/Beat)
+
+Il **Report** è il file scaricabile da Beat con i contatori installati con successo.
+
+1. Apri la mappa → sidebar → **Import Report**
 2. Seleziona uno o più file `.xlsx`, `.xls` o `.csv`
 3. Il sistema:
    - Legge il file (header alla riga 3)
    - Filtra solo le righe con **"Esito OK"**
-   - Cerca il **POD** corrispondente nel FILONE
+   - Cerca il **POD** corrispondente nel DB
    - Aggiorna automaticamente: **Operatore**, **Data Installazione**, **Esito**
-4. Tutte le modifiche vengono fatte in un unico batch per velocità
 
-### Cosa viene aggiornato sul FILONE
+### Cosa viene aggiornato dal Report
 
-| Campo BOXBEAT      | Campo FILONE       |
-| ------------------ | ------------------ |
-| Matricola preposto | Operatore          |
-| Data esecuzione    | Data Installazione |
+| Campo Report | Campo DB |
+| --- | --- |
+| Matricola preposto | Operatore |
+| Data esecuzione | Data Installazione |
 | Esito = "Esito OK" | Esito = "ESITO OK" |
 
 ---
 
-## 10. Gestione sigilli e matricole
+## 9. Gestione sigilli e matricole
 
 ### Sigilli
 
-I **sigilli** sono necessari per:
-
-- Contatori **trifase semidiretti**
-- Contatori **fotovoltaici** (ENELTEL che termina con A o B)
+Necessari per contatori **trifase semidiretti** e **fotovoltaici** (ENELTEL che termina con A o B).
 
 1. Sidebar → **Sigilli**
 2. Vengono mostrati i contatori installati (Esito OK) senza sigillo
 3. Inserisci il numero di sigillo
-4. Il sistema lo salva su Google Sheets ed evidenzia la cella in giallo
+4. Il sistema lo salva nel DB
 
 ### Matricole
 
-Le **matricole** sono i numeri seriali dei contatori installati.
+Numeri seriali dei contatori installati.
 
 1. Sidebar → **Matricole**
 2. Vengono mostrati TUTTI i contatori installati senza matricola
 3. Inserisci la matricola del contatore nuovo
-4. Il sistema la salva su Google Sheets ed evidenzia la cella in verde
+4. Il sistema la salva nel DB
 
 > Sia sigilli che matricole mostrano solo le installazioni dell'anno corrente.
 
 ---
 
-## 11. Accesso remoto (Cloudflare)
+## 10. Vista FILONE (Excel)
 
-Per accedere al sistema da fuori la rete locale (es. dal cantiere), è possibile usare **Cloudflare Tunnel**.
+Vista tabellare di tutti i contatori del DB, equivalente alla vista del foglio Excel originale. Permette:
 
-### Avvio con accesso pubblico
-
-```powershell
-python server.py --pubblico
-```
-
-### URL pubblici (con dominio configurato)
-
-| Provincia | URL                             |
-| --------- | ------------------------------- |
-| Torino    | https://torino.mappa-algeco.com |
-| Pavia     | https://pavia.mappa-algeco.com  |
-
-### Configurazione
-
-Vedi il file `GUIDA_CLOUDFLARE.md` per la configurazione dettagliata del tunnel.
+- Filtri rapidi per colonna
+- Editing inline dei campi modificabili
+- Aggiunta manuale di una nuova riga
+- Export Excel del filone corrente
 
 ---
 
-## 12. Domande frequenti (FAQ)
+## 11. Accesso remoto (Cloudflare)
+
+Per accedere al sistema da fuori la rete locale è disponibile **Cloudflare Tunnel** come servizio systemd indipendente (`cloudflared-tunnel.service`).
+
+### URL pubblici (con dominio configurato)
+
+| Servizio | URL |
+| --- | --- |
+| Torino | https://torino.mappa-algeco.com |
+| Pavia  | https://pavia.mappa-algeco.com |
+| Admin  | https://admin.mappa-algeco.com |
+
+Vedi [GUIDA_CLOUDFLARE.md](GUIDA_CLOUDFLARE.md) per la configurazione dettagliata del tunnel.
+
+---
+
+## 12. FAQ
 
 ### Il server non si avvia, dice "OSRM non raggiungibile"
 
-Verifica che:
+In produzione (servizio nativo): `sudo systemctl status osrm-routed`.
+In dev locale (Docker): `docker ps` e verifica porta 5000.
+Test diretto: `curl "http://localhost:5000/route/v1/driving/7.68,45.07;7.78,45.19"`.
 
-1. **Docker Desktop** sia in esecuzione
-2. Il **container OSRM** sia attivo (`docker ps` nel terminale)
-3. La porta **5000** sia libera e raggiungibile (`http://localhost:5000`)
-
-Puoi avviare comunque con `python server.py --skip-osrm-check`, ma i percorsi non saranno ottimizzati.
+Si può avviare comunque con `python server.py --skip-osrm-check`, ma i percorsi non saranno ottimizzati.
 
 ### La mappa non si aggiorna
 
-- Verifica che il sync in background sia attivo (controlla i log nel terminale)
+- Verifica che l'SSE sia connessa (in dev tools del browser, scheda Network → `/api/events`)
 - Prova il **sync manuale** dalla sidebar
 - Ricarica la pagina con **Ctrl+F5** (svuota cache browser)
 
 ### Non riesco a loggarmi
 
-- Verifica che l'utente sia stato creato con `gestione_utenti.py`
-- Controlla che l'utente sia **attivo** (opzione 5 nel menu gestione utenti)
+- Verifica che l'utente sia stato creato con `gestione_utenti.py` (vedi [GUIDA_ACCOUNT.md](GUIDA_ACCOUNT.md))
+- Controlla che l'utente sia **attivo**
 - Dopo 5 tentativi falliti, attendi 30 secondi
 
-### I dati sul foglio Google non si aggiornano
+### Una modifica fatta in Excel non appare
 
-- Verifica che `credenziali.json` sia presente e valido
-- Controlla che il Service Account abbia **permessi di modifica** sul foglio
-- Verifica l'ID del foglio in `config.py` → `PROVINCE[...]['id_foglio']`
+Da quando Google Sheets è scollegato (21/05/2026), il sistema NON legge più da Sheets in automatico. Per aggiornare il DB con i dati del foglio devi fare un **import Excel manuale** dalla UI admin (sezione [8](#8-import-dati-esterni)).
 
 ### Come cambio la password di un utente?
 
-```powershell
-python gestione_utenti.py --reset --username nomeutente --password nuovapassword
+```bash
+/opt/mappa-algeco/venv/bin/python gestione_utenti.py --reset --username nomeutente --password nuovapassword
 ```
 
 ---
@@ -457,133 +397,189 @@ python gestione_utenti.py --reset --username nomeutente --password nuovapassword
 
 ---
 
-## 14. Architettura del sistema
+## 13. Architettura del sistema
 
 ### Diagramma ad alto livello
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│                      server.py (Launcher)                        │
-│  CLI args → spawn processi figlio Flask per ogni provincia       │
-│  Opzionale: Cloudflare Tunnel per accesso pubblico               │
-├─────────────────────────┬────────────────────────────────────────┤
-│  Flask :5001 (Torino)   │  Flask :5002 (Pavia)                  │
-│                         │  (stessa struttura, config diversa)    │
-│                         │                                        │
-│  ┌─── Sync Thread (loop 180s) ────────────────────────────┐     │
-│  │ 1. carica_dati_google_sheets()  → DataFrame             │     │
-│  │ 2. genera_report_distanze_con_cache()  → OSRM           │     │
-│  │ 3. genera_report_zone()  → DBSCAN clusters              │     │
-│  │ 4. genera_mappa_html()  → HTML + JSON                   │     │
-│  │ 5. SSE notify → browser                                 │     │
-│  └──────────────────────────────────────────────────────────┘     │
-│                                                                    │
-│  ┌─── API REST ──────────────────────────────────────────────┐   │
-│  │ /api/contatore/<eneltel>      ← CRUD contatore            │   │
-│  │ /api/upload-BOXBEAT           ← Import Enel               │   │
-│  │ /api/sigilli, /api/matricole  ← Tracking installazioni    │   │
-│  │ /api/filone                   ← Vista Excel               │   │
-│  │ /api/distinte/*               ← Gestione distinte         │   │
-│  │ /api/sync                     ← Trigger manuale           │   │
-│  │ /api/events                   ← SSE stream                │   │
-│  └────────────────────────────────────────────────────────────┘   │
-└──────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│                         router.py (entry produzione)                 │
+│  Reverse proxy per Host → backend per provincia                      │
+│  + UI admin (templates_router/) su admin.*                           │
+├─────────────────────────────┬────────────────────────────────────────┤
+│  server.py :5001 (Torino)   │  server.py :5002 (Pavia)               │
+│                             │  (stessa struttura, config diversa)    │
+│                             │                                        │
+│  ┌─── Loop event-driven ───────────────────────────────────────┐    │
+│  │  Risvegliato da: POST utente, import Excel, sync manuale    │    │
+│  │   1. Legge DB → DataFrame pandas (con cache)                │    │
+│  │   2. Calcola distanze OSRM (con cache hash)                 │    │
+│  │   3. Genera zone (DBSCAN)                                   │    │
+│  │   4. Genera mappa_data.json + HTML                          │    │
+│  │   5. SSE notify → browser                                   │    │
+│  └─────────────────────────────────────────────────────────────┘    │
+│                                                                       │
+│  ┌─── API REST (blueprint in routes/) ───────────────────────────┐   │
+│  │  /api/contatore/<eneltel>    ← CRUD contatore                 │   │
+│  │  /api/upload-report          ← Import installazioni Beat      │   │
+│  │  /api/admin/import-excel     ← Import FILONE                  │   │
+│  │  /api/sigilli, /api/matricole← Tracking installazioni         │   │
+│  │  /api/filone                 ← Vista Excel                    │   │
+│  │  /api/distinte/*             ← Gestione distinte              │   │
+│  │  /api/sync                   ← Trigger manuale                │   │
+│  │  /api/events                 ← SSE stream                     │   │
+│  └───────────────────────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────────────────────────┘
 
 Dipendenze esterne:
-  • Google Sheets API (gspread + Service Account) — lettura/scrittura FILONE
-  • OSRM Docker (:5000)     — calcolo distanze e percorsi stradali reali
+  • OSRM (:5000) — calcolo distanze e percorsi stradali reali
+  • Cloudflare Tunnel — accesso pubblico (opzionale)
 ```
 
 ### Principi architetturali
 
-1. **Nessun database locale** — Google Sheets è l'unica fonte di verità. Il sistema legge e scrive direttamente sul foglio.
-2. **OSRM obbligatorio** — tutte le distanze e i tempi sono calcolati su strade reali, mai in linea d'aria (haversine solo come fallback per errori parziali).
-3. **Ottimizzazione per tempo** — l'algoritmo preferisce le autostrade anche se più lunghe in km, perché più veloci.
-4. **Isolamento per provincia** — ogni provincia è un processo Flask separato con la propria configurazione, cache e output HTML.
-5. **Architettura dual-JSON** — il file HTML della mappa è uno "shell" statico; i dati vengono serviti come file JSON separati (`data/{provincia}/mappa_data.json` e `data/{provincia}/config.json`), aggiornati via SSE per refresh rapidi senza ricaricare la pagina.
-6. **Cache aggressiva** — le distanze OSRM vengono cachate per evitare di ricalcolare percorsi invariati. L'ordine dei percorsi viene anch'esso cachato.
+1. **DB SQLite locale = unica fonte di verità** (dal 21/05/2026). I dati esterni entrano via import Excel manuale. Vedi [DB_LOCALE_README.md](DB_LOCALE_README.md) per il dettaglio.
+2. **OSRM consigliato** — distanze e tempi calcolati su strade reali. Fallback haversine × 1.35 in caso di errore parziale.
+3. **Ottimizzazione per tempo** — l'algoritmo preferisce le autostrade anche se più lunghe in km. Implicito nel profilo `driving` di OSRM.
+4. **Isolamento per provincia** — ogni provincia è un processo Flask separato, con il proprio DB, cache, output HTML.
+5. **Architettura dual-JSON** — il file HTML della mappa è uno shell statico; i dati arrivano come JSON separati (`data/{prov}/mappa_data.json` e `data/{prov}/config.json`), aggiornati via SSE per refresh rapidi.
+6. **Refresh event-driven** — niente sync periodico. La mappa viene rigenerata solo quando serve (modifica utente o import). Soft edit applicano una patch in-place a `mappa_data.json` in ~50ms; cambi strutturali fanno girare l'intero sync_loop (~7-10s).
+7. **Cache aggressiva** — distanze OSRM e ordine percorsi vengono cachate per evitare ricalcoli inutili.
 
 ---
 
-## 15. Struttura del progetto
+## 14. Struttura del progetto
 
 ```
-mappa_algeco_nuova/
+/opt/mappa-algeco/
 │
-├── server.py                    # Entry point: launcher + server Flask
-├── config.py                    # Configurazioni globali multi-provincia
-├── requirements.txt             # Dipendenze Python
-├── credenziali.json             # Credenziali Google API (non in git)
-├── users.json                   # Database utenti login
+├── server.py                    # Entry point per-provincia (Flask)
+├── router.py                    # Reverse proxy multi-tenant + admin UI
+├── wsgi.py                      # Bootstrap per gunicorn
+├── gunicorn.conf.py             # Config gunicorn (1 worker, 32 thread, gthread)
+├── config.py                    # Configurazione (carica provinces.json)
+├── requirements.txt             # Dipendenze runtime
+├── requirements-dev.txt         # Dipendenze test
+├── pyproject.toml
 │
-├── login.html                   # Pagina di login
-├── distinte.html                # Pagina gestione distinte/WhatsApp
-├── mappa_torino.html            # Mappa generata (auto, non editare)
-├── mappa_pavia.html             # Mappa generata (auto, non editare)
+├── users.json                   # DB utenti (non in git)
+├── gestione_utenti.py           # CLI gestione utenti
+├── genera_excel_lettere.py      # CLI export lettere clienti
 │
-├── gestione_utenti.py           # CLI per gestione utenti
-├── genera_fasce_orarie.py       # CLI per Excel fasce orarie
-├── genera_excel_lettere.py      # CLI per Excel lettere clienti
-│
-├── cache_distanze_torino.json   # Cache distanze OSRM (auto)
-├── cache_distanze_pavia.json    # Cache distanze OSRM (auto)
-├── cache_hash_torino.json       # Hash per invalidazione cache (auto)
-├── cache_hash_pavia.json        # Hash per invalidazione cache (auto)
-├── cache_ordine_percorsi_*.json # Cache ordine percorsi TSP (auto)
-├── report_distanze.csv          # Report distanze ultimo sync (auto)
-│
-├── GUIDA_CLOUDFLARE.md          # Guida configurazione Cloudflare
-├── DOCUMENTAZIONE.md            # Questo file
-│
-├── data/                        # Dati JSON per il frontend
+├── data/
+│   ├── provinces.json           # Definizioni province (in git)
 │   ├── torino/
-│   │   ├── config.json          # Config statica (deposito, colori, ecc.)
-│   │   └── mappa_data.json      # Dati contatori (aggiornato ogni sync)
+│   │   ├── state.db             # DB SQLite (WAL)
+│   │   ├── mappa_data.json      # JSON per la mappa (aggiornato a ogni refresh)
+│   │   ├── config.json          # Config statica per il frontend
+│   │   ├── settings.json        # Override settings (da UI admin)
+│   │   ├── cell_log.json
+│   │   ├── shadow_reports/      # (legacy, vuota post-disconnessione)
+│   │   └── span_reports/        # Report anomalie span (Torino)
 │   └── pavia/
-│       ├── config.json
-│       └── mappa_data.json
+│       └── (idem)
 │
-└── moduli/                      # Moduli Python del backend
-    ├── __init__.py              # Re-export API pubbliche
-    ├── auth.py                  # Autenticazione e gestione sessioni
-    ├── cache.py                 # Cache persistente distanze
-    ├── data_loader.py           # Caricamento dati da Google Sheets
-    ├── distanze.py              # Calcolo distanze via OSRM
-    ├── distinta_parser.py       # (vuoto — funzionalità in distinte_manager)
-    ├── distinte_manager.py      # Parser PDF distinte + WhatsApp
-    ├── fasce_orarie.py          # Assegnazione fasce orarie
-    ├── gestionale.py            # Generazione HTML/CSS/JS gestionale
-    ├── mappa_html.py            # Generazione mappa HTML completa
-    ├── percorso.py              # Ottimizzazione percorso (TSP)
-    ├── report_generator.py      # Generazione report Excel
-    └── zone_geografiche.py      # Clustering zone geografiche
+├── moduli/                      # Logica di dominio
+│   ├── __init__.py
+│   ├── auth.py                  # Auth Flask + sessioni
+│   ├── backup.py                # Backup periodico DB + JSON
+│   ├── cache.py                 # Cache persistente distanze OSRM
+│   ├── calendario.py            # Calendario zone/comuni
+│   ├── comuni_db.py             # DB normalizzato comuni
+│   ├── data_loader.py           # DB → DataFrame (con cache + hash)
+│   ├── db.py                    # Schema SQLite, record_local_change, upsert
+│   ├── distanze.py              # OSRM Table/Route
+│   ├── distinte_manager.py      # Parser PDF distinte + WhatsApp
+│   ├── excel_importer.py        # Import FILONE Excel/CSV (merge sicuro)
+│   ├── fasce_orarie.py          # Assegnazione fasce
+│   ├── fasce_orarie_legacy.py   # Compat (vecchia API)
+│   ├── gestionale.py            # CSS/JS/HTML del gestionale embeddato
+│   ├── mappa_data_patcher.py    # Patch in-place mappa_data.json (soft edit)
+│   ├── mappa_html.py            # Generazione mappa HTML completa
+│   ├── outbox.py                # Coda email
+│   ├── percorso.py              # TSP via OSRM Trip
+│   ├── postit.py                # Note utente (post-it sulla mappa)
+│   ├── rilevamento_aziende.py   # Detect aziende/condomini dagli indirizzi
+│   ├── safe_json.py             # Read/write JSON robusto
+│   ├── shared.py                # API legacy gspread → DB
+│   ├── sync_engine.py           # STUB no-op (post-disconnessione)
+│   ├── verifica_indirizzi.py    # Geocoding + normalizzazione
+│   ├── verifica_indirizzi_ui.py
+│   └── zone_geografiche.py      # Clustering DBSCAN delle zone
+│
+├── routes/                      # Blueprint Flask
+│   ├── access_points.py         # Access points / punti di interesse
+│   ├── bacheca.py               # Bacheca avvisi
+│   ├── calendario.py            # Calendario zone
+│   ├── contatori.py             # CRUD contatori + sigilli + matricole
+│   ├── dashboard.py             # Dashboard admin
+│   ├── distinte.py              # Gestione distinte
+│   ├── postit.py                # Post-it
+│   ├── report.py                # Generazione report Excel
+│   ├── sigilli.py               # API sigilli
+│   ├── sync.py                  # Trigger sync manuale + SSE
+│   └── verifica_indirizzi.py
+│
+├── tools/                       # CLI di servizio
+│   ├── dump_db.py               # Diagnostica DB
+│   ├── archive_audit_log.py     # Archiviazione mensile audit
+│   ├── cleanup_done_pendings.py # Cleanup mensile pending done
+│   ├── build_indir_db.py        # Costruzione DB indirizzi
+│   └── confronta_percorsi.py    # Confronto offline percorsi
+│
+├── templates/                   # HTML per-provincia (Jinja2)
+├── templates_router/            # HTML admin del router
+├── static/                      # CSS/JS/asset frontend
+├── cache/                       # Cache OSRM + hash (auto, non in git)
+├── output/                      # Excel/PDF generati (auto)
+├── backup/                      # Snapshot DB + audit archive
+├── deploy/                      # Script deploy e systemd unit
+├── tests/                       # pytest
+│
+├── AGENTS.md                    # Linee guida per agent
+├── CLAUDE.md                    # (se presente) istruzioni Claude per il repo
+├── DB_LOCALE_README.md          # Architettura DB-only
+├── DOCUMENTAZIONE.md            # Questo file
+├── GUIDA_UTILIZZO.md            # Guida utente
+├── GUIDA_ACCOUNT.md             # Gestione utenti
+├── GUIDA_CLOUDFLARE.md          # Setup tunnel
+└── GUIDA_DEPLOY_VPS.md          # Deploy su VPS
 ```
 
-### File generati automaticamente (non modificare)
+### File generati automaticamente
 
-- `mappa_torino.html` / `mappa_pavia.html` — rigenerati ad ogni sync
-- `data/*/mappa_data.json` — dati contatori aggiornati
-- `cache_*.json` — cache per le performance
-- `report_distanze.csv` — ultimo report distanze
-- `.flask_secret_key` — chiave segreta Flask persistente
+- `data/{prov}/mappa_data.json` — rigenerato a ogni refresh
+- `templates/mappa_{prov}.html` — generato dalla pipeline (non editare a mano)
+- `cache/cache_*.json` — cache distanze OSRM
+- `output/*.xlsx`, `output/*.pdf` — export utente
+- `backup/{prov}/state_YYYY-MM-DD.db` — snapshot DB giornaliero
+- `.flask_secret_key` — chiave Flask persistente
 
 ---
 
-## 16. Flusso dati
+## 15. Flusso dati
 
-### Ciclo di sincronizzazione (ogni 180 secondi)
+### Refresh della mappa (event-driven)
 
 ```
-Google Sheets (FILONE)
+POST utente / Import Excel / Trigger manuale
         │
         ▼
+  trigger_sync_after_edit()  ← server.py
+        │
+        ├── soft edit? ──→ try_patch_inplace()  → patch JSON  → SSE
+        │   (~50 ms)        moduli/mappa_data_patcher.py
+        │
+        └── cambio strutturale? ──→ sync_loop classico (~7-10 s)
+            │
+            ▼
   1. data_loader.py
-     └─ carica_dati_google_sheets()
-        ├─ Scarica foglio via gspread
+     └─ carica_dati_google_sheets()  ← nome legacy: legge dal DB
+        ├─ Apre state.db, applica join filone + filone_extra
         ├─ Normalizza colonne (trova_colonna fuzzy match)
         ├─ Filtra: rimuove ESITO OK, date fuori range, no coordinate
-        ├─ Rileva appuntamenti (regex su NOTE APP)
-        └─ Risultato: pandas DataFrame pulito
+        ├─ Rileva appuntamenti (regex su NOTE APP + esclusioni)
+        └─ Risultato: pandas DataFrame
         │
         ▼
   2. distanze.py
@@ -591,7 +587,7 @@ Google Sheets (FILONE)
         ├─ Raggruppa per tecnico + data
         ├─ Controlla hash cache (skip se dati invariati)
         ├─ Calcola matrice distanze OSRM (blocchi da 80)
-        ├─ Ottimizza percorso (percorso.py → TSP)
+        ├─ Ottimizza percorso (percorso.py → TSP via OSRM Trip)
         ├─ Assegna fasce orarie (fasce_orarie.py)
         └─ Risultato: report con ordine, km, tempo per ogni tecnico/data
         │
@@ -601,8 +597,7 @@ Google Sheets (FILONE)
         ├─ Calcola centroide per comune
         ├─ Clustering DBSCAN (raggio configurabile)
         ├─ Unisce zone piccole (<10-15 contatori)
-        ├─ Nomina zone (direzione cardinale + comune principale)
-        └─ Risultato: mappa zone con statistiche
+        └─ Nomina zone (direzione cardinale + comune principale)
         │
         ▼
   4. mappa_html.py
@@ -610,428 +605,292 @@ Google Sheets (FILONE)
         ├─ Prepara dati contatori con percorsi
         ├─ Calcola rotte OSRM per le linee sulla mappa
         ├─ Genera HTML completo (Leaflet.js + gestionale.py)
-        ├─ Salva data/{provincia}/mappa_data.json
-        ├─ Salva data/{provincia}/config.json
-        └─ Salva mappa_{provincia}.html
+        ├─ Salva data/{prov}/mappa_data.json
+        └─ Salva templates/mappa_{prov}.html
         │
         ▼
   5. SSE notify
-     └─ Invia evento 'sync_complete' a tutti i browser connessi
+     └─ Invia 'sync_complete' a tutti i browser connessi
 ```
 
-### Flusso di modifica (utente → Google Sheets)
+### Flusso di modifica (utente → DB)
 
 ```
-Browser (popup/sidebar)
+Browser (popup / sidebar / FILONE)
     │
-    ├─ PUT /api/contatore/<eneltel>
-    │   └─ server.py → update_row_fields() → gspread.batch_update()
+    ├── PUT /api/contatore/<eneltel>
+    │      → routes/contatori.py
+    │      → safe_batch_update_by_name (legacy name, routes al DB)
+    │      → moduli/db.py:record_local_change()
     │
-    ├─ POST /api/upload-BOXBEAT
-    │   └─ server.py → legge Excel → match POD → batch_update()
+    ├── POST /api/upload-report           (Beat)
+    │      → routes/contatori.py
+    │      → match POD → db.record_local_change()
     │
-    ├─ PUT /api/sigillo/<eneltel>
-    │   └─ server.py → update_acell() + format() giallo
+    ├── POST /api/admin/import-excel      (FILONE)
+    │      → moduli/excel_importer.py
+    │      → merge "vince il più recente" cella per cella
     │
-    └─ POST /api/distinte/*
-        └─ server.py → update_cell() / format()
+    └── PUT /api/sigillo/<eneltel>, /api/matricola/<eneltel>
+           → routes/sigilli.py, routes/contatori.py
     │
     ▼
-Google Sheets (FILONE) aggiornato
+DB SQLite (state.db) aggiornato + audit_log popolato
     │
     ▼
 trigger_sync_after_edit()
-    └─ Sync immediato → rigenera mappa → SSE notify
+    └─ Patch in-place o sync_loop classico → SSE notify
 ```
 
 ---
 
-## 17. Moduli — Riferimento completo
+## 16. Moduli — Riferimento
 
-### `moduli/__init__.py`
+### `moduli/db.py`
 
-Re-esporta le funzioni pubbliche principali per import semplificato:
+Schema SQLite v2 + accessor thread-local. Funzioni principali:
 
-```python
-from moduli import carica_cache, salva_cache, carica_dati_google_sheets, genera_mappa_html, ...
-```
+| Funzione | Descrizione |
+| --- | --- |
+| `record_local_change(eneltel, fields, ...)` | Update filone + audit (entry point per le scritture utente). |
+| `upsert_filone_row(...)` | Insert/update da import Excel. |
+| `find_eneltel_by_pod(pod)` | Lookup secondario. |
+| `canonical_column_name(name)` | Risolve alias colonna → chiave interna. |
+| `dump_filone_as_rows(...)` | Export DataFrame-like dal DB. |
+| `stats()` | Statistiche DB (count, integrity, ecc.). |
+| `integrity_check()` | PRAGMA integrity_check. |
 
----
+Schema: `filone`, `filone_extra`, `pending_writes` (legacy), `audit_log`, `column_registry`, `filone_anomalies`, `sync_state`. Vedi [DB_LOCALE_README.md](DB_LOCALE_README.md).
+
+### `moduli/excel_importer.py`
+
+Import del FILONE da Excel/CSV. Politica di merge: "vince il più recente" a granularità RIGA (`last_local_change_ts` vs `excel_export_ts`).
 
 ### `moduli/data_loader.py`
 
-**Scopo:** Carica tutti i dati dal foglio Google Sheets e li trasforma in un DataFrame pandas pulito.
-
-| Funzione                        | Descrizione                                                |
-| ------------------------------- | ---------------------------------------------------------- |
-| `carica_dati_google_sheets()` | Entry point principale. Ritorna `pd.DataFrame`           |
-| `trova_colonna(df, nomi)`     | Trova colonne con match case-insensitive                   |
-| `parse_data_flessibile(val)`  | Gestisce formati data misti (dd/mm/yyyy, yyyy-mm-dd, ecc.) |
+Legge dal DB e produce il DataFrame pandas. Mantiene una cache TTL in memoria invalidata da `mark_data_changed()` dopo ogni scrittura.
 
 **Colonne output principali:**
-`DATA_K`, `NOTE_APP_RAW`, `IS_APPUNTAMENTO`, `ORA_APPUNTAMENTO`, `Eneltel_Key`, `CLI_K`, `VIA_K`, `COMUNE`, `TEL_K`, `TEC_K`, `POD_K`, `Lat`, `Lon`, `CIVICO_K`, `TIPO_CE_K`, `LCL`, `LOCALITA`, `NOTE_K`
+`DATA_K`, `NOTE_APP_RAW`, `IS_APPUNTAMENTO`, `ORA_APPUNTAMENTO`, `Eneltel_Key`, `CLI_K`, `VIA_K`, `COMUNE`, `TEL_K`, `TEC_K`, `POD_K`, `Lat`, `Lon`, `CIVICO_K`, `TIPO_CE_K`, `LCL`, `LOCALITA`, `NOTE_K`.
 
 **Filtri applicati:**
-
-- Rimuove righe con `ESITO OK` (già installati)
-- Rimuove righe con `DATA_MANCANTE`
+- Rimuove righe con `ESITO OK` (già installate)
 - Rimuove righe senza coordinate GPS valide
 - Filtra per operatori VIP (`MATRICOLE_VIP`)
 - Filtra per range date (`DATA_INIZIO` — `DATA_FINE`)
 
----
+### `moduli/shared.py`
 
-### `moduli/cache.py`
+API legacy gspread (`safe_batch_update_by_name`, `get_worksheet`, `get_header_map`, `force_refresh_headers`, ecc.) re-implementata sopra il DB. Tutte le chiamate gspread effettive (es. `ws.batch_update`) sollevano eccezioni esplicite. Mantenuta per non toccare le route Blueprint.
 
-**Scopo:** Cache persistente su file JSON per evitare ricalcoli OSRM inutili.
+### `moduli/sync_engine.py`
 
-| Funzione                                       | Descrizione                                                        |
-| ---------------------------------------------- | ------------------------------------------------------------------ |
-| `genera_hash_dati(df_tecnico)`               | Genera hash MD5 delle colonne rilevanti                            |
-| `carica_cache()`                             | Carica `cache_distanze_{prov}.json` e `cache_hash_{prov}.json` |
-| `salva_cache(cache, hash)`                   | Salva su disco                                                     |
-| `pulisci_cache_vecchia(cache, hash, giorni)` | Attualmente no-op (cache permanente)                               |
+**Stub no-op**. `pull_once`, `drain_once`, `trigger_drain_now` ritornano risultati success-like senza effetti. `start_workers` esegue solo `PRAGMA integrity_check` al boot. Vedi commento nel modulo per la cronologia.
 
-**Strategia:** se l'hash dei dati di un tecnico/data non è cambiato, i percorsi non vengono ricalcolati.
+### `moduli/mappa_data_patcher.py`
 
----
+Patch in-place di `mappa_data.json` per soft edit (~50ms invece di rigenerare tutto). Definisce `SOFT_FIELDS_DB` e `STRUCTURAL_FIELDS_DB`.
 
 ### `moduli/distanze.py`
 
-**Scopo:** Calcolo matrice distanze/durate tramite OSRM Docker. Modulo critico per le performance.
+| Funzione | Descrizione |
+| --- | --- |
+| `calcola_matrice_distanze_osrm(...)` | OSRM Table API, blocchi da 80 coordinate |
+| `calcola_rotta_osrm(...)` | Rotta singola con geometria per le linee sulla mappa |
+| `genera_report_distanze_con_cache(...)` | Entry point principale del calcolo distanze |
 
-| Funzione                                                        | Descrizione                                          |
-| --------------------------------------------------------------- | ---------------------------------------------------- |
-| `calcola_matrice_distanze_osrm(punti, deposito)`              | OSRM Table API, blocchi da 80 coordinate             |
-| `ottieni_matrice_distanze(punti, deposito)`                   | Wrapper, errore se OSRM offline                      |
-| `calcola_distanza_haversine(lat1, lon1, lat2, lon2)`          | Fallback per errori parziali                         |
-| `calcola_rotta_osrm(coords_list)`                             | Rotta singola con geometria per le linee sulla mappa |
-| `calcola_distanze_percorso(percorso, deposito)`               | Distanze gamba per gamba                             |
-| `genera_report_distanze_con_cache(df, deposito, cache, hash)` | **Entry point principale**                     |
-| `stampa_report_distanze(report)`                              | Output console                                       |
-| `esporta_report_csv(report)`                                  | Salva `report_distanze.csv`                        |
-
-**Algoritmo blocchi:** per matrici >80 punti, divide in sotto-blocchi, calcola le sotto-matrici, e assembla la matrice completa. Haversine × `FATTORE_CORREZIONE_HAVERSINE=1.35` come fallback per singoli blocchi OSRM falliti.
-
-**Costanti importanti:**
-
-- `OSRM_MAX_TABLE_SIZE = 80` — dimensione massima blocco OSRM
-- `OSRM_TIMEOUT = 30` — timeout richieste
-- `VELOCITA_MEDIA_KMH = 35` — per stima tempi fallback
-- `TEMPO_INTERVENTO_MIN = 20` — tempo medio per sostituzione contatore
-
----
+**Costanti:** `OSRM_MAX_TABLE_SIZE=80`, `OSRM_TIMEOUT=30`, `VELOCITA_MEDIA_KMH=35` (override per provincia), `TEMPO_INTERVENTO_MIN=20`, `FATTORE_CORREZIONE_HAVERSINE=1.35`.
 
 ### `moduli/percorso.py`
 
-**Scopo:** Cuore dell'ottimizzazione — risolve il problema del commesso viaggiatore (TSP) con vincoli di appuntamento, delegando il TSP a OSRM Trip API (rete stradale reale).
-
-| Funzione                                                | Descrizione                                                          |
-| ------------------------------------------------------- | -------------------------------------------------------------------- |
-| `ordina_percorso(punti, deposito, usa_osrm)`            | **Entry point principale** (alias di `ottimizza_percorso`)           |
-| `_ottimizza_con_osrm_trip(punti, deposito)`             | TSP roundtrip: parte e torna al deposito                             |
-| `_ordina_segmento_osrm(punti, start, end)`              | TSP non-roundtrip: start fisso, end fisso (per riempire un segmento) |
-| `_ordina_con_appuntamenti(punti, deposito, ora_serale)` | Strategia "ancore temporali" con appuntamenti                        |
-| `_ordina_sweep(punti, deposito)`                        | Fallback geografico (sweep angolare) se OSRM cade                    |
-| `rileva_appuntamento(testo)`                            | Whitelist + blacklist per `IS_APPUNTAMENTO`                          |
-| `estrai_orario_e_fascia(testo)`                         | Parser fasce e orari (`dalle 8 alle 12`, `10:30`, ecc.)              |
-6. **2-opt finale** — pulizia finale
-
-**Gestione appuntamenti:**
-
-- Gli appuntamenti sono "ancore temporali" fisse nel percorso
-- I contatori senza appuntamento vengono inseriti nei gap tra appuntamenti
-- Appuntamenti serali (>17:00 TO, >15:00 PV) vengono messi a fine giornata
-- `ORA_INIZIO_GIORNATA` configurabile per provincia
-
----
+TSP via **OSRM Trip API**. Gestisce vincoli di appuntamento con strategia ad ancore temporali. Fallback geografico (sweep angolare) se OSRM cade. Vedi sezione [20](#20-algoritmo-di-ottimizzazione-percorsi).
 
 ### `moduli/fasce_orarie.py`
 
-**Scopo:** Assegna fasce orarie ai contatori in base all'ordine di visita.
+| Funzione | Descrizione |
+| --- | --- |
+| `assegna_fasce(percorso)` | 4 contatori per fascia, ordine del percorso ottimizzato |
+| `formatta_fascia_oraria(fascia)` | `'8/11'` → `'dalle 8:00 alle 11:00'` |
 
-| Funzione                           | Descrizione                                        |
-| ---------------------------------- | -------------------------------------------------- |
-| `assegna_fasce(percorso)`        | Assegna fasce sequenziali (4 contatori per fascia) |
-| `formatta_fascia_oraria(fascia)` | `'8/11'` → `'dalle 8:00 alle 11:00'`          |
-| `get_colore_fascia(fascia)`      | Colore hex per ogni fascia                         |
-| `calcola_max_tappe_giorno()`     | 6 fasce × 4 tappe = 24                            |
-
-**Fasce definite:** `['8/11', '10/13', '11/14', '12/15', '13/16', '14/17']`
-
-**Logica:** 4 contatori per fascia, assegnati sequenzialmente seguendo l'ordine del percorso ottimizzato.
-
----
+**Fasce definite:** `['8/11', '10/13', '11/14', '12/15', '13/16', '14/17']`.
 
 ### `moduli/zone_geografiche.py`
 
-**Scopo:** Raggruppa i comuni in zone geografiche operative tramite clustering.
-
-| Funzione                                             | Descrizione                                               |
-| ---------------------------------------------------- | --------------------------------------------------------- |
-| `genera_report_zone(df, filename)`                 | **Entry point** — clustering + naming + calendario |
-| `calcola_centroidi_comuni(df)`                     | Centroide GPS per ogni comune                             |
-| `crea_cluster_zone(comuni_data, cella_km)`         | Clustering (DBSCAN o griglia)                             |
-| `crea_cluster_zone_dbscan(comuni_data, cella_km)`  | DBSCAN con eps auto                                       |
-| `crea_cluster_zone_griglia(comuni_data, cella_km)` | Griglia fallback                                          |
-| `unisci_zone_piccole(zone, min, max_dist)`         | Merge zone con <10-15 contatori                           |
-| `assegna_nomi_zone(zone, centroidi)`               | Nome: direzione + comune più grande                      |
-| `genera_calendario_zone(df, zone, centroidi)`      | Calendario date per zona                                  |
-
-**Algoritmo DBSCAN:** `eps = cella_km × 0.625 / 111` (conversione km → gradi), `min_samples = 1`.
-
----
+Clustering DBSCAN dei comuni in zone operative. `eps = cella_km × 0.625 / 111`, `min_samples = 1`. Naming: direzione cardinale + comune principale.
 
 ### `moduli/mappa_html.py`
 
-**Scopo:** Genera l'intera mappa HTML interattiva (7000+ righe) con Leaflet.js.
-
-| Funzione                                          | Descrizione                           |
-| ------------------------------------------------- | ------------------------------------- |
-| `genera_mappa_html(df, report, zone, filename)` | **Entry point**                 |
-| `prepara_dati_contatori(df, report)`            | Prepara dati per JSON                 |
-| `prepara_dati_zone(df, zone)`                   | Prepara zone per JSON                 |
-| `calcola_ordine_percorsi(df, deposito)`         | Pre-calcola ordine TSP (con cache)    |
-| `prepara_rotte_per_data(df, deposito)`          | Rotte OSRM per linee mappa            |
-| `salva_dati_json(dati)`                         | Salva `data/{prov}/mappa_data.json` |
-| `salva_config_statica(config)`                  | Salva `data/{prov}/config.json`     |
-| `genera_html_completo()`                        | Genera HTML completo                  |
-
-**Contenuto HTML generato:**
-
-- Mappa Leaflet.js con tile OpenStreetMap
-- Marker colorati con numeri d'ordine
-- Linee percorso animabili
-- Popup con tutti i dati e pulsanti modifica
-- Filtri (data, operatore, LCL, ricerca)
-- Toggle tema chiaro/scuro
-- Auto-refresh via SSE
-- Sidebar gestionale (da `gestionale.py`)
-
----
-
-### `moduli/gestionale.py`
-
-**Scopo:** Genera il CSS, JavaScript e HTML per le funzionalità gestionali embeddati nella mappa.
-
-| Funzione                      | Descrizione                                         |
-| ----------------------------- | --------------------------------------------------- |
-| `genera_css_gestionale()`   | CSS per modali, form, sidebar                       |
-| `genera_js_gestionale()`    | JS per editing, BOXBEAT, sigilli, matricole, FILONE |
-| `genera_html_gestionale()`  | HTML per modali BOXBEAT, sigilli                    |
-| `genera_pulsanti_sidebar()` | Bottoni HTML della sidebar                          |
-
----
+Generazione mappa HTML completa con Leaflet.js. Inietta CSS/JS dal modulo `gestionale.py`. Output: `templates/mappa_{prov}.html` + `data/{prov}/mappa_data.json`.
 
 ### `moduli/distinte_manager.py`
 
-**Scopo:** Parsing PDF "DistintaBase" di Enel, classificazione contatti, generazione messaggi WhatsApp.
-
-| Funzione                                    | Descrizione                                 |
-| ------------------------------------------- | ------------------------------------------- |
-| `parse_distinta_pdf(path)`                | Estrae lavori da PDF (pdfplumber)           |
-| `parse_multiple_distinte(paths)`          | Multi-file                                  |
-| `is_cellulare(numero)`                    | Verifica prefisso mobile italiano (320-399) |
-| `is_numero_valido(numero)`                | Validazione numero                          |
-| `formatta_numero_whatsapp(numero)`        | Formato `+39...`                          |
-| `genera_messaggio_whatsapp(lavoro, prov)` | Template messaggio                          |
-| `classifica_contatti(lavori, filone)`     | Divide: cellulare/fisso/senza_telefono      |
-| `confronta_con_filone(lavori, filone)`    | Rileva differenze PDF ↔ FILONE             |
-| `estrai_telefono_da_testo(testo)`         | Regex estrazione numero                     |
-
----
+Parsing PDF "DistintaBase" Enel (pdfplumber), classificazione contatti per prefisso (320-399 → cellulare), generazione messaggi WhatsApp.
 
 ### `moduli/auth.py`
 
-**Scopo:** Autenticazione Flask con sessioni.
+Auth Flask con sessioni. Password PBKDF2-SHA256 (100k iterazioni). Storage: `users.json`.
 
-| Funzione                              | Descrizione                     |
-| ------------------------------------- | ------------------------------- |
-| `init_auth(app)`                    | Configura secret key + sessioni |
-| `login_required(f)`                 | Decorator di protezione route   |
-| `authenticate(user, pass)`          | Verifica credenziali            |
-| `hash_password(pass)`               | PBKDF2-SHA256, 100k iterazioni  |
-| `verify_password(pass, hash, salt)` | Verifica hash                   |
-| `create_user(user, pass)`           | Crea utente                     |
-| `delete_user(user)`                 | Elimina utente                  |
-| `reset_password(user, pass)`        | Cambia password                 |
+### `moduli/backup.py`
 
-**Storage:** `users.json` — `{username: {password_hash, salt, created_at, last_login, active}}`
+Backup periodico del DB (`VACUUM INTO backup/{prov}/state_YYYY-MM-DD.db`, rotation ultimi 7).
 
----
+### `moduli/verifica_indirizzi.py`
 
-### `moduli/report_generator.py`
+Geocoding + normalizzazione indirizzi. Usa un DB locale di indirizzi pre-costruito da `tools/build_indir_db.py`.
 
-**Scopo:** Genera report Excel completi.
+### `moduli/rilevamento_aziende.py`
 
-| Funzione                               | Descrizione                    |
-| -------------------------------------- | ------------------------------ |
-| `genera_report_completo(df, report)` | Excel con 6 fogli              |
-| `genera_excel_comuni_per_data(df)`   | Excel semplificato comuni/date |
-
-**Fogli del report:**
-
-1. **Riepilogo** — statistiche generali
-2. **Per Data** — conteggi per data
-3. **Per Tecnico** — statistiche per operatore
-4. **Appuntamenti** — dettaglio appuntamenti
-5. **Calendario Comuni** — pianificazione per comune
-6. **Tappe Tecnici** — percorso ordinato con fasce orarie
+Detect di indirizzi aziendali/condomini per il raggruppamento marker (stessa azienda/indirizzo → fascia unica in lettera, pin separati sulla mappa).
 
 ---
 
-## 18. API REST — Riferimento completo
+## 17. API REST
 
 Tutte le API (tranne `/api/config` e `/api/login`) richiedono autenticazione.
 
-### Autenticazione
+### Auth
 
-| Metodo | Endpoint        | Descrizione                                            |
-| ------ | --------------- | ------------------------------------------------------ |
-| GET    | `/login`      | Pagina di login HTML                                   |
-| POST   | `/api/login`  | Login. Body:`{"username": "...", "password": "..."}` |
-| POST   | `/api/logout` | Logout                                                 |
-| GET    | `/api/user`   | Utente corrente                                        |
-| GET    | `/logout`     | Logout + redirect                                      |
+| Metodo | Endpoint | Descrizione |
+| --- | --- | --- |
+| GET | `/login` | Pagina di login HTML |
+| POST | `/api/login` | Login. Body: `{"username": "...", "password": "..."}` |
+| POST | `/api/logout` | Logout |
+| GET | `/api/user` | Utente corrente |
+| GET | `/logout` | Logout + redirect |
 
-### Mappa e configurazione
+### Mappa e config
 
-| Metodo | Endpoint         | Descrizione                                   |
-| ------ | ---------------- | --------------------------------------------- |
-| GET    | `/`            | Mappa HTML della provincia attiva             |
-| GET    | `/api/config`  | Configurazione provincia (non protetto)       |
-| GET    | `/api/events`  | Stream SSE per notifiche real-time            |
-| GET    | `/data/<path>` | File JSON dalla cartella `data/` (no cache) |
+| Metodo | Endpoint | Descrizione |
+| --- | --- | --- |
+| GET | `/` | Mappa HTML della provincia attiva |
+| GET | `/api/config` | Configurazione provincia (non protetto) |
+| GET | `/api/events` | Stream SSE per notifiche real-time |
+| GET | `/data/<path>` | File JSON dalla cartella `data/` (no cache) |
 
 ### Contatori
 
-| Metodo | Endpoint                                          | Descrizione                                              |
-| ------ | ------------------------------------------------- | -------------------------------------------------------- |
-| GET    | `/api/contatore/<eneltel>`                      | Dati di un contatore specifico                           |
-| PUT    | `/api/contatore/<eneltel>`                      | Aggiorna campi. Body:`{"campo": "valore", ...}`        |
-| POST   | `/api/contatore/<eneltel>/appuntamento`         | Imposta appuntamento. Body:`{"orario": "10:00-12:00"}` |
-| POST   | `/api/contatore/<eneltel>/rimuovi-appuntamento` | Rimuove appuntamento                                     |
+| Metodo | Endpoint | Descrizione |
+| --- | --- | --- |
+| GET | `/api/contatore/<eneltel>` | Dati di un contatore |
+| PUT | `/api/contatore/<eneltel>` | Aggiorna campi |
+| POST | `/api/contatore/<eneltel>/appuntamento` | Imposta appuntamento |
+| POST | `/api/contatore/<eneltel>/rimuovi-appuntamento` | Rimuove appuntamento |
 
-### BOXBEAT
+### Import dati esterni
 
-| Metodo | Endpoint                | Descrizione                                 |
-| ------ | ----------------------- | ------------------------------------------- |
-| POST   | `/api/upload-BOXBEAT` | Upload file Excel Enel. Multipart:`files` |
+| Metodo | Endpoint | Descrizione |
+| --- | --- | --- |
+| POST | `/api/upload-report` | Upload file Excel di ritorno installazioni (Beat) |
+| POST | `/api/admin/import-excel` | Upload FILONE Excel/CSV con merge sicuro |
 
-### Sigilli
+### Sigilli / Matricole
 
-| Metodo | Endpoint                   | Descrizione                                            |
-| ------ | -------------------------- | ------------------------------------------------------ |
-| GET    | `/api/sigilli/pending`   | Contatori (trifase/fotovolt.) installati senza sigillo |
-| PUT    | `/api/sigillo/<eneltel>` | Salva sigillo. Body:`{"sigillo": "..."}`             |
+| Metodo | Endpoint | Descrizione |
+| --- | --- | --- |
+| GET | `/api/sigilli/pending` | Contatori (trifase/fotovolt.) installati senza sigillo |
+| PUT | `/api/sigillo/<eneltel>` | Salva sigillo |
+| GET | `/api/matricole/pending` | Contatori installati senza matricola |
+| PUT | `/api/matricola/<eneltel>` | Salva matricola |
 
-### Matricole
+### FILONE (vista Excel)
 
-| Metodo | Endpoint                     | Descrizione                                    |
-| ------ | ---------------------------- | ---------------------------------------------- |
-| GET    | `/api/matricole/pending`   | Contatori installati senza matricola           |
-| PUT    | `/api/matricola/<eneltel>` | Salva matricola. Body:`{"matricola": "..."}` |
-
-### FILONE (Vista Excel)
-
-| Metodo | Endpoint                      | Descrizione                                        |
-| ------ | ----------------------------- | -------------------------------------------------- |
-| GET    | `/api/filone`               | Tutti i dati del foglio Google                     |
-| PUT    | `/api/filone/row/<row_num>` | Aggiorna riga. Body:`{"colonna": "valore", ...}` |
+| Metodo | Endpoint | Descrizione |
+| --- | --- | --- |
+| GET | `/api/filone` | Tutti i contatori del DB |
+| PUT | `/api/filone/row/<row_num>` | Aggiorna riga |
+| POST | `/api/filone/row` | Aggiunge nuova riga manualmente |
 
 ### Distinte
 
-| Metodo | Endpoint                                 | Descrizione                                                                         |
-| ------ | ---------------------------------------- | ----------------------------------------------------------------------------------- |
-| GET    | `/distinte`                            | Pagina gestione distinte HTML                                                       |
-| POST   | `/api/distinte/parse-distinta`         | Upload PDF distinte. Multipart:`files`                                            |
-| POST   | `/api/distinte/sovrascrivi`            | Sovrascrivi valore FILONE. Body:`{"pod": "...", "campo": "...", "valore": "..."}` |
-| POST   | `/api/distinte/salva-nota`             | Salva nota. Body:`{"pod": "...", "nota": "...", "sovrascrivere": true}`           |
-| POST   | `/api/distinte/strikethrough-telefono` | Barra telefono. Body:`{"pod": "...", "strikethrough": true}`                      |
-| POST   | `/api/distinte/segna-errato`           | Segna numero errato. Body:`{"pod": "..."}`                                        |
-| POST   | `/api/distinte/appuntamento`           | Appuntamento via POD. Body:`{"pod": "...", "orario": "..."}`                      |
-| POST   | `/api/distinte/aggiorna-data`          | Aggiorna data. Body:`{"pod": "...", "data": "DD/MM/YYYY"}`                        |
-| POST   | `/api/distinte/salva-telefono`         | Salva telefono. Body:`{"pod": "...", "telefono": "...", "fonte": "..."}`          |
+| Metodo | Endpoint | Descrizione |
+| --- | --- | --- |
+| GET | `/distinte` | Pagina gestione distinte |
+| POST | `/api/distinte/parse-distinta` | Upload PDF distinte |
+| POST | `/api/distinte/sovrascrivi` | Sovrascrivi campo via POD |
+| POST | `/api/distinte/salva-nota` | Salva nota |
+| POST | `/api/distinte/appuntamento` | Appuntamento via POD |
+| POST | `/api/distinte/salva-telefono` | Salva telefono |
 
-### Sincronizzazione
+### Sync / Admin
 
-| Metodo | Endpoint             | Descrizione                    |
-| ------ | -------------------- | ------------------------------ |
-| POST   | `/api/sync`        | Forza sincronizzazione manuale |
-| GET    | `/api/sync/status` | Stato del sync in background   |
+| Metodo | Endpoint | Descrizione |
+| --- | --- | --- |
+| POST | `/api/sync` | Forza refresh manuale |
+| GET | `/api/sync/status` | Stato del refresh |
+| GET | `/api/admin/db-stats` | Stats DB locale |
+| GET | `/api/admin/db-pending` | Pending residue per stato |
 
 ---
 
-## 19. Configurazione (`config.py`)
+## 18. Configurazione
 
-### Struttura `PROVINCE`
+### `data/provinces.json` — definizioni province
 
-Ogni provincia è definita come un dizionario in `PROVINCE`:
-
-```python
-PROVINCE = {
-    'TORINO': {
-        'nome': 'Torino',                          # Nome visualizzato
-        'id_foglio': '1ZYDay6F...',                 # ID Google Sheets
-        'gid_scheda': 2061618218,                   # GID del worksheet
-        'deposito': {'Nome': '...', 'Lat': ..., 'Lon': ...},  # Punto partenza
-        'operatori_vip': ['AE101392', 'AG49808'],   # Matricole tecnici attivi
-        'colori_operatori': {'AE101392': '#e74c3c'}, # Colore mappa per tecnico
-        'operatori_dict': {'Nome': 'MATRICOLA'},     # Per dropdown gestionale
-        'file_report': 'report_torino.xlsx',
-        'file_mappa': 'mappa_torino.html',
-        'ora_inizio_giornata': 9 * 60,               # Minuti da mezzanotte
-    },
-    'PAVIA': { ... }
+```json
+{
+  "TORINO": {
+    "nome": "Torino",
+    "deposito": {"Nome": "Volpiano", "Lat": 45.32, "Lon": 7.78},
+    "operatori_vip": ["AE101392", "AG49808"],
+    "colori_operatori": {"AE101392": "#e74c3c"},
+    "operatori_dict": {"Mario Rossi": "AE101392"},
+    "ora_inizio_giornata": 540,
+    "ora_fine_giornata": 1020,
+    "data_inizio": "2025-10-01",
+    "data_fine": ""
+  }
 }
 ```
 
-### Costanti critiche
+Aggiungibile/modificabile dall'UI admin (`admin.*` o `/admin/*`).
 
-| Costante                         | Valore                          | Descrizione                            |
-| -------------------------------- | ------------------------------- | -------------------------------------- |
-| `OSRM_SERVER`                  | `http://localhost:5000`       | Server OSRM Docker                     |
-| `OSRM_TIMEOUT`                 | 30                              | Timeout secondi per richieste OSRM     |
-| `VELOCITA_MEDIA_KMH`           | 35                              | Velocità media per stime fallback     |
-| `TEMPO_INTERVENTO_MIN`         | 20                              | Minuti per sostituzione contatore      |
-| `INTERVALLO_SYNC_SECONDI`      | 180                             | Intervallo sync automatico (3 min)     |
-| `DATA_INIZIO` / `DATA_FINE`  | `2025-10-01` / `2026-03-31` | Range date filtro                      |
-| `DIMENSIONE_CELLA_ZONA_KM`     | 8                               | Raggio clustering zone DBSCAN          |
-| `FATTORE_CORREZIONE_HAVERSINE` | 1.35                            | Moltiplicatore distanza linea d'aria   |
+### `config.py` — costanti globali
 
-### Campi modificabili per provincia
+| Costante | Valore default | Descrizione |
+| --- | --- | --- |
+| `OSRM_SERVER` | `http://localhost:5000` | Server OSRM |
+| `OSRM_TIMEOUT` | 30 | Timeout in secondi |
+| `VELOCITA_MEDIA_KMH` | 35 | Stima fallback (override per provincia) |
+| `TEMPO_INTERVENTO_MIN` | 20 | Minuti per sostituzione |
+| `INTERVALLO_SYNC_SECONDI` | 300 | Solo fallback polling client se SSE down |
+| `DATA_INIZIO` / `DATA_FINE` | provincia-specifico | Range filtro date |
+| `DIMENSIONE_CELLA_ZONA_KM` | 8 | Raggio clustering DBSCAN |
+| `FATTORE_CORREZIONE_HAVERSINE` | 1.35 | Moltiplicatore fallback haversine |
+| `DB_PATH` | `data/{prov}/state.db` | Path DB SQLite |
+| `USE_DB_BACKEND` | `primary` | `primary` (default) o `off` (kill-switch) |
 
-`CAMPI_MODIFICABILI` definisce quali colonne del foglio Google sono editabili dall'interfaccia web:
+### `data/{prov}/settings.json` — override da UI admin
 
-- **Torino:** DATA PIAN, NOTE APP, NOMINATIVO, Indirizzo, Num, telefono, Posizione_Ante_Mis, Operatore
-- **Pavia:** Posizione misuratore, Nominativo, Telefono, Via, civico, PROG, Ora pian, Operatore
+Può sovrascrivere: `operatori_vip`, `colori_operatori`, `operatori_dict`, `deposito`, `ora_inizio_giornata`, `ora_fine_giornata`, `velocita_media_kmh`, `tempo_intervento_min`, `data_inizio`, `data_fine`, `mappatura_colonne`.
 
 ### Variabili d'ambiente
 
-| Variabile         | Descrizione                                |
-| ----------------- | ------------------------------------------ |
-| `PROVINCIA`     | Provincia attiva (`TORINO` / `PAVIA`)  |
-| `FLASK_PORT`    | Porta del server Flask (default: 5001)     |
-| `_SERVER_CHILD` | Indica processo figlio Flask (`1` = sì) |
+| Variabile | Descrizione |
+| --- | --- |
+| `PROVINCIA` | Provincia attiva (`TORINO` / `PAVIA` / ...) |
+| `FLASK_PORT` | Porta del server Flask (default 5001) |
+| `ROUTER_PORT` | Porta del router (default 5050) |
+| `GUNICORN_THREADS` | Override threads gunicorn (default 32) |
+| `USE_DB_BACKEND` | Override modalità DB (`primary` / `off`) |
 
 ---
 
-## 20. Sistema di cache
+## 19. Cache e performance
 
 ### File di cache
 
-| File                                  | Contenuto                           | Chiave                 |
-| ------------------------------------- | ----------------------------------- | ---------------------- |
-| `cache_distanze_{prov}.json`        | Matrici distanze/durate OSRM        | `"{tecnico}_{data}"` |
-| `cache_hash_{prov}.json`            | Hash MD5 dei dati per invalidazione | `"{tecnico}_{data}"` |
-| `cache_ordine_percorsi_{prov}.json` | Ordine percorsi TSP pre-calcolati   | `"{tecnico}_{data}"` |
+| File | Contenuto | Chiave |
+| --- | --- | --- |
+| `cache/cache_distanze_{prov}.json` | Matrici distanze/durate OSRM | `"{tecnico}_{data}"` |
+| `cache/cache_hash_{prov}.json` | Hash MD5 dei dati per invalidazione | `"{tecnico}_{data}"` |
+| `cache/cache_ordine_percorsi_{prov}.json` | Ordine TSP pre-calcolato | `"{tecnico}_{data}"` |
 
 ### Strategia di invalidazione
 
-1. Per ogni coppia **tecnico + data**, viene calcolato un **hash MD5** dei dati rilevanti (coordinate, appuntamenti, fasce orarie)
-2. Se l'hash è identico al sync precedente, le distanze NON vengono ricalcolate
-3. Se l'hash è diverso (nuovo contatore, cambio posizione, ecc.), la cache per quella chiave viene invalidata e ricalcolata
-4. La cache è **permanente** (nessuna scadenza temporale)
+1. Per ogni coppia **tecnico + data** viene calcolato un **hash MD5** dei dati rilevanti (coordinate, appuntamenti, fasce orarie).
+2. Se l'hash è identico al sync precedente, le distanze NON vengono ricalcolate.
+3. Se l'hash è diverso (nuovo contatore, cambio posizione, ecc.), la cache per quella chiave viene invalidata.
+4. La cache è **permanente** (nessuna scadenza temporale).
 
 ### Quando viene invalidata
 
@@ -1041,17 +900,17 @@ PROVINCE = {
 - Cambio operatore assegnato
 - Cambio data pianificata
 
+### Memoria
+
+Singolo worker gunicorn (`workers=1`, `threads=32`, `worker_class=gthread`). Il DataFrame + cache + `mappa_data` occupa ~300 MB in memoria. Con N worker la memoria si moltiplicherebbe: si è scelto **1 worker** perché il pattern è I/O-bound (DB + OSRM) e il volume di traffico basso (~5 utenti). I thread gthread gestiscono la concorrenza, inclusi SSE long-lived.
+
 ---
 
-## 21. Algoritmo di ottimizzazione percorsi
+## 20. Algoritmo di ottimizzazione percorsi
 
-Il modulo `percorso.py` (~700 righe) delega il TSP a **OSRM Trip API**, che lo
-risolve nativamente sulla rete stradale reale (sensi unici, svincoli, autostrade).
-La riscrittura ha sostituito il vecchio algoritmo "matrice + nearest neighbor +
-2-opt + 3-opt + or-opt" (~1700 righe) con qualcosa di molto più semplice e
-sempre coerente con la traccia OSRM.
+Il modulo `percorso.py` delega il TSP a **OSRM Trip API**, che lo risolve nativamente sulla rete stradale reale (sensi unici, svincoli, autostrade).
 
-### Pipeline completa
+### Pipeline
 
 ```
 Input: lista punti con coordinate (Lat/Lon o Lat_access/Lon_access)
@@ -1066,281 +925,183 @@ Input: lista punti con coordinate (Lat/Lon o Lat_access/Lon_access)
 2. SE NESSUN APPUNTAMENTO → OSRM Trip roundtrip
    GET /trip/v1/driving/{deposito;p1;p2;...;pn;deposito}
        ?roundtrip=true&source=first&destination=last
-   OSRM ritorna l'ordine ottimale rispettando la rete stradale reale.
   │
   ▼
 3. SE CI SONO APPUNTAMENTI → strategia "ancore temporali"
    ├─ Ordina app_normali per ora_min crescente.
-   ├─ Per ogni segmento (pos -> prossimo_app):
+   ├─ Per ogni segmento (pos → prossimo_app):
    │    budget = ora_min(app) - orario_corrente - tempo_diretto(pos, app)
    │    n_max  = floor(budget / TEMPO_TAPPA_MEDIO)
    │    Sceglie i n_max punti base con minor "deviazione" dal segmento
    │    e li ordina con OSRM Trip non-roundtrip (start=pos, end=app).
    ├─ Aggiunge l'appuntamento (se arriva prima di ora_min, "aspetta").
-   ├─ Punti base rimanenti: OSRM Trip pos -> deposito (o pos -> primo serale).
+   ├─ Punti base rimanenti: OSRM Trip pos → deposito.
    └─ Appuntamenti serali in coda, in ordine cronologico.
   │
   ▼
 4. FALLBACK (OSRM down): sweep angolare dal deposito
-   Garantisce sempre un percorso geograficamente lineare.
   │
   ▼
 Output: lista punti ordinata
 ```
 
-### Rilevamento appuntamenti (`rileva_appuntamento`)
+### Rilevamento appuntamenti
 
-`IS_APPUNTAMENTO=True` se la nota contiene `\bapp\b` come token e NON matcha
-nessuno dei pattern di esclusione conservativi:
+`IS_APPUNTAMENTO=True` se la nota contiene `\bapp\b` come token e NON matcha pattern di esclusione (`no app`, `app annullata`, `app da fissare`, ecc.). Vedi `rileva_appuntamento` in `percorso.py`.
 
-| Categoria             | Esempi                                                                  |
-| --------------------- | ----------------------------------------------------------------------- |
-| negazione             | `no app`, `non app`, `nessun app`, `niente app`, `senza app`            |
-| annullato/spostato    | `app annullata`, `app cancellata`, `app saltata`, `app rinviata`, `app spostata`, `app sospesa`, `app disdetta` |
-| incerto               | `app?`, `app??`                                                         |
-| da fissare            | `app da fissare`, `app da prendere`, `app da concordare`, `da fissare app` |
-| richiesta non confermata | `richiesta app`, `richiede app`, `vuole un app`, `vorrebbe app`         |
-| ipotetico             | `forse app`, `magari app`, `eventualmente app`, `se possibile app`      |
+### Parsing orario
 
-I motivi sono loggati in fase di sync per audit:
-`🔍 Falsi positivi 'APP' filtrati: N note (annullato/spostato: X, ...)`.
-
-Pattern aggiuntivi possono essere aggiunti via `config.APPUNTAMENTO_PATTERN_ESCLUSIONE`.
-
-### Parsing orario appuntamento
-
-`estrai_orario_e_fascia` (riusato anche dal frontend in JS) riconosce:
+`estrai_orario_e_fascia` riconosce:
 
 - `dalle 8 alle 12` → `(08:00, 12:00)`
 - `dalle 09:00 alle 12:30` → `(09:00, 12:30)`
 - `ORE 10:30/12:00` → `(10:30, 12:00)`
 - `10/12`, `10-12` → `(10:00, 12:00)`
-- `10:30` → `(10:30, 10:30)` (orario puntuale)
+- `10:30` → `(10:30, 10:30)`
 - `alle 14`, `ore 14` → `(14:00, 14:00)`
 
-Se NOTE APP non contiene un orario parsabile, viene fatto **fallback su
-`ORARI_LETTERE`** (la fascia della colonna "Orari" usata per le lettere già
-spedite ai clienti).
+Se NOTE APP non contiene un orario parsabile, fallback su `ORARI_LETTERE` (la fascia delle lettere già spedite ai clienti).
 
-### Perché le autostrade vengono preferite
+### Perché le autostrade
 
-OSRM con `profile=driving` restituisce sempre il percorso **più veloce**, non
-il più breve in km. Conseguenze:
-
-- Per Torino: i tecnici usano la tangenziale/autostrada anziché attraversare il centro
-- Le autostrade sono preferite anche quando aumentano i km, perché abbattono il tempo
-
-Non è più necessaria una flag dedicata (era ridondante con il profilo OSRM).
+OSRM con `profile=driving` restituisce il percorso **più veloce** (non il più breve in km). Per Torino i tecnici usano la tangenziale/autostrada anziché attraversare il centro.
 
 ---
 
-## 22. Sistema di sincronizzazione
+## 21. Sistema di refresh mappa
 
-### Sync automatico
+### Refresh event-driven
 
-Un **thread daemon** esegue `sincronizza_dati()` ogni `INTERVALLO_SYNC_SECONDI` (default: 180 secondi = 3 minuti).
+Il sistema NON gira più un sync periodico ogni 3 minuti. La mappa viene rigenerata solo quando serve:
 
-```python
-def background_sync_loop():
-    while _sync_running:
-        sincronizza_dati()
-        sleep(INTERVALLO_SYNC_SECONDI)
-```
+- Dopo un POST utente (modifica contatore, sigillo, matricola, appuntamento, ecc.)
+- Dopo un import (FILONE Excel o Report Beat)
+- Su trigger manuale (`/api/sync` o pulsante "Sync" in sidebar)
 
-### Sync dopo modifica
+`server.py:trigger_sync_after_edit()` decide se applicare una **patch in-place** o eseguire il **sync_loop classico**.
 
-Quando un utente modifica dati dall'interfaccia web (popup, sidebar, distinte), viene chiamato `trigger_sync_after_edit()`:
+### Patch in-place (soft edit, ~50ms)
 
-- Avvia un sync immediato in un thread separato (non blocca la risposta HTTP)
-- Se un sync è già in corso, la richiesta viene messa in coda ("pending")
-- Al termine del sync corrente, il sync pendente viene eseguito automaticamente
-- Evita sync simultanei con un lock
+Per modifiche cosmetiche (email, telefono, nominativo, indirizzo, sigillo, matricola, NOTE APP senza pattern `APP`, ecc.) `moduli/mappa_data_patcher.py` patcha direttamente `data/{prov}/mappa_data.json` e invia SSE `sync_complete`. Niente sync_loop.
+
+### Sync_loop classico (cambi strutturali, ~7-10s)
+
+Per cambi strutturali (DATA PIAN, Operatore, Lat/Lon, Comune, NOTE APP con pattern `APP`, Esito) si esegue l'intera pipeline: DB → DataFrame → distanze → zone → mappa.
 
 ### Notifiche SSE
 
-Dopo ogni sync completato, il server invia un evento SSE a tutti i browser connessi:
-
 ```
 event: sync_complete
-data: {"source": "background_sync", "timestamp": "20260210143022"}
+data: {"source": "inplace_patch" | "sync_loop", "timestamp": "..."}
 ```
 
-Il JavaScript nel browser riceve l'evento e ricarica i dati JSON dalla cartella `data/`.
+Il JS nel browser riceve l'evento e ricarica i JSON da `data/`. Quando l'SSE è giù, fallback su polling JSON ogni `INTERVALLO_SYNC_SECONDI` (default 300s).
 
 ---
 
-## 23. Aggiungere una nuova provincia
+## 22. Aggiungere una nuova provincia
 
-### Passo 1 — Configura `config.py`
+### Passo 1 — Wizard UI admin (consigliato)
 
-Aggiungi un nuovo blocco in `PROVINCE`:
+Dalla UI admin (`admin.*`) c'è un wizard che chiede nome, deposito, operatori e genera automaticamente la voce in `data/provinces.json` + cartella `data/{slug}/` + DB iniziale vuoto. L'utente che crea la provincia ottiene auto-grant di accesso.
 
-```python
-PROVINCE = {
-    'TORINO': { ... },
-    'PAVIA': { ... },
-    'NUOVA_PROVINCIA': {
-        'nome': 'Nuova Provincia',
-        'id_foglio': 'ID_GOOGLE_SHEETS',
-        'gid_scheda': GID_WORKSHEET,
-        'deposito': {'Nome': 'DEPOSITO', 'Lat': XX.XXXX, 'Lon': YY.YYYY},
-        'operatori_vip': ['OP1', 'OP2'],
-        'colori_operatori': {'OP1': '#e74c3c', 'OP2': '#f1c40f'},
-        'operatori_dict': {'Operatore 1': 'OP1', 'Operatore 2': 'OP2'},
-        'file_report': 'report_nuova.xlsx',
-        'file_mappa': 'mappa_nuova.html',
-        'ora_inizio_giornata': 8 * 60,
-    },
-}
-```
+### Passo 2 — Aggiunta manuale (per dev)
 
-### Passo 2 — Aggiorna le validazioni
-
-In `config.py`, aggiorna:
-
-```python
-if PROVINCIA_ATTIVA not in ['TORINO', 'PAVIA', 'NUOVA_PROVINCIA']:
-```
-
-### Passo 3 — Aggiungi campi modificabili
-
-In `CAMPI_MODIFICABILI` e `CAMPI_BOXBEAT` e `COLONNE_SIGILLI`, aggiungi le mappature per la nuova provincia.
-
-### Passo 4 — Crea le cartelle dati
-
-```
-data/nuova_provincia/
-    config.json
-    mappa_data.json
-```
-
-### Passo 5 — Aggiorna `server.py`
-
-Nel launcher, aggiungi la porta per la nuova provincia e aggiorna la logica degli argomenti CLI.
-
-### Passo 6 — Configura il foglio Google Sheets
-
-Il foglio deve avere le colonne attese dal `data_loader.py`. Le colonne minime sono:
-
-- **ENELTEL** — identificativo contatore
-- **POD** — Point of Delivery
-- **NOMINATIVO** — nome cliente
-- **Indirizzo/Via** + **civico** — indirizzo
-- **COMUNE** — comune
-- **Lat**, **Lon** — coordinate GPS
-- **DATA PIAN** — data pianificata
-- **Operatore** — tecnico assegnato
-- **Esito** — stato installazione
-- Colonne opzionali: telefono, note, tipologia, sigillo, matricola
+1. Modifica `data/provinces.json`:
+   ```json
+   "NUOVA_PROVINCIA": {
+     "nome": "Nuova Provincia",
+     "deposito": {"Nome": "DEPOSITO", "Lat": 45.0, "Lon": 9.0},
+     "operatori_vip": ["OP1"],
+     "colori_operatori": {"OP1": "#e74c3c"},
+     "operatori_dict": {"Operatore 1": "OP1"},
+     "ora_inizio_giornata": 480
+   }
+   ```
+2. Crea la cartella `data/nuova_provincia/`.
+3. Importa un Excel iniziale per popolare il DB (UI admin → Import FILONE).
+4. Riavvia il router: `systemctl restart mappa-algeco-router`.
 
 ---
 
-## 24. Troubleshooting per sviluppatori
+## 23. Troubleshooting
 
 ### OSRM non raggiungibile
 
-```powershell
-# Verifica container Docker
+```bash
+# Produzione (nativo)
+sudo systemctl status osrm-routed
+
+# Dev (Docker)
 docker ps
-
-# Testa direttamente
 curl "http://localhost:5000/route/v1/driving/7.68,45.07;7.78,45.19"
-
-# Se il container non c'è, avvialo
-docker start osrm-backend
-```
-
-### Google Sheets: "Quota exceeded"
-
-L'API Google Sheets ha limiti di richieste. Il sistema fa una singola lettura bulk (`get_all_values()`) per sync, più scritture batch. Se superi la quota:
-
-- Aumenta `INTERVALLO_SYNC_SECONDI`
-- Le `batch_update()` contano come singola chiamata
-
-### Cache corrotta
-
-Se la mappa mostra percorsi sbagliati:
-
-```powershell
-# Elimina tutti i file cache
-Remove-Item cache_*.json
-# Riavvia il server
-python server.py
 ```
 
 ### Mappa HTML vuota o errore
 
-Se `mappa_{provincia}.html` è vuota o corrotta:
+- Controlla `journalctl -u mappa-algeco-router` per i log del sync
+- Verifica che `data/{prov}/mappa_data.json` contenga dati validi
+- Forza un sync manuale dalla sidebar
 
-- Controlla i log del sync nel terminale
-- Verifica che `data/{provincia}/mappa_data.json` contenga dati validi
-- Riavvia il server (la mappa viene rigenerata al primo sync)
+### Cache corrotta
+
+```bash
+rm /opt/mappa-algeco/cache/cache_*.json
+sudo systemctl restart mappa-algeco-router
+```
+
+### DB corrotto
+
+```bash
+PY=/opt/mappa-algeco/venv/bin/python
+$PY tools/dump_db.py        # mostra anche PRAGMA integrity_check
+
+# Restore da snapshot
+cp /opt/mappa-algeco/backup/torino/state_YYYY-MM-DD.db \
+   /opt/mappa-algeco/data/torino/state.db
+sudo systemctl restart mappa-algeco-router
+```
+
+### Import Excel non aggiorna alcune righe
+
+Verifica il timestamp di export inserito al momento dell'upload: se è precedente alle ultime modifiche locali, la politica "vince il più recente" protegge il DB. Vedi [DB_LOCALE_README.md](DB_LOCALE_README.md#troubleshooting-rapido).
 
 ### Debug API
 
-Tutte le API producono log dettagliati nel terminale. Per debug aggiuntivo:
+I log nel journal sono prefissati per area:
 
-```python
-# In server.py, attiva debug Flask (solo sviluppo!)
-app.run(host='0.0.0.0', port=FLASK_PORT, debug=True, threaded=True)
+| Prefisso | Modulo |
+| --- | --- |
+| `[SYNC]` | Refresh mappa |
+| `[SSE]` | Server-Sent Events |
+| `[REPORT]` | Import installazioni Beat |
+| `[IMPORT]` | Import FILONE Excel |
+| `[SIGILLI]` | Gestione sigilli |
+| `[MATRICOLE]` | Gestione matricole |
+| `[DISTINTE]` | Gestione distinte |
+
+```bash
+sudo journalctl -u mappa-algeco-router -f
 ```
-
-### Errore "Colonna X non trovata"
-
-Il `data_loader.py` usa `trova_colonna()` con match case-insensitive. Se il nome della colonna nel foglio Google è cambiato, aggiorna i nomi possibili nella funzione.
-
-### Permessi Google Sheets
-
-Se le scritture falliscono:
-
-1. Verifica che il Service Account abbia permessi di **Editore** sul foglio
-2. Controlla che `credenziali.json` non sia scaduto
-3. Verifica che l'ID foglio e il GID scheda siano corretti in `config.py`
-
-### Performance lente
-
-| Problema                | Soluzione                                                                |
-| ----------------------- | ------------------------------------------------------------------------ |
-| Sync lento (>2 min)     | Cache funzionante? Controlla `cache_hash_*.json`                       |
-| Mappa lenta nel browser | Troppi contatori nel range date? Restringi `DATA_INIZIO`/`DATA_FINE` |
-| OSRM lento              | Controlla risorse Docker (CPU/RAM)                                       |
-| Google Sheets lento     | Quota API? Connessione Internet?                                         |
-
-### Struttura log
-
-I log nel terminale usano prefissi per agevolare il debug:
-
-| Prefisso        | Modulo                     |
-| --------------- | -------------------------- |
-| `[SYNC]`      | Thread di sincronizzazione |
-| `[SSE]`       | Server-Sent Events         |
-| `[BOXBEAT]`   | Import BOXBEAT             |
-| `[SIGILLI]`   | Gestione sigilli           |
-| `[MATRICOLE]` | Gestione matricole         |
-| `[DISTINTE]`  | Gestione distinte          |
-| `🗺️`        | Configurazione provincia   |
-| `🚗`          | Calcolo distanze           |
-| `🌐`          | Generazione mappa          |
 
 ---
 
 ## Glossario
 
-| Termine                         | Significato                                                               |
-| ------------------------------- | ------------------------------------------------------------------------- |
-| **FILONE**                | Il foglio Google Sheets principale con tutti i contatori da sostituire    |
-| **ENELTEL**               | Codice identificativo univoco del contatore Enel                          |
-| **POD**                   | Point of Delivery — codice punto di consegna energia                     |
-| **BOXBEAT**               | File Excel di ritorno da Enel con gli esiti delle installazioni           |
-| **Distinta/DistintaBase** | Ordine di lavoro PDF da Enel con i dati delle sostituzioni programmate    |
-| **OSRM**                  | Open Source Routing Machine — calcolo percorsi stradali reali            |
-| **LCL**                   | Codice località/area del contatore                                       |
-| **Fascia oraria**         | Intervallo di 3 ore in cui il tecnico prevede di arrivare                 |
-| **Micro-zona**            | Raggruppamento di contatori entro 500m per evitare zigzag                 |
-| **TSP**                   | Travelling Salesman Problem — ottimizzazione dell'ordine di visita       |
-| **SSE**                   | Server-Sent Events — tecnologia per notifiche push dal server al browser |
-| **Sigillo**               | Sigillo di sicurezza applicato ai contatori trifase/fotovoltaici          |
+| Termine | Significato |
+| --- | --- |
+| **FILONE** | Il foglio principale con tutti i contatori da sostituire. Storicamente Google Sheets, oggi DB SQLite locale. |
+| **ENELTEL** | Codice identificativo univoco del contatore Enel |
+| **POD** | Point of Delivery — codice punto di consegna energia |
+| **Report / BOXBEAT** | File Excel di ritorno da Beat con gli esiti delle installazioni |
+| **Distinta / DistintaBase** | Ordine di lavoro PDF da Enel con dati delle sostituzioni programmate |
+| **OSRM** | Open Source Routing Machine — calcolo percorsi stradali reali |
+| **LCL** | Codice località/area del contatore |
+| **Fascia oraria** | Intervallo di 3 ore in cui il tecnico prevede di arrivare |
+| **TSP** | Travelling Salesman Problem — ottimizzazione dell'ordine di visita |
+| **SSE** | Server-Sent Events — notifiche push dal server al browser |
+| **Sigillo** | Sigillo di sicurezza applicato ai contatori trifase/fotovoltaici |
+| **Sync_loop** | Pipeline completa di rigenerazione mappa (DB → DataFrame → distanze → zone → JSON + HTML) |
+| **Patch in-place** | Aggiornamento diretto di `mappa_data.json` per soft edit (no sync_loop) |
 
 ---
-
-*Documento generato automaticamente. Per aggiornamenti, contattare il team di sviluppo.*

@@ -57,34 +57,6 @@ def trigger_sync():
         return _api_error(e, 'sync manuale')
 
 
-@bp.route('/api/sync/webhook', methods=['POST'])
-def sync_webhook():
-    """Webhook server-to-server per notifica modifiche da Google Sheets.
-
-    Chiamato da Apps Script (trigger onEdit sul foglio) per attivare il sync
-    immediatamente, senza attendere il polling periodico.
-
-    Autenticazione: header X-Sync-Secret confrontato con env var
-    SYNC_WEBHOOK_SECRET. Niente sessione utente, niente CSRF (esclusa in
-    server.csrf_check).
-    """
-    import secrets as _secrets
-    expected = os.environ.get('SYNC_WEBHOOK_SECRET', '').strip()
-    received = request.headers.get('X-Sync-Secret', '').strip()
-    if not expected:
-        logger.warning("[webhook] SYNC_WEBHOOK_SECRET non configurato, rifiuto")
-        return jsonify({'error': 'webhook non configurato'}), 503
-    if not received or not _secrets.compare_digest(received, expected):
-        logger.warning("[webhook] secret non valido da %s", request.remote_addr)
-        return jsonify({'error': 'secret non valido'}), 403
-    try:
-        _callbacks['trigger_sync_after_edit']()
-        logger.info("[webhook] sync trigger ricevuto da %s", request.remote_addr)
-        return ('', 204)
-    except Exception as e:
-        return _api_error(e, 'webhook sync')
-
-
 @bp.route('/api/sync/status')
 @login_required
 def sync_status():

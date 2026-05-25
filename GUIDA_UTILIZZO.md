@@ -361,8 +361,8 @@ In tutti i casi, si aprirà un **pannello a schermo** intero che permette di mod
 
 ### Cosa succede dopo il salvataggio
 
-1. I dati vengono inviati a Google Sheets (il FILONE)
-2. Parte una **sincronizzazione immediata** che rigenera i percorsi e la mappa
+1. I dati vengono scritti sul DB locale (il FILONE)
+2. Parte una **patch immediata** che aggiorna in-place mappa, percorsi e sidebar (~50 ms)
 3. La sidebar e la mappa si aggiornano automaticamente senza ricaricare la pagina
 4. Appare una conferma visiva
 
@@ -377,7 +377,7 @@ In tutti i casi, si aprirà un **pannello a schermo** intero che permette di mod
 - Selettore **Orario fine** (es. 12:00)
 
 3. Clicca **☎️ Salva Appuntamento**
-4. Il sistema scrive "APP 10:00-12:00" nella colonna note del FILONE
+4. Il sistema scrive "APP 10:00-12:00" nella colonna note del FILONE (DB locale)
 
 ### Dalla pagina Gestione Distinte
 
@@ -557,7 +557,7 @@ I sigilli sono necessari per i contatori **trifase semidiretti** e **fotovoltaic
 1. Trova il contatore nella lista (ogni card mostra: nome, comune, via, eneltel, data installazione, operatore)
 2. Scrivi il numero di sigillo nel campo **input** della card
 3. Premi **Invio**
-4. Il sigillo viene salvato su Google Sheets e la cella viene **evidenziata in giallo**
+4. Il sigillo viene salvato sul DB e la card viene **evidenziata in giallo**
 5. Il cursore passa automaticamente al **campo successivo** per un inserimento rapido
 
 ### Indicatori visivi
@@ -584,7 +584,7 @@ Le matricole sono i numeri seriali dei nuovi contatori installati. A differenza 
 
 1. Trova il contatore nella lista
 2. Spara l'etichetta nel campo input
-3. La matricola viene salvata su Google Sheets e la cella viene **evidenziata in verde**
+3. La matricola viene salvata sul DB e la card viene **evidenziata in verde**
 4. Il cursore passa automaticamente al campo successivo
 
 ---
@@ -598,7 +598,7 @@ Le matricole sono i numeri seriali dei nuovi contatori installati. A differenza 
 5. Vai su **🔐 Sigilli / Matricole**:
    - Tab Sigilli → inserisci i sigilli per trifase e fotovoltaici
    - Tab Matricole → inserisci le matricole per tutti i contatori
-6. I dati si aggiornano automaticamente su Google Sheets
+6. I dati si aggiornano automaticamente sul DB e la mappa viene rigenerata
 
 ---
 
@@ -705,8 +705,8 @@ Se un numero di telefono è sbagliato (non risponde, non esiste, ecc.):
 
 1. Nella card del contatto, cerca l'opzione per segnare il numero errato
 2. Il sistema:
-   - Aggiunge **"ERRATO"** al valore del telefono nel FILONE
-   - Applica la **formattazione barrato** (strikethrough) alla cella su Google Sheets
+   - Aggiunge **"ERRATO"** al valore del telefono nel FILONE (DB)
+   - Mostra il numero con **formattazione barrato** nella UI della distinta
 
 ### Note e appuntamenti
 
@@ -719,9 +719,7 @@ Ogni contatto ha una sezione per le note:
    - "Numero errato"
 2. Oppure scrivi una **nota libera** nel campo testo
 3. La nota si salva automaticamente premendo **Invio** o cliccando fuori dal campo
-4. La nota viene:
-   - Salvata sul FILONE (Google Sheets)
-   - Salvata localmente
+4. La nota viene salvata sul FILONE (DB locale)
 
 ### Impostare un appuntamento dalla distinta
 
@@ -729,7 +727,7 @@ Ogni contatto ha una sezione per le note:
 2. Seleziona la **data** con il selettore apposito
 3. Seleziona l'**orario inizio** e l'**orario fine** (se si tratta di una fascia estesa)
 4. Clicca **📅 Salva**
-5. Il sistema scrive la nota "APP [orario]" nel FILONE e fa partire la sincronizzazione
+5. Il sistema scrive la nota "APP [orario]" nel FILONE e applica la patch in-place
 
 ### Confronto tra distinte e FILONE
 
@@ -784,16 +782,19 @@ La scelta del tema viene salvata localmente. Quando ricarichi la pagina o se dov
 
 ## 20. Aggiornamento dei dati
 
-Il sistema si aggiorna automaticamente in due modi.
+Dal 21/05/2026 il sistema non è più collegato a Google Sheets: la fonte di verità è il **DB locale SQLite** per provincia. Gli aggiornamenti sono **event-driven** invece che a polling.
 
-### Sync in background (ogni 3 minuti)
+### Patch in-place (modifiche puntuali, ~50 ms)
 
-Ogni 3 minuti il server:
+Quando un utente modifica un contatore, inserisce un sigillo/matricola, aggiorna una nota o salva un appuntamento:
 
-1. Scarica i dati aggiornati da Google Sheets
-2. Ricalcola distanze e percorsi (usando la cache per velocità)
-3. Rigenera i file JSON della mappa
-4. Notifica tutti i browser connessi
+1. La scrittura va direttamente sul DB
+2. Il server applica una **patch in-place** che aggiorna solo le strutture impattate (mappa, percorsi, sidebar)
+3. Tutti i browser collegati ricevono la patch via **SSE** e la applicano senza reload
+
+### Rigenerazione completa (cambi strutturali, ~7-10 s)
+
+Per modifiche che alterano la geometria dei percorsi (import Excel, BOXBEAT, cambi operatore di massa) parte un **sync_loop** che ricostruisce da capo zone, percorsi e cache OSRM. Anche in questo caso la notifica arriva via SSE.
 
 ### Notifica al browser (SSE)
 
@@ -810,10 +811,10 @@ Se la connessione SSE si interrompe (es. problema di rete), il sistema riprova f
 Se hai bisogno di forzare un aggiornamento immediato:
 
 1. Clicca il pulsante **🔄** nell'intestazione della sidebar
-2. Il server lancia immediatamente una sincronizzazione completa
+2. Il server lancia immediatamente una rigenerazione completa
 3. La pagina si ricarica da zero con i dati aggiornati
 
-In alternativa: dopo ogni **modifica manuale** (salvataggio contatore, upload Report, ecc.), il sync viene triggerato **automaticamente** senza dover cliccare nulla.
+In alternativa: dopo ogni **modifica manuale** (salvataggio contatore, upload Report Beat, import Excel, ecc.), il refresh parte **automaticamente** senza dover cliccare nulla.
 
 ---
 

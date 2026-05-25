@@ -1,94 +1,70 @@
-# Architettura sync DB locale ↔ Google Sheets
+# Architettura DB locale (post-disconnessione Google Sheets)
 
-Refactor completato in aprile-maggio 2026 in 3 fasi:
-1. **Shadow-write** (validation): DB popolato in parallelo, scritture ancora dirette a Sheets.
-2. **Primary mode**: DB diventa source of truth, drainer asincrono pusha su Sheets.
-3. **Cleanup**: eliminati i path legacy. Oggi esiste solo il path DB-first.
+## Storia
+
+Fino al 21/05/2026 il sistema era a doppia fonte di verità: DB SQLite locale + Google Sheets, con un sync engine bidirezionale (pull periodico Sheets→DB, drainer asincrono DB→Sheets). Il 21/05/2026 il dispatch automatico cross-colonna ha causato uno **span massivo** (numeri di telefono finiti nella colonna SIGILLO perché matchavano il pattern `\d{8,14}`).
+
+A seguito di quell'incidente Google Sheets è stato **scollegato completamente**. Da allora:
+
+- Il **DB SQLite locale** è l'unica fonte di verità.
+- I dati esterni entrano via **import Excel manuale** (admin scarica il foglio come `.xlsx`/`.csv` e lo carica dall'UI admin).
+- `moduli/sync_engine.py` è oggi uno **stub no-op** ([moduli/sync_engine.py:1-17](moduli/sync_engine.py)) che mantiene la firma delle funzioni storiche (`pull_once`, `drain_once`, `trigger_drain_now`, `start_workers`, `stop_workers`) per non rompere gli import residui.
+- I nomi gspread (`safe_batch_update_by_name`, `get_worksheet`, `carica_dati_google_sheets`, ecc.) sopravvivono come **alias legacy**: le route Blueprint non sono state toccate, ma internamente tutto legge/scrive sul DB. Le chiamate gspread reali sollevano eccezioni ([moduli/shared.py:179-277](moduli/shared.py)).
 
 ## Modalità di funzionamento
 
-Controllata da `USE_DB_BACKEND` in [config.py](config.py) (env var omonima):
+Controllata da `USE_DB_BACKEND` in [config.py](config.py) (env var omonima). Nel nuovo regime esistono due soli valori utili:
 
 | Valore | Comportamento |
 |---|---|
-| `primary` (default, unico path attivo) | DB = source of truth. Route → DB → drainer → Sheets. |
-| `off` | Kill-switch d'emergenza: drainer e pull NON partono. Le route scrivono comunque nel DB (le pending si accumulano). |
+| `primary` (default) | DB = source of truth. Route → DB → invalidate cache → mappa rigenerata. |
+| `off` | Kill-switch d'emergenza: le route scrivono comunque nel DB (Sheets era già off, quindi è equivalente in pratica). |
 
-> Dopo la Fase 3 il path `shadow` è stato rimosso dal codice. Per rollback
-> emergenziale a un comportamento pre-refactor occorre `git checkout` di un
-> commit precedente alla Fase 3 (es. `0809e3c`).
+Per rollback emergenziale al comportamento pre-disconnessione (sconsigliato, riapre l'incident del 21/05) occorre `git checkout` di un commit precedente a `5d24775`.
 
-Per fermare temporaneamente il drainer senza fermare l'app:
-```bash
-sudo systemctl edit mappa-algeco-router.service
-# Aggiungi: Environment="USE_DB_BACKEND=off"
-sudo systemctl restart mappa-algeco-router
-```
-
-## Flusso operativo (primary mode)
+## Flusso operativo
 
 ```
-┌──────────────┐  POST    ┌──────────────┐
-│ UI / route   │─────────▶│ DB SQLite    │  filone, pending_writes, audit_log
-└──────────────┘ <100ms   └──────┬───────┘
-                                 │
-                       ┌─────────┴─────────┐
-                       ▼                   ▼
-              push_drain_worker    pull_loop (180s)
-              (ogni 30s)                   │
-                       │                   │
-                       ▼                   ▼
-                  ┌──────────────────────────┐
-                  │   GOOGLE SHEETS API      │
-                  │ safe_batch_update_*(...) │
-                  └──────────────────────────┘
+┌──────────────────┐  POST   ┌──────────────┐
+│  UI / route      │────────▶│  DB SQLite   │  filone, audit_log
+└──────────────────┘ <50ms   └──────┬───────┘
+                                    │
+                              ┌─────┴───────────────┐
+                              ▼                     ▼
+                      patch in-place        sync_loop classico
+                      mappa_data.json       (rigenera DataFrame +
+                      (~50ms, soft edit)    percorsi + mappa, ~7-10s,
+                              │             cambi strutturali)
+                              ▼
+                       SSE 'sync_complete' → browser
 ```
 
 **Scrittura (POST utente)**
 
-1. La route filtra i campi modificabili → chiama `update_row_fields` o equivalente.
-2. `safe_batch_update_by_name` ([moduli/shared.py:344](moduli/shared.py#L344)) entra nel branch `primary`.
-3. `_route_to_db_primary` ([moduli/shared.py](moduli/shared.py)):
-   - Risolve `eneltel_key` (PK del DB) via anchor (Eneltel/POD) o sheets_row.
-   - **Dedup**: confronta col valore corrente in DB + pending overlay. Se uguale → no-op (es. client che manda tutto il form ma utente ha cambiato un solo campo).
-   - `db.record_local_change(...)` accoda in `pending_writes` (state='pending') + aggiorna `filone` (preview ottimistica) + audit.
-   - `sync_engine.trigger_drain_now()` sveglia il drainer.
-4. Risposta API in ~50ms.
+1. La route filtra i campi modificabili → chiama `safe_batch_update_by_name` ([moduli/shared.py:366](moduli/shared.py)) o helper di alto livello.
+2. La funzione entra nel branch `primary` (l'unico oggi attivo) e instrada a `_route_to_db_primary`:
+   - Risolve `eneltel_key` (PK del DB) via anchor (Eneltel/POD) o `sheets_row`.
+   - **Dedup**: confronta col valore corrente in DB. Se uguale → no-op.
+   - `db.record_local_change(...)` ([moduli/db.py:490](moduli/db.py)) aggiorna `filone` + scrive entry in `audit_log`.
+3. Risposta API in ~50ms.
+
+Nota: la coda `pending_writes` (storicamente usata dal drainer verso Sheets) viene ancora popolata da alcuni path per audit/storico, ma non viene mai drenata verso un sistema esterno. Il cron mensile `cleanup_done_pendings.py` la mantiene piccola.
 
 **Patch in-place mappa_data.json (soft edit)**
 
-`server.py:trigger_sync_after_edit()` tenta prima [moduli/mappa_data_patcher.py:try_patch_inplace](moduli/mappa_data_patcher.py). Se le pending in volo sono **tutte cosmetiche** (email, telefono, nominativo, indirizzo, NOTE APP senza pattern APP, ecc.), patcha direttamente `data/{prov}/mappa_data.json` in ~50ms e invia SSE `sync_complete`. Niente sync_loop.
+`server.py:trigger_sync_after_edit()` tenta prima [moduli/mappa_data_patcher.py:try_patch_inplace](moduli/mappa_data_patcher.py). Se le modifiche in volo sono **tutte cosmetiche** (email, telefono, nominativo, indirizzo, posizione_misuratore, sigillo, codice_*, matricola_*, NOTE APP senza pattern `APP`, ecc.), patcha direttamente `data/{prov}/mappa_data.json` in ~50ms e invia SSE `sync_complete`. Niente sync_loop.
 
-Per cambi **strutturali** (DATA PIAN, Operatore, Lat/Lon, COMUNE, NOTE APP con APP, Esito) cade nel sync_loop classico (~7-10s).
+Per cambi **strutturali** (DATA PIAN, Operatore, Lat/Lon, COMUNE, NOTE APP con pattern `APP`, Esito) cade nel sync_loop classico (~7-10s): riprocesso DataFrame, ricalcolo zone/percorsi/access points, rigenera `mappa_data.json` e HTML.
 
-**Drainer (asincrono)**
+**Import Excel manuale**
 
-[moduli/sync_engine.py:drain_once](moduli/sync_engine.py):
+[moduli/excel_importer.py](moduli/excel_importer.py) sostituisce il vecchio pull periodico. Flusso:
 
-1. Ogni 30s (o on-demand via `trigger_drain_now()`).
-2. Prende fino a `DRAIN_BATCH_SIZE=400` pending in stato `pending`.
-3. Le marca `in_flight`.
-4. Costruisce `items` con `row` da `filone.sheets_row` + `anchor=eneltel`.
-5. Chiama `safe_batch_update_by_name(..., _force_sheets=True)`:
-   - Lock globale + `force_refresh_headers()` (anti-spanamento colonne)
-   - `col_values(Eneltel)` fresh per remap righe (anti-spanamento righe)
-   - Skip-with-quarantine se colonna mancante o ancora persa
-   - `batch_update` su Sheets
-6. Marca pending `done` su successo, `failed` (con retry) o `quarantined`.
+1. L'admin scarica il foglio Sheets come `.xlsx` o `.csv` e lo carica dall'endpoint admin.
+2. L'importer legge il file, risolve il mapping colonne (header alla riga 1 o configurato), e fa **merge cella-per-cella** col DB.
+3. Politica di merge: **"vince il più recente"** a granularità RIGA. Per ogni `eneltel` confronta `last_local_change_ts` del DB con `excel_export_ts` (fornito dall'utente nel form). Se la riga è stata modificata nel programma DOPO l'export Excel, il DB vince e Excel viene ignorato per quella riga; altrimenti vincono i valori Excel, cella per cella.
 
-**Pull engine**
-
-[moduli/sync_engine.py:pull_once](moduli/sync_engine.py) gira ogni 180s (chiamato da `_do_sincronizza_dati` in `server.py`):
-
-1. Legge l'intero foglio via `shared.get_all_values_cached` (TTL 30s, condiviso con `data_loader`).
-2. Calcola hash globale → skip se invariato.
-3. Per ogni riga: calcola hash riga, confronta con `filone.row_hash`.
-4. Se cambiato:
-   - Carica pending in volo per la riga.
-   - Per ogni colonna: confronta remote/base/pending → applica diff campo-per-campo.
-   - Pending in volo + `remote != base_value` → audit `conflict_local_wins` (locale vince, drainer sovrascriverà).
-   - Aggiorna `filone` con i cambi remoti (skip su colonne con pending in_flight).
-5. Marca orphan le righe sparite.
+Granularità a livello riga: una sola modifica locale post-export protegge l'intera riga dall'import. È la scelta più sicura per evitare di sovrascrivere lavoro recente.
 
 ## Schema DB
 
@@ -96,13 +72,13 @@ File: `data/{provincia}/state.db` (SQLite + WAL). Schema in [moduli/db.py](modul
 
 | Tabella | Contenuto |
 |---|---|
-| `filone` | Una riga per contatore. **PK composta `(eneltel_key, lcl)`** (schema v2, per supportare i casi multi-LCL di Pavia). ~30 colonne tipizzate (pod, nominativo, comune, data_pianificata, operatore, lat/lon, ecc.) + meta (row_hash, last_remote_pull_ts, sheets_row, is_orphan). |
+| `filone` | Una riga per contatore. **PK composta `(eneltel_key, lcl)`** (schema v2, per supportare i casi multi-LCL di Pavia). ~30 colonne tipizzate (pod, nominativo, comune, data_pianificata, operatore, lat/lon, ecc.) + meta (row_hash, last_local_change_ts, sheets_row, is_orphan). |
 | `filone_extra` | Colonne del foglio non mappate alle ~30 note (es. `Mot. Rich.`, `MID`, `ZTL`). Key-value `(eneltel_key, lcl, column_name) → value`. |
-| `pending_writes` | Coda di scritture da pushare su Sheets. Stati: `pending` / `in_flight` / `done` / `quarantined` / `failed`. `UNIQUE INDEX` parziale su `(eneltel_key, column_name)` con `state IN ('pending','in_flight')` per coalesce. |
-| `audit_log` | Storico di ogni modifica. `source` ∈ {`local`, `remote`, `bootstrap`, `conflict_local_wins`, `quarantine`}. |
-| `column_registry` | Mappatura nome colonna foglio → chiave interna, aggiornata ad ogni pull. |
-| `filone_anomalies` | Righe del foglio anomale (Eneltel duplicato, riga senza Eneltel). Ricalcolato ad ogni pull. |
-| `sync_state` | Key/value: `schema_version`, `last_full_pull_ts`, `last_full_pull_sheet_hash`, `last_sheet_id`. |
+| `pending_writes` | Coda storica delle scritture. Oggi rimane popolata per audit ma **non viene drenata** verso sistemi esterni. Stati: `pending` / `in_flight` / `done` / `quarantined` / `failed`. Pulita dal cron mensile. |
+| `audit_log` | Storico di ogni modifica. `source` ∈ {`local`, `import_excel`, `bootstrap`, `quarantine`}. |
+| `column_registry` | Mappatura nome colonna → chiave interna, aggiornata ad ogni import Excel. |
+| `filone_anomalies` | Righe Excel anomale (Eneltel duplicato, riga senza Eneltel). Ricalcolato ad ogni import. |
+| `sync_state` | Key/value: `schema_version`, `last_import_ts`, `last_import_filename`, ecc. |
 
 ## Strumenti CLI
 
@@ -118,49 +94,44 @@ PROVINCIA=PAVIA $PY tools/dump_db.py
 # Dettagli su una riga specifica (audit, pending, ...)
 $PY tools/dump_db.py --eneltel 12345
 
-# Pending in volo (dovrebbero essere ~zero in regime normale)
+# Pending residue (dovrebbero essere ~zero in regime normale)
 $PY tools/dump_db.py --pending
 
-# Conflitti rilevati dal pull engine
-$PY tools/dump_db.py --conflicts
-
-# Anomalie del foglio (Eneltel duplicati, righe senza Eneltel)
+# Anomalie rilevate dall'ultimo import
 $PY tools/dump_db.py --anomalies
 
 # Mappatura colonne (column_registry)
 $PY tools/dump_db.py --columns
 
-# Bootstrap iniziale (idempotente) — usare solo dopo --reset o per recovery
-$PY tools/migrate_to_sqlite.py
-$PY tools/migrate_to_sqlite.py --reset                # rebuild da zero
-$PY tools/migrate_to_sqlite.py --from-backup PATH     # da snapshot JSON
-
-# Validatore shadow (DB vs Sheets): dry-run a mano
-$PY tools/validate_shadow.py --report-dir /tmp/shadow_check
-
-# Cleanup pending quarantined obsolete (default: > 7 giorni)
-$PY tools/cleanup_quarantined.py            # dry-run
-$PY tools/cleanup_quarantined.py --apply
+# Cleanup pending in stato `done` > 30 giorni (info conservata in audit_log)
+$PY tools/cleanup_done_pendings.py            # dry-run
+$PY tools/cleanup_done_pendings.py --apply
 
 # Archivia audit_log > 6 mesi in backup/{prov}/audit_log_archive_YYYY-MM.jsonl.gz
 $PY tools/archive_audit_log.py
 $PY tools/archive_audit_log.py --apply
+
+# Costruisce il DB di indirizzi normalizzati (usato da verifica_indirizzi)
+$PY tools/build_indir_db.py
+
+# Confronto offline tra due percorsi pre-calcolati (debug)
+$PY tools/confronta_percorsi.py
 ```
+
+> **Tool rimossi post-disconnessione**: `migrate_to_sqlite.py`, `validate_shadow.py`, `cleanup_quarantined.py` non esistono più (servivano per bootstrap da Sheets e validazione DB↔Sheets).
 
 ## Cron schedulati
 
 | File | Quando | Cosa fa |
 |---|---|---|
-| `/etc/cron.d/mappa-algeco-shadow-validator` | Ogni notte: Torino 03:00, Pavia 03:30 | Confronta DB ↔ Sheets cella per cella (usando PK composta `(eneltel,lcl)`), salva report JSON in `data/{prov}/shadow_reports/` |
 | `/etc/cron.d/mappa-algeco-audit-archive` | 1° del mese: Torino 04:00, Pavia 04:15 | Archivia `audit_log` > 180 giorni in `backup/{prov}/audit_log_archive_YYYY-MM.jsonl.gz` |
-| `/etc/cron.d/mappa-algeco-cleanup-pendings` | 1° del mese: Torino 05:00, Pavia 05:15 | Cancella `pending_writes` in stato `done` > 30 giorni (info conservata in audit_log) |
+| `/etc/cron.d/mappa-algeco-cleanup-pendings` | 1° del mese: Torino 05:00, Pavia 05:15 | Cancella `pending_writes` in stato `done` > 30 giorni |
 
 Backup giornaliero del DB:
 - `backup/{prov}/state_YYYY-MM-DD.db` (snapshot via `VACUUM INTO`, rotation: ultimi 7)
-- Eseguito da `backup_periodico_auto()` nel sync_loop (stessa cadenza dei backup JSON)
+- Eseguito da `backup_periodico_auto()` (vedi [moduli/backup.py](moduli/backup.py))
 
 Log:
-- `/var/log/mappa-shadow-{torino,pavia}.log`
 - `/var/log/mappa-audit-archive-{torino,pavia}.log`
 - `/var/log/mappa-cleanup-pendings-{torino,pavia}.log`
 
@@ -170,86 +141,51 @@ Log:
 |---|---|
 | `GET /api/admin/db-stats` | Stats live del DB locale + `health.warnings` se backlog ≥ 500 o `max_attempts` ≥ 10. |
 | `GET /api/admin/db-pending?state=pending` | Lista pending per stato. Parametri: `state`, `limit`. |
+| `POST /api/admin/import-excel` | Upload foglio Sheets esportato come Excel/CSV. Form data: file + `excel_export_ts`. |
 
 ## Tassonomia delle modifiche
 
 | Tipo | Esempi | Cosa scatta |
 |---|---|---|
 | **Soft (in-place patch)** | email, telefono, nominativo, indirizzo, civico, posizione_mis, smart_test, sigillo, codice_*, matricola_*, NOTE APP senza pattern `APP` | Patch diretta di `mappa_data.json` (~50ms). Nessun sync_loop. |
-| **Strutturali** | DATA PIAN, Operatore, Latitudine/Longitudine, Comune/Localita, NOTE APP con pattern `APP`, Esito | Sync_loop completo (~7-10s): riprocesso DataFrame, ricalcolo zone/percorsi/access points, rigenera mappa_data.json e HTML. |
+| **Strutturali** | DATA PIAN, Operatore, Latitudine/Longitudine, Comune/Localita, NOTE APP con pattern `APP`, Esito | Sync_loop completo (~7-10s): riprocesso DataFrame, ricalcolo zone/percorsi/access points, rigenera `mappa_data.json` e HTML. |
 
 Definizione "soft" in [moduli/mappa_data_patcher.py:SOFT_FIELDS_DB](moduli/mappa_data_patcher.py).
-Definizione "strutturale" del DataFrame in [moduli/data_loader.py:_COLONNE_STRUTTURALI](moduli/data_loader.py#L45).
+Definizione "strutturale" del DataFrame in [moduli/data_loader.py:_COLONNE_STRUTTURALI](moduli/data_loader.py).
 
-## Conflict resolution
-
-Policy: **locale vince** (`local_wins`), configurabile in `config.py:CONFLICT_POLICY`.
-
-Quando il pull engine trova una riga con hash cambiato E c'è una pending in volo per una cella di quella riga:
-
-- `remote_val == pending.base_value` → nessun conflitto reale, la pending procederà (drainer la pusherà).
-- `remote_val != pending.base_value` → la collega ha modificato Sheets manualmente dopo la base. Audit `source='conflict_local_wins'` con dettaglio. DB locale NON aggiornato su quella cella; il drainer sovrascriverà su Sheets.
-
-Per ispezionare conflitti storici:
-```bash
-$PY tools/dump_db.py --conflicts
-```
-
-## Quota Google Sheets
-
-Limite per service account: ~60 read/min e ~60 write/min. In regime di carico utente normale:
-
-- POST utente: **0** chiamate Sheets (DB-only).
-- Sync periodico (180s): 1 read Sheets (cache shared TTL 30s evita doppi download tra `data_loader` e `pull_once`).
-- Drainer (30s, se ci sono pending): 2 read + 1 write per ciclo. Coalesce per cella: bursti di N modifiche stesso campo = 1 sola write.
-
-In totale: **~5-7 chiamate API/min** sotto carico tipico (60 era il punto di rottura del vecchio sistema).
-
-## File chiave del refactor
+## File chiave
 
 | File | Ruolo |
 |---|---|
 | [moduli/db.py](moduli/db.py) | Schema SQLite v2, connection thread-local, `record_local_change`, `find_eneltel_by_pod`, `canonical_column_name`, `dump_filone_as_rows`, `audit`, migrations. |
-| [moduli/sync_engine.py](moduli/sync_engine.py) | `pull_once` (Sheets→DB) e `drain_once` (DB→Sheets). Worker daemon + check anti sheet-substitution + alert backlog. |
-| [moduli/data_loader.py](moduli/data_loader.py) | `_apply_pending_to_values` (overlay pending sui raw values), `mark_data_changed`. |
+| [moduli/excel_importer.py](moduli/excel_importer.py) | Import Excel/CSV con merge "vince il più recente" per riga. |
+| [moduli/sync_engine.py](moduli/sync_engine.py) | **Stub post-disconnessione**. `pull_once`/`drain_once` no-op; `start_workers` esegue solo PRAGMA integrity_check al boot. |
+| [moduli/data_loader.py](moduli/data_loader.py) | Legge dal DB e produce il DataFrame pandas usato dalla mappa. `mark_data_changed` invalida l'hash per forzare il riprocessing. |
 | [moduli/mappa_data_patcher.py](moduli/mappa_data_patcher.py) | Patch in-place di `mappa_data.json` per soft edit. |
-| [moduli/shared.py](moduli/shared.py) | `safe_batch_update_by_name` (API canonica, route → `_route_to_db_primary`; drainer usa `_force_sheets=True`), helper di lookup row leggono solo dal DB. |
+| [moduli/shared.py](moduli/shared.py) | API legacy compatibile gspread che instrada al DB. Helper di lookup row leggono solo dal DB. |
 | [moduli/backup.py](moduli/backup.py) | Backup giornaliero JSON + snapshot DB rotativo (`esegui_backup_db`). |
-| [server.py](server.py) | `trigger_sync_after_edit` (prova patch in-place → fallback sync_loop), `_shadow_db_pull`, init drainer, endpoint admin (`db-stats`, `db-pending`). |
-| [tools/migrate_to_sqlite.py](tools/migrate_to_sqlite.py) | Bootstrap iniziale (idempotente). Aggiorna `last_sheet_id` in `sync_state`. |
-| [tools/validate_shadow.py](tools/validate_shadow.py) | Validatore notturno DB↔Sheets (PK composta v2). |
+| [server.py](server.py) | `trigger_sync_after_edit` (prova patch in-place → fallback sync_loop), endpoint admin (`db-stats`, `db-pending`, `import-excel`). |
 | [tools/dump_db.py](tools/dump_db.py) | Diagnostica CLI. |
-| [tools/cleanup_quarantined.py](tools/cleanup_quarantined.py) | Pulizia pending quarantined obsolete. |
 | [tools/cleanup_done_pendings.py](tools/cleanup_done_pendings.py) | Cancellazione mensile delle pending `done` vecchie. |
 | [tools/archive_audit_log.py](tools/archive_audit_log.py) | Archiviazione mensile audit_log. |
 
 ## Troubleshooting rapido
 
-**Problema**: pending non vengono drenate (rimangono in `pending` per >1 min).
-- Verifica `journalctl -u mappa.service | grep drain` → cerca errori del drainer.
-- Verifica quota Sheets: `journalctl -u mappa.service | grep 429`.
-- `$PY tools/dump_db.py --pending` mostra le pending in coda.
-
 **Problema**: modifica utente non appare sulla UI.
-- `$PY tools/dump_db.py --eneltel <ENELTEL>` → controlla `pending_writes`. Se `state='pending'` → drainer in ritardo; se `state='done'` → drainer ha pushato, controlla `mappa_data.json` con `grep <ENELTEL> data/{prov}/mappa_data.json | head -1`.
-- Log del sync: `journalctl -u mappa.service | grep -E "patch|sync_complete|FILONE"` per i 30s precedenti.
+- `$PY tools/dump_db.py --eneltel <ENELTEL>` → controlla che il `filone` mostri il nuovo valore.
+- Se il DB è aggiornato ma la mappa no: controlla `mappa_data.json` con `grep <ENELTEL> data/{prov}/mappa_data.json | head -1`. Se manca, il sync_loop / patch in-place ha fallito.
+- Log: `journalctl -u mappa-algeco-router.service | grep -E "patch|sync_complete|FILONE"` per i 30s precedenti.
 
-**Problema**: validatore notturno segnala discrepanze.
-- Apri `data/{prov}/shadow_reports/shadow_diff_YYYY-MM-DD.json`. Lista i campi divergenti.
-- Se `only_in_sheets`: righe esistenti su foglio ma non nel DB → eseguire `tools/migrate_to_sqlite.py` per re-importare.
-- Se `field_diffs`: indagare se sono modifiche esterne ancora pending (cache 30s) o un vero bug.
+**Problema**: import Excel non aggiorna alcune righe.
+- Verifica `excel_export_ts` inserito al momento dell'upload: se è precedente alle ultime modifiche locali, la politica "vince il più recente" protegge il DB e quelle righe vengono ignorate.
+- `$PY tools/dump_db.py --eneltel <ENELTEL>` → controlla `last_local_change_ts`.
+- Anomalie (Eneltel duplicati, righe senza Eneltel): `$PY tools/dump_db.py --anomalies`.
 
-**Problema**: Sheets diventa fuori sync grave o DB corrotto.
+**Problema**: DB corrotto.
 - `PRAGMA integrity_check` via `$PY tools/dump_db.py` (mostra anche `integrity` nella sezione stats).
-- Restore da snapshot: `cp backup/{prov}/state_YYYY-MM-DD.db data/{prov}/state.db` (poi restart router).
-- Worst case: `$PY tools/migrate_to_sqlite.py --reset` ricostruisce il DB da Sheets.
+- Restore da snapshot: `cp backup/{prov}/state_YYYY-MM-DD.db data/{prov}/state.db` (poi `systemctl restart mappa-algeco-router`).
 
-**Problema**: messaggio "⛔ SHEET SUBSTITUTION RILEVATA" nei log a startup.
-- Significa che `provinces.json` punta a un foglio diverso da quello con cui il DB è stato bootstrappato. Il drainer e il pull NON partono per evitare corruzione.
-- Soluzione (a) ripristina `id_foglio` originale in `provinces.json` e riavvia.
-- Soluzione (b) accetta il cambio: `PROVINCIA=XXX $PY tools/migrate_to_sqlite.py --reset` (ricostruisce DB dal nuovo foglio).
+**Problema**: pending residue non vengono pulite (rimangono nello stato `done` per > 30 giorni).
+- Verifica che il cron `cleanup-pendings` sia attivo: `cat /etc/cron.d/mappa-algeco-cleanup-pendings`.
+- Esegui manualmente: `$PY tools/cleanup_done_pendings.py --apply`.
 
-**Problema**: warning "BACKLOG ANOMALO" nei log del drainer.
-- Indica che il `pending_writes` è > 500 entries oppure una pending ha > 10 tentativi falliti.
-- Possibili cause: Sheets API down (quota o 503), colonne mancanti sul foglio, ancora persa.
-- Verifica `GET /api/admin/db-pending?state=pending` o `$PY tools/dump_db.py --pending`.

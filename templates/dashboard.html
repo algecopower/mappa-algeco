@@ -19,13 +19,13 @@
     </script>
     <style>
         :root {
-            --primary: #25D366;
-            --primary-dark: #128C7E;
-            --danger: #e74c3c;
-            --warning: #f39c12;
-            --success: #27ae60;
-            --info: #3498db;
-            --purple: #9b59b6;
+            --primary: var(--accent);
+            --primary-dark: var(--accent-deep);
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --success: #22c55e;
+            --info: var(--accent-hover);
+            --purple: #8b5cf6;
             /* I container card e page bg sono ora ereditati dal theme acrylic
                (theme.css). Le variabili locali puntano alle nuove. */
             --bg-dark: transparent;
@@ -68,14 +68,14 @@
         body { background: var(--body-bg) !important; }
         [data-theme="light"] .back-btn { color: #555; }
         [data-theme="light"] .back-btn:hover { color: var(--primary); }
-        [data-theme="light"] .op-card { background: #f8f9fa; }
-        [data-theme="light"] .op-card:hover { background: #eef6ee; }
-        [data-theme="light"] .item-row { background: #f8f9fa; }
-        [data-theme="light"] .item-row:hover { background: #eef6ee; }
-        [data-theme="light"] .bar-track { background: #e9ecef; }
-        [data-theme="light"] .hint { color: #999; }
-        [data-theme="light"] .section-empty { color: #aaa; }
-        [data-theme="light"] .kpi-explain { color: #999; }
+        [data-theme="light"] .op-card { background: rgba(255, 255, 255, 0.55); }
+        [data-theme="light"] .op-card:hover { background: rgba(var(--accent-rgb), 0.08); }
+        [data-theme="light"] .item-row { background: rgba(255, 255, 255, 0.55); }
+        [data-theme="light"] .item-row:hover { background: rgba(var(--accent-rgb), 0.08); }
+        [data-theme="light"] .bar-track { background: rgba(0, 0, 0, 0.06); }
+        [data-theme="light"] .hint { color: var(--text-muted); }
+        [data-theme="light"] .section-empty { color: var(--text-muted); }
+        [data-theme="light"] .kpi-explain { color: var(--text-muted); }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -126,7 +126,7 @@
         }
         .sn-link:hover { background: var(--bg-inner); color: var(--primary); }
         .sn-link.active {
-            background: rgba(37,211,102,0.10);
+            background: rgba(var(--accent-rgb),0.10);
             color: var(--primary);
             border-left-color: var(--primary);
             font-weight: 600;
@@ -195,8 +195,8 @@
 
         /* ---- Welcome banner ---- */
         .welcome-banner {
-            background: linear-gradient(135deg, rgba(37,211,102,0.08), rgba(18,140,126,0.05));
-            border: 1px solid rgba(37,211,102,0.15);
+            background: linear-gradient(135deg, rgba(var(--accent-rgb),0.08), rgba(var(--accent-rgb),0.05));
+            border: 1px solid rgba(var(--accent-rgb),0.15);
             border-radius: 14px; padding: 18px 24px; margin-bottom: 24px;
             display: flex; align-items: flex-start; gap: 14px;
         }
@@ -320,7 +320,7 @@
             padding: 11px 14px; border-radius: 10px; margin-bottom: 6px;
             background: var(--bg-inner); transition: background 0.15s;
         }
-        .item-row:hover { background: rgba(37,211,102,0.06); }
+        .item-row:hover { background: rgba(var(--accent-rgb),0.06); }
         .item-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 6px; }
         .item-body { flex: 1; min-width: 0; }
         .item-title { font-weight: 600; font-size: 0.88em; }
@@ -425,9 +425,9 @@
             background: var(--bg-card); color: var(--text);
         }
         .rp-tbl { width: 100%; border-collapse: collapse; font-size: 0.85em; }
-        .rp-tbl th { background: rgba(37,211,102,0.1); color: var(--primary); padding: 9px 10px; text-align: left; font-weight: 700; white-space: nowrap; }
+        .rp-tbl th { background: rgba(var(--accent-rgb),0.1); color: var(--primary); padding: 9px 10px; text-align: left; font-weight: 700; white-space: nowrap; }
         .rp-tbl td { padding: 8px 10px; border-bottom: 1px solid var(--border); }
-        .rp-tbl tr:hover { background: rgba(37,211,102,0.03); }
+        .rp-tbl tr:hover { background: rgba(var(--accent-rgb),0.03); }
         [data-theme="light"] .report-filter { background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
         [data-theme="light"] .rp-tbl th { background: #f0f4f0; color: #333; }
 
@@ -1272,8 +1272,8 @@ function renderLclMensile(mensile) {
             datasets: [{
                 label: 'Sostituzioni',
                 data: mensile.values,
-                backgroundColor: 'rgba(37, 211, 102, 0.55)',
-                borderColor: 'rgba(37, 211, 102, 1)',
+                backgroundColor: 'rgba(59, 130, 246, 0.55)',
+                borderColor: 'rgba(59, 130, 246, 1)',
                 borderWidth: 1,
                 borderRadius: 4,
             }]

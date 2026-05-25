@@ -17,15 +17,13 @@
 
         body {
             font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background:
-                radial-gradient(ellipse at 20% 0%, rgba(15, 52, 96, 0.6) 0%, transparent 55%),
-                radial-gradient(ellipse at 80% 100%, rgba(233, 69, 96, 0.25) 0%, transparent 50%),
-                linear-gradient(135deg, #0d1b2a 0%, #152238 50%, #1b2d4a 100%);
+            background: var(--body-bg);
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
             padding: 20px;
+            color: var(--text-primary);
         }
 
         .login-container {
@@ -61,13 +59,13 @@
         .logo-icon {
             width: 80px;
             height: 80px;
-            background: linear-gradient(135deg, #00d4aa, #00b894);
+            background: linear-gradient(135deg, var(--accent-hover) 0%, var(--accent-deep) 100%);
             border-radius: 20px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
             margin-bottom: 15px;
-            box-shadow: 0 10px 30px rgba(0, 212, 170, 0.3);
+            box-shadow: 0 10px 30px rgba(var(--accent-rgb), 0.35);
         }
 
         .logo-icon svg {
@@ -77,15 +75,15 @@
         }
 
         .logo h1 {
-            color: #ffffff;
+            color: var(--text-primary);
             font-size: 28px;
             font-weight: 700;
             margin-bottom: 5px;
-            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
         }
 
         .logo p {
-            color: #8fa3bf;
+            color: var(--text-secondary);
             font-size: 14px;
         }
 
@@ -96,7 +94,7 @@
 
         .form-group label {
             display: block;
-            color: #8fa3bf;
+            color: var(--text-secondary);
             font-weight: 500;
             margin-bottom: 8px;
             font-size: 14px;
@@ -113,82 +111,66 @@
             transform: translateY(-50%);
             width: 20px;
             height: 20px;
-            fill: #5a7a9a;
-            transition: fill 0.3s;
+            fill: var(--text-muted);
+            transition: fill var(--duration) var(--easing);
+            pointer-events: none;
         }
 
         .form-group input {
             width: 100%;
             padding: 15px 15px 15px 50px;
-            border: 2px solid rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
             font-size: 16px;
-            transition: all 0.3s;
-            background: rgba(255, 255, 255, 0.05);
-            color: #ffffff;
+            transition:
+                border-color var(--duration) var(--easing),
+                background-color var(--duration) var(--easing),
+                box-shadow var(--duration) var(--easing);
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text-primary);
+        }
+
+        [data-theme="light"] .form-group input {
+            background: rgba(255, 255, 255, 0.6);
         }
 
         .form-group input::placeholder {
-            color: #5a7a9a;
+            color: var(--text-muted);
         }
 
         .form-group input:focus {
             outline: none;
-            border-color: #00d4aa;
-            background: rgba(255, 255, 255, 0.08);
-            box-shadow: 0 0 0 4px rgba(0, 212, 170, 0.15);
-        }
-
-        .form-group input:focus + .input-icon,
-        .form-group input:focus ~ svg {
-            fill: #00d4aa;
+            border-color: var(--accent);
+            background: rgba(var(--accent-rgb), 0.06);
+            box-shadow: var(--focus-ring);
         }
 
         .input-wrapper input:focus ~ svg {
-            fill: #00d4aa;
+            fill: var(--accent);
         }
 
-        .btn-login {
+        /* Bottone login: usa .btn .btn-primary .btn-lg di theme.css.
+           Qui solo l'override per occupare l'intera larghezza del form. */
+        #btn-login {
             width: 100%;
-            padding: 16px;
-            background: linear-gradient(135deg, #e74c3c, #c0392b);
-            color: white;
-            border: none;
-            border-radius: 12px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
             text-transform: uppercase;
             letter-spacing: 1px;
         }
 
-        .btn-login:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 25px rgba(231, 76, 60, 0.4);
-        }
-
-        .btn-login:active {
-            transform: translateY(0);
-        }
-
-        .btn-login:disabled {
-            background: #3d5a80;
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
-        }
-
         .error-message {
-            background: rgba(231, 76, 60, 0.15);
-            color: #ff6b6b;
+            background: rgba(239, 68, 68, 0.12);
+            color: #ff8585;
             padding: 12px 15px;
-            border-radius: 10px;
+            border-radius: var(--radius);
             margin-bottom: 20px;
             font-size: 14px;
             display: none;
             animation: shake 0.5s ease-in-out;
-            border-left: 4px solid #e74c3c;
+            border-left: 4px solid #ef4444;
+        }
+        [data-theme="light"] .error-message {
+            color: #b91c1c;
+            background: rgba(239, 68, 68, 0.08);
         }
 
         @keyframes shake {
@@ -221,25 +203,26 @@
             text-align: center;
             margin-top: 30px;
             padding-top: 20px;
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            border-top: 1px solid var(--border);
         }
 
         .footer p {
-            color: #5a7a9a;
+            color: var(--text-muted);
             font-size: 12px;
         }
 
         .provincia-badge {
             display: inline-block;
-            background: linear-gradient(135deg, #00d4aa, #00b894);
+            background: linear-gradient(135deg, var(--accent-hover) 0%, var(--accent-deep) 100%);
             color: white;
             padding: 5px 15px;
-            border-radius: 20px;
+            border-radius: var(--radius-full);
             font-size: 12px;
             font-weight: 600;
             margin-top: 10px;
             text-transform: uppercase;
             letter-spacing: 1px;
+            box-shadow: 0 4px 14px rgba(var(--accent-rgb), 0.30);
         }
 
         /* Password visibility toggle */
@@ -259,12 +242,12 @@
             transform: none;
             width: 22px;
             height: 22px;
-            fill: #5a7a9a;
-            transition: fill 0.3s;
+            fill: var(--text-muted);
+            transition: fill var(--duration) var(--easing);
         }
 
         .toggle-password:hover svg {
-            fill: #8fa3bf;
+            fill: var(--accent);
         }
 
         /* Rate limiting message */
@@ -272,11 +255,16 @@
             background: rgba(255, 193, 7, 0.15);
             color: #ffc107;
             padding: 12px 15px;
-            border-radius: 10px;
+            border-radius: var(--radius);
             margin-bottom: 20px;
             font-size: 14px;
             display: none;
             border-left: 4px solid #ffc107;
+        }
+        [data-theme="light"] .rate-limit-message {
+            color: #92400e;
+            background: rgba(245, 158, 11, 0.10);
+            border-left-color: #f59e0b;
         }
 
         .rate-limit-message.show {
@@ -292,7 +280,7 @@
             .form-group { margin-bottom: 18px; }
             .form-group input { padding: 13px 13px 13px 44px; font-size: 16px; }
             .input-wrapper svg { left: 12px; width: 18px; height: 18px; }
-            .btn-login { padding: 14px; font-size: 15px; letter-spacing: 0.5px; }
+            #btn-login { letter-spacing: 0.5px; }
         }
 
         /* iOS Safari mobile fix: previeni auto-zoom su focus input <16px */
@@ -351,7 +339,7 @@
                 </div>
             </div>
 
-            <button type="submit" class="btn-login" id="btn-login">
+            <button type="submit" class="btn btn-primary btn-lg" id="btn-login">
                 Accedi
             </button>
         </form>

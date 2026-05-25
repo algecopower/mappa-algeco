@@ -585,7 +585,7 @@ from config import (
     MATRICOLE_VIP,
 )
 
-app = Flask(__name__, static_folder='.')
+app = Flask(__name__, static_folder='static')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # Limite upload: 16 MB
 
 # CORS: limita le origini consentite (localhost + dominio Cloudflare)
@@ -2320,6 +2320,11 @@ _BLOCKED_DIRS = {'__pycache__', 'moduli', 'routes', 'backup', '.git', 'templates
 _ALLOWED_EXTENSIONS = {'.html', '.css', '.js', '.png', '.jpg', '.jpeg', '.gif',
                         '.svg', '.ico', '.woff', '.woff2', '.ttf', '.eot', '.map'}
 
+# Nota: /static/<file> è servito automaticamente da Flask senza autenticazione
+# grazie a static_folder='static' nel costruttore. Il catchall qui sotto
+# protegge invece eventuali altri path. La pagina /login dipende da
+# theme.css/theme-init.js/favicon caricati senza sessione, quindi il bypass
+# Flask-built-in è intenzionale e va mantenuto.
 @app.route('/<path:filename>')
 @login_required
 def serve_static(filename):

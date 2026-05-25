@@ -11,55 +11,52 @@
             document.documentElement.setAttribute('data-theme', t);
         })();
     </script>
+    <link rel="stylesheet" href="/static/theme.css">
     <style>
         :root {
-            --primary: #25D366;
-            --primary-dark: #128C7E;
-            --danger: #e74c3c;
-            --warning: #f39c12;
-            --success: #27ae60;
-            --info: #3498db;
-            --bg-body: #0f0f23;
-            --bg-dark: #1a1a2e;
-            --bg-card: #16213e;
-            --bg-cell: #1a1a2e;
-            --bg-cell-alt: #151528;
-            --bg-cell-hover: #252550;
-            --bg-cell-edit: #2a2a4e;
-            --bg-header: #0a0a1a;
-            --bg-input: #252550;
-            --text: #eee;
-            --text-muted: #888;
-            --text-header: #aab;
-            --border: #2a2a3e;
-            --border-light: #333355;
-            --scrollbar-bg: #1a1a2e;
-            --scrollbar-thumb: #3a3a5e;
+            --primary: var(--accent);
+            --primary-dark: var(--accent-deep);
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --success: #22c55e;
+            --info: var(--accent-hover);
+            --bg-body: var(--body-bg);
+            --bg-dark: rgba(15, 18, 38, 0.78);
+            --bg-card: rgba(20, 24, 48, 0.72);
+            --bg-cell: rgba(20, 24, 48, 0.55);
+            --bg-cell-alt: rgba(15, 18, 38, 0.45);
+            --bg-cell-hover: rgba(var(--accent-rgb), 0.14);
+            --bg-cell-edit: rgba(var(--accent-rgb), 0.22);
+            --bg-header: rgba(10, 12, 26, 0.85);
+            --bg-input: rgba(255, 255, 255, 0.05);
+            --text: var(--text-primary);
+            --text-header: var(--text-secondary);
+            --border-light: rgba(255, 255, 255, 0.08);
+            --scrollbar-bg: rgba(15, 18, 38, 0.4);
+            --scrollbar-thumb: rgba(255, 255, 255, 0.15);
             --shadow: rgba(0,0,0,0.4);
-            --modified-bg: rgba(37, 211, 102, 0.08);
-            --modified-border: rgba(37, 211, 102, 0.4);
+            --modified-bg: rgba(var(--accent-rgb), 0.10);
+            --modified-border: rgba(var(--accent-rgb), 0.45);
             --frozen-shadow: 4px 0 12px rgba(0,0,0,0.4);
         }
         [data-theme="light"] {
-            --bg-body: #f0f2f5;
-            --bg-dark: #fff;
-            --bg-card: #fff;
-            --bg-cell: #fff;
-            --bg-cell-alt: #f8f9fa;
-            --bg-cell-hover: #e8f0fe;
-            --bg-cell-edit: #fff;
-            --bg-header: #f1f3f5;
-            --bg-input: #fff;
-            --text: #222;
-            --text-muted: #666;
-            --text-header: #555;
-            --border: #ddd;
-            --border-light: #e0e0e0;
-            --scrollbar-bg: #f0f0f0;
-            --scrollbar-thumb: #bbb;
+            --bg-body: var(--body-bg);
+            --bg-dark: rgba(255, 255, 255, 0.78);
+            --bg-card: rgba(255, 255, 255, 0.72);
+            --bg-cell: rgba(255, 255, 255, 0.85);
+            --bg-cell-alt: rgba(248, 249, 250, 0.85);
+            --bg-cell-hover: rgba(var(--accent-rgb), 0.10);
+            --bg-cell-edit: rgba(var(--accent-rgb), 0.18);
+            --bg-header: rgba(241, 243, 245, 0.85);
+            --bg-input: rgba(255, 255, 255, 0.85);
+            --text: var(--text-primary);
+            --text-header: var(--text-secondary);
+            --border-light: rgba(0, 0, 0, 0.06);
+            --scrollbar-bg: rgba(0, 0, 0, 0.04);
+            --scrollbar-thumb: rgba(0, 0, 0, 0.18);
             --shadow: rgba(0,0,0,0.1);
-            --modified-bg: rgba(37, 211, 102, 0.08);
-            --modified-border: rgba(37, 211, 102, 0.5);
+            --modified-bg: rgba(var(--accent-rgb), 0.08);
+            --modified-border: rgba(var(--accent-rgb), 0.5);
             --frozen-shadow: 4px 0 8px rgba(0,0,0,0.1);
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -76,6 +73,8 @@
         /* TOOLBAR */
         .toolbar {
             background: var(--bg-dark);
+            backdrop-filter: blur(var(--panel-blur, 18px)) saturate(var(--panel-saturate, 140%));
+            -webkit-backdrop-filter: blur(var(--panel-blur, 18px)) saturate(var(--panel-saturate, 140%));
             border-bottom: 1px solid var(--border);
             padding: 8px 16px;
             display: flex;
@@ -163,6 +162,8 @@
             display: flex;
             align-items: stretch;
             background: var(--bg-header);
+            backdrop-filter: blur(var(--panel-blur, 18px)) saturate(var(--panel-saturate, 140%));
+            -webkit-backdrop-filter: blur(var(--panel-blur, 18px)) saturate(var(--panel-saturate, 140%));
             border-bottom: 1px solid var(--border);
             padding: 0 8px;
             gap: 2px;

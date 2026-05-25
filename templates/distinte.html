@@ -11,13 +11,14 @@
     <script src="/static/theme-init.js" defer></script>
     <style>
         :root {
-            --primary: #25D366;
-            --primary-dark: #128C7E;
-            --danger: #e74c3c;
-            --warning: #f39c12;
-            --success: #27ae60;
-            --info: #3498db;
-            /* Card e bg ereditati da theme.css (acrylic). */
+            /* Allineato al theme: l'accent della pagina distinte usa lo stesso
+               blu di theme.css. I "primary" qui sono alias semantici. */
+            --primary: var(--accent);
+            --primary-dark: var(--accent-deep);
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --success: #22c55e;
+            --info: var(--accent-hover);
             --bg-dark: transparent;
             --bg-card: var(--panel-bg-strong);
             --text: var(--text-primary);
@@ -25,16 +26,16 @@
         }
 
         [data-theme="light"] {
+            --primary: var(--accent);
+            --primary-dark: var(--accent-deep);
+            --danger: #dc2626;
+            --warning: #d97706;
+            --success: #16a34a;
+            --info: var(--accent-hover);
             --bg-dark: transparent;
             --bg-card: var(--panel-bg-strong);
             --text: var(--text-primary);
             --text-muted: var(--text-secondary);
-            --primary: #25D366;
-            --primary-dark: #128C7E;
-            --danger: #e74c3c;
-            --warning: #e67e22;
-            --success: #27ae60;
-            --info: #2980b9;
         }
 
         body { background: var(--body-bg) !important; }
@@ -54,81 +55,81 @@
         }
 
         [data-theme="light"] .upload-section label {
-            border-color: #bbb;
-            background: #f9f9f9;
+            border-color: var(--border);
+            background: var(--panel-bg);
         }
 
         [data-theme="light"] .upload-section label:hover {
             border-color: var(--primary);
-            background: #f0faf0;
+            background: rgba(var(--accent-rgb), 0.06);
         }
 
         [data-theme="light"] .contact-card {
-            background: #ffffff;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            background: var(--panel-bg-strong);
+            box-shadow: var(--elev-1);
         }
 
         [data-theme="light"] .contact-card:hover {
-            box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+            box-shadow: var(--elev-2);
         }
 
         [data-theme="light"] .contact-card.completed {
-            background: #f0f8f0;
+            background: rgba(34, 197, 94, 0.10);
             border-color: var(--success);
         }
 
         [data-theme="light"] header {
-            background: #ffffff;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            background: var(--panel-bg-strong);
+            box-shadow: var(--elev-1);
         }
 
         [data-theme="light"] .alert-item {
-            background: #fff8e1;
-            border-color: #ffcc80;
+            background: rgba(245, 158, 11, 0.10);
+            border-color: rgba(245, 158, 11, 0.45);
         }
 
         [data-theme="light"] .value-box {
-            background: #f5f5f5;
+            background: var(--panel-bg);
         }
 
         [data-theme="light"] .note-display {
-            background: #f5f5f5;
-            color: #333;
-            border-color: #ddd;
+            background: var(--panel-bg);
+            color: var(--text-primary);
+            border-color: var(--border);
         }
 
         [data-theme="light"] .note-dropdown {
-            background: #ffffff;
-            border-color: #ddd;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+            background: var(--panel-bg-strong);
+            border-color: var(--border);
+            box-shadow: var(--elev-3);
         }
 
         [data-theme="light"] .note-dropdown-item:hover {
-            background: #f0f0f0;
+            background: rgba(var(--accent-rgb), 0.08);
         }
 
         [data-theme="light"] .numeri-alternativi-box {
-            background: #f8f9fa;
-            border-color: #ddd;
+            background: var(--panel-bg);
+            border-color: var(--border);
         }
 
         [data-theme="light"] .modal-content {
-            background: #ffffff;
-            color: #333;
+            background: var(--panel-bg-strong);
+            color: var(--text-primary);
         }
 
         [data-theme="light"] #messagePreview {
-            background: #f5f5f5;
-            color: #333;
+            background: var(--panel-bg);
+            color: var(--text-primary);
         }
 
         [data-theme="light"] .template-tab {
-            background: #f0f0f0;
-            color: #555;
+            background: var(--panel-bg);
+            color: var(--text-secondary);
         }
 
         [data-theme="light"] .template-tab:hover {
-            background: #e0e0e0;
+            background: var(--panel-bg-strong);
         }
 
         [data-theme="light"] .template-tab.active {
@@ -138,13 +139,13 @@
 
         [data-theme="light"] .template-field input,
         [data-theme="light"] .template-field textarea {
-            background: #f5f5f5;
-            color: #333;
-            border-color: #ddd;
+            background: var(--panel-bg);
+            color: var(--text-primary);
+            border-color: var(--border);
         }
 
         [data-theme="light"] .back-btn {
-            color: #555;
+            color: var(--text-secondary);
         }
 
         [data-theme="light"] .back-btn:hover {
@@ -228,7 +229,7 @@
 
         .upload-section:hover, .upload-section.drag-over {
             border-color: var(--primary);
-            background: rgba(37, 211, 102, 0.1);
+            background: rgba(var(--accent-rgb), 0.10);
         }
 
         .upload-section input[type="file"] {
@@ -274,45 +275,8 @@
             color: var(--danger);
         }
 
-        .btn {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: bold;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            transition: all 0.2s;
-        }
-
-        .btn-primary {
-            background: var(--primary);
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background: var(--primary-dark);
-        }
-
-        .btn-danger {
-            background: var(--danger);
-            color: white;
-        }
-
-        .btn-warning {
-            background: var(--warning);
-            color: white;
-        }
-
-        .btn-info {
-            background: var(--info);
-            color: white;
-        }
-
-
-
+        /* Bottoni .btn .btn-primary .btn-danger .btn-warning .btn-info
+           ereditano lo stile unificato da theme.css. */
 
 
         /* Badge azienda/condominio */
@@ -597,7 +561,7 @@
         }
 
         .btn-salva-data:hover {
-            background: #2980b9;
+            background: var(--accent-deep);
         }
 
         .btn-salva-data:disabled {
@@ -844,7 +808,7 @@
         }
 
         .btn-add-to-filone:hover {
-            background: #2980b9;
+            background: var(--accent-deep);
             transform: scale(1.05);
         }
 
@@ -959,7 +923,7 @@
         }
 
         .btn-mini.btn-whatsapp:hover {
-            background: #128C7E;
+            background: var(--accent-deep);
             transform: scale(1.1);
         }
 
@@ -979,7 +943,7 @@
         }
 
         .btn-mini.btn-mail:hover {
-            background: #2980b9;
+            background: var(--accent-deep);
             transform: scale(1.1);
         }
 
@@ -1425,7 +1389,7 @@
 
         /* ===== Bulk Email Modal ===== */
         .bulk-email-btn {
-            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            background: linear-gradient(135deg, var(--accent-hover) 0%, var(--accent-deep) 100%);
             color: white;
             border: none;
             padding: 8px 16px;
@@ -2080,7 +2044,7 @@
                     <i class="fas fa-eye"></i>
                     Anteprima
                 </button>
-                <button class="btn btn-primary" id="bulkSendBtn" onclick="inviaEmailBulk()" style="background: linear-gradient(135deg, #3498db, #2980b9); display: none;">
+                <button class="btn btn-primary" id="bulkSendBtn" onclick="inviaEmailBulk()" style="background: linear-gradient(135deg, var(--accent-hover), var(--accent-deep)); display: none;">
                     <i class="fas fa-paper-plane"></i>
                     Invia Email
                 </button>
@@ -4309,7 +4273,7 @@
             // Ripristina pulsante
             sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Invia Email';
             sendBtn.onclick = inviaEmailBulk;
-            sendBtn.style.background = 'linear-gradient(135deg, #3498db, #2980b9)';
+            sendBtn.style.background = 'linear-gradient(135deg, var(--accent-hover), var(--accent-deep))';
 
             if (inviati > 0) {
                 showToast(`${inviati} email inviate con successo!`);

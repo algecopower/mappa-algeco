@@ -350,6 +350,24 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     box-shadow: 0 6px 18px rgba(var(--danger-rgb), 0.40);
 }
 
+/* WARNING (ambra) */
+.btn-warning {
+    background: linear-gradient(135deg, #fbbf24 0%, #b45309 100%);
+    color: white;
+}
+.btn-warning:not(:disabled):hover {
+    box-shadow: 0 6px 18px rgba(245, 158, 11, 0.40);
+}
+
+/* INFO (ciano accent secondario) */
+.btn-info {
+    background: linear-gradient(135deg, var(--accent-secondary) 0%, var(--accent-deep) 100%);
+    color: white;
+}
+.btn-info:not(:disabled):hover {
+    box-shadow: 0 6px 18px rgba(var(--accent-secondary-rgb), 0.40);
+}
+
 /* GHOST/SECONDARY (acrylic neutro) */
 .btn-ghost,
 .btn-secondary,

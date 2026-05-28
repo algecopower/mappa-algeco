@@ -1,6 +1,10 @@
+# -*- coding: utf-8 -*-
 """
-Caricamento dati DIRETTAMENTE da Google Sheets (FILONE).
-Nessun database locale - tutto dal FILONE in tempo reale.
+Caricamento dati dal DB locale (FILONE).
+
+Post-disconnessione Google Sheets (21/05/2026), il DB SQLite per provincia è
+la fonte di verità. Questo modulo ricostruisce il formato tabellare storico del
+FILONE e lo trasforma nel DataFrame usato da mappa, percorsi e dashboard.
 
 Colonne utilizzate dal FILONE:
 - DATA PIAN          → DATA_K (data pianificata)
@@ -27,15 +31,15 @@ import pandas as pd
 logger = logging.getLogger('mappa_algeco')
 
 # ============================================================================
-# CACHE IN MEMORIA — evita ri-download e ri-processing inutili
+# CACHE IN MEMORIA — evita riletture DB e re-processing inutili
 # ============================================================================
 _dl_cache_lock = threading.Lock()
 _dl_cached_df = None          # DataFrame processato
 _dl_cached_raw_hash = None    # Hash MD5 dei dati grezzi
-_dl_cache_timestamp = 0       # Timestamp ultimo download
-_dl_data_changed = True       # Flag: ultimo download ha trovato dati diversi?
+_dl_cache_timestamp = 0       # Timestamp ultima lettura DB
+_dl_data_changed = True       # Flag: ultima lettura DB ha trovato dati diversi?
 _dl_structural_change = True  # Flag: cambiamento strutturale (richiede ricalcolo percorsi)?
-_DL_CACHE_TTL = 30            # Secondi: non ri-scaricare entro questo intervallo
+_DL_CACHE_TTL = 30            # Secondi: non rileggere entro questo intervallo
 
 # Colonne nel DataFrame processato che influenzano percorsi/mappa.
 # Se cambiano → ricalcola distanze, zone, percorsi.
@@ -246,7 +250,7 @@ def invalidate_data_cache():
 
 
 def mark_data_changed():
-    """Forza il prossimo `carica_dati_google_sheets` a riprocessare il DataFrame.
+    """Forza il prossimo `carica_dati_db_locale` a riprocessare il DataFrame.
 
     A differenza di `invalidate_data_cache()`, NON azzera `_dl_cached_df`:
     serve a quel confronto che produce 'COSMETICO' vs 'STRUTTURALE'. Azzera
@@ -333,18 +337,18 @@ def parse_data_flessibile(valore):
     return None
 
 
-def carica_dati_google_sheets(force=False):
-    """Carica tutti i dati direttamente dal FILONE (Google Sheet).
+def carica_dati_db_locale(force=False):
+    """Carica tutti i dati dal DB locale nel formato storico del FILONE.
 
     Con sistema di cache in memoria:
     - Se force=False e la cache è fresca (< _DL_CACHE_TTL secondi), ritorna
-      il DataFrame in cache senza contattare Google Sheets.
-    - Se i dati scaricati sono identici all'ultima volta (hash MD5),
+      il DataFrame in cache senza rileggere SQLite.
+    - Se i dati grezzi sono identici all'ultima volta (hash MD5),
       salta tutto il processing e ritorna il DataFrame in cache.
     - Il flag dati_sono_cambiati() indica se i dati sono effettivamente diversi.
 
     Args:
-        force: Se True, scarica sempre dal foglio (usato dal sync periodico).
+        force: Se True, rilegge sempre il DB (usato dal sync event-driven).
     """
     global _dl_cached_df, _dl_cached_raw_hash, _dl_cache_timestamp, _dl_data_changed, _dl_structural_change
 
@@ -354,13 +358,13 @@ def carica_dati_google_sheets(force=False):
     if not force:
         with _dl_cache_lock:
             if _dl_cached_df is not None and (now - _dl_cache_timestamp) < _DL_CACHE_TTL:
-                logger.info("📊 Dati FILONE serviti da cache in memoria (nessun download)")
+                logger.info("📊 Dati FILONE serviti da cache in memoria (nessuna rilettura DB)")
                 _dl_data_changed = False
                 _dl_structural_change = False
                 return _dl_cached_df.copy()
 
     logger.info("=" * 60)
-    logger.info("📊 CARICAMENTO DATI DAL FILONE")
+    logger.info("📊 CARICAMENTO DATI DAL DB LOCALE")
     logger.info("=" * 60)
 
     # ================================================================
@@ -391,14 +395,14 @@ def carica_dati_google_sheets(force=False):
             _dl_cache_timestamp = _time_module.time()
             _dl_data_changed = False
             _dl_structural_change = False
-            logger.info("📊 Dati FILONE invariati (hash identico), skip processing")
+            logger.info("📊 Dati DB invariati (hash identico), skip processing")
             logger.info("=" * 60)
             return _dl_cached_df.copy()
 
     df = pd.DataFrame(values[1:], columns=values[0])
     df.columns = df.columns.str.strip()
 
-    logger.info(f"✅ FILONE caricato: {len(df)} righe, {len(df.columns)} colonne")
+    logger.info(f"✅ DB locale caricato: {len(df)} righe, {len(df.columns)} colonne")
 
     # ================================================================
     # MAPPING COLONNE FILONE → COLONNE INTERNE
@@ -599,7 +603,7 @@ def carica_dati_google_sheets(force=False):
         df['Lat'] = pd.NA
         df['Lon'] = pd.NA
 
-    # LCL dal FILONE (Google Sheets)
+    # LCL dal FILONE ricostruito dal DB locale
     col_lcl = trova_colonna(df, ['LCL', 'lcl', 'Lcl'], chiave_mapping='lcl')
     if col_lcl:
         df['LCL'] = df[col_lcl].fillna('').astype(str).str.strip()
@@ -854,3 +858,12 @@ def carica_dati_google_sheets(force=False):
         logger.info("   📝 Tipo cambiamento: COSMETICO (solo aggiornamento dati)")
 
     return df
+
+
+def carica_dati_google_sheets(force=False):
+    """Alias legacy: oggi i dati vengono caricati dal DB locale.
+
+    Il nome resta per compatibilità con route e callback storici; il percorso
+    effettivo non contatta Google Sheets.
+    """
+    return carica_dati_db_locale(force=force)

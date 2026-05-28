@@ -51,7 +51,12 @@ from .fasce_orarie import (
     get_colore_fascia
 )
 
-from .data_loader import carica_dati_google_sheets, dati_sono_cambiati, cambiamento_e_strutturale
+from .data_loader import (
+    carica_dati_db_locale,
+    carica_dati_google_sheets,
+    dati_sono_cambiati,
+    cambiamento_e_strutturale,
+)
 
 from .zone_geografiche import (
     genera_report_zone,
@@ -59,4 +64,3 @@ from .zone_geografiche import (
 )
 
 from .mappa_html import genera_mappa_html
-

@@ -589,13 +589,30 @@ app = Flask(__name__, static_folder='static')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # Limite upload: 16 MB
 
 # CORS: limita le origini consentite (localhost + dominio Cloudflare)
+def _cors_origins_da_province():
+    """Origini pubbliche derivate da data/provinces.json."""
+    origins = set()
+    try:
+        provinces_path = os.path.join(SCRIPT_DIR, 'data', 'provinces.json')
+        with open(provinces_path, 'r', encoding='utf-8') as f:
+            provs = json.load(f)
+        for cfg in provs.values():
+            sub = (cfg or {}).get('sottodominio')
+            if sub:
+                origins.add(f'https://{sub}')
+                origins.add(f'http://{sub}')
+    except Exception as e:
+        logger.warning(f"[CORS] impossibile leggere origins da provinces.json: {e}")
+    return sorted(origins)
+
+
 _CORS_ORIGINS = [
     'http://localhost:5001', 'http://localhost:5002', 'http://localhost:5050',
     'http://127.0.0.1:5001', 'http://127.0.0.1:5002', 'http://127.0.0.1:5050',
-    f'https://torino.{DOMINIO_BASE}', f'https://pavia.{DOMINIO_BASE}',
     f'https://admin.{DOMINIO_BASE}',
     f'https://{DOMINIO_BASE}',
 ]
+_CORS_ORIGINS.extend(_cors_origins_da_province())
 CORS(app, supports_credentials=True, origins=_CORS_ORIGINS)
 
 # Inizializza autenticazione
@@ -1237,8 +1254,8 @@ def update_settings():
         logger.info(f"⚙️  Impostazioni aggiornate da {session.get('user', 'unknown')}")
 
         # Rigenera SUBITO config.json e (se possibile) la mappa HTML usando i dati in
-        # cache. Senza questo, il loop di sync salta tutto se i dati Google Sheets
-        # non sono cambiati (Livello 1: "dati invariati") e le nuove impostazioni
+        # cache. Senza questo, il loop di sync salta tutto se i dati DB non sono
+        # cambiati (Livello 1: "dati invariati") e le nuove impostazioni
         # non vengono riflesse nei file serviti al frontend finche' i dati non
         # cambiano (o finche' il server non viene riavviato).
         from moduli.mappa_html import salva_config_statica, genera_mappa_html
@@ -1251,8 +1268,8 @@ def update_settings():
         html_regen_ok = False
         if _last_report is not None and _last_risultato_zone is not None:
             try:
-                from moduli.data_loader import carica_dati_google_sheets
-                df_cached = carica_dati_google_sheets(force=False)
+                from moduli.data_loader import carica_dati_db_locale
+                df_cached = carica_dati_db_locale(force=False)
                 if df_cached is not None:
                     genera_mappa_html(df_cached, _last_report, _last_risultato_zone)
                     html_regen_ok = True
@@ -2365,7 +2382,7 @@ from moduli import (
     pulisci_cache_vecchia,
     genera_report_distanze_con_cache,
     stampa_report_distanze,
-    carica_dati_google_sheets,
+    carica_dati_db_locale,
     dati_sono_cambiati,
     cambiamento_e_strutturale,
     genera_report_zone,
@@ -2429,8 +2446,8 @@ def _do_sincronizza_dati():
     start_loop = time_module.time()
     
     try:
-        # Carica dati (force=True → scarica sempre dal foglio nel sync periodico)
-        df = carica_dati_google_sheets(force=True)
+        # Carica dati (force=True → rilegge sempre il DB nel sync event-driven)
+        df = carica_dati_db_locale(force=True)
         if df is None:
             logger.warning("[SYNC] ⚠️ Nessun dato caricato")
             sse_notify_all('sync_complete', {'source': 'sync_failed'})

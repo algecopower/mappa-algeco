@@ -2063,7 +2063,7 @@ def genera_orari_lettere():
         formatta_fascia_oraria,
         FASCE_ORARIE,
     )
-    from moduli.data_loader import carica_dati_google_sheets
+    from moduli.data_loader import carica_dati_db_locale
     from genera_excel_lettere import genera_excel_lettere as _genera_excel
 
     data = request.get_json()
@@ -2113,7 +2113,7 @@ def genera_orari_lettere():
         logger.info(f"   📅 Date: {len(date_da_elaborare)} giorni")
 
         # Carica dati dal FILONE
-        df = carica_dati_google_sheets()
+        df = carica_dati_db_locale()
         if df is None or df.empty:
             return jsonify({'error': 'Impossibile caricare i dati dal FILONE'}), 500
 

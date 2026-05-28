@@ -28,12 +28,14 @@ $PY server.py --torino
 $PY server.py --pavia
 
 # Multi-tenant come in produzione
-$PY router.py
+ROUTER_PORT=5050 $PY router.py
 
 # Test
 $PY -m pytest                              # tutta la suite
-$PY -m pytest tests/test_sync_engine.py    # un singolo file
 $PY -m pytest tests/test_db.py::test_bootstrap_schema_idempotente
+
+# Lint conservativo
+$PY -m ruff check .
 
 # CLI ricorrenti
 $PY tools/dump_db.py                       # stato DB Torino
@@ -45,14 +47,14 @@ Produzione: `systemctl restart mappa-algeco-router` (i backend per provincia rip
 ## Coding Style & Naming Conventions
 
 - Python 3.12, 4-space indent, header `# -*- coding: utf-8 -*-` su ogni `.py` (commenti e docstring in italiano).
-- Nessun linter/formatter configurato — segui lo stile dei file vicini.
+- Ruff è configurato in [pyproject.toml](pyproject.toml): target `py312`, line length 100, regole `F`, `E9`, `W6`. Non c'è formatter configurato: segui lo stile dei file vicini.
 - File e simboli in `snake_case`; moduli sotto `moduli/` raggruppati per dominio (`excel_importer`, `verifica_indirizzi`, …), non per layer.
 - Nessuna nuova dipendenza senza aggiornare [requirements.txt](requirements.txt).
 - File con segreti sono già in `.gitignore` (`users.json`, `.flask_secret_key`, `data/smtp_settings.json`) — non committarli mai. `credenziali.json` è obsoleto (era per gspread) ma resta in `.gitignore` per precauzione.
 
 ## Testing Guidelines
 
-- Framework: `pytest`. La fixture `db_isolato` in [tests/conftest.py](tests/conftest.py) monkeypatcha `config.DB_PATH` su un file temporaneo e ricarica `moduli.db` — usala per qualunque test che tocchi lo stato. **Non puntare al DB di produzione.**
+- Framework: `pytest`, con `testpaths = ["tests"]` in [pyproject.toml](pyproject.toml). La fixture `db_isolato` in [tests/conftest.py](tests/conftest.py) monkeypatcha `config.DB_PATH` su un file temporaneo e ricarica `moduli.db` — usala per qualunque test che tocchi lo stato. **Non puntare al DB di produzione.**
 - Nomi: `test_*.py`, funzioni `test_*`. Raggruppa per modulo testato (`test_db.py`, `test_inplace_patch.py`…).
 - Non c'è gate di coverage; aggiungi test quando tocchi schema DB, importer Excel o route di scrittura.
 
@@ -60,4 +62,4 @@ Produzione: `systemctl restart mappa-algeco-router` (i backend per provincia rip
 
 - Messaggi in italiano, prima riga ~70 char. Pattern ricorrenti dal log: `fix(scope): ...`, `docs(scope): ...`, `admin UI: ...`, `import: ...`. Usa lo scope quando l'area è netta (`import`, `auth`, `deploy`, `tema`).
 - Un commit = un cambio logico; descrivi il *perché* nel body se non ovvio dal diff.
-- Non c'è template PR. In assenza di CI, prima del merge: lancia `pytest` e — per cambi su schema, importer o route di scrittura — fai un giro su `server.py --torino` in locale.
+- Non ho trovato template PR o workflow CI. Prima del merge: lancia `pytest` e — per cambi su schema, importer o route di scrittura — fai un giro su `server.py --torino` in locale.

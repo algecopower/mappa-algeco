@@ -117,10 +117,10 @@ def genera_css_gestionale():
         
         .popup-edit-select {
             width: 100%;
-            padding: 8px 12px;
+            padding: 8px 32px 8px 12px;
             border: 1px solid var(--border);
             border-radius: 6px;
-            background: var(--bg-tertiary);
+            background-color: var(--bg-tertiary);
             color: var(--text-primary);
             font-size: 0.9em;
             cursor: pointer;
@@ -1088,10 +1088,10 @@ def genera_css_gestionale():
         }
         
         .fullscreen-field-select {
-            padding: 12px 14px;
+            padding: 12px 34px 12px 14px;
             border: 1px solid var(--border);
             border-radius: 8px;
-            background: var(--bg-tertiary);
+            background-color: var(--bg-tertiary);
             color: var(--text-primary);
             font-size: 0.95em;
             cursor: pointer;

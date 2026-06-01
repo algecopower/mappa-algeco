@@ -821,10 +821,10 @@ body {
 .sched-filter-row select {
     flex: 1;
     min-width: 0;
-    padding: 4px 8px;
+    padding: 4px 28px 4px 8px;
     border-radius: 6px;
     border: 1px solid var(--border);
-    background: var(--bg-tertiary);
+    background-color: var(--bg-tertiary);
     color: var(--text);
     font-size: 0.78rem;
     cursor: pointer;
@@ -2453,11 +2453,14 @@ body {
     padding: 9px 12px;
     border: 1px solid var(--border);
     border-radius: 8px;
-    background: var(--bg-secondary);
+    background-color: var(--bg-secondary);
     color: var(--text-primary);
     font-size: 14px;
     box-sizing: border-box;
     transition: border-color 0.2s;
+}
+.settings-field select {
+    padding-right: 32px;
 }
 
 .settings-field select option {
@@ -2884,10 +2887,10 @@ body {
 
 .settings-colonne-table select {
     width: 100%;
-    padding: 7px 10px;
+    padding: 7px 28px 7px 10px;
     border: 1px solid var(--border);
     border-radius: 6px;
-    background: var(--bg-secondary);
+    background-color: var(--bg-secondary);
     color: var(--text-primary);
     font-size: 13px;
     box-sizing: border-box;
@@ -3382,10 +3385,13 @@ body {
     padding: 4px 8px;
     border-radius: 6px;
     border: 1px solid var(--border);
-    background: var(--bg-tertiary);
+    background-color: var(--bg-tertiary);
     color: var(--text);
     font-size: 0.78rem;
     box-sizing: border-box;
+}
+.planning-filter-grid select {
+    padding-right: 28px;
 }
 .planning-filter-grid input:focus,
 .planning-filter-grid select:focus {
@@ -3620,10 +3626,13 @@ body {
     padding: 10px 12px;
     border-radius: 10px;
     border: 1px solid var(--border);
-    background: var(--bg-tertiary);
+    background-color: var(--bg-tertiary);
     color: var(--text);
     font-size: 0.9rem;
     box-sizing: border-box;
+}
+.bulk-assign-field select {
+    padding-right: 32px;
 }
 .bulk-assign-field input:focus,
 .bulk-assign-field select:focus {

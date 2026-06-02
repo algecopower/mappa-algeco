@@ -2463,11 +2463,6 @@ body {
     padding-right: 32px;
 }
 
-.settings-field select option {
-    background: var(--bg-secondary);
-    color: var(--text-primary);
-}
-
 .settings-field input:focus,
 .settings-field select:focus {
     outline: none;
@@ -2895,11 +2890,6 @@ body {
     font-size: 13px;
     box-sizing: border-box;
     cursor: pointer;
-}
-
-.settings-colonne-table select option {
-    background: var(--bg-secondary);
-    color: var(--text-primary);
 }
 
 .settings-colonne-table select:focus {

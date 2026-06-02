@@ -2267,6 +2267,9 @@ def api_admin_import_excel():
         result_compact = {k: v for k, v in result.items() if k != 'headers_excel'}
         result_compact['n_headers'] = len(result.get('headers_excel', []))
         return jsonify(result_compact)
+    except ValueError as e:
+        logger.warning('[admin] import Excel rifiutato: %s', e)
+        return jsonify({'success': False, 'message': str(e)}), 400
     except Exception as e:
         logger.exception('[admin] errore /api/admin/import-excel')
         return jsonify({'success': False, 'message': str(e)}), 500

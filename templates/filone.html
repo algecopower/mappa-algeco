@@ -157,6 +157,272 @@
         }
         .search-input::placeholder { color: var(--text-muted); }
 
+        .mode-toggle {
+            display: inline-flex;
+            align-items: center;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg-input);
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+        .mode-toggle button {
+            border: 0;
+            background: transparent;
+            color: var(--text-muted);
+            padding: 5px 10px;
+            font-size: 0.8em;
+            cursor: pointer;
+            min-width: 64px;
+        }
+        .mode-toggle button.active {
+            background: var(--primary);
+            color: #fff;
+            font-weight: 700;
+        }
+        body.fast-mode .toolbar > .search-box,
+        body.fast-mode .toolbar-filters,
+        body.fast-mode .toolbar-actions,
+        body.fast-mode .tabbar,
+        body.fast-mode .grid-wrap,
+        body.fast-mode .status-bar {
+            display: none !important;
+        }
+        body.fast-mode .quick-wrap { display: flex; }
+
+        /* MODALITÀ RAPIDA */
+        .quick-wrap {
+            display: none;
+            flex: 1;
+            min-height: 0;
+            flex-direction: column;
+            background: var(--bg-body);
+        }
+        .quick-topbar,
+        .quick-actions {
+            flex-shrink: 0;
+            background: var(--bg-dark);
+            border-bottom: 1px solid var(--border);
+            padding: 10px 16px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .quick-actions {
+            border-top: 1px solid var(--border);
+            border-bottom: 0;
+        }
+        .quick-filters,
+        .quick-action-fields {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            flex-wrap: wrap;
+        }
+        .quick-filterbar {
+            gap: 10px;
+        }
+        .quick-filters {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+        .quick-input,
+        .quick-select {
+            height: 30px;
+            border: 1px solid var(--border);
+            border-radius: 5px;
+            background: var(--bg-input);
+            color: var(--text);
+            padding: 0 8px;
+            font-size: 0.8em;
+            min-width: 130px;
+            outline: none;
+        }
+        .quick-input:focus,
+        .quick-select:focus { border-color: var(--primary); }
+        .quick-input.search { min-width: 220px; }
+        .quick-input.note { min-width: 260px; flex: 1 1 260px; }
+        .quick-meta {
+            margin-left: auto;
+            color: var(--text-muted);
+            font-size: 0.78em;
+            white-space: nowrap;
+        }
+        .quick-meta strong { color: var(--text); }
+        .quick-list {
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+        .quick-grid {
+            display: grid;
+            grid-template-columns: 36px minmax(0, 1.35fr) minmax(0, 1.35fr)
+                minmax(0, 0.75fr) minmax(0, 0.65fr) minmax(0, 0.8fr)
+                minmax(0, 1.15fr) minmax(0, 0.42fr) minmax(0, 0.72fr);
+            align-items: center;
+            gap: 0;
+        }
+        .quick-head {
+            position: sticky;
+            top: 0;
+            z-index: 5;
+            background: var(--bg-header);
+            color: var(--text-header);
+            border-bottom: 1px solid var(--border);
+            font-size: 0.72em;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+        .quick-head > div,
+        .quick-row > div {
+            min-width: 0;
+            padding: 8px 9px;
+            border-right: 1px solid var(--border-light);
+        }
+        .quick-row {
+            min-height: 48px;
+            border-bottom: 1px solid var(--border-light);
+            background: var(--bg-cell);
+            font-size: 0.8em;
+        }
+        .quick-row:nth-child(even) { background: var(--bg-cell-alt); }
+        .quick-row:hover { background: var(--bg-cell-hover); }
+        .quick-row.selected {
+            background: var(--modified-bg);
+            box-shadow: inset 3px 0 0 var(--primary);
+        }
+        .quick-main {
+            font-weight: 700;
+            color: var(--text);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .quick-sub,
+        .quick-muted {
+            margin-top: 2px;
+            color: var(--text-muted);
+            font-size: 0.86em;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .quick-badge {
+            display: inline-flex;
+            align-items: center;
+            max-width: 100%;
+            min-height: 22px;
+            padding: 2px 7px;
+            border-radius: 999px;
+            background: rgba(var(--accent-rgb), 0.12);
+            color: var(--primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .quick-badge.empty {
+            background: rgba(239, 68, 68, 0.12);
+            color: var(--danger);
+        }
+        .quick-empty {
+            padding: 56px 20px;
+            text-align: center;
+            color: var(--text-muted);
+        }
+        .quick-preview-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 9998;
+            background: var(--modal-overlay-bg-strong);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .quick-preview-panel {
+            width: 980px;
+            max-width: calc(100vw - 40px);
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background: var(--panel-bg-strong);
+            backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+            -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+            border: var(--panel-border);
+            border-radius: 16px;
+            box-shadow: var(--panel-shadow);
+            animation: quickPreviewIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes quickPreviewIn {
+            from { opacity: 0; transform: translateY(20px) scale(0.97); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .quick-preview-hdr,
+        .quick-preview-foot {
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--border);
+        }
+        .quick-preview-foot {
+            justify-content: flex-end;
+            border-top: 1px solid var(--border);
+            border-bottom: 0;
+        }
+        .quick-preview-hdr h3 {
+            margin: 0;
+            font-size: 1em;
+            color: var(--primary);
+        }
+        .quick-preview-body {
+            min-height: 0;
+            overflow: auto;
+            padding: 12px 14px;
+        }
+        .quick-diff-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.8em;
+        }
+        .quick-diff-table th,
+        .quick-diff-table td {
+            padding: 7px 8px;
+            border-bottom: 1px solid var(--border-light);
+            text-align: left;
+            vertical-align: top;
+            word-break: break-word;
+        }
+        .quick-diff-table th {
+            position: sticky;
+            top: 0;
+            background: var(--bg-header);
+            color: var(--text-header);
+            z-index: 1;
+        }
+        .quick-old { color: var(--danger); }
+        .quick-new { color: var(--success); font-weight: 600; }
+
+        @media (max-width: 920px) {
+            .quick-grid {
+                grid-template-columns: 34px minmax(0, 1.3fr) minmax(0, 1.2fr)
+                    minmax(0, 0.8fr) minmax(0, 0.7fr);
+            }
+            .quick-grid > div:nth-child(6),
+            .quick-grid > div:nth-child(7),
+            .quick-grid > div:nth-child(8),
+            .quick-grid > div:nth-child(9) { display: none; }
+            .quick-input.search,
+            .quick-input.note { min-width: 0; flex: 1 1 100%; }
+            .quick-meta { margin-left: 0; width: 100%; }
+        }
+
         /* TAB BAR — multiple independent views of the same file */
         .tabbar {
             display: flex;
@@ -1529,6 +1795,10 @@
 <body>
     <div class="toolbar">
         <div class="toolbar-title">&#x1F4CA; Filone</div>
+        <div class="mode-toggle" aria-label="Modalità filone">
+            <button type="button" id="modeGridBtn" class="active" onclick="setFiloneMode('grid')">Griglia</button>
+            <button type="button" id="modeQuickBtn" onclick="setFiloneMode('quick')">Rapido</button>
+        </div>
         <div class="toolbar-sep"></div>
         <span class="toolbar-info" id="infoRighe">Caricamento...</span>
         <div class="toolbar-sep hide-mobile"></div>
@@ -1604,6 +1874,52 @@
         </div>
     </div>
 
+    <div class="quick-wrap" id="quickWrap">
+        <div class="quick-topbar quick-filterbar">
+            <div class="quick-filters">
+                <input class="quick-input search" id="quickSearch" type="text" placeholder="Cerca nominativo, POD, indirizzo..." oninput="quickFilterChanged('search')" autocomplete="off">
+                <select class="quick-select" id="quickFilterLcl" onchange="quickFilterChanged('lcl')"><option value="">Tutti LCL</option></select>
+                <select class="quick-select" id="quickFilterComune" onchange="quickFilterChanged('comune')"><option value="">Tutti comuni</option></select>
+                <select class="quick-select" id="quickFilterPhone" onchange="quickFilterChanged('phone')">
+                    <option value="">Telefono: tutti</option>
+                    <option value="with">Con telefono</option>
+                    <option value="without">Senza telefono</option>
+                </select>
+                <select class="quick-select" id="quickFilterDate" onchange="quickFilterChanged('date')">
+                    <option value="">Date: tutte</option>
+                    <option value="to_plan">Da pianificare</option>
+                    <option value="planned">Pianificati</option>
+                    <option value="expired">Scaduti</option>
+                </select>
+                <select class="quick-select" id="quickFilterOperator" onchange="quickFilterChanged('operator')"><option value="">Tutti operatori</option></select>
+                <select class="quick-select" id="quickFilterAppointment" onchange="quickFilterChanged('appointment')">
+                    <option value="">Appuntamenti: tutti</option>
+                    <option value="with">Con appuntamento</option>
+                    <option value="without">Senza appuntamento</option>
+                </select>
+                <select class="quick-select" id="quickFilterTipo" onchange="quickFilterChanged('tipo')" style="display:none"><option value="">Tutte tipologie</option></select>
+                <select class="quick-select" id="quickFilterPosizione" onchange="quickFilterChanged('posizione')" style="display:none"><option value="">Tutte posizioni</option></select>
+            </div>
+            <span class="quick-meta" id="quickStats">-</span>
+        </div>
+        <div class="quick-actions">
+            <button class="tb" onclick="quickSelectVisible()">&#x2611; Visibili</button>
+            <button class="tb" onclick="quickClearSelection()">&#x2610; Nessuno</button>
+            <span class="quick-meta" id="quickSelectedStats"><strong>0</strong> selezionati</span>
+            <div class="quick-action-fields">
+                <input class="quick-input" id="quickActionDate" type="date" title="DATA PIAN" onchange="quickUpdateSelectionStats()" oninput="quickUpdateSelectionStats()">
+                <select class="quick-select" id="quickActionOperator" title="Operatore" onchange="quickUpdateSelectionStats()">
+                    <option value="">Operatore: non modificare</option>
+                </select>
+                <input class="quick-input note" id="quickActionNote" type="text" placeholder="Nota da aggiungere a NOTE APP" autocomplete="off" oninput="quickUpdateSelectionStats()">
+                <button class="tb primary" id="quickPreviewBtn" onclick="quickOpenPreview()" disabled>&#x1F50D; Anteprima</button>
+            </div>
+        </div>
+        <div class="quick-list" id="quickList">
+            <div class="quick-empty">Caricamento...</div>
+        </div>
+    </div>
+
     <div class="status-bar">
         <span id="stRows">Righe: <strong>-</strong></span>
         <span id="stCols">Colonne: <strong>-</strong></span>
@@ -1615,6 +1931,22 @@
 
     <div class="toast" id="toast"></div>
     <div class="fpop" id="filterPopup"></div>
+
+    <div class="quick-preview-overlay" id="quickPreviewOverlay" onclick="if(event.target===this)quickClosePreview()">
+        <div class="quick-preview-panel" role="dialog" aria-modal="true">
+            <div class="quick-preview-hdr">
+                <h3 id="quickPreviewTitle">Anteprima modifiche</h3>
+                <span class="quick-meta" id="quickPreviewSummary"></span>
+                <span style="flex:1"></span>
+                <button class="cell-log-close" type="button" onclick="quickClosePreview()">&times;</button>
+            </div>
+            <div class="quick-preview-body" id="quickPreviewBody"></div>
+            <div class="quick-preview-foot">
+                <button class="tb" type="button" onclick="quickClosePreview()">Annulla</button>
+                <button class="tb primary" type="button" id="quickConfirmBtn" onclick="quickConfirmBatch()">Salva modifiche</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Pop-up nota cella (stile Sheets) -->
     <div class="note-popup-overlay" id="notePopupOverlay" onclick="if(event.target===this)closeCellNotePopup()">
@@ -1902,6 +2234,18 @@ let activeRows = new Map(); // visIdx -> DOM node
 
 // Row index for quick lookup  _row -> rawData index
 let rowIndex = {};
+
+// Modalità Rapida
+let filoneMode = 'grid';
+let quickCols = {};
+let quickSelectedRows = new Set();
+let quickFiltered = [];
+let quickRendered = 0;
+let quickSettingsLoaded = false;
+let quickOperatoriDict = {};
+let quickPendingDiffs = [];
+let quickChangedFilterKey = '';
+const QUICK_PAGE_SIZE = 120;
 
 // ============================================================
 // MULTI-TAB STATE — viste indipendenti dello stesso file
@@ -2270,6 +2614,14 @@ async function loadData() {
         updateHiddenColsBtn();
         hideLoading();
         qs('#infoRighe').innerHTML = '<strong>' + rawData.length + '</strong> righe &times; <strong>' + headers.length + '</strong> colonne';
+        loadQuickSettings();
+        initQuickModeData();
+        if (filoneMode === 'quick') {
+            document.body.classList.add('fast-mode');
+            qs('#modeGridBtn').classList.remove('active');
+            qs('#modeQuickBtn').classList.add('active');
+            quickRender(true);
+        }
         // Recupera lo stato di sync pending (modifiche fatte nella sessione
         // precedente e non ancora pushate, es. user che ha ricaricato prima
         // del debounce). Se c'è qualcosa, viene flushato subito al server
@@ -4585,6 +4937,657 @@ function toggleTheme() {
 window.onbeforeunload = function(e) {
     if (Object.keys(pending).length) { e.preventDefault(); e.returnValue = ''; }
 };
+
+// ============================================================
+// MODALITÀ RAPIDA FILONE
+// ============================================================
+function setFiloneMode(mode) {
+    if (mode === 'quick' && Object.keys(pending).length > 0) {
+        toast('Salva o annulla le modifiche della griglia prima di passare a Rapido', 'warning');
+        return;
+    }
+    filoneMode = mode === 'quick' ? 'quick' : 'grid';
+    document.body.classList.toggle('fast-mode', filoneMode === 'quick');
+    qs('#modeGridBtn').classList.toggle('active', filoneMode === 'grid');
+    qs('#modeQuickBtn').classList.toggle('active', filoneMode === 'quick');
+    try { localStorage.setItem('filone_mode_v1', filoneMode); } catch(e) {}
+    if (filoneMode === 'quick') {
+        initQuickModeData();
+        quickRender();
+    } else {
+        updateLayout();
+    }
+}
+
+async function loadQuickSettings() {
+    if (quickSettingsLoaded) return;
+    quickSettingsLoaded = true;
+    try {
+        var r = await fetch('/api/settings');
+        if (!r.ok) return;
+        var d = await r.json();
+        quickOperatoriDict = d.operatori_dict || {};
+    } catch(e) {
+        quickOperatoriDict = {};
+    } finally {
+        quickPopulateOperatorControls();
+        if (Object.keys(quickCols || {}).length) {
+            if (filoneMode === 'quick') {
+                quickChangedFilterKey = 'search';
+                quickRender(true);
+            } else {
+                quickRefreshFilterOptions('search');
+            }
+        }
+    }
+}
+
+function initQuickModeData() {
+    quickCols = {
+        data: quickFindHeader(['DATA PIAN', 'DATA_PIAN', 'Data Pian', 'DATA PIANIFICATA', 'PROG', 'Prog', 'DATA']),
+        operatore: quickFindHeader(['Operatore', 'OPERATORE', 'TECNICO', 'Tecnico', 'Matricola']),
+        noteApp: quickFindHeader(['NOTE APP', 'NOTE_APP', 'Note App', 'NOTE APPUNTAMENTO', 'NOTE', 'Note']),
+        nominativo: quickFindHeader(['NOMINATIVO', 'Nominativo', 'CLIENTE', 'Cliente', 'NOME', 'Nome']),
+        comune: quickFindHeader(['Comune', 'COMUNE']),
+        indirizzo: quickFindHeader(['Indirizzo', 'Via', 'VIA', 'Via Num', 'VIA NUM']),
+        civico: quickFindHeader(['Num', 'NUM', 'civico', 'CIVICO', 'Numero civico', 'N. Civico']),
+        telefono: quickFindHeader(['telefono', 'TELEFONO', 'Telefono', 'TEL', 'Tel']),
+        lcl: quickFindHeader(['LCL', 'lcl', 'Lcl']),
+        pod: podColName || quickFindHeader(['POD', 'Pod', 'pod']),
+        eneltel: quickFindHeader(['Eneltel', 'ENELTEL']),
+        tipo: quickFindHeader(['Tipo_Misuratore', 'TIPO_MISURATORE', 'TIPOLOGIA CE', 'Tipologia CE', 'TIPO CE', 'Tipo CE', 'Tipologia']),
+        posizione: quickFindHeader(['Posizione_Mis_Ante_Sost', 'Posizione_Ante_Mis', 'Posizione misuratore', 'POSIZIONE', 'Posizione', 'Posizione Misuratore'])
+    };
+    quickSelectedRows.forEach(function(rn) {
+        if (rowIndex[+rn] === undefined) quickSelectedRows.delete(rn);
+    });
+    quickPopulateFilters();
+    quickUpdateActionAvailability();
+    quickUpdateSelectionStats();
+}
+
+function quickFindHeader(candidates) {
+    var lowerMap = {};
+    for (var i = 0; i < headers.length; i++) lowerMap[headers[i].trim().toLowerCase()] = headers[i];
+    for (var c = 0; c < candidates.length; c++) {
+        var hit = lowerMap[String(candidates[c]).trim().toLowerCase()];
+        if (hit) return hit;
+    }
+    return '';
+}
+
+function quickVal(row, key) {
+    var col = quickCols[key];
+    if (!col || !row) return '';
+    return row[col] == null ? '' : String(row[col]);
+}
+
+function quickPopulateFilters() {
+    qs('#quickFilterAppointment').style.display = quickCols.noteApp ? '' : 'none';
+    if (!quickCols.noteApp) qs('#quickFilterAppointment').value = '';
+    qs('#quickFilterTipo').style.display = quickCols.tipo ? '' : 'none';
+    qs('#quickFilterPosizione').style.display = quickCols.posizione ? '' : 'none';
+    quickRefreshFilterOptions('search');
+    quickPopulateOperatorControls();
+}
+
+function quickPopulateOperatorControls() {
+    var ops = quickDistinct('operatore');
+    var currentAction = qs('#quickActionOperator').value;
+    var seen = new Set();
+    var actionHtml = '<option value="">Operatore: non modificare</option>';
+    Object.keys(quickOperatoriDict || {}).sort(function(a, b) {
+        return a.toLowerCase().localeCompare(b.toLowerCase());
+    }).forEach(function(nome) {
+        var matricola = quickOperatoriDict[nome];
+        if (!matricola || seen.has(matricola)) return;
+        seen.add(matricola);
+        actionHtml += '<option value="' + esc(matricola) + '">' + esc(nome + ' (' + matricola + ')') + '</option>';
+    });
+    ops.forEach(function(op) {
+        if (!op || seen.has(op)) return;
+        seen.add(op);
+        actionHtml += '<option value="' + esc(op) + '">' + esc(quickOperatorLabel(op)) + '</option>';
+    });
+    qs('#quickActionOperator').innerHTML = actionHtml;
+    if (currentAction && seen.has(currentAction)) qs('#quickActionOperator').value = currentAction;
+}
+
+function quickDistinct(key, rows) {
+    var set = new Map();
+    if (!quickCols[key]) return [];
+    (rows || rawData).forEach(function(row) {
+        var v = quickVal(row, key).trim();
+        if (!v || v.toUpperCase() === 'TUTTI') return;
+        var norm = v.toLowerCase();
+        if (!set.has(norm)) set.set(norm, v);
+    });
+    return Array.from(set.values()).sort(function(a, b) {
+        return a.toLowerCase().localeCompare(b.toLowerCase());
+    });
+}
+
+function quickPopulateSelect(id, placeholder, values, keepInvalid) {
+    var sel = qs('#' + id);
+    if (!sel) return;
+    var prev = sel.value;
+    var html = '<option value="">' + esc(placeholder) + '</option>';
+    values.forEach(function(v) {
+        html += '<option value="' + esc(v) + '">' + esc(v) + '</option>';
+    });
+    if (prev && keepInvalid && values.indexOf(prev) < 0) {
+        html += '<option value="' + esc(prev) + '">' + esc(prev) + '</option>';
+    }
+    sel.innerHTML = html;
+    if (prev && (keepInvalid || values.indexOf(prev) >= 0)) sel.value = prev;
+}
+
+function quickFilterState() {
+    return {
+        search: (qs('#quickSearch').value || '').trim().toLowerCase(),
+        lcl: qs('#quickFilterLcl').value,
+        comune: qs('#quickFilterComune').value,
+        phone: qs('#quickFilterPhone').value,
+        date: qs('#quickFilterDate').value,
+        operator: qs('#quickFilterOperator').value,
+        appointment: quickCols.noteApp ? qs('#quickFilterAppointment').value : '',
+        tipo: qs('#quickFilterTipo').value,
+        posizione: qs('#quickFilterPosizione').value
+    };
+}
+
+function quickFilterChanged(key) {
+    quickChangedFilterKey = key || '';
+    quickRender();
+}
+
+function quickRowsForFilterOptions(skipKey) {
+    var state = quickFilterState();
+    return rawData.filter(function(row) {
+        return quickRowPassesFilters(row, state, skipKey);
+    });
+}
+
+function quickRefreshFilterOptions(preserveKey) {
+    quickRefreshFilterOptionsPass(preserveKey);
+    quickRefreshFilterOptionsPass(preserveKey);
+}
+
+function quickPreserveFilter(preserveKey, key) {
+    return preserveKey === key || preserveKey === 'search';
+}
+
+function quickRefreshFilterOptionsPass(preserveKey) {
+    quickPopulateSelect('quickFilterLcl', 'Tutti LCL', quickDistinct('lcl', quickRowsForFilterOptions('lcl')), quickPreserveFilter(preserveKey, 'lcl'));
+    quickPopulateSelect('quickFilterComune', 'Tutti comuni', quickDistinct('comune', quickRowsForFilterOptions('comune')), quickPreserveFilter(preserveKey, 'comune'));
+    quickPopulateStaticSelect('quickFilterPhone', 'Telefono: tutti', [
+        { value: 'with', label: 'Con telefono', match: function(row) { return !!quickVal(row, 'telefono').trim(); } },
+        { value: 'without', label: 'Senza telefono', match: function(row) { return !quickVal(row, 'telefono').trim(); } }
+    ], quickRowsForFilterOptions('phone'), quickPreserveFilter(preserveKey, 'phone'));
+    quickPopulateStaticSelect('quickFilterDate', 'Date: tutte', [
+        { value: 'to_plan', label: 'Da pianificare', match: function(row) { return quickMatchesDateFilter(row, 'to_plan'); } },
+        { value: 'planned', label: 'Pianificati', match: function(row) { return quickMatchesDateFilter(row, 'planned'); } },
+        { value: 'expired', label: 'Scaduti', match: function(row) { return quickMatchesDateFilter(row, 'expired'); } }
+    ], quickRowsForFilterOptions('date'), quickPreserveFilter(preserveKey, 'date'));
+    quickPopulateOperatorFilter(quickRowsForFilterOptions('operator'), quickPreserveFilter(preserveKey, 'operator'));
+    quickPopulateStaticSelect('quickFilterAppointment', 'Appuntamenti: tutti', [
+        { value: 'with', label: 'Con appuntamento', match: quickHasAppointment },
+        { value: 'without', label: 'Senza appuntamento', match: function(row) { return !quickHasAppointment(row); } }
+    ], quickRowsForFilterOptions('appointment'), quickPreserveFilter(preserveKey, 'appointment'));
+    quickPopulateSelect('quickFilterTipo', 'Tutte tipologie', quickDistinct('tipo', quickRowsForFilterOptions('tipo')), quickPreserveFilter(preserveKey, 'tipo'));
+    quickPopulateSelect('quickFilterPosizione', 'Tutte posizioni', quickDistinct('posizione', quickRowsForFilterOptions('posizione')), quickPreserveFilter(preserveKey, 'posizione'));
+}
+
+function quickPopulateStaticSelect(id, placeholder, options, rows, keepInvalid) {
+    var sel = qs('#' + id);
+    if (!sel) return;
+    var prev = sel.value;
+    var available = new Set();
+    var optionByValue = {};
+    rows.forEach(function(row) {
+        options.forEach(function(opt) {
+            if (opt.match(row)) available.add(opt.value);
+        });
+    });
+    var html = '<option value="">' + esc(placeholder) + '</option>';
+    options.forEach(function(opt) {
+        optionByValue[opt.value] = opt;
+        if (available.has(opt.value)) {
+            html += '<option value="' + esc(opt.value) + '">' + esc(opt.label) + '</option>';
+        }
+    });
+    if (prev && keepInvalid && !available.has(prev) && optionByValue[prev]) {
+        html += '<option value="' + esc(prev) + '">' + esc(optionByValue[prev].label) + '</option>';
+    }
+    sel.innerHTML = html;
+    if (prev && (keepInvalid || available.has(prev))) sel.value = prev;
+}
+
+function quickPopulateOperatorFilter(rows, keepInvalid) {
+    var sel = qs('#quickFilterOperator');
+    if (!sel) return;
+    var prev = sel.value;
+    var hasEmpty = false;
+    var values = new Map();
+    rows.forEach(function(row) {
+        var op = quickVal(row, 'operatore').trim();
+        if (!op || op.toUpperCase() === 'TUTTI') {
+            hasEmpty = true;
+            return;
+        }
+        if (!values.has(op.toLowerCase())) values.set(op.toLowerCase(), op);
+    });
+    var ops = Array.from(values.values()).sort(function(a, b) {
+        return quickOperatorLabel(a).toLowerCase().localeCompare(quickOperatorLabel(b).toLowerCase());
+    });
+    var html = '<option value="">Tutti operatori</option>';
+    if (hasEmpty) html += '<option value="__EMPTY__">Senza operatore</option>';
+    ops.forEach(function(op) {
+        html += '<option value="' + esc(op) + '">' + esc(quickOperatorLabel(op)) + '</option>';
+    });
+    if (prev === '__EMPTY__' && keepInvalid && !hasEmpty) {
+        html += '<option value="__EMPTY__">Senza operatore</option>';
+    } else if (prev && keepInvalid && prev !== '__EMPTY__' && ops.indexOf(prev) < 0) {
+        html += '<option value="' + esc(prev) + '">' + esc(quickOperatorLabel(prev)) + '</option>';
+    }
+    sel.innerHTML = html;
+    if (prev === '__EMPTY__' && (keepInvalid || hasEmpty)) sel.value = prev;
+    else if (prev && (keepInvalid || ops.indexOf(prev) >= 0)) sel.value = prev;
+}
+
+function quickOperatorLabel(op) {
+    if (!op) return '';
+    for (var nome in quickOperatoriDict) {
+        if (quickOperatoriDict[nome] === op) return nome + ' (' + op + ')';
+    }
+    return op;
+}
+
+function quickUpdateActionAvailability() {
+    var dateInput = qs('#quickActionDate');
+    var opSelect = qs('#quickActionOperator');
+    var noteInput = qs('#quickActionNote');
+    dateInput.disabled = !quickCols.data || quickIsProtected(quickCols.data);
+    opSelect.disabled = !quickCols.operatore || quickIsProtected(quickCols.operatore);
+    noteInput.disabled = !quickCols.noteApp || quickIsProtected(quickCols.noteApp);
+    quickUpdateSelectionStats();
+}
+
+function quickIsProtected(col) {
+    return !!col && protectedCols.has(col.toLowerCase());
+}
+
+function quickDateInfo(row) {
+    var raw = quickVal(row, 'data').trim();
+    if (!raw) return { state: 'empty', raw: raw, date: null };
+    var d = parseDate(raw);
+    if (!d) return { state: 'unknown', raw: raw, date: null };
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+    d.setHours(0, 0, 0, 0);
+    return { state: d < today ? 'expired' : 'planned', raw: raw, date: d };
+}
+
+function quickMatchesDateFilter(row, filter) {
+    if (!filter) return true;
+    var info = quickDateInfo(row);
+    if (filter === 'to_plan') return info.state === 'empty' || info.state === 'expired';
+    if (filter === 'planned') return info.state === 'planned';
+    if (filter === 'expired') return info.state === 'expired';
+    return true;
+}
+
+function quickMatchesSearch(row, query) {
+    if (!query) return true;
+    var parts = [
+        quickVal(row, 'nominativo'), quickVal(row, 'comune'), quickVal(row, 'indirizzo'),
+        quickVal(row, 'civico'), quickVal(row, 'telefono'), quickVal(row, 'pod'),
+        quickVal(row, 'eneltel'), quickVal(row, 'noteApp')
+    ].join(' ').toLowerCase();
+    return parts.indexOf(query) >= 0;
+}
+
+function quickHasAppointment(row) {
+    return /\bapp\b/i.test(quickVal(row, 'noteApp'));
+}
+
+function quickRowPassesFilters(row, state, skipKey) {
+    if (skipKey !== 'search' && !quickMatchesSearch(row, state.search)) return false;
+    if (skipKey !== 'lcl' && state.lcl && quickVal(row, 'lcl') !== state.lcl) return false;
+    if (skipKey !== 'comune' && state.comune && quickVal(row, 'comune') !== state.comune) return false;
+    if (skipKey !== 'tipo' && state.tipo && quickVal(row, 'tipo') !== state.tipo) return false;
+    if (skipKey !== 'posizione' && state.posizione && quickVal(row, 'posizione') !== state.posizione) return false;
+
+    var tel = quickVal(row, 'telefono').trim();
+    if (skipKey !== 'phone') {
+        if (state.phone === 'with' && !tel) return false;
+        if (state.phone === 'without' && tel) return false;
+    }
+    if (skipKey !== 'date' && !quickMatchesDateFilter(row, state.date)) return false;
+
+    var op = quickVal(row, 'operatore').trim();
+    if (skipKey !== 'operator') {
+        if (state.operator === '__EMPTY__' && op && op.toUpperCase() !== 'TUTTI') return false;
+        if (state.operator && state.operator !== '__EMPTY__' && op !== state.operator) return false;
+    }
+
+    if (skipKey !== 'appointment') {
+        var hasAppointment = quickHasAppointment(row);
+        if (state.appointment === 'with' && !hasAppointment) return false;
+        if (state.appointment === 'without' && hasAppointment) return false;
+    }
+
+    return true;
+}
+
+function quickGetFilteredRows() {
+    var state = quickFilterState();
+    return rawData.filter(function(row) {
+        return quickRowPassesFilters(row, state);
+    });
+}
+
+function quickRender(keepScroll) {
+    if (filoneMode !== 'quick') return;
+    var list = qs('#quickList');
+    var previousTop = keepScroll ? list.scrollTop : 0;
+    var preserveKey = quickChangedFilterKey;
+    quickChangedFilterKey = '';
+    quickRefreshFilterOptions(preserveKey);
+    quickFiltered = quickGetFilteredRows();
+    quickRendered = 0;
+    if (!quickFiltered.length) {
+        list.innerHTML = '<div class="quick-empty">Nessun contatore con i filtri correnti</div>';
+        quickUpdateSelectionStats();
+        return;
+    }
+    list.innerHTML = quickHeaderHtml();
+    quickAppendRows();
+    list.scrollTop = previousTop;
+    list.onscroll = function() {
+        if (list.scrollTop + list.clientHeight >= list.scrollHeight - 240) quickAppendRows();
+    };
+    quickUpdateSelectionStats();
+}
+
+function quickHeaderHtml() {
+    return '<div class="quick-grid quick-head">' +
+        '<div></div><div>Nominativo</div><div>Indirizzo</div><div>Telefono</div>' +
+        '<div>Data</div><div>Operatore</div><div>Note app</div><div>LCL</div><div>POD / Eneltel</div>' +
+        '</div>';
+}
+
+function quickAppendRows() {
+    if (quickRendered >= quickFiltered.length) return;
+    var slice = quickFiltered.slice(quickRendered, quickRendered + QUICK_PAGE_SIZE);
+    var html = slice.map(quickRowHtml).join('');
+    qs('#quickList').insertAdjacentHTML('beforeend', html);
+    quickRendered += slice.length;
+}
+
+function quickRowHtml(row) {
+    var rn = String(row._row);
+    var selected = quickSelectedRows.has(rn);
+    var address = [quickVal(row, 'indirizzo'), quickVal(row, 'civico')].filter(Boolean).join(' ');
+    var dataInfo = quickDateInfo(row);
+    var dateBadge = quickDateBadge(dataInfo);
+    var op = quickVal(row, 'operatore').trim();
+    var tel = quickVal(row, 'telefono').trim();
+    var pod = quickVal(row, 'pod').trim();
+    var eneltel = quickVal(row, 'eneltel').trim();
+    return '<div class="quick-grid quick-row ' + (selected ? 'selected' : '') + '" data-rn="' + esc(rn) + '" onclick="quickToggleRow(\'' + esc(rn) + '\')">' +
+        '<div><input type="checkbox" ' + (selected ? 'checked' : '') + ' onclick="event.stopPropagation(); quickToggleRow(\'' + esc(rn) + '\', this.checked)"></div>' +
+        '<div><div class="quick-main">' + esc(quickVal(row, 'nominativo') || 'N/D') + '</div><div class="quick-sub">riga ' + esc(rn) + '</div></div>' +
+        '<div><div class="quick-main">' + esc(quickVal(row, 'comune') || 'N/D') + '</div><div class="quick-sub">' + esc(address || '-') + '</div></div>' +
+        '<div>' + (tel ? '<span class="quick-badge">' + esc(tel) + '</span>' : '<span class="quick-badge empty">Senza</span>') + '</div>' +
+        '<div>' + dateBadge + '</div>' +
+        '<div>' + (op && op.toUpperCase() !== 'TUTTI' ? '<span class="quick-badge">' + esc(quickOperatorLabel(op)) + '</span>' : '<span class="quick-badge empty">Senza</span>') + '</div>' +
+        '<div><div class="quick-muted">' + esc(quickVal(row, 'noteApp') || '-') + '</div></div>' +
+        '<div><span class="quick-badge">' + esc(quickVal(row, 'lcl') || '-') + '</span></div>' +
+        '<div><div class="quick-main">' + esc(pod || '-') + '</div><div class="quick-sub">' + esc(eneltel || '-') + '</div></div>' +
+        '</div>';
+}
+
+function quickDateBadge(info) {
+    if (info.state === 'empty') return '<span class="quick-badge empty">Senza</span>';
+    if (info.state === 'expired') return '<span class="quick-badge empty">' + esc(info.raw) + '</span>';
+    return '<span class="quick-badge">' + esc(info.raw) + '</span>';
+}
+
+function quickToggleRow(rn, forced) {
+    rn = String(rn);
+    var next = forced;
+    if (next === undefined) next = !quickSelectedRows.has(rn);
+    if (next) quickSelectedRows.add(rn);
+    else quickSelectedRows.delete(rn);
+    document.querySelectorAll('.quick-row[data-rn="' + rn + '"]').forEach(function(rowEl) {
+        rowEl.classList.toggle('selected', quickSelectedRows.has(rn));
+        var cb = rowEl.querySelector('input[type="checkbox"]');
+        if (cb) cb.checked = quickSelectedRows.has(rn);
+    });
+    quickUpdateSelectionStats();
+}
+
+function quickSelectVisible() {
+    quickFiltered.forEach(function(row) { quickSelectedRows.add(String(row._row)); });
+    quickRender(true);
+}
+
+function quickClearSelection() {
+    quickSelectedRows.clear();
+    quickRender(true);
+}
+
+function quickUpdateSelectionStats() {
+    var selected = quickSelectedRows.size;
+    var hasAction = quickHasPendingAction();
+    var previewBtn = qs('#quickPreviewBtn');
+    qs('#quickStats').innerHTML = '<strong>' + quickFiltered.length + '</strong> filtrati su <strong>' + rawData.length + '</strong>';
+    qs('#quickSelectedStats').innerHTML = '<strong>' + selected + '</strong> selezionati';
+    previewBtn.disabled = selected === 0 || !hasAction;
+    previewBtn.innerHTML = selected === 0 || hasAction ? '&#x1F50D; Anteprima' : 'Scegli modifica';
+    previewBtn.title = selected === 0
+        ? 'Seleziona almeno una riga'
+        : (hasAction ? 'Mostra anteprima modifiche' : 'Imposta data, operatore o nota');
+}
+
+function quickHasPendingAction() {
+    var dateInput = qs('#quickActionDate');
+    var opSelect = qs('#quickActionOperator');
+    var noteInput = qs('#quickActionNote');
+    return !!(
+        (dateInput && dateInput.value) ||
+        (opSelect && opSelect.value) ||
+        (noteInput && noteInput.value.trim())
+    );
+}
+
+function quickFocusFirstAction() {
+    var fields = [qs('#quickActionDate'), qs('#quickActionOperator'), qs('#quickActionNote')];
+    for (var i = 0; i < fields.length; i++) {
+        if (fields[i] && !fields[i].disabled) {
+            fields[i].focus();
+            return;
+        }
+    }
+}
+
+function quickBuildDiffs() {
+    var dateVal = qs('#quickActionDate').value;
+    var opVal = qs('#quickActionOperator').value;
+    var noteVal = (qs('#quickActionNote').value || '').trim();
+    var errors = [];
+    var diffs = [];
+    var dateItalian = dateVal ? quickDateToItalian(dateVal) : '';
+
+    if (!dateVal && !opVal && !noteVal) {
+        errors.push('Seleziona almeno data, operatore o nota.');
+    }
+    if (dateVal && (!quickCols.data || quickIsProtected(quickCols.data))) errors.push('Colonna DATA PIAN non modificabile.');
+    if (opVal && (!quickCols.operatore || quickIsProtected(quickCols.operatore))) errors.push('Colonna Operatore non modificabile.');
+    if (noteVal && (!quickCols.noteApp || quickIsProtected(quickCols.noteApp))) errors.push('Colonna NOTE APP non modificabile.');
+    if (errors.length) return { diffs: [], errors: errors };
+
+    var selectedRows = rawData.filter(function(row) { return quickSelectedRows.has(String(row._row)); });
+    selectedRows.forEach(function(row) {
+        if (dateItalian) quickPushDiff(diffs, row, quickCols.data, dateItalian);
+        if (opVal) quickPushDiff(diffs, row, quickCols.operatore, opVal);
+        if (noteVal) {
+            var oldNote = quickVal(row, 'noteApp');
+            quickPushDiff(diffs, row, quickCols.noteApp, buildNotaConData(noteVal, oldNote));
+        }
+    });
+    return { diffs: diffs, errors: errors };
+}
+
+function quickPushDiff(diffs, row, col, newVal) {
+    if (!col) return;
+    var oldVal = row[col] == null ? '' : String(row[col]);
+    var newStr = newVal == null ? '' : String(newVal);
+    if (oldVal === newStr) return;
+    diffs.push({
+        rn: String(row._row),
+        row: row,
+        col: col,
+        old: oldVal,
+        newVal: newStr
+    });
+}
+
+function quickDateToItalian(iso) {
+    var p = (iso || '').split('-');
+    return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : iso;
+}
+
+function quickOpenPreview() {
+    if (!quickSelectedRows.size) {
+        toast('Seleziona almeno una riga', 'warning');
+        return;
+    }
+    if (!quickHasPendingAction()) {
+        toast("Imposta data, operatore o nota prima dell'anteprima", 'warning');
+        quickFocusFirstAction();
+        return;
+    }
+    var built = quickBuildDiffs();
+    if (built.errors.length) {
+        qs('#quickPreviewTitle').textContent = 'Anteprima modifiche';
+        qs('#quickPreviewSummary').textContent = '';
+        qs('#quickPreviewBody').innerHTML = built.errors.map(function(e) {
+            return '<div class="quick-empty">' + esc(e) + '</div>';
+        }).join('');
+        qs('#quickConfirmBtn').disabled = true;
+        qs('#quickPreviewOverlay').style.display = 'flex';
+        return;
+    }
+    if (!built.diffs.length) {
+        toast('Nessuna cella cambierebbe valore', 'warning');
+        return;
+    }
+    quickPendingDiffs = built.diffs;
+    var rows = new Set(built.diffs.map(function(d) { return d.rn; })).size;
+    qs('#quickPreviewTitle').textContent = 'Anteprima modifiche';
+    qs('#quickPreviewSummary').innerHTML = '<strong>' + built.diffs.length + '</strong> celle su <strong>' + rows + '</strong> righe';
+    qs('#quickPreviewBody').innerHTML = quickDiffTableHtml(built.diffs);
+    qs('#quickConfirmBtn').disabled = false;
+    qs('#quickPreviewOverlay').style.display = 'flex';
+}
+
+function quickDiffTableHtml(diffs) {
+    var html = '<table class="quick-diff-table"><thead><tr><th>Riga</th><th>Contatore</th><th>Campo</th><th>Prima</th><th>Dopo</th></tr></thead><tbody>';
+    diffs.forEach(function(d) {
+        html += '<tr><td>' + esc(d.rn) + '</td><td>' + esc(quickRowLabel(d.row)) + '</td><td>' + esc(d.col) + '</td>' +
+            '<td class="quick-old">' + esc(d.old) + '</td><td class="quick-new">' + esc(d.newVal) + '</td></tr>';
+    });
+    html += '</tbody></table>';
+    return html;
+}
+
+function quickRowLabel(row) {
+    var nome = quickVal(row, 'nominativo') || 'N/D';
+    var comune = quickVal(row, 'comune') || '-';
+    var pod = quickVal(row, 'pod') || quickVal(row, 'eneltel') || '-';
+    return nome + ' · ' + comune + ' · ' + pod;
+}
+
+function quickClosePreview() {
+    qs('#quickPreviewOverlay').style.display = 'none';
+    qs('#quickConfirmBtn').disabled = false;
+}
+
+async function quickConfirmBatch() {
+    if (!quickPendingDiffs.length) return;
+    var btn = qs('#quickConfirmBtn');
+    btn.disabled = true;
+    btn.textContent = 'Salvataggio...';
+
+    var rowsPayload = {};
+    var trackedRows = {};
+    var logEntries = [];
+    quickPendingDiffs.forEach(function(d) {
+        if (!rowsPayload[d.rn]) {
+            rowsPayload[d.rn] = {};
+            trackedRows[d.rn] = {};
+            var pod = quickVal(d.row, 'pod');
+            var lcl = quickVal(d.row, 'lcl');
+            if (pod) rowsPayload[d.rn]['_anchor_pod'] = pod;
+            if (quickCols.lcl) rowsPayload[d.rn]['_anchor_lcl'] = lcl || '';
+        }
+        rowsPayload[d.rn][d.col] = d.newVal;
+        trackedRows[d.rn][d.col] = d.newVal;
+        logEntries.push({ row: +d.rn, col: d.col, old: d.old, 'new': d.newVal });
+    });
+
+    try {
+        var r = await fetch('/api/filone/bulk', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rows: rowsPayload })
+        });
+        var res = await r.json();
+        if (!r.ok || !res.success) {
+            toast('Errore: ' + (res.error || 'salvataggio non completato'), 'error');
+            await loadData();
+            return;
+        }
+
+        var warnings = (res.invalid_cols && res.invalid_cols.length) ||
+            res.lost_anchors || res.skipped || (res.cells < quickPendingDiffs.length);
+        if (warnings) {
+            toast('Salvataggio parziale: ricarico i dati aggiornati', 'warning');
+            await loadData();
+        } else {
+            quickPendingDiffs.forEach(function(d) {
+                var di = rowIndex[+d.rn];
+                if (di !== undefined) rawData[di][d.col] = d.newVal;
+            });
+            if (window._trackRecentSaves) window._trackRecentSaves(trackedRows);
+            applyFilters();
+            initQuickModeData();
+            quickRender(true);
+            toast('Modifiche salvate', 'success');
+        }
+        _sendCellLog(logEntries);
+        triggerMapSync();
+        quickSelectedRows.clear();
+        qs('#quickActionDate').value = '';
+        qs('#quickActionOperator').value = '';
+        qs('#quickActionNote').value = '';
+        quickClosePreview();
+        initQuickModeData();
+        quickRender(true);
+    } catch(e) {
+        toast('Errore di rete durante il salvataggio', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Salva modifiche';
+    }
+}
+
+try {
+    var savedMode = localStorage.getItem('filone_mode_v1');
+    if (savedMode === 'quick') filoneMode = 'quick';
+} catch(e) {}
 
 // ============================================================
 // VLOOKUP FILTER (Filtra sul filone dai risultati Filtri Avanzati)
@@ -7415,6 +8418,8 @@ function vlExcelClear() {
 
             applyFilters();
             qs('#infoRighe').innerHTML = '<strong>' + rawData.length + '</strong> righe &times; <strong>' + headers.length + '</strong> colonne';
+            initQuickModeData();
+            if (filoneMode === 'quick') quickRender(true);
 
             var hasRecentSaves = Object.keys(_recentSaves).length > 0;
 

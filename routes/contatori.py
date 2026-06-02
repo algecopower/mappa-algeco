@@ -1710,6 +1710,14 @@ def update_filone_bulk():
         protette = set(c.lower() for c in COLONNE_PROTETTE_FILONE.get(PROVINCIA_ATTIVA, _COLONNE_PROTETTE_BASE))
         protette -= sbloccate
 
+        from moduli import db as _db
+        conn = _db.get_conn()
+        valid_cols = {
+            r['column_name'].strip().lower(): r['column_name']
+            for r in conn.execute('SELECT column_name FROM column_registry').fetchall()
+        }
+        invalid_cols = set()
+
         # Costruisci la lista di item per safe_batch_update_by_name.
         items = []
         rows_ok = set()
@@ -1731,7 +1739,11 @@ def update_filone_bulk():
                     continue
                 if col_name.lower() in protette:
                     continue
-                item = {'row': row_num, 'col': col_name, 'value': value}
+                col_key = col_name.strip().lower()
+                if col_key not in valid_cols:
+                    invalid_cols.add(col_name)
+                    continue
+                item = {'row': row_num, 'col': valid_cols[col_key], 'value': value}
                 if anchor_pod:
                     item['anchor'] = anchor_pod
                 if anchor_lcl is not None:
@@ -1740,6 +1752,11 @@ def update_filone_bulk():
             rows_ok.add(row_num_str)
 
         if not items:
+            if invalid_cols:
+                return jsonify({
+                    'error': 'Colonne non trovate nel filone',
+                    'invalid_cols': sorted(invalid_cols),
+                }), 400
             return jsonify({'error': 'Nessun campo valido da aggiornare'}), 400
 
         pod_anchor_col = _resolve_anchor_col_name('pod') or 'POD'
@@ -1751,6 +1768,13 @@ def update_filone_bulk():
 
         if res.get('error'):
             return jsonify({'error': res['error']}), 400
+        if invalid_cols:
+            res['invalid_cols'] = sorted(set(res.get('invalid_cols') or []) | invalid_cols)
+        if not res.get('success', True) and res.get('written', 0) == 0:
+            return jsonify({
+                'error': 'Righe o ancore non trovate nel filone',
+                'skipped': res.get('skipped', 0),
+            }), 409
 
         if res['lost_anchors']:
             logger.warning(
@@ -1855,6 +1879,7 @@ def update_filone_bulk():
             'success': True,
             'rows': len(rows_ok),
             'cells': res['written'],
+            'skipped': res.get('skipped', 0),
             'remapped': res['remapped'],
             'invalid_cols': res['invalid_cols'],
             'lost_anchors': len(res['lost_anchors']),

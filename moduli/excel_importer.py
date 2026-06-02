@@ -78,6 +78,11 @@ _INVALID_NUMERIC_TOKENS = {
 import re as _re
 _ISO_DATE_RE = _re.compile(r'^(\d{4})-(\d{2})-(\d{2})(?:\s+(\d{2}:\d{2}:\d{2}))?$')
 _IT_DATE_RE = _re.compile(r'^(\d{1,2})/(\d{1,2})/(\d{4})(?:\s+(\d{2}:\d{2}(?::\d{2})?))?$')
+_ENELTEL_KEY_RE = _re.compile(r'^[A-Z0-9]{4,15}$')
+_LCL_RE = _re.compile(r'^\d{4,20}$')
+_POD_RE = _re.compile(r'^IT[A-Z0-9]{8,}$')
+_OPERATOR_RE = _re.compile(r'^[A-Z]{2,3}\d{4,8}$')
+_POSITION_RE = _re.compile(r'^\d+\s*-?')
 
 
 def _normalize_for_compare(s):
@@ -249,13 +254,20 @@ def parse_csv(file_path):
     except csv.Error:
         dialect = csv.excel
 
-    reader = csv.reader(io.StringIO(text, newline=''), dialect)
     parsed = []
-    for row in reader:
-        vals = [_cell_to_str(c) for c in row]
-        if all(v == '' for v in vals):
-            continue
-        parsed.append(vals)
+    try:
+        reader = csv.reader(io.StringIO(text, newline=''), dialect=dialect, strict=True)
+        for row in reader:
+            vals = [_cell_to_str(c) for c in row]
+            if all(v == '' for v in vals):
+                continue
+            parsed.append(vals)
+    except csv.Error as e:
+        raise ValueError(
+            "CSV malformato: alcune celle sembrano contenere virgolette o a-capo "
+            "non esportati correttamente. Reimporta un file .xlsx oppure riesporta "
+            f"il CSV da Sheets. Dettaglio: {e}"
+        ) from e
     if not parsed:
         return ([], [])
     return (parsed[0], parsed[1:])
@@ -283,6 +295,95 @@ def _find_col_idx(headers, candidates):
     return None
 
 
+def _looks_like_pod(value):
+    """True se il valore ha l'aspetto di un POD, non di un Eneltel."""
+    s = _normalize_for_compare(value).upper()
+    return bool(_POD_RE.match(s))
+
+
+def _looks_like_date_or_marker(value):
+    """True per date reali o marker storici ammessi nelle colonne data."""
+    s = _normalize_for_compare(value)
+    if not s:
+        return True
+    upper = s.upper()
+    if upper in _INVALID_NUMERIC_TOKENS:
+        return True
+    return bool(_IT_DATE_RE.match(s) or _ISO_DATE_RE.match(s))
+
+
+def _structural_col_indices(headers):
+    """Indici di colonne che devono esistere fisicamente in ogni riga CSV."""
+    required = []
+    for candidates in (
+        ('Pod', 'POD'),
+        ('NOMINATIVO',),
+        ('Indirizzo', 'INDIRIZZO'),
+        ('Comune', 'COMUNE'),
+    ):
+        idx = _find_col_idx(headers, candidates)
+        if idx is not None:
+            required.append(idx)
+    return required
+
+
+def _invalid_import_row_reason(eneltel_raw, eneltel_key, lcl, row=None, required_indices=None):
+    """Motivo di scarto per righe che hanno colonne slittate o chiavi impossibili."""
+    key = _normalize_for_compare(eneltel_key).upper()
+    lcl_clean = _normalize_for_compare(lcl)
+    if not key:
+        return ''
+    if row is not None and required_indices:
+        missing = [idx for idx in required_indices if idx >= len(row)]
+        if missing:
+            return 'riga CSV tronca: colonne strutturali mancanti'
+    if _looks_like_pod(eneltel_raw) or _looks_like_pod(key):
+        return 'valore POD nella colonna Eneltel'
+    if not _ENELTEL_KEY_RE.match(key):
+        return 'Eneltel con formato non valido'
+    if lcl_clean and not _LCL_RE.match(lcl_clean):
+        return 'LCL con formato non valido'
+    return ''
+
+
+def _invalid_structural_values_reason(
+    fields, header_mapping, known_comuni=None, known_operators=None, known_positions=None,
+):
+    """Scarta righe parseate ma con valori incompatibili con colonne strutturali."""
+    known_comuni = known_comuni or set()
+    known_operators = known_operators or set()
+    known_positions = known_positions or set()
+    for col_name, raw_value in fields.items():
+        chiave = header_mapping.get(col_name)
+        value = _normalize_for_compare(raw_value)
+        if not value:
+            continue
+        value_upper = value.upper()
+        if chiave == 'pod' and not _looks_like_pod(value):
+            return 'POD con formato non valido: probabile slittamento colonne'
+        if chiave == 'comune' and value.isdigit():
+            return 'Comune numerico: probabile slittamento colonne'
+        if chiave in _KEYS_DATE and not _looks_like_date_or_marker(value):
+            return f'{col_name} non data: probabile slittamento colonne'
+        if chiave in _KEYS_NUMERIC_DOT:
+            if _is_invalid_numeric_value(value):
+                continue
+            if _parse_decimal(value) is None:
+                return f'{col_name} non numerico: probabile slittamento colonne'
+        if chiave == 'telefono':
+            if value_upper in known_comuni and not any(ch.isdigit() for ch in value):
+                return 'Telefono contiene un comune: probabile slittamento colonne'
+        if chiave == 'operatore':
+            if value_upper in _INVALID_NUMERIC_TOKENS:
+                continue
+            if value_upper not in known_operators and not _OPERATOR_RE.match(value_upper):
+                return 'Operatore con formato non valido: probabile slittamento colonne'
+        if chiave == 'posizione_misuratore':
+            if value_upper not in known_positions and not _POSITION_RE.match(value_upper):
+                return 'Posizione misuratore non valida: probabile slittamento colonne'
+    return ''
+
+
 def import_excel(file_path, *, export_ts=None, sheet_name=None, dry_run=False, user=None):
     """Importa il filone da file Excel/CSV applicando merge most-recent-wins.
 
@@ -305,10 +406,12 @@ def import_excel(file_path, *, export_ts=None, sheet_name=None, dry_run=False, u
             'rows_aggiornate': int,
             'rows_db_vince': int,           # righe il cui DB è più recente
             'rows_skip_no_eneltel': int,    # righe Excel senza eneltel valido
+            'rows_skip_invalid_key': int,   # righe con chiavi/valori strutturali impossibili
             'celle_modificate': int,
             'eneltel_solo_db': int,         # in DB ma NON in Excel (non cancellati)
             'dry_run': bool,
             'sample_db_vince': list[str],   # primi eneltel saltati per DB più recente
+            'sample_invalid_rows': list[dict],
             'errori': list[str],
         }
     """
@@ -334,6 +437,7 @@ def import_excel(file_path, *, export_ts=None, sheet_name=None, dry_run=False, u
 
     # 2. LCL opzionale (per Pavia: multi-LCL per stesso eneltel)
     lcl_idx = _find_col_idx(headers_xlsx, ['LCL', 'lcl'])
+    required_row_indices = _structural_col_indices(headers_xlsx) if file_format == 'csv' else []
 
     # 3. Header mapping: per ogni colonna Excel, cerca la chiave interna nel DB
     header_mapping = {}
@@ -355,6 +459,7 @@ def import_excel(file_path, *, export_ts=None, sheet_name=None, dry_run=False, u
         'rows_aggiornate': 0,
         'rows_db_vince': 0,
         'rows_skip_no_eneltel': 0,
+        'rows_skip_invalid_key': 0,
         'celle_modificate': 0,
         'celle_ignorate_rumorose': 0,
         'diff_per_colonna': {},
@@ -362,6 +467,7 @@ def import_excel(file_path, *, export_ts=None, sheet_name=None, dry_run=False, u
         'eneltel_solo_db': 0,
         'dry_run': dry_run,
         'sample_db_vince': [],
+        'sample_invalid_rows': [],
         'errori': [],
     }
 
@@ -386,6 +492,22 @@ def import_excel(file_path, *, export_ts=None, sheet_name=None, dry_run=False, u
             d = dict(r)
             key = (d['eneltel_key'], d.get('lcl') or '')
             filone_by_key[key] = d
+        known_comuni = {
+            comune.upper()
+            for row_db in filone_by_key.values()
+            if (comune := _normalize_for_compare(row_db.get('comune')))
+            and not comune.isdigit()
+        }
+        known_operators = {
+            operatore.upper()
+            for row_db in filone_by_key.values()
+            if (operatore := _normalize_for_compare(row_db.get('operatore')))
+        }
+        known_positions = {
+            posizione.upper()
+            for row_db in filone_by_key.values()
+            if (posizione := _normalize_for_compare(row_db.get('posizione_misuratore')))
+        }
         extras_by_key = {}  # (eneltel_key, lcl) -> {column_name: value}
         for r in conn.execute(
             "SELECT eneltel_key, COALESCE(lcl,'') AS lcl, column_name, value FROM filone_extra"
@@ -418,10 +540,24 @@ def import_excel(file_path, *, export_ts=None, sheet_name=None, dry_run=False, u
             if not eneltel_key:
                 summary['rows_skip_no_eneltel'] += 1
                 continue
-            eneltel_visti_excel.add(eneltel_key)
 
             lcl_raw = row[lcl_idx] if lcl_idx is not None and lcl_idx < len(row) else ''
             lcl = (lcl_raw or '').strip()
+            invalid_reason = _invalid_import_row_reason(
+                eneltel_raw, eneltel_key, lcl,
+                row=row, required_indices=required_row_indices,
+            )
+            if invalid_reason:
+                summary['rows_skip_invalid_key'] += 1
+                if len(summary['sample_invalid_rows']) < 20:
+                    summary['sample_invalid_rows'].append({
+                        'row': row_excel_idx,
+                        'reason': invalid_reason,
+                        'eneltel': str(eneltel_raw or ''),
+                        'lcl': str(lcl or ''),
+                    })
+                continue
+            eneltel_visti_excel.add(eneltel_key)
 
             # Costruisci dict {nome_colonna_excel: valore} per questa riga
             fields = {}
@@ -429,6 +565,19 @@ def import_excel(file_path, *, export_ts=None, sheet_name=None, dry_run=False, u
                 if not h or h == 'Eneltel' or h.lower() == 'eneltel':
                     continue
                 fields[h] = row[i] if i < len(row) else ''
+            invalid_reason = _invalid_structural_values_reason(
+                fields, header_mapping, known_comuni, known_operators, known_positions,
+            )
+            if invalid_reason:
+                summary['rows_skip_invalid_key'] += 1
+                if len(summary['sample_invalid_rows']) < 20:
+                    summary['sample_invalid_rows'].append({
+                        'row': row_excel_idx,
+                        'reason': invalid_reason,
+                        'eneltel': str(eneltel_raw or ''),
+                        'lcl': str(lcl or ''),
+                    })
+                continue
 
             # Lookup riga DB (memoria, no SELECT)
             key = (eneltel_key, lcl)

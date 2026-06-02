@@ -82,6 +82,11 @@ body, button, input, select, textarea {
     --text-primary: #eef2ff;
     --text-secondary: #b8c2d6;
     --text-muted: #6c7898;
+    --select-option-bg: #111b30;
+    --select-option-text: #eef2ff;
+    --select-option-active-bg: #3b82f6;
+    --select-option-active-text: #ffffff;
+    --select-option-disabled-text: #6c7898;
     --accent: #3b82f6;             /* blue-500 */
     --accent-hover: #60a5fa;       /* blue-400 */
     --accent-deep: #1d4ed8;        /* blue-700 — per gradient depth */
@@ -132,6 +137,11 @@ html[data-theme="light"],
     --text-primary: #1e293b;
     --text-secondary: #475569;
     --text-muted: #94a3b8;
+    --select-option-bg: #ffffff;
+    --select-option-text: #1e293b;
+    --select-option-active-bg: #bfdbfe;
+    --select-option-active-text: #1e293b;
+    --select-option-disabled-text: #94a3b8;
     --accent: #2563eb;             /* blue-600 — più scuro per contrasto su bianco */
     --accent-hover: #3b82f6;       /* blue-500 */
     --accent-deep: #1e40af;        /* blue-800 */
@@ -444,10 +454,31 @@ select {
     background-position: right 10px center;
     background-size: 12px 12px;
     padding-right: 32px;
+    color-scheme: dark;
 }
 
 [data-theme="light"] select {
     background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23475569' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+    color-scheme: light;
+}
+
+select option,
+select optgroup {
+    background-color: var(--select-option-bg);
+    color: var(--select-option-text);
+}
+
+select optgroup {
+    font-weight: 700;
+}
+
+select option:checked {
+    background-color: var(--select-option-active-bg);
+    color: var(--select-option-active-text);
+}
+
+select option:disabled {
+    color: var(--select-option-disabled-text);
 }
 
 select[multiple],

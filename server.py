@@ -18,6 +18,7 @@ import argparse
 import subprocess
 import signal
 import time
+import re
 import urllib.request
 import urllib.error
 import shutil
@@ -1475,7 +1476,7 @@ def api_admin_db_stats():
             warnings.append(
                 f"Anomalia: {a['kind']} ({a['c']}x nelle ultime 24h)"
             )
-        # Outbox stats (modifiche locali da consegnare alla collega)
+        # Outbox stats (modifiche locali da gestire)
         outbox_info = {}
         try:
             from moduli import outbox as _ob
@@ -1661,7 +1662,7 @@ def api_admin_db_action():
 @app.route('/api/admin/outbox', methods=['GET'])
 @admin_required
 def api_admin_outbox_stats():
-    """Statistiche outbox: quante modifiche locali sono da consegnare alla collega."""
+    """Statistiche outbox: quante modifiche locali sono da gestire."""
     try:
         from moduli import outbox as _ob
         return jsonify({'success': True, **_ob.stats()})
@@ -1673,12 +1674,12 @@ def api_admin_outbox_stats():
 @app.route('/api/admin/outbox/excel', methods=['GET'])
 @admin_required
 def api_admin_outbox_excel():
-    """Scarica il file Excel "delta" da consegnare alla collega."""
+    """Scarica il file Excel dei cambiamenti."""
     try:
         from moduli import outbox as _ob
         data, n_rows, n_cells = _ob.build_outbox_xlsx()
         if not data:
-            return jsonify({'success': False, 'message': 'Nessuna modifica da consegnare'}), 404
+            return jsonify({'success': False, 'message': 'Nessuna modifica da esportare'}), 404
         import datetime as _dt
         fname = f"modifiche_{PROVINCIA_ATTIVA.lower()}_{_dt.datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
         resp = make_response(data)
@@ -1775,6 +1776,115 @@ def api_admin_column_mapping_put():
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
+def _clean_lettere_excel_config(raw):
+    """Sanitizza la configurazione Excel lettere mantenendo i default mancanti."""
+    import config as _cfg
+    merged = _cfg.merge_lettere_excel_config(raw if isinstance(raw, dict) else {})
+    default = _cfg.LETTERE_EXCEL_CONFIG_DEFAULT
+
+    def _clean_list(value):
+        if isinstance(value, str):
+            items = re.split(r'[\n,;]+', value)
+        elif isinstance(value, list):
+            items = value
+        else:
+            items = []
+        out = []
+        seen = set()
+        for item in items:
+            text = str(item or '').strip()
+            key = text.upper()
+            if text and key not in seen:
+                out.append(text)
+                seen.add(key)
+        return out
+
+    clean = {
+        'fogli': {},
+        'nomi_colonne': {},
+        'valori_lettera': {},
+        'regole_no': {},
+        'opzioni': {},
+        'parole_chiave': {},
+    }
+    for section in ('fogli', 'nomi_colonne', 'valori_lettera'):
+        for key, fallback in default.get(section, {}).items():
+            value = str(merged.get(section, {}).get(key, fallback)).strip()
+            clean[section][key] = value or fallback
+
+    for section in ('regole_no', 'opzioni'):
+        for key, fallback in default.get(section, {}).items():
+            clean[section][key] = bool(merged.get(section, {}).get(key, fallback))
+
+    for key, fallback in default.get('parole_chiave', {}).items():
+        value = merged.get('parole_chiave', {}).get(key, fallback)
+        clean['parole_chiave'][key] = _clean_list(value)
+
+    return _cfg.merge_lettere_excel_config(clean)
+
+
+@app.route('/api/admin/lettere-excel-config', methods=['GET'])
+@admin_required
+def api_admin_lettere_excel_config_get():
+    """Ritorna la configurazione Excel lettere della provincia corrente."""
+    try:
+        import config as _cfg
+        return jsonify({
+            'success': True,
+            'provincia': PROVINCIA_ATTIVA,
+            'default': _cfg.LETTERE_EXCEL_CONFIG_DEFAULT,
+            'config': _cfg.merge_lettere_excel_config(_cfg.LETTERE_EXCEL_CONFIG),
+        })
+    except Exception as e:
+        logger.exception('[admin] errore GET /api/admin/lettere-excel-config')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/admin/lettere-excel-config', methods=['PUT'])
+@admin_required
+def api_admin_lettere_excel_config_put():
+    """Aggiorna la configurazione Excel lettere in settings.json."""
+    try:
+        import json as _json
+        import config as _cfg
+
+        body = request.get_json(silent=True) or {}
+        raw = body.get('config') if 'config' in body else body.get('lettere_excel', body)
+        clean = _clean_lettere_excel_config(raw)
+
+        path = os.path.join(SCRIPT_DIR, 'data', PROVINCIA_ATTIVA.lower(), 'settings.json')
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                settings = _json.load(f)
+        except (FileNotFoundError, _json.JSONDecodeError):
+            settings = {}
+
+        settings['lettere_excel'] = clean
+        tmp = path + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            _json.dump(settings, f, indent=2, ensure_ascii=False)
+        os.replace(tmp, path)
+
+        _cfg.LETTERE_EXCEL_CONFIG = clean
+        try:
+            _cfg.PROVINCE[_cfg.PROVINCIA_ATTIVA]['lettere_excel'] = clean
+        except Exception:
+            pass
+
+        logger.info("[admin] lettere-excel-config aggiornata")
+        return jsonify({
+            'success': True,
+            'provincia': PROVINCIA_ATTIVA,
+            'config': clean,
+            'restart_required': False,
+            'path': path,
+        })
+    except Exception as e:
+        logger.exception('[admin] errore PUT /api/admin/lettere-excel-config')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 def _get_protected_columns_set():
     """Ritorna l'insieme (lowercase) delle colonne protette dalla
     rimozione/rinomina, allineato a `routes.contatori.COLONNE_PROTETTE_FILONE`.
@@ -1793,9 +1903,9 @@ def api_admin_columns_list():
     """Lista tutte le colonne registrate nel filone + statistiche di uso.
 
     Per ogni colonna:
-      - column_name (sul foglio)
+      - column_name (nome nei dati)
       - chiave_interna (se nota al programma)
-      - last_index (ordine sul foglio)
+      - last_index (ordine registrato)
       - is_typed (True se è una colonna fissa di filone, False se vive in filone_extra)
       - n_values (numero di righe con valore non vuoto)
       - last_seen_ts
@@ -1932,7 +2042,7 @@ def api_admin_column_create():
     """Aggiunge una nuova colonna libera (non tipata) al filone.
 
     Body: {name: str, position?: int}
-      - name: nome della colonna come apparirà nel foglio / vista Excel
+      - name: nome della colonna come apparirà nella vista Excel
       - position: indice 1-based (default: in coda). Se duplicato, le entry
         successive vengono shiftate di +1.
 
@@ -2093,7 +2203,7 @@ def api_admin_column_rename(column_name):
 
     Body: {new_name: 'NuovoNome'}.
     Niente cambia per colonne TIPATE (il nome SQL resta; cambia solo la
-    label visibile sul foglio). Per colonne FREE migra anche i valori.
+    label visibile nella vista dati). Per colonne FREE migra anche i valori.
     """
     try:
         from moduli import db as _db
@@ -2114,13 +2224,13 @@ def api_admin_column_rename(column_name):
             ).fetchone()
             if not row:
                 return jsonify({'success': False, 'message': f"colonna '{old}' non trovata"}), 404
-            # Eneltel: se la collega la rinomina sul foglio, gestiscilo dalla
-            # sezione 'Sinonimi colonne' (più sicuro che rinominarla qui).
+            # Eneltel: se nei dati importati ha un nome diverso, gestiscilo
+            # dalla sezione 'Sinonimi colonne' (più sicuro che rinominarla qui).
             if row['chiave_interna'] == 'eneltel':
                 return jsonify({
                     'success': False,
                     'message': "La colonna Eneltel è la chiave primaria del filone. "
-                               "Se sul foglio si chiama in modo diverso, dichiaralo "
+                               "Se nei dati importati si chiama in modo diverso, dichiaralo "
                                "nella scheda 'Sinonimi colonne' invece di rinominarla qui.",
                 }), 400
             # Colonne protette nella vista Excel: stesso ragionamento.
@@ -2131,7 +2241,7 @@ def api_admin_column_rename(column_name):
                     'success': False,
                     'message': f"La colonna '{old}' è una colonna protetta del programma "
                                "(usata da contatori, distinte, sigilli, ecc.). "
-                               "Se sul foglio è stata rinominata, dichiara il nuovo nome "
+                               "Se nei dati importati è stata rinominata, dichiara il nuovo nome "
                                "nella scheda 'Sinonimi colonne'.",
                 }), 400
             # Verifica che il nuovo nome non sia già occupato
@@ -2202,7 +2312,7 @@ def api_admin_export_full_excel():
 @app.route('/api/admin/outbox/mark-delivered', methods=['POST'])
 @admin_required
 def api_admin_outbox_mark_delivered():
-    """Marca TUTTE le pending correnti come consegnate (state='done')."""
+    """Marca TUTTE le pending correnti come gestite (state='done')."""
     try:
         from moduli import outbox as _ob
         user = ((session.get('user') or {}).get('username')
@@ -2735,18 +2845,6 @@ def bootstrap():
     (sotto __main__) sia in prod (da wsgi.py importato da gunicorn).
     """
     avvia_sync_background()
-
-    try:
-        from routes.contatori import warmup_format_cache
-        warmup_format_cache()
-    except Exception as e:
-        logger.warning(f"⚠️ Warmup cache formattazione fallito: {e}")
-
-    try:
-        from routes.contatori import warmup_notes_cache
-        warmup_notes_cache()
-    except Exception as e:
-        logger.warning(f"⚠️ Warmup cache note fallito: {e}")
 
     try:
         rimossi = pulisci_boxbeat_completati(giorni_retention=7)

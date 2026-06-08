@@ -2,11 +2,11 @@
 """
 Script per generare Excel per l'invio delle lettere agli utenti.
 
-Genera un file Excel con 4 fogli separati per tipo di contatore:
-- Monofase: contatori standard
-- Fotovoltaici: contatori con Eneltel che termina con A o B
-- Trifase Semidiretti: contatori trifase semidiretti
-- Trifase Diretti: contatori trifase diretti (foglio separato)
+Genera un file Excel con fogli allineati al template lettere:
+- MONOFASE: contatori monofase + trifase diretti
+- EMME2: contatori fotovoltaici con Eneltel che termina con A o B
+- SEMIDIRETTI: contatori trifase semidiretti
+- SOLO MONOFASE e SOLO TRIFASE DIRETTI: fogli di dettaglio in coda
 
 Elabora le DATE definite manualmente nella configurazione.
 Tutte le tappe di tutti i tecnici sono raggruppate insieme in ogni foglio.
@@ -56,6 +56,46 @@ from moduli.comuni_db import cerca_cap, cerca_provincia
 
 
 # formatta_fascia_oraria() è ora importata da moduli/fasce_orarie.py
+
+COLONNE_LETTERE_ORDINE = [
+    'nominativo',
+    'via',
+    'civico',
+    'comune',
+    'provincia',
+    'cap',
+    'data_pianificazione',
+    'ora_pianificazione',
+    'lettera',
+    'pod',
+    'operatore',
+    'posizione_mis',
+    'appuntamento',
+]
+
+LARGHEZZE_COLONNE_LETTERE = {
+    'nominativo': 58,
+    'via': 30,
+    'civico': 14,
+    'comune': 22,
+    'provincia': 10,
+    'cap': 7,
+    'data_pianificazione': 17,
+    'ora_pianificazione': 22,
+    'lettera': 10,
+    'pod': 20,
+    'operatore': 14,
+    'posizione_mis': 18,
+    'appuntamento': 14,
+}
+
+HEADERS_LETTERE = [
+    'Nominativo_Cliente', 'VIA', 'Numero_Civico', 'Comune', 'PROVINCIA', 'CAP',
+    'Data Pianificazione', 'Ora pianificazione', 'LETTERA', 'POD', 'Operatore',
+    'Posizione mis.', 'Appuntamento',
+]
+
+CIVICI_SENZA_NUMERO = ('SN', 'SNC', 'S.N.', 'S.N.C.', 'S/N', 'S/NC')
 
 
 def parse_args():
@@ -167,15 +207,114 @@ def pulisci_nominativo(nominativo):
     return risultato
 
 
-def richiede_lettera(punto):
+def testo_pulito(valore):
+    """Normalizza celle vuote/NaN in stringa vuota."""
+    if valore is None:
+        return ''
+    testo = str(valore).strip()
+    # "None" è anche un Comune reale della provincia di Torino.
+    if testo.lower() in ('nan', 'null'):
+        return ''
+    return testo
+
+
+def get_config_lettere(config_override=None):
+    """Ritorna la configurazione Excel lettere completa di default."""
+    try:
+        from config import LETTERE_EXCEL_CONFIG, merge_lettere_excel_config
+        base = LETTERE_EXCEL_CONFIG if config_override is None else config_override
+        return merge_lettere_excel_config(base)
+    except Exception:
+        return {
+            'fogli': {
+                'monofase': 'MONOFASE',
+                'emme2': 'EMME2',
+                'semidiretti': 'SEMIDIRETTI',
+                'contatti_aziendali': 'Contatti Aziendali',
+                'solo_monofase': 'SOLO MONOFASE',
+                'solo_trifase_diretti': 'SOLO TRIFASE DIRETTI',
+            },
+            'nomi_colonne': dict(zip(COLONNE_LETTERE_ORDINE, HEADERS_LETTERE)),
+            'valori_lettera': {'si': "SI'", 'no': 'NO'},
+            'regole_no': {
+                'appuntamento': True,
+                'accessibile_esterno': True,
+                'civico_vuoto': True,
+                'civico_senza_numero': True,
+            },
+            'parole_chiave': {
+                'lettera_no': ['COMUNE', 'PROVINCIA'],
+                'contatti_aziendali_escludi': ['COMUNE', 'PROVINCIA'],
+            },
+            'opzioni': {
+                'unisci_trifase_diretti_in_monofase': True,
+                'crea_fogli_dettaglio': True,
+                'escludi_enti_da_contatti_aziendali': True,
+            },
+        }
+
+
+def get_headers_lettere(config_override=None):
+    """Ritorna le intestazioni Excel lettere secondo configurazione."""
+    cfg = get_config_lettere(config_override)
+    nomi_colonne = cfg.get('nomi_colonne', {})
+    return [
+        testo_pulito(nomi_colonne.get(chiave)) or default
+        for chiave, default in zip(COLONNE_LETTERE_ORDINE, HEADERS_LETTERE)
+    ]
+
+
+def normalizza_parole_chiave(raw):
+    """Normalizza una lista/stringa di parole chiave configurabili."""
+    if raw is None:
+        return []
+    if isinstance(raw, str):
+        items = re.split(r'[\n,;]+', raw)
+    elif isinstance(raw, (list, tuple, set)):
+        items = raw
+    else:
+        items = [raw]
+
+    out = []
+    viste = set()
+    for item in items:
+        keyword = testo_pulito(item).upper()
+        if keyword and keyword not in viste:
+            out.append(keyword)
+            viste.add(keyword)
+    return out
+
+
+def contiene_parola_chiave(testo, parole_chiave):
+    """True se una delle parole chiave compare nel testo normalizzato."""
+    haystack = testo_pulito(testo).upper()
+    if not haystack:
+        return False
+    return any(keyword in haystack for keyword in normalizza_parole_chiave(parole_chiave))
+
+
+def civico_senza_numero(civico, includi_vuoto=True):
+    """True se il civico è vuoto o una variante di senza numero."""
+    civico_norm = testo_pulito(civico).upper()
+    return (includi_vuoto and not civico_norm) or civico_norm in CIVICI_SENZA_NUMERO
+
+
+def nome_foglio_excel(nome, fallback):
+    """Normalizza un nome foglio secondo i vincoli Excel."""
+    pulito = testo_pulito(nome) or fallback
+    pulito = re.sub(r'[:\\/?*\[\]]', '-', pulito).strip("'").strip()
+    return (pulito or fallback)[:31]
+
+
+def richiede_lettera(punto, config_lettere=None):
     """
     Determina se il contatore richiede l'invio di una lettera.
     
     NON si invia lettera se:
     - È un appuntamento (hanno già concordato)
     - Posizione contatore è "Accessibile dall'esterno" (anche con "3" accanto)
-    - Cliente è intestato a un Comune
-    - Civico è SN o SNC
+    - Nominativo contiene una parola chiave configurata per LETTERA = NO
+    - Civico è vuoto, SN o SNC
     
     Args:
         punto: Dizionario con i dati del contatore
@@ -183,23 +322,33 @@ def richiede_lettera(punto):
     Returns:
         True se richiede lettera (SI'), False altrimenti (NO)
     """
+    cfg = get_config_lettere(config_lettere)
+    regole_no = cfg.get('regole_no', {})
+    parole_chiave = cfg.get('parole_chiave', {})
+
     # Controlla se è un appuntamento (non serve lettera)
-    if punto.get('IS_APPUNTAMENTO', False):
+    if regole_no.get('appuntamento', True) and punto.get('IS_APPUNTAMENTO', False):
         return False
     
     # Controlla posizione contatore (NOTE_K)
     posizione = str(punto.get('NOTE_K', '')).strip().upper()
-    if 'ACCESSIBILE' in posizione and 'ESTERNO' in posizione:
+    if (
+        regole_no.get('accessibile_esterno', True)
+        and 'ACCESSIBILE' in posizione
+        and 'ESTERNO' in posizione
+    ):
         return False
     
-    # Controlla se intestato a Comune
-    cliente = str(punto.get('CLI_K', '')).strip().upper()
-    if cliente.startswith('COMUNE ') or cliente == 'COMUNE':
+    # Controlla parole chiave configurabili nel nominativo cliente.
+    if contiene_parola_chiave(punto.get('CLI_K', ''), parole_chiave.get('lettera_no', [])):
         return False
     
-    # Controlla civico SN o SNC
-    civico = str(punto.get('CIVICO_K', '')).strip().upper()
-    if civico in ('SN', 'SNC', 'S.N.', 'S.N.C.', 'S/N', 'S/NC'):
+    civico = testo_pulito(punto.get('CIVICO_K', '')).upper()
+    if regole_no.get('civico_vuoto', True) and not civico:
+        return False
+    if regole_no.get('civico_senza_numero', True) and civico_senza_numero(
+        civico, includi_vuoto=False,
+    ):
         return False
     
     return True
@@ -239,19 +388,25 @@ def classifica_contatore(punto):
 
 def genera_excel_lettere(df, date_da_elaborare, filename=None, tappe_per_fascia=None):
     """
-    Genera Excel per invio lettere con 4 fogli per tipo contatore.
+    Genera Excel per invio lettere con fogli allineati al template.
     Elabora le date specificate.
     
     Fogli:
-    - Monofase: contatori standard
-    - Fotovoltaici: Eneltel termina con A o B  
-    - Trifase Semidiretti: contatori trifase semidiretti
-    - Trifase Diretti: contatori trifase diretti
+    - MONOFASE: contatori standard + trifase diretti
+    - EMME2: Eneltel termina con A o B
+    - SEMIDIRETTI: contatori trifase semidiretti
+    - SOLO MONOFASE / SOLO TRIFASE DIRETTI: fogli tecnici in coda
     """
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     from moduli.percorso import ordina_percorso
-    from config import PROVINCIA_ATTIVA, DEPOSITO, MATRICOLE_VIP
+    from config import PROVINCIA_ATTIVA, DEPOSITO, MATRICOLE_VIP, LETTERE_EXCEL_CONFIG
+    lettere_cfg = get_config_lettere(LETTERE_EXCEL_CONFIG)
+    fogli_cfg = lettere_cfg.get('fogli', {})
+    opzioni_cfg = lettere_cfg.get('opzioni', {})
+    valori_lettera = lettere_cfg.get('valori_lettera', {})
+    valore_lettera_si = testo_pulito(valori_lettera.get('si')) or "SI'"
+    valore_lettera_no = testo_pulito(valori_lettera.get('no')) or "NO"
     
     # Determina modalità auto o fisso
     auto_mode = (tappe_per_fascia is None or str(tappe_per_fascia).lower() == 'auto')
@@ -380,13 +535,41 @@ def genera_excel_lettere(df, date_da_elaborare, filename=None, tappe_per_fascia=
         bottom=Side(style='thin')
     )
     
-    # Configurazione fogli (4 fogli)
-    fogli_config = [
-        ('Monofase', 'monofase', mono_fill),
-        ('Fotovoltaici', 'fotovoltaico', foto_fill),
-        ('Trifase Semidiretti', 'trifase_semi', tri_semi_fill),
-        ('Trifase Diretti', 'trifase_dir', tri_dir_fill)
+    # Configurazione fogli principali allineati al template.
+    contatori_monofase_principale = list(contatori_per_tipo['monofase'])
+    if opzioni_cfg.get('unisci_trifase_diretti_in_monofase', True):
+        contatori_monofase_principale += contatori_per_tipo['trifase_dir']
+
+    fogli_principali = [
+        (
+            nome_foglio_excel(fogli_cfg.get('monofase'), 'MONOFASE'),
+            contatori_monofase_principale,
+            mono_fill,
+        ),
+        (nome_foglio_excel(fogli_cfg.get('emme2'), 'EMME2'), contatori_per_tipo['fotovoltaico'], foto_fill),
+        (
+            nome_foglio_excel(fogli_cfg.get('semidiretti'), 'SEMIDIRETTI'),
+            contatori_per_tipo['trifase_semi'],
+            tri_semi_fill,
+        ),
     ]
+    fogli_dettaglio_finali = [
+        (
+            nome_foglio_excel(fogli_cfg.get('solo_monofase'), 'SOLO MONOFASE'),
+            contatori_per_tipo['monofase'],
+            mono_fill,
+        ),
+        (
+            nome_foglio_excel(fogli_cfg.get('solo_trifase_diretti'), 'SOLO TRIFASE DIRETTI'),
+            contatori_per_tipo['trifase_dir'],
+            tri_dir_fill,
+        ),
+    ]
+    if not opzioni_cfg.get('crea_fogli_dettaglio', True):
+        if opzioni_cfg.get('unisci_trifase_diretti_in_monofase', True):
+            fogli_dettaglio_finali = []
+        else:
+            fogli_dettaglio_finali = fogli_dettaglio_finali[-1:]
     
     # Stringa periodo
     if len(date_da_elaborare) == 1:
@@ -397,46 +580,29 @@ def genera_excel_lettere(df, date_da_elaborare, filename=None, tappe_per_fascia=
     # Per Pavia usa Località al posto di Comune
     usa_localita = (PROVINCIA_ATTIVA.upper() == 'PAVIA')
     
-    # Headers tabella nell'ordine richiesto
-    headers = [
-        "Nominativo", "Via", "Civico", "Località" if usa_localita else "Comune", "Provincia", "CAP",
-        "POD", "Operatore", "Appuntamento", "Ora Appuntamento", "Posizione mis.", 
-        "Data Pianificazione", "Fascia Oraria", "Lettera"
-    ]
+    headers = get_headers_lettere(lettere_cfg)
     
     # Verifica CAP disponibili per i comuni
     comuni_unici = set(str(p.get('COMUNE', '')).strip() for p in tutti_punti if p.get('COMUNE'))
     comuni_con_cap = sum(1 for c in comuni_unici if cerca_cap(c))
     print(f"\n📮 CAP trovati per {comuni_con_cap}/{len(comuni_unici)} comuni")
     
-    first_sheet = True
-    
-    for nome_foglio, tipo_key, fill_color in fogli_config:
-        contatori = contatori_per_tipo[tipo_key]
-        
+    def scrivi_foglio_lettere(nome_foglio, contatori, fill_color, first_sheet=False):
+        """Scrive un foglio lettere con intestazioni e ordine colonne del template."""
         if first_sheet:
             ws = wb.active
             ws.title = nome_foglio
-            first_sheet = False
         else:
             ws = wb.create_sheet(nome_foglio)
-        
-        # Intestazione con info
-        ws['A1'] = f"LETTERE - {nome_foglio.upper()}"
-        ws['A1'].font = Font(bold=True, size=14)
-        ws['A1'].fill = fill_color
-        ws['A2'] = periodo_str
-        ws['A2'].font = Font(italic=True, size=11)
-        ws['A3'] = f"Totale contatori: {len(contatori)}"
-        
-        # Headers tabella (riga 5)
+
+        # Headers tabella (riga 1, come TEMPLATE LETTERE.xlsx)
         for col, header in enumerate(headers, start=1):
-            cell = ws.cell(row=5, column=col, value=header)
+            cell = ws.cell(row=1, column=col, value=header)
             cell.fill = header_fill
             cell.font = header_font
             cell.alignment = Alignment(horizontal='center', vertical='center')
             cell.border = thin_border
-        
+
         # Dati contatori (ordina per data, poi località/comune, poi via)
         campo_luogo = 'LOCALITA' if usa_localita else 'COMUNE'
         contatori_ordinati = sorted(contatori, key=lambda x: (
@@ -444,84 +610,97 @@ def genera_excel_lettere(df, date_da_elaborare, filename=None, tappe_per_fascia=
             str(x.get(campo_luogo, '')).lower(),
             str(x.get('VIA_K', '')).lower()
         ))
-        
-        row = 6
+
+        row = 2
         for punto in contatori_ordinati:
             is_app = punto.get('IS_APPUNTAMENTO', False)
-            ora_app = punto.get('ORA_APPUNTAMENTO', '') or ''
             fascia = punto.get('FASCIA_ORARIA', '')
             # Per Pavia usa Località per tutto (più precisa del Comune)
-            luogo_display = str(punto.get('LOCALITA', '')).strip() if usa_localita else str(punto.get('COMUNE', '')).strip()
+            luogo_display = (
+                testo_pulito(punto.get('LOCALITA', '')) if usa_localita
+                else testo_pulito(punto.get('COMUNE', ''))
+            )
             comune_per_cap = luogo_display if usa_localita else str(punto.get('COMUNE', '')).strip()
             cap = cerca_cap(comune_per_cap)
             sigla_prov_riga = cerca_provincia(comune_per_cap)
-            lettera = "SI'" if richiede_lettera(punto) else "NO"
+            lettera = (
+                valore_lettera_si if richiede_lettera(punto, lettere_cfg)
+                else valore_lettera_no
+            )
             nominativo = pulisci_nominativo(punto.get('CLI_K', ''))
             via_raw = punto.get('VIA_K', '')
             civico_raw = punto.get('CIVICO_K', '')
             via_pulita, civico_pulito = separa_via_civico(via_raw, civico_raw)
             
-            values = [
-                nominativo,                        # Nominativo (pulito)
-                via_pulita,                        # Via (pulita)
-                civico_pulito,                     # Civico (estratto se necessario)
-                luogo_display,                     # Comune o Località (Pavia)
-                sigla_prov_riga,                   # Provincia (TO/PV/LO)
-                cap,                               # CAP
-                punto.get('POD_K', ''),           # POD
-                punto.get('TEC_K', ''),           # Operatore
-                "SÌ" if is_app else "",           # Appuntamento
-                ora_app,                           # Ora Appuntamento
-                punto.get('NOTE_K', ''),          # Posizione mis.
-                punto.get('DATA_ITALIANA', ''),   # Data Pianificazione
-                formatta_fascia_oraria(fascia),   # Fascia Oraria
-                lettera                            # Lettera
-            ]
+            values_by_key = {
+                'nominativo': nominativo,
+                'via': via_pulita,
+                'civico': civico_pulito,
+                'comune': luogo_display,
+                'provincia': sigla_prov_riga,
+                'cap': cap,
+                'data_pianificazione': punto.get('DATA_ITALIANA', ''),
+                'ora_pianificazione': formatta_fascia_oraria(fascia),
+                'lettera': lettera,
+                'pod': punto.get('POD_K', ''),
+                'operatore': punto.get('TEC_K', ''),
+                'posizione_mis': punto.get('NOTE_K', ''),
+                'appuntamento': valore_lettera_si if is_app else '',
+            }
+            values = [values_by_key.get(chiave, '') for chiave in COLONNE_LETTERE_ORDINE]
             
             for col, value in enumerate(values, start=1):
+                chiave_colonna = COLONNE_LETTERE_ORDINE[col - 1]
                 cell = ws.cell(row=row, column=col, value=value)
                 cell.border = thin_border
                 cell.alignment = Alignment(vertical='center')
                 
-                # Formatta Data Pianificazione come testo (colonna 12)
-                if col == 12:
+                if chiave_colonna == 'data_pianificazione':
                     cell.number_format = '@'  # Formato testo
                 
-                # Colora la cella della fascia oraria (colonna 13)
-                if col == 13:  # Fascia Oraria
+                if chiave_colonna == 'ora_pianificazione':
                     if fascia in fascia_fills:
                         cell.fill = fascia_fills[fascia]
                     cell.font = Font(bold=True)
                     cell.alignment = Alignment(horizontal='center', vertical='center')
-                # Colora la cella Lettera (colonna 14)
-                elif col == 14:  # Lettera
+                elif chiave_colonna == 'lettera':
                     cell.alignment = Alignment(horizontal='center', vertical='center')
-                    if lettera == "NO":
+                    if lettera == valore_lettera_no:
                         cell.fill = PatternFill(start_color="D9D9D9", end_color="D9D9D9", fill_type="solid")  # Grigio
+                elif chiave_colonna == 'appuntamento':
+                    cell.alignment = Alignment(horizontal='center', vertical='center')
                 # Evidenzia appuntamenti (non colorare fascia e lettera)
-                elif is_app and col < 13:
+                elif is_app and chiave_colonna in (
+                    'nominativo', 'via', 'civico', 'comune', 'provincia', 'cap',
+                    'data_pianificazione',
+                ):
                     cell.fill = app_fill
             
             row += 1
         
         # Se il foglio è vuoto (solo headers)
         if len(contatori) == 0:
-            ws.cell(row=6, column=1, value="Nessun contatore di questo tipo")
-            ws.merge_cells(start_row=6, start_column=1, end_row=6, end_column=len(headers))
-            ws.cell(row=6, column=1).alignment = Alignment(horizontal='center')
-            ws.cell(row=6, column=1).font = Font(italic=True)
+            ws.cell(row=2, column=1, value="Nessun contatore di questo tipo")
+            ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=len(headers))
+            ws.cell(row=2, column=1).alignment = Alignment(horizontal='center')
+            ws.cell(row=2, column=1).font = Font(italic=True)
         
-        # Larghezza colonne nel nuovo ordine
-        # Nominativo, Via, Civico, Comune, Provincia, CAP, POD, Operatore, Appuntamento, Ora App, Posizione, Data, Fascia, Lettera
-        col_widths = [25, 25, 8, 18, 10, 7, 20, 14, 12, 15, 18, 18, 22, 10]
+        # Larghezza colonne allineata al template, con LETTERA finale.
+        col_widths = [LARGHEZZE_COLONNE_LETTERE[k] for k in COLONNE_LETTERE_ORDINE]
         for idx, width in enumerate(col_widths, start=1):
             col_letter = chr(64 + idx) if idx <= 26 else 'A' + chr(64 + idx - 26)
             ws.column_dimensions[col_letter].width = width
         
         # Blocca intestazioni
-        ws.freeze_panes = 'A6'
-        
+        ws.freeze_panes = 'A2'
+        ws.auto_filter.ref = f"A1:{chr(64 + len(headers))}1"
+
         print(f"   📋 Foglio '{nome_foglio}': {len(contatori)} contatori")
+
+    first_sheet = True
+    for nome_foglio, contatori, fill_color in fogli_principali:
+        scrivi_foglio_lettere(nome_foglio, contatori, fill_color, first_sheet=first_sheet)
+        first_sheet = False
     
     # ------------------------------------------------------------------
     # Foglio "Contatti Aziendali"
@@ -530,7 +709,10 @@ def genera_excel_lettere(df, date_da_elaborare, filename=None, tappe_per_fascia=
     # i Semidiretti (al 99% sono società). TEL/MAIL/PEC vuoti (da
     # compilare manualmente). Dedupe per POD.
     # ------------------------------------------------------------------
-    ws_aziende = wb.create_sheet("Contatti Aziendali")
+    nome_foglio_aziende = nome_foglio_excel(
+        fogli_cfg.get('contatti_aziendali'), "Contatti Aziendali",
+    )
+    ws_aziende = wb.create_sheet(nome_foglio_aziende)
 
     headers_aziende = ["NOMINATIVO", "COMUNE", "TEL", "MAIL", "PEC", "POD"]
 
@@ -552,7 +734,16 @@ def genera_excel_lettere(df, date_da_elaborare, filename=None, tappe_per_fascia=
     aziende_rows = []
     pod_visti = set()
     for punto in tutti_punti:
-        nominativo = pulisci_nominativo(punto.get('CLI_K', '')) or ''
+        nominativo_raw = punto.get('CLI_K', '')
+        if (
+            opzioni_cfg.get('escludi_enti_da_contatti_aziendali', True)
+            and contiene_parola_chiave(
+                nominativo_raw,
+                lettere_cfg.get('parole_chiave', {}).get('contatti_aziendali_escludi', []),
+            )
+        ):
+            continue
+        nominativo = pulisci_nominativo(nominativo_raw) or ''
         tipo_ce = str(punto.get('TIPO_CE_K', '')).strip()
         if not is_azienda(nominativo, tipo_ce):
             continue
@@ -596,55 +787,10 @@ def genera_excel_lettere(df, date_da_elaborare, filename=None, tappe_per_fascia=
 
     ws_aziende.freeze_panes = 'A6'
 
-    print(f"   📋 Foglio 'Contatti Aziendali': {len(aziende_rows)} aziende")
+    print(f"   📋 Foglio '{nome_foglio_aziende}': {len(aziende_rows)} aziende")
 
-    # Crea foglio riepilogo
-    ws_summary = wb.create_sheet("RIEPILOGO", 0)
-    ws_summary['A1'] = "RIEPILOGO LETTERE"
-    ws_summary['A1'].font = Font(bold=True, size=16)
-    ws_summary['A2'] = periodo_str
-    ws_summary['A2'].font = Font(italic=True, size=12)
-    
-    # Tabella riepilogo
-    row = 4
-    headers_summary = ["Tipo Contatore", "Quantità"]
-    for col, header in enumerate(headers_summary, start=1):
-        cell = ws_summary.cell(row=row, column=col, value=header)
-        cell.fill = header_fill
-        cell.font = header_font
-        cell.alignment = Alignment(horizontal='center')
-        cell.border = thin_border
-    
-    row = 5
-    totale_generale = 0
-    for nome_foglio, tipo_key, fill_color in fogli_config:
-        count = len(contatori_per_tipo[tipo_key])
-        totale_generale += count
-        
-        cell1 = ws_summary.cell(row=row, column=1, value=nome_foglio)
-        cell1.border = thin_border
-        cell1.fill = fill_color
-        
-        cell2 = ws_summary.cell(row=row, column=2, value=count)
-        cell2.border = thin_border
-        cell2.alignment = Alignment(horizontal='center')
-        cell2.fill = fill_color
-        
-        row += 1
-    
-    # Totale
-    cell1 = ws_summary.cell(row=row, column=1, value="TOTALE")
-    cell1.border = thin_border
-    cell1.font = Font(bold=True)
-    
-    cell2 = ws_summary.cell(row=row, column=2, value=totale_generale)
-    cell2.border = thin_border
-    cell2.font = Font(bold=True)
-    cell2.alignment = Alignment(horizontal='center')
-    
-    # Larghezza colonne riepilogo
-    ws_summary.column_dimensions['A'].width = 25
-    ws_summary.column_dimensions['B'].width = 15
+    for nome_foglio, contatori, fill_color in fogli_dettaglio_finali:
+        scrivi_foglio_lettere(nome_foglio, contatori, fill_color)
     
     # Salva
     wb.save(filename)

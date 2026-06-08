@@ -107,6 +107,90 @@ def test_import_csv_popola_db_locale(db_isolato, tmp_path):
     assert extra['value'] == 'valore'
 
 
+def test_import_csv_accetta_testo_in_data_pianificata(db_isolato, tmp_path):
+    """DATA PIAN nel filone storico può contenere anche note testuali."""
+    db = db_isolato
+    from moduli import excel_importer
+    excel_importer = importlib.reload(excel_importer)
+
+    path = tmp_path / 'filone.csv'
+    path.write_text(
+        'Eneltel,LCL,NOMINATIVO,Comune,DATA PIAN\n'
+        '50146375,6600104200,Mario Rossi,Torino,cliente chiede appuntamento a luglio\n',
+        encoding='utf-8',
+    )
+
+    result = excel_importer.import_excel(
+        str(path), export_ts='2026-05-28 08:00:00', user='tester',
+    )
+
+    assert result['success'] is True
+    assert result['rows_skip_invalid_key'] == 0
+    row = db.get_filone_row('50146375', lcl='6600104200')
+    assert row['data_pianificata'] == 'cliente chiede appuntamento a luglio'
+
+
+def test_import_xlsx_importa_commenti_cella(db_isolato, tmp_path):
+    """Gli XLSX conservano commenti cella: l'import li salva nel DB locale."""
+    db = db_isolato
+    openpyxl = pytest.importorskip('openpyxl')
+    from openpyxl.comments import Comment
+
+    from moduli import excel_importer
+    excel_importer = importlib.reload(excel_importer)
+
+    path = tmp_path / 'filone.xlsx'
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.append(['Eneltel', 'LCL', 'NOMINATIVO', 'Comune'])
+    ws.append(['50146375', '6600104200', 'Mario Rossi', 'Torino'])
+    ws['C2'].comment = Comment('Richiamare dopo le 18', 'tester')
+    wb.save(path)
+
+    result = excel_importer.import_excel(
+        str(path), export_ts='2026-05-28 08:00:00', user='tester',
+    )
+
+    assert result['success'] is True
+    assert result['rows_nuove'] == 1
+    assert result['commenti_importati'] == 1
+    assert db.get_cell_comments() == {'2:NOMINATIVO': 'Richiamare dopo le 18'}
+
+
+def test_import_xlsx_commenti_non_apre_workbook_pesante(db_isolato, tmp_path, monkeypatch):
+    """I commenti XLSX non devono forzare load_workbook(read_only=False)."""
+    openpyxl = pytest.importorskip('openpyxl')
+    from openpyxl.comments import Comment
+
+    path = tmp_path / 'filone.xlsx'
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.append(['Eneltel', 'LCL', 'NOMINATIVO'])
+    ws.append(['50146375', '6600104200', 'Mario Rossi'])
+    ws['C2'].comment = Comment('Nota leggera', 'tester')
+    wb.save(path)
+
+    real_load_workbook = openpyxl.load_workbook
+    read_only_values = []
+
+    def spy_load_workbook(*args, **kwargs):
+        read_only_values.append(kwargs.get('read_only'))
+        assert kwargs.get('read_only') is True
+        return real_load_workbook(*args, **kwargs)
+
+    monkeypatch.setattr(openpyxl, 'load_workbook', spy_load_workbook)
+
+    from moduli import excel_importer
+    excel_importer = importlib.reload(excel_importer)
+
+    result = excel_importer.import_excel(
+        str(path), export_ts='2026-05-28 08:00:00', user='tester',
+    )
+
+    assert result['success'] is True
+    assert read_only_values == [True, True]
+
+
 def test_import_csv_scarta_righe_con_chiavi_implausibili(db_isolato, tmp_path):
     db = db_isolato
     from moduli import excel_importer
@@ -335,8 +419,9 @@ def test_import_csv_non_sovrascrive_se_operatore_e_slittato(db_isolato, tmp_path
     )
 
     row = db.get_filone_row('49550731', lcl='6600101316')
-    assert result['rows_skip_invalid_key'] == 1
+    assert result['rows_skip_invalid_key'] == 0
     assert result['rows_aggiornate'] == 0
+    assert result['valori_invalidi_per_colonna'] == {'operatore': 1}
     assert row['operatore'] == 'AG49808'
 
 

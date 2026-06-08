@@ -4,6 +4,25 @@
 // stessa logica dopo update dinamici via innerHTML.
 
 (function () {
+    function getCookie(name) {
+        var m = document.cookie.match(new RegExp('(?:^|;\\s*)' + name + '=([^;]+)'));
+        return m ? decodeURIComponent(m[1]) : null;
+    }
+
+    function getStored(name) {
+        try {
+            return localStorage.getItem(name);
+        } catch (_) {
+            return null;
+        }
+    }
+
+    var root = document.documentElement;
+    var theme = getCookie('algeco_theme') || getStored('algeco_theme') || getStored('admin_theme') || root.dataset.theme || 'dark';
+    var design = getCookie('algeco_design') || getStored('algeco_design') || root.dataset.design || 'solid';
+    root.setAttribute('data-theme', theme);
+    root.setAttribute('data-design', design);
+
     function init() {
         if (typeof lucide !== 'undefined' && lucide.createIcons) {
             lucide.createIcons();

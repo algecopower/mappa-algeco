@@ -162,3 +162,32 @@ def test_filone_bulk_segnala_riga_non_trovata(db_isolato):
 
     assert resp.status_code == 409
     assert 'Righe o ancore' in resp.get_json()['error']
+
+
+def test_filone_notes_salva_commenti_persistenti(db_isolato):
+    """Il popup commenti salva nel DB e rilegge via API."""
+    db = db_isolato
+    _setup_filone(db)
+    client = _app().test_client()
+    _login(client)
+
+    resp = client.put('/api/filone/notes', json={
+        'notes': {'2:NOMINATIVO': 'Da richiamare domani'},
+    })
+
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body['success'] is True
+    assert body['written'] == 1
+
+    resp = client.get('/api/filone/notes')
+    assert resp.status_code == 200
+    assert resp.get_json()['notes'] == {'2:NOMINATIVO': 'Da richiamare domani'}
+
+    resp = client.put('/api/filone/notes', json={
+        'cleared': ['2:NOMINATIVO'],
+    })
+
+    assert resp.status_code == 200
+    assert resp.get_json()['deleted'] == 1
+    assert client.get('/api/filone/notes').get_json()['notes'] == {}

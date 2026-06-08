@@ -225,6 +225,150 @@ def parse_excel(file_path, sheet_name=None):
     return (headers, rows)
 
 
+def _extract_xlsx_cell_comments(file_path, sheet_name=None):
+    """Estrae i commenti strutturati delle celle da un .xlsx.
+
+    Ritorna list[dict] con:
+      - row: riga logica import 1-based (dopo aver ignorato righe vuote)
+      - col_name: header della colonna
+      - text: testo del commento
+
+    I CSV non hanno un canale equivalente per commenti cella: eventuali note
+    devono essere dentro una normale colonna testuale (es. NOTE APP).
+    """
+    import posixpath
+    import zipfile
+    from xml.etree import ElementTree as ET
+
+    ns_main = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'
+    ns_rel_doc = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
+    ns_rel_pkg = 'http://schemas.openxmlformats.org/package/2006/relationships'
+
+    def q(ns, tag):
+        return f'{{{ns}}}{tag}'
+
+    def resolve_target(base_path, target):
+        if target.startswith('/'):
+            return target.lstrip('/')
+        return posixpath.normpath(posixpath.join(posixpath.dirname(base_path), target))
+
+    def rels_path_for(part_path):
+        return posixpath.join(
+            posixpath.dirname(part_path),
+            '_rels',
+            posixpath.basename(part_path) + '.rels',
+        )
+
+    def column_index_from_ref(cell_ref):
+        m = _re.match(r'^\$?([A-Z]+)\$?(\d+)$', str(cell_ref or '').upper())
+        if not m:
+            return None, None
+        idx = 0
+        for ch in m.group(1):
+            idx = idx * 26 + (ord(ch) - ord('A') + 1)
+        return idx - 1, int(m.group(2))
+
+    def sheet_headers_and_rows():
+        try:
+            import openpyxl
+        except ImportError as e:
+            raise RuntimeError(
+                f"openpyxl non installato ({e}). pip install openpyxl"
+            )
+        wb = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
+        try:
+            ws = wb[sheet_name] if sheet_name else wb.active
+            headers = []
+            physical_to_logical = {}
+            logical_row = 0
+            for row in ws.iter_rows(values_only=False):
+                if not row:
+                    continue
+                values = [_cell_to_str(cell.value) for cell in row]
+                if all(v == '' for v in values):
+                    continue
+                logical_row += 1
+                physical_to_logical[row[0].row] = logical_row
+                if logical_row == 1:
+                    headers = values
+            return headers, physical_to_logical
+        finally:
+            wb.close()
+
+    headers, physical_to_logical = sheet_headers_and_rows()
+    if not headers:
+        return []
+
+    with zipfile.ZipFile(file_path) as zf:
+        names = set(zf.namelist())
+        if 'xl/workbook.xml' not in names or 'xl/_rels/workbook.xml.rels' not in names:
+            return []
+
+        workbook = ET.fromstring(zf.read('xl/workbook.xml'))
+        workbook_rels = ET.fromstring(zf.read('xl/_rels/workbook.xml.rels'))
+        rel_targets = {
+            rel.attrib.get('Id'): resolve_target('xl/workbook.xml', rel.attrib.get('Target', ''))
+            for rel in workbook_rels.findall(q(ns_rel_pkg, 'Relationship'))
+        }
+
+        selected_sheet = None
+        for sheet in workbook.findall(f'.//{q(ns_main, "sheet")}'):
+            if sheet_name and sheet.attrib.get('name') != sheet_name:
+                continue
+            selected_sheet = sheet
+            break
+        if selected_sheet is None:
+            return []
+
+        rel_id = selected_sheet.attrib.get(q(ns_rel_doc, 'id'))
+        sheet_path = rel_targets.get(rel_id)
+        if not sheet_path:
+            return []
+
+        sheet_rels_path = rels_path_for(sheet_path)
+        if sheet_rels_path not in names:
+            return []
+        sheet_rels = ET.fromstring(zf.read(sheet_rels_path))
+
+        comments_paths = []
+        for rel in sheet_rels.findall(q(ns_rel_pkg, 'Relationship')):
+            rel_type = rel.attrib.get('Type', '')
+            if rel_type.endswith('/comments'):
+                comments_paths.append(resolve_target(sheet_path, rel.attrib.get('Target', '')))
+
+        comments = []
+        for comments_path in comments_paths:
+            if comments_path not in names:
+                continue
+            root = ET.fromstring(zf.read(comments_path))
+            for item in root.findall(f'.//{q(ns_main, "comment")}'):
+                col_idx, physical_row = column_index_from_ref(item.attrib.get('ref'))
+                if col_idx is None or physical_row is None:
+                    continue
+                if col_idx >= len(headers):
+                    continue
+                col_name = headers[col_idx]
+                if not col_name:
+                    continue
+                logical_row = physical_to_logical.get(physical_row)
+                if logical_row is None:
+                    continue
+                text = _normalize_for_compare(
+                    ''.join(
+                        t.text or ''
+                        for t in item.findall(f'.//{q(ns_main, "t")}')
+                    )
+                )
+                if not text:
+                    continue
+                comments.append({
+                    'row': logical_row,
+                    'col_name': col_name,
+                    'text': text,
+                })
+        return comments
+
+
 def _decode_csv_bytes(raw):
     """Decodifica CSV esportati da Sheets/Excel con encoding comuni."""
     for enc in ('utf-8-sig', 'utf-8', 'cp1252', 'latin-1'):
@@ -327,7 +471,9 @@ def _structural_col_indices(headers):
     return required
 
 
-def _invalid_import_row_reason(eneltel_raw, eneltel_key, lcl, row=None, required_indices=None):
+def _invalid_import_row_reason(
+    eneltel_raw, eneltel_key, lcl, row=None, required_indices=None, expected_cols=None,
+):
     """Motivo di scarto per righe che hanno colonne slittate o chiavi impossibili."""
     key = _normalize_for_compare(eneltel_key).upper()
     lcl_clean = _normalize_for_compare(lcl)
@@ -337,6 +483,10 @@ def _invalid_import_row_reason(eneltel_raw, eneltel_key, lcl, row=None, required
         missing = [idx for idx in required_indices if idx >= len(row)]
         if missing:
             return 'riga CSV tronca: colonne strutturali mancanti'
+    if row is not None and expected_cols is not None and len(row) > expected_cols:
+        extra_values = row[expected_cols:]
+        if any(_normalize_for_compare(v) for v in extra_values):
+            return 'riga CSV con più celle dell’intestazione: probabile separatore non quotato'
     if _looks_like_pod(eneltel_raw) or _looks_like_pod(key):
         return 'valore POD nella colonna Eneltel'
     if not _ENELTEL_KEY_RE.match(key):
@@ -346,13 +496,21 @@ def _invalid_import_row_reason(eneltel_raw, eneltel_key, lcl, row=None, required
     return ''
 
 
-def _invalid_structural_values_reason(
+def _csv_structural_cell_anomalies(
     fields, header_mapping, known_comuni=None, known_operators=None, known_positions=None,
 ):
-    """Scarta righe parseate ma con valori incompatibili con colonne strutturali."""
+    """Ritorna celle CSV sospette senza usare un singolo valore per scartare la riga.
+
+    Il CSV è fragile quando testo libero contiene virgole non quotate: invece di
+    bloccare righe per valori perfettamente possibili (es. note nella DATA),
+    contiamo solo anomalie ad alta confidenza e usiamo il risultato per:
+      - scartare la riga se le anomalie sono multiple;
+      - ignorare la singola cella sospetta se è isolata.
+    """
     known_comuni = known_comuni or set()
     known_operators = known_operators or set()
     known_positions = known_positions or set()
+    anomalies = {}
     for col_name, raw_value in fields.items():
         chiave = header_mapping.get(col_name)
         value = _normalize_for_compare(raw_value)
@@ -360,28 +518,32 @@ def _invalid_structural_values_reason(
             continue
         value_upper = value.upper()
         if chiave == 'pod' and not _looks_like_pod(value):
-            return 'POD con formato non valido: probabile slittamento colonne'
+            anomalies[col_name] = 'POD con formato non valido'
         if chiave == 'comune' and value.isdigit():
-            return 'Comune numerico: probabile slittamento colonne'
-        if chiave in _KEYS_DATE and not _looks_like_date_or_marker(value):
-            return f'{col_name} non data: probabile slittamento colonne'
+            anomalies[col_name] = 'Comune numerico'
+        if chiave == 'civico':
+            compact = value.replace('/', '').replace('-', '').replace(' ', '')
+            if compact and not any(ch.isdigit() for ch in compact):
+                anomalies[col_name] = 'Civico senza numeri'
         if chiave in _KEYS_NUMERIC_DOT:
             if _is_invalid_numeric_value(value):
                 continue
             if _parse_decimal(value) is None:
-                return f'{col_name} non numerico: probabile slittamento colonne'
+                anomalies[col_name] = f'{col_name} non numerico'
         if chiave == 'telefono':
             if value_upper in known_comuni and not any(ch.isdigit() for ch in value):
-                return 'Telefono contiene un comune: probabile slittamento colonne'
+                anomalies[col_name] = 'Telefono contiene un comune'
         if chiave == 'operatore':
             if value_upper in _INVALID_NUMERIC_TOKENS:
                 continue
             if value_upper not in known_operators and not _OPERATOR_RE.match(value_upper):
-                return 'Operatore con formato non valido: probabile slittamento colonne'
+                anomalies[col_name] = 'Operatore con formato non valido'
         if chiave == 'posizione_misuratore':
-            if value_upper not in known_positions and not _POSITION_RE.match(value_upper):
-                return 'Posizione misuratore non valida: probabile slittamento colonne'
-    return ''
+            # La posizione ha molte varianti testuali legittime
+            # ("nell'appartamento", "esterno", ecc.): non la usiamo come blocco.
+            if value_upper in known_positions or _POSITION_RE.match(value_upper):
+                continue
+    return anomalies
 
 
 def import_excel(file_path, *, export_ts=None, sheet_name=None, dry_run=False, user=None):
@@ -438,6 +600,7 @@ def import_excel(file_path, *, export_ts=None, sheet_name=None, dry_run=False, u
     # 2. LCL opzionale (per Pavia: multi-LCL per stesso eneltel)
     lcl_idx = _find_col_idx(headers_xlsx, ['LCL', 'lcl'])
     required_row_indices = _structural_col_indices(headers_xlsx) if file_format == 'csv' else []
+    expected_row_cols = len(headers_xlsx) if file_format == 'csv' else None
 
     # 3. Header mapping: per ogni colonna Excel, cerca la chiave interna nel DB
     header_mapping = {}
@@ -465,11 +628,23 @@ def import_excel(file_path, *, export_ts=None, sheet_name=None, dry_run=False, u
         'diff_per_colonna': {},
         'valori_invalidi_per_colonna': {},
         'eneltel_solo_db': 0,
+        'commenti_importati': 0,
         'dry_run': dry_run,
         'sample_db_vince': [],
         'sample_invalid_rows': [],
         'errori': [],
     }
+
+    comments_by_excel_row = {}
+    if file_format == 'xlsx':
+        try:
+            for item in _extract_xlsx_cell_comments(file_path, sheet_name=sheet_name):
+                comments_by_excel_row.setdefault(item['row'], []).append(
+                    (item['col_name'], item['text'])
+                )
+        except Exception as e:
+            logger.warning(f"[excel-import] lettura commenti XLSX fallita: {e}")
+            summary['errori'].append(f"Lettura commenti XLSX non riuscita: {e}")
 
     if dry_run:
         # In dry-run NON modifichiamo nulla, ma proviamo a fare il merge
@@ -534,6 +709,23 @@ def import_excel(file_path, *, export_ts=None, sheet_name=None, dry_run=False, u
         # Mantenuti come (eneltel_key, lcl, {chiave: new_value}) in lista,
         # eseguiti uno per uno (UPDATE filone con set dinamico è già veloce
         # grazie all'index PK).
+        def import_comments_for_row(row_excel_idx, eneltel_key, lcl):
+            if dry_run:
+                return 0
+            row_comments = comments_by_excel_row.get(row_excel_idx)
+            if not row_comments:
+                return 0
+            comments = {col_name: text for col_name, text in row_comments}
+            result = _db.set_cell_comments_by_anchor(
+                conn,
+                eneltel_key=eneltel_key,
+                lcl=lcl,
+                comments=comments,
+                user=user,
+                source='excel_import',
+            )
+            return result['written']
+
         for row_excel_idx, row in enumerate(rows_xlsx, start=2):
             eneltel_raw = row[eneltel_idx] if eneltel_idx < len(row) else ''
             eneltel_key = _db.normalize_eneltel(eneltel_raw)
@@ -546,6 +738,7 @@ def import_excel(file_path, *, export_ts=None, sheet_name=None, dry_run=False, u
             invalid_reason = _invalid_import_row_reason(
                 eneltel_raw, eneltel_key, lcl,
                 row=row, required_indices=required_row_indices,
+                expected_cols=expected_row_cols,
             )
             if invalid_reason:
                 summary['rows_skip_invalid_key'] += 1
@@ -565,19 +758,29 @@ def import_excel(file_path, *, export_ts=None, sheet_name=None, dry_run=False, u
                 if not h or h == 'Eneltel' or h.lower() == 'eneltel':
                     continue
                 fields[h] = row[i] if i < len(row) else ''
-            invalid_reason = _invalid_structural_values_reason(
-                fields, header_mapping, known_comuni, known_operators, known_positions,
-            )
-            if invalid_reason:
+
+            skip_cell_columns = set()
+            cell_anomalies = {}
+            if file_format == 'csv':
+                cell_anomalies = _csv_structural_cell_anomalies(
+                    fields, header_mapping, known_comuni, known_operators, known_positions,
+                )
+            if len(cell_anomalies) >= 2:
                 summary['rows_skip_invalid_key'] += 1
                 if len(summary['sample_invalid_rows']) < 20:
+                    reasons = '; '.join(cell_anomalies.values())
                     summary['sample_invalid_rows'].append({
                         'row': row_excel_idx,
-                        'reason': invalid_reason,
+                        'reason': f'anomalie strutturali multiple: {reasons}',
                         'eneltel': str(eneltel_raw or ''),
                         'lcl': str(lcl or ''),
                     })
                 continue
+            if cell_anomalies:
+                skip_cell_columns = set(cell_anomalies.keys())
+                invalid_counter.update(
+                    header_mapping.get(col) or col for col in skip_cell_columns
+                )
 
             # Lookup riga DB (memoria, no SELECT)
             key = (eneltel_key, lcl)
@@ -593,9 +796,16 @@ def import_excel(file_path, *, export_ts=None, sheet_name=None, dry_run=False, u
             if db_row is None:
                 summary['rows_nuove'] += 1
                 if not dry_run:
-                    _insert_new_row(conn, eneltel_key, lcl, row_excel_idx,
-                                    headers_xlsx, fields, header_mapping,
-                                    export_ts=export_ts_int, user=user)
+                    inserted = _insert_new_row(
+                        conn, eneltel_key, lcl, row_excel_idx,
+                        headers_xlsx, fields, header_mapping,
+                        export_ts=export_ts_int, user=user,
+                        skip_columns=skip_cell_columns,
+                    )
+                    if inserted:
+                        summary['commenti_importati'] += import_comments_for_row(
+                            row_excel_idx, eneltel_key, lcl,
+                        )
                 continue
 
             # Most-recent-wins a livello riga
@@ -606,11 +816,17 @@ def import_excel(file_path, *, export_ts=None, sheet_name=None, dry_run=False, u
                     summary['sample_db_vince'].append(eneltel_key)
                 continue
 
+            summary['commenti_importati'] += import_comments_for_row(
+                row_excel_idx, eneltel_key, lcl,
+            )
+
             # Diff cella-per-cella usando i dict in memoria
             cur_extra = extras_by_key.get(key, {})
             filone_updates = {}  # {chiave: new_val}
             extra_updates = {}   # {col_name: new_val}
             for col_name, new_val_raw in fields.items():
+                if col_name in skip_cell_columns:
+                    continue
                 chiave = header_mapping.get(col_name)
                 new_val = _normalize_for_db(new_val_raw, chiave)
                 if chiave == 'eneltel':
@@ -729,7 +945,7 @@ def import_excel(file_path, *, export_ts=None, sheet_name=None, dry_run=False, u
 
 
 def _insert_new_row(conn, eneltel_key, lcl, sheets_row, headers, fields, header_mapping,
-                    *, export_ts, user):
+                    *, export_ts, user, skip_columns=None):
     """Inserisce una riga nuova in `filone` (+ `filone_extra`).
 
     Le colonne che hanno chiave interna nota vanno in `filone`; le altre
@@ -737,9 +953,12 @@ def _insert_new_row(conn, eneltel_key, lcl, sheets_row, headers, fields, header_
     (è un import esterno, non una modifica locale).
     """
     # Costruisci dict di valori per colonne note di `filone`
+    skip_columns = skip_columns or set()
     filone_cols = {}
     extra_cols = {}
     for col_name, val in fields.items():
+        if col_name in skip_columns:
+            continue
         chiave = header_mapping.get(col_name)
         val_str = _normalize_for_db(val, chiave)
         if chiave and chiave in _db.COLONNE_NOTE:
@@ -766,7 +985,7 @@ def _insert_new_row(conn, eneltel_key, lcl, sheets_row, headers, fields, header_
         )
     except Exception as e:
         logger.warning(f"[excel-import] INSERT filone fallita per {eneltel_key}: {e}")
-        return
+        return False
 
     # Inserisci colonne extra
     for col_name, val in extra_cols.items():
@@ -780,6 +999,7 @@ def _insert_new_row(conn, eneltel_key, lcl, sheets_row, headers, fields, header_
               old_value=None, new_value=None, source='excel_import',
               user=user, detail={'action': 'new_row', 'lcl': lcl,
                                  'sheets_row': sheets_row, 'export_ts': export_ts})
+    return True
 
 
 def _apply_excel_to_row(conn, eneltel_key, lcl, sheets_row, fields, header_mapping,

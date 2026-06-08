@@ -25,7 +25,7 @@
          Le emoji "di contenuto" (📅 date, ✅ esiti, 🚗 km) restano. -->
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
-<body data-theme="dark" data-design="glass">
+<body data-theme="dark" data-design="solid">
     <script>
         // Applica tema + design salvati prima del primo paint per evitare FOUC.
         // Priorità: cookie (impostato dalla dashboard admin con domain=.mappa-algeco.com,
@@ -38,7 +38,7 @@
             }
             var t = _cookie('algeco_theme') || localStorage.getItem('algeco_theme');
             if (t) document.body.setAttribute('data-theme', t);
-            var d = _cookie('algeco_design') || localStorage.getItem('algeco_design');
+            var d = _cookie('algeco_design') || localStorage.getItem('algeco_design') || 'solid';
             if (d) document.body.setAttribute('data-design', d);
         })();
     </script>

@@ -275,6 +275,73 @@ MAPPATURA_COLONNE_DEFAULT = {
 # Formato: { "chiave_interna": "nome_colonna_sul_foglio" }
 MAPPATURA_COLONNE = {}
 
+# Configurazione Excel lettere. La sezione `lettere_excel` in
+# data/{provincia}/settings.json può sovrascrivere questi default dalla UI admin.
+LETTERE_EXCEL_CONFIG_DEFAULT = {
+    'fogli': {
+        'monofase': 'MONOFASE',
+        'emme2': 'EMME2',
+        'semidiretti': 'SEMIDIRETTI',
+        'contatti_aziendali': 'Contatti Aziendali',
+        'solo_monofase': 'SOLO MONOFASE',
+        'solo_trifase_diretti': 'SOLO TRIFASE DIRETTI',
+    },
+    'nomi_colonne': {
+        'nominativo': 'Nominativo_Cliente',
+        'via': 'VIA',
+        'civico': 'Numero_Civico',
+        'comune': 'Comune',
+        'provincia': 'PROVINCIA',
+        'cap': 'CAP',
+        'data_pianificazione': 'Data Pianificazione',
+        'ora_pianificazione': 'Ora pianificazione',
+        'lettera': 'LETTERA',
+        'pod': 'POD',
+        'operatore': 'Operatore',
+        'posizione_mis': 'Posizione mis.',
+        'appuntamento': 'Appuntamento',
+    },
+    'valori_lettera': {
+        'si': "SI'",
+        'no': 'NO',
+    },
+    'regole_no': {
+        'appuntamento': True,
+        'accessibile_esterno': True,
+        'civico_vuoto': True,
+        'civico_senza_numero': True,
+    },
+    'parole_chiave': {
+        'lettera_no': ['COMUNE', 'PROVINCIA'],
+        'contatti_aziendali_escludi': ['COMUNE', 'PROVINCIA'],
+    },
+    'opzioni': {
+        'unisci_trifase_diretti_in_monofase': True,
+        'crea_fogli_dettaglio': True,
+        'escludi_enti_da_contatti_aziendali': True,
+    },
+}
+
+
+def merge_lettere_excel_config(override=None):
+    """Unisce ricorsivamente i default Excel lettere con eventuali override."""
+    def _merge(default, custom):
+        if isinstance(default, dict):
+            out = {}
+            custom = custom if isinstance(custom, dict) else {}
+            for key, value in default.items():
+                out[key] = _merge(value, custom.get(key))
+            for key, value in custom.items():
+                if key not in out:
+                    out[key] = value
+            return out
+        return custom if custom is not None else default
+
+    return _merge(LETTERE_EXCEL_CONFIG_DEFAULT, override or {})
+
+
+LETTERE_EXCEL_CONFIG = merge_lettere_excel_config()
+
 # ============================================================================
 # CONFIGURAZIONI COMUNI (uguali per tutte le province)
 # ============================================================================
@@ -382,6 +449,9 @@ if os.path.exists(_settings_file):
         # Mappatura colonne personalizzata
         if 'mappatura_colonne' in _user_settings:
             MAPPATURA_COLONNE = _user_settings['mappatura_colonne']
+        if 'lettere_excel' in _user_settings:
+            LETTERE_EXCEL_CONFIG = merge_lettere_excel_config(_user_settings['lettere_excel'])
+            PROVINCE[PROVINCIA_ATTIVA]['lettere_excel'] = LETTERE_EXCEL_CONFIG
         
         print("✅ Impostazioni personalizzate caricate da settings.json")
     except Exception as _e:

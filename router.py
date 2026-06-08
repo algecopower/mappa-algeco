@@ -717,6 +717,16 @@ def _admin_dispatch(path):
     if m and method == 'PUT':
         return _admin_check() or _admin_proxy_simple(m.group(1), '/api/admin/column-mapping', 'PUT')
 
+    m = re.match(r'^api/provinces/([A-Z0-9_]+)/lettere-excel-config$', p)
+    if m and method == 'GET':
+        return _admin_check() or _admin_proxy_simple(
+            m.group(1), '/api/admin/lettere-excel-config', 'GET'
+        )
+    if m and method == 'PUT':
+        return _admin_check() or _admin_proxy_simple(
+            m.group(1), '/api/admin/lettere-excel-config', 'PUT'
+        )
+
     m = re.match(r'^api/provinces/([A-Z0-9_]+)/columns$', p)
     if m and method == 'GET':
         return _admin_check() or _admin_proxy_simple(m.group(1), '/api/admin/columns', 'GET')

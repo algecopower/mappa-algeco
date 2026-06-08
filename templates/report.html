@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="it">
+<html lang="it" data-theme="dark" data-design="solid">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,11 +8,24 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="/static/theme.css">
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
-    <script src="/static/theme-init.js" defer></script>
+    <script src="/static/theme-init.js"></script>
     <script>
         (function(){
-            const t = localStorage.getItem('algeco_theme') || 'dark';
+            function getCookie(name) {
+                var m = document.cookie.match(new RegExp('(?:^|;\\s*)' + name + '=([^;]+)'));
+                return m ? decodeURIComponent(m[1]) : null;
+            }
+            function getStored(name) {
+                try {
+                    return localStorage.getItem(name);
+                } catch (_) {
+                    return null;
+                }
+            }
+            const t = getCookie('algeco_theme') || getStored('algeco_theme') || 'dark';
+            const d = getCookie('algeco_design') || getStored('algeco_design') || 'solid';
             document.documentElement.setAttribute('data-theme', t);
+            document.documentElement.setAttribute('data-design', d);
         })();
     </script>
     <style>

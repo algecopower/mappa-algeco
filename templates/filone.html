@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="it">
+<html lang="it" data-theme="dark" data-design="solid">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,8 +7,21 @@
     <title>Filone - Vista Excel</title>
     <script>
         (function() {
-            const t = localStorage.getItem('algeco_theme') || 'dark';
+            function getCookie(name) {
+                var m = document.cookie.match(new RegExp('(?:^|;\\s*)' + name + '=([^;]+)'));
+                return m ? decodeURIComponent(m[1]) : null;
+            }
+            function getStored(name) {
+                try {
+                    return localStorage.getItem(name);
+                } catch (_) {
+                    return null;
+                }
+            }
+            const t = getCookie('algeco_theme') || getStored('algeco_theme') || 'dark';
+            const d = getCookie('algeco_design') || getStored('algeco_design') || 'solid';
             document.documentElement.setAttribute('data-theme', t);
+            document.documentElement.setAttribute('data-design', d);
         })();
     </script>
     <link rel="stylesheet" href="/static/theme.css">
@@ -38,6 +51,15 @@
             --modified-bg: rgba(var(--accent-rgb), 0.10);
             --modified-border: rgba(var(--accent-rgb), 0.45);
             --frozen-shadow: 4px 0 12px rgba(0,0,0,0.4);
+            --header-glass-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)), rgba(9, 13, 29, 0.78);
+            --header-glass-border: rgba(255, 255, 255, 0.10);
+            --header-glass-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 10px 24px rgba(0, 0, 0, 0.24);
+            --filone-modal-panel-bg: linear-gradient(135deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.015)), rgba(15, 23, 44, 0.96);
+            --filone-modal-chrome-bg: linear-gradient(180deg, rgba(96, 165, 250, 0.10), rgba(255, 255, 255, 0.02)), rgba(18, 27, 51, 0.96);
+            --filone-modal-border: 1px solid rgba(132, 161, 216, 0.34);
+            --filone-modal-ring: 0 0 0 1px rgba(59, 130, 246, 0.18);
+            --filone-modal-field-bg: rgba(7, 13, 28, 0.94);
+            --filone-modal-frost-bg: linear-gradient(135deg, rgba(96, 165, 250, 0.08), rgba(255, 255, 255, 0.025)), rgba(10, 17, 34, 0.84);
         }
         [data-theme="light"] {
             --bg-body: var(--body-bg);
@@ -58,6 +80,48 @@
             --modified-bg: rgba(var(--accent-rgb), 0.08);
             --modified-border: rgba(var(--accent-rgb), 0.5);
             --frozen-shadow: 4px 0 8px rgba(0,0,0,0.1);
+            --header-glass-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.90), rgba(255, 255, 255, 0.62)), rgba(255, 255, 255, 0.76);
+            --header-glass-border: rgba(0, 0, 0, 0.08);
+            --header-glass-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.92), 0 10px 22px rgba(31, 41, 55, 0.10);
+            --filone-modal-panel-bg: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.86)), rgba(255, 255, 255, 0.98);
+            --filone-modal-chrome-bg: linear-gradient(180deg, rgba(59, 130, 246, 0.10), rgba(255, 255, 255, 0.78)), rgba(255, 255, 255, 0.96);
+            --filone-modal-border: 1px solid rgba(59, 130, 246, 0.22);
+            --filone-modal-ring: 0 0 0 1px rgba(15, 23, 42, 0.08);
+            --filone-modal-field-bg: rgba(255, 255, 255, 0.96);
+            --filone-modal-frost-bg: linear-gradient(135deg, rgba(255, 255, 255, 0.84), rgba(255, 255, 255, 0.66)), rgba(255, 255, 255, 0.76);
+        }
+        [data-design="solid"] {
+            --bg-body: var(--body-bg);
+            --bg-dark: var(--bg-secondary);
+            --bg-card: var(--bg-tertiary);
+            --bg-cell: var(--bg-secondary);
+            --bg-cell-alt: var(--bg-primary);
+            --bg-cell-hover: rgba(var(--accent-rgb), 0.10);
+            --bg-cell-edit: rgba(var(--accent-rgb), 0.16);
+            --bg-header: var(--bg-secondary);
+            --bg-input: var(--bg-primary);
+            --border-light: var(--border);
+            --scrollbar-bg: var(--bg-primary);
+            --scrollbar-thumb: rgba(var(--accent-rgb), 0.45);
+            --header-glass-bg: var(--bg-secondary);
+            --header-glass-border: var(--border);
+            --header-glass-shadow: none;
+            --filone-modal-panel-bg: var(--bg-tertiary);
+            --filone-modal-chrome-bg: var(--bg-secondary);
+            --filone-modal-border: 1px solid var(--border);
+            --filone-modal-ring: none;
+            --filone-modal-field-bg: var(--bg-primary);
+            --filone-modal-frost-bg: transparent;
+        }
+        [data-design="solid"][data-theme="light"] {
+            --bg-dark: var(--bg-secondary);
+            --bg-card: var(--bg-tertiary);
+            --bg-cell: var(--bg-secondary);
+            --bg-cell-alt: var(--bg-primary);
+            --bg-header: var(--bg-secondary);
+            --bg-input: var(--bg-primary);
+            --scrollbar-bg: var(--bg-primary);
+            --scrollbar-thumb: rgba(var(--accent-rgb), 0.40);
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -136,26 +200,105 @@
         .tb.danger { border-color: var(--danger); color: var(--danger); }
         .tb.danger:hover { background: var(--danger); color: #fff; }
         .search-box {
-            display: flex;
+            position: relative;
+            display: inline-flex;
             align-items: center;
-            background: var(--bg-input);
-            border: 1px solid var(--border);
-            border-radius: 5px;
-            padding: 0 8px;
-            min-width: 200px;
+            min-width: 280px;
+            height: 36px;
+            border: 1px solid rgba(86, 108, 153, 0.36);
+            border-radius: 7px;
+            background: rgba(13, 18, 35, 0.66);
+            box-shadow: none;
+            overflow: hidden;
+            padding: 0 8px 0 12px;
+            backdrop-filter: blur(var(--panel-blur, 18px)) saturate(var(--panel-saturate, 140%));
+            -webkit-backdrop-filter: blur(var(--panel-blur, 18px)) saturate(var(--panel-saturate, 140%));
+            transition: border-color 0.16s, background 0.16s;
         }
-        .search-box:focus-within { border-color: var(--primary); }
+        .search-box:focus-within {
+            border-color: rgba(var(--accent-rgb), 0.78);
+            background: rgba(13, 18, 35, 0.82);
+        }
+        [data-theme="light"] .search-box {
+            background: rgba(255, 255, 255, 0.82);
+        }
+        [data-theme="light"] .search-box:focus-within {
+            background: rgba(255, 255, 255, 0.96);
+        }
+        .search-icon {
+            position: relative;
+            flex: 0 0 25px;
+            width: 24px;
+            height: 24px;
+            margin-right: 9px;
+            align-self: center;
+            pointer-events: none;
+            filter: drop-shadow(0 0 5px rgba(56, 189, 248, 0.28));
+        }
+        .search-icon::before {
+            content: '';
+            position: absolute;
+            left: 3px;
+            top: 3px;
+            width: 12px;
+            height: 12px;
+            border: 3px solid #38bdf8;
+            border-radius: 50%;
+        }
+        .search-icon::after {
+            content: '';
+            position: absolute;
+            left: 16px;
+            top: 16px;
+            width: 8px;
+            height: 3px;
+            border-radius: 999px;
+            background: #c084fc;
+            transform: rotate(45deg);
+            transform-origin: left center;
+        }
         .search-input {
-            border: none;
-            background: transparent;
+            all: unset;
+            appearance: none;
+            -webkit-appearance: none;
+            box-sizing: border-box;
+            display: block;
+            flex: 1 1 auto;
             color: var(--text);
-            font-size: 0.82em;
-            padding: 6px 0;
-            outline: none;
+            font-size: 0.9em;
+            padding: 0 34px 0 0;
             width: 100%;
-            margin-left: 4px;
+            min-width: 0;
+            height: 100%;
+            line-height: 36px;
+            border: 0 !important;
+            border-radius: 0 !important;
+            background: transparent !important;
+            box-shadow: none !important;
+            outline: 0 !important;
         }
         .search-input::placeholder { color: var(--text-muted); }
+        .search-clear {
+            position: absolute;
+            right: 7px;
+            width: 23px;
+            height: 23px;
+            border: 0;
+            border-radius: 5px;
+            background: transparent;
+            color: var(--text-muted);
+            cursor: pointer;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-size: 1em;
+            line-height: 1;
+        }
+        .search-box.has-value .search-clear { display: inline-flex; }
+        .search-clear:hover {
+            background: var(--bg-cell-hover);
+            color: var(--primary);
+        }
 
         .mode-toggle {
             display: inline-flex;
@@ -180,7 +323,6 @@
             color: #fff;
             font-weight: 700;
         }
-        body.fast-mode .toolbar > .search-box,
         body.fast-mode .toolbar-filters,
         body.fast-mode .toolbar-actions,
         body.fast-mode .tabbar,
@@ -227,6 +369,45 @@
             flex: 1 1 auto;
             min-width: 0;
         }
+        .quick-field {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            min-width: 0;
+            width: clamp(92px, calc(var(--quick-control-ch, 12) * 1ch + 50px), 320px);
+            flex: 0 0 auto;
+        }
+        .quick-field.search { --quick-control-ch: 18; }
+        .quick-field.tipo { --quick-control-ch: 15; }
+        .quick-field.posizione { --quick-control-ch: 15; }
+        .quick-field .quick-icon {
+            position: absolute;
+            left: 7px;
+            z-index: 1;
+            width: 22px;
+            height: 22px;
+            border-radius: 6px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--primary);
+            background: rgba(var(--accent-rgb), 0.11);
+            border: 1px solid rgba(var(--accent-rgb), 0.16);
+            font-size: 0.86em;
+            font-weight: 800;
+            line-height: 1;
+            pointer-events: none;
+            filter: drop-shadow(0 0 7px rgba(var(--accent-rgb), 0.24));
+        }
+        .quick-field.search .quick-icon { color: #38bdf8; background: rgba(56, 189, 248, 0.13); border-color: rgba(56, 189, 248, 0.20); }
+        .quick-field.lcl .quick-icon { color: #c4b5fd; background: rgba(167, 139, 250, 0.15); border-color: rgba(167, 139, 250, 0.24); }
+        .quick-field.comune .quick-icon { color: #34d399; background: rgba(34, 197, 94, 0.14); border-color: rgba(34, 197, 94, 0.24); }
+        .quick-field.phone .quick-icon { color: #fbbf24; background: rgba(245, 158, 11, 0.14); border-color: rgba(245, 158, 11, 0.24); }
+        .quick-field.date .quick-icon { color: #fb7185; background: rgba(239, 68, 68, 0.13); border-color: rgba(239, 68, 68, 0.22); }
+        .quick-field.operator .quick-icon { color: #93c5fd; background: rgba(96, 165, 250, 0.14); border-color: rgba(96, 165, 250, 0.24); }
+        .quick-field.appointment .quick-icon { color: #f9a8d4; background: rgba(244, 114, 182, 0.14); border-color: rgba(244, 114, 182, 0.24); }
+        .quick-field.tipo .quick-icon { color: #5eead4; background: rgba(45, 212, 191, 0.14); border-color: rgba(45, 212, 191, 0.24); }
+        .quick-field.posizione .quick-icon { color: #fdba74; background: rgba(251, 146, 60, 0.14); border-color: rgba(251, 146, 60, 0.24); }
         .quick-input,
         .quick-select {
             height: 30px;
@@ -236,12 +417,18 @@
             color: var(--text);
             padding: 0 8px;
             font-size: 0.8em;
-            min-width: 130px;
+            min-width: 0;
             outline: none;
+        }
+        .quick-field .quick-input,
+        .quick-field .quick-select {
+            width: 100%;
+            min-width: 0;
+            padding-left: 36px;
         }
         .quick-input:focus,
         .quick-select:focus { border-color: var(--primary); }
-        .quick-input.search { min-width: 220px; }
+        .quick-input.search { min-width: 0; }
         .quick-input.note { min-width: 260px; flex: 1 1 260px; }
         .quick-meta {
             margin-left: auto;
@@ -260,7 +447,7 @@
             display: grid;
             grid-template-columns: 36px minmax(0, 1.35fr) minmax(0, 1.35fr)
                 minmax(0, 0.75fr) minmax(0, 0.65fr) minmax(0, 0.8fr)
-                minmax(0, 1.15fr) minmax(0, 0.42fr) minmax(0, 0.72fr);
+                minmax(0, 1.15fr) minmax(86px, 0.48fr) minmax(0, 0.72fr);
             align-items: center;
             gap: 0;
         }
@@ -268,9 +455,12 @@
             position: sticky;
             top: 0;
             z-index: 5;
-            background: var(--bg-header);
+            background: var(--header-glass-bg);
+            backdrop-filter: blur(var(--panel-blur, 18px)) saturate(var(--panel-saturate, 140%));
+            -webkit-backdrop-filter: blur(var(--panel-blur, 18px)) saturate(var(--panel-saturate, 140%));
             color: var(--text-header);
-            border-bottom: 1px solid var(--border);
+            border-bottom: 1px solid var(--header-glass-border);
+            box-shadow: var(--header-glass-shadow);
             font-size: 0.72em;
             font-weight: 700;
             text-transform: uppercase;
@@ -280,6 +470,14 @@
             min-width: 0;
             padding: 8px 9px;
             border-right: 1px solid var(--border-light);
+        }
+        .quick-head > div {
+            border-right-color: var(--header-glass-border);
+        }
+        .quick-head > div:nth-child(8),
+        .quick-row > div:nth-child(8) {
+            padding-left: 6px;
+            padding-right: 6px;
         }
         .quick-row {
             min-height: 48px;
@@ -325,6 +523,40 @@
         .quick-badge.empty {
             background: rgba(239, 68, 68, 0.12);
             color: var(--danger);
+        }
+        .quick-badge.quick-lcl {
+            font-size: 0.76em;
+            line-height: 1.1;
+            min-height: 20px;
+            padding: 2px 5px;
+            font-variant-numeric: tabular-nums;
+            letter-spacing: 0;
+        }
+        .quick-hover-preview {
+            position: fixed;
+            z-index: 2500;
+            display: none;
+            width: min(520px, calc(100vw - 28px));
+            max-height: min(360px, calc(100vh - 28px));
+            overflow: auto;
+            padding: 11px 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg-card);
+            color: var(--text);
+            box-shadow: 0 14px 34px var(--shadow);
+            backdrop-filter: blur(var(--panel-blur, 18px)) saturate(var(--panel-saturate, 140%));
+            -webkit-backdrop-filter: blur(var(--panel-blur, 18px)) saturate(var(--panel-saturate, 140%));
+            pointer-events: none;
+            white-space: pre-wrap;
+            line-height: 1.35;
+            font-size: 0.84em;
+        }
+        .quick-hover-preview.show { display: block; }
+        .quick-hover-preview .quick-hover-title {
+            color: var(--primary);
+            font-weight: 700;
+            margin-bottom: 6px;
         }
         .quick-empty {
             padding: 56px 20px;
@@ -418,6 +650,13 @@
             .quick-grid > div:nth-child(7),
             .quick-grid > div:nth-child(8),
             .quick-grid > div:nth-child(9) { display: none; }
+            .quick-field,
+            .quick-field.search,
+            .quick-field.tipo,
+            .quick-field.posizione {
+                min-width: 0;
+                flex: 1 1 100%;
+            }
             .quick-input.search,
             .quick-input.note { min-width: 0; flex: 1 1 100%; }
             .quick-meta { margin-left: 0; width: 100%; }
@@ -526,7 +765,7 @@
         }
         .tabbar-new:hover { background: var(--bg-cell-hover); color: var(--primary); }
 
-        /* NOTE CELLA — stile Sheets: triangolino in alto a destra + popup */
+        /* NOTE CELLA: triangolino in alto a destra + popup */
         .vc.has-note { position: relative; }
         .vc.has-note::after {
             content: '';
@@ -561,14 +800,20 @@
             display: flex;
             flex-direction: column;
             gap: 10px;
+            overflow: hidden;
         }
         .note-popup h3 {
-            margin: 0;
+            margin: -16px -18px 2px;
+            padding: 13px 18px;
             font-size: 1em;
             color: var(--primary);
             display: flex;
             align-items: center;
             gap: 8px;
+            background: var(--filone-modal-chrome-bg);
+            border-bottom: 1px solid var(--border-light);
+            backdrop-filter: blur(var(--panel-blur, 18px)) saturate(var(--panel-saturate, 140%));
+            -webkit-backdrop-filter: blur(var(--panel-blur, 18px)) saturate(var(--panel-saturate, 140%));
         }
         .note-popup-meta {
             font-size: 0.8em;
@@ -579,7 +824,7 @@
             width: 100%;
             min-height: 110px;
             box-sizing: border-box;
-            background: var(--bg-input);
+            background: var(--filone-modal-field-bg);
             color: var(--text);
             border: 1px solid var(--border);
             border-radius: 6px;
@@ -594,9 +839,45 @@
             display: flex;
             justify-content: flex-end;
             gap: 6px;
-            margin-top: 4px;
+            margin: 4px -18px -16px;
+            padding: 12px 18px;
+            background: var(--filone-modal-chrome-bg);
+            border-top: 1px solid var(--border-light);
+            backdrop-filter: blur(var(--panel-blur, 18px)) saturate(var(--panel-saturate, 140%));
+            -webkit-backdrop-filter: blur(var(--panel-blur, 18px)) saturate(var(--panel-saturate, 140%));
         }
         .note-popup-actions .spacer { flex: 1; }
+        .filone-input-modal {
+            gap: 12px;
+        }
+        .filone-input-message {
+            color: var(--text-secondary);
+            font-size: 0.88em;
+            line-height: 1.45;
+            white-space: pre-wrap;
+        }
+        .filone-input-control {
+            width: 100%;
+            box-sizing: border-box;
+            background: var(--filone-modal-field-bg);
+            color: var(--text);
+            border: 1px solid rgba(var(--accent-rgb), 0.42);
+            border-radius: 7px;
+            padding: 9px 10px;
+            font-family: inherit;
+            font-size: 0.94em;
+            outline: none;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        }
+        .filone-input-control:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+        }
+        textarea.filone-input-control {
+            min-height: 112px;
+            resize: vertical;
+            line-height: 1.35;
+        }
         /* Tooltip on hover che mostra il testo della nota — alternativa "rich"
            al title nativo. Posizionato via JS sotto/sopra la cella. */
         .note-tip {
@@ -641,6 +922,35 @@
         .grid-scroll::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 5px; }
         .grid-scroll::-webkit-scrollbar-corner { background: var(--scrollbar-bg); }
 
+        .grid-empty-state {
+            position: absolute;
+            left: 50%;
+            top: 44%;
+            transform: translate(-50%, -50%);
+            z-index: 30;
+            display: none;
+            width: min(420px, calc(100vw - 32px));
+            padding: 16px 18px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg-card);
+            box-shadow: 0 14px 34px var(--shadow);
+            text-align: center;
+            color: var(--text);
+        }
+        .grid-empty-state.show { display: block; }
+        .grid-empty-state strong {
+            display: block;
+            margin-bottom: 6px;
+            color: var(--primary);
+        }
+        .grid-empty-state span {
+            display: block;
+            color: var(--text-muted);
+            font-size: 0.85em;
+            margin-bottom: 12px;
+        }
+
         .grid-inner {
             position: relative;
             min-width: max-content;
@@ -652,8 +962,11 @@
             top: 0;
             z-index: 20;
             display: flex;
-            background: var(--bg-header);
-            border-bottom: 2px solid var(--border-light);
+            background: var(--header-glass-bg);
+            border-bottom: 1px solid var(--header-glass-border);
+            box-shadow: var(--header-glass-shadow);
+            backdrop-filter: blur(var(--panel-blur, 18px)) saturate(var(--panel-saturate, 140%));
+            -webkit-backdrop-filter: blur(var(--panel-blur, 18px)) saturate(var(--panel-saturate, 140%));
         }
         .gh {
             padding: 6px 10px;
@@ -662,7 +975,8 @@
             text-transform: uppercase;
             letter-spacing: 0.3px;
             color: var(--text-header);
-            border-right: 1px solid var(--border);
+            border-right: 1px solid var(--header-glass-border);
+            background: transparent;
             cursor: pointer;
             user-select: none;
             white-space: nowrap;
@@ -976,112 +1290,6 @@
             background: var(--modified-bg) !important;
             box-shadow: inset 3px 0 0 var(--modified-border);
         }
-
-        /* FORMAT TOOLBAR */
-        .fmt-bar {
-            display: flex;
-            align-items: center;
-            gap: 2px;
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 5px;
-            padding: 2px 4px;
-        }
-        .fmt-btn {
-            width: 28px;
-            height: 26px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border: 1px solid transparent;
-            border-radius: 3px;
-            background: none;
-            color: var(--text);
-            font-size: 0.82em;
-            cursor: pointer;
-            position: relative;
-            padding: 0;
-        }
-        .fmt-btn:hover { background: var(--bg-cell-hover); border-color: var(--border); }
-        .fmt-btn.active { background: var(--bg-cell-hover); border-color: var(--primary); color: var(--primary); }
-        .fmt-btn .fmt-icon { font-weight: 700; font-size: 1em; line-height: 1; }
-        .fmt-btn .fmt-icon-i { font-style: italic; font-family: Georgia, 'Times New Roman', serif; }
-        .fmt-btn .fmt-icon-u { text-decoration: underline; }
-        .fmt-btn .fmt-icon-s { text-decoration: line-through; }
-        .fmt-color-wrap {
-            position: relative;
-            display: flex;
-            align-items: center;
-        }
-        .fmt-color-wrap input[type=color] {
-            position: absolute;
-            bottom: -2px;
-            left: 0;
-            width: 100%;
-            height: 6px;
-            padding: 0;
-            border: none;
-            cursor: pointer;
-            opacity: 0.85;
-            background: none;
-        }
-        .fmt-color-wrap input[type=color]::-webkit-color-swatch-wrapper { padding: 0; }
-        .fmt-color-wrap input[type=color]::-webkit-color-swatch { border: none; border-radius: 1px; }
-        .fmt-color-preview {
-            width: 28px;
-            height: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 700;
-            font-size: 0.95em;
-            line-height: 1;
-            border: 1px solid transparent;
-            border-radius: 3px;
-            cursor: pointer;
-        }
-        .fmt-color-preview:hover { border-color: var(--border); background: var(--bg-cell-hover); }
-        .fmt-color-palette {
-            display: none;
-            position: absolute;
-            top: 100%;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 999;
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            padding: 6px;
-            box-shadow: 0 4px 16px rgba(0,0,0,.25);
-            width: 176px;
-        }
-        .fmt-color-palette.open { display: block; }
-        .fmt-color-palette-grid {
-            display: grid;
-            grid-template-columns: repeat(8, 1fr);
-            gap: 3px;
-        }
-        .fmt-color-swatch {
-            width: 18px; height: 18px;
-            border-radius: 3px;
-            border: 1px solid rgba(128,128,128,.25);
-            cursor: pointer;
-            transition: transform .1s;
-        }
-        .fmt-color-swatch:hover { transform: scale(1.25); border-color: var(--primary); z-index: 1; }
-        .fmt-color-palette-row {
-            display: flex; align-items: center; gap: 5px;
-            margin-top: 5px; padding-top: 5px;
-            border-top: 1px solid var(--border);
-            font-size: 0.78em; color: var(--text-muted); cursor: pointer;
-        }
-        .fmt-color-palette-row:hover { color: var(--text); }
-        .fmt-color-palette-row .fmt-custom-swatch {
-            width: 18px; height: 18px; border-radius: 3px;
-            border: 1px dashed var(--border); display: flex; align-items: center; justify-content: center;
-            font-size: 0.9em;
-        }
-        .fmt-sep { width: 1px; height: 18px; background: var(--border); margin: 0 2px; }
 
         .vc.protected {
             cursor: default;
@@ -1697,7 +1905,6 @@
             .toolbar { flex-wrap: wrap; gap: 6px; padding: 6px 10px; }
             .search-box { min-width: 140px; flex: 1; }
             .hide-mobile { display: none; }
-            .fmt-bar { display: none; }
             .vl-panel { width: 98vw; }
             .vl-config { flex-direction: column; }
             .toolbar-title { font-size: 0.95em; }
@@ -1784,6 +1991,255 @@
         .cell-log-old { color: var(--danger); }
         .cell-log-new { color: var(--success); font-weight: 500; }
 
+        /* Modal e popup: vetro uniforme sulla vista griglia */
+        .note-popup-overlay,
+        .filone-input-overlay,
+        .colmgr-overlay,
+        .fnr-overlay,
+        .cfm-overlay,
+        .vl-overlay,
+        .cell-log-overlay,
+        .quick-preview-overlay {
+            background: rgba(0, 4, 16, 0.34);
+            backdrop-filter: none;
+            -webkit-backdrop-filter: none;
+            animation: filoneOverlayIn 0.18s ease-out both;
+        }
+        [data-theme="light"] .note-popup-overlay,
+        [data-theme="light"] .filone-input-overlay,
+        [data-theme="light"] .colmgr-overlay,
+        [data-theme="light"] .fnr-overlay,
+        [data-theme="light"] .cfm-overlay,
+        [data-theme="light"] .vl-overlay,
+        [data-theme="light"] .cell-log-overlay,
+        [data-theme="light"] .quick-preview-overlay {
+            background: rgba(15, 23, 42, 0.16);
+        }
+        .note-popup,
+        .filone-input-modal,
+        .quick-preview-panel {
+            animation: filoneModalIn 0.26s cubic-bezier(0.16, 1, 0.3, 1) both;
+        }
+        .colmgr,
+        .cfm-panel,
+        .vl-panel,
+        .cell-log-panel {
+            animation: filoneCenteredModalIn 0.26s cubic-bezier(0.16, 1, 0.3, 1) both;
+        }
+        .fnr-panel {
+            animation: filoneFloatingPanelIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+            transform-origin: top right;
+        }
+        .note-popup,
+        .filone-input-modal,
+        .colmgr,
+        .fnr-panel,
+        .cfm-panel,
+        .vl-panel,
+        .cell-log-panel,
+        .quick-preview-panel,
+        .fpop,
+        .vl-suggestions {
+            background: var(--filone-modal-panel-bg);
+            backdrop-filter: blur(var(--panel-blur, 18px)) saturate(var(--panel-saturate, 140%));
+            -webkit-backdrop-filter: blur(var(--panel-blur, 18px)) saturate(var(--panel-saturate, 140%));
+            border: var(--filone-modal-border);
+            box-shadow: var(--panel-shadow), var(--filone-modal-ring);
+            background-clip: padding-box;
+        }
+        .note-popup,
+        .filone-input-modal,
+        .quick-preview-panel {
+            position: relative;
+            isolation: isolate;
+        }
+        .colmgr,
+        .fnr-panel,
+        .cfm-panel,
+        .vl-panel,
+        .cell-log-panel {
+            isolation: isolate;
+        }
+        .note-popup > *,
+        .filone-input-modal > *,
+        .colmgr > *,
+        .fnr-panel > *,
+        .cfm-panel > *,
+        .vl-panel > *,
+        .cell-log-panel > *,
+        .quick-preview-panel > * {
+            position: relative;
+            z-index: 1;
+        }
+        .note-popup::after,
+        .filone-input-modal::after,
+        .colmgr::after,
+        .fnr-panel::after,
+        .cfm-panel::after,
+        .vl-panel::after,
+        .cell-log-panel::after,
+        .quick-preview-panel::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+            border-radius: inherit;
+            background: var(--filone-modal-frost-bg);
+            backdrop-filter: blur(calc(var(--panel-blur, 18px) * 0.8)) saturate(var(--panel-saturate, 140%));
+            -webkit-backdrop-filter: blur(calc(var(--panel-blur, 18px) * 0.8)) saturate(var(--panel-saturate, 140%));
+        }
+        .note-popup::before,
+        .filone-input-modal::before,
+        .colmgr::before,
+        .fnr-panel::before,
+        .cfm-panel::before,
+        .vl-panel::before,
+        .cell-log-panel::before,
+        .quick-preview-panel::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            z-index: 5;
+            pointer-events: none;
+            border-radius: inherit;
+            border: 1px solid rgba(147, 197, 253, 0.46);
+            box-shadow:
+                inset 0 0 0 1px rgba(255, 255, 255, 0.05),
+                0 0 0 1px rgba(59, 130, 246, 0.16);
+        }
+        [data-theme="light"] .note-popup::before,
+        [data-theme="light"] .filone-input-modal::before,
+        [data-theme="light"] .colmgr::before,
+        [data-theme="light"] .fnr-panel::before,
+        [data-theme="light"] .cfm-panel::before,
+        [data-theme="light"] .vl-panel::before,
+        [data-theme="light"] .cell-log-panel::before,
+        [data-theme="light"] .quick-preview-panel::before {
+            border-color: rgba(59, 130, 246, 0.28);
+            box-shadow:
+                inset 0 0 0 1px rgba(255, 255, 255, 0.72),
+                0 0 0 1px rgba(15, 23, 42, 0.08);
+        }
+        .note-popup textarea {
+            background: var(--filone-modal-field-bg);
+        }
+        [data-theme="light"] .note-popup textarea {
+            background: var(--filone-modal-field-bg);
+        }
+        .fpop.show,
+        .vl-suggestions.show {
+            animation: filonePopoverIn 0.16s cubic-bezier(0.16, 1, 0.3, 1) both;
+            transform-origin: top left;
+        }
+        .colmgr-hdr,
+        .colmgr-foot,
+        .cfm-hdr,
+        .cfm-foot,
+        .vl-hdr,
+        .vl-foot,
+        .cell-log-hdr,
+        .quick-preview-hdr,
+        .quick-preview-foot {
+            background: var(--filone-modal-chrome-bg);
+            backdrop-filter: blur(var(--panel-blur, 18px)) saturate(var(--panel-saturate, 140%));
+            -webkit-backdrop-filter: blur(var(--panel-blur, 18px)) saturate(var(--panel-saturate, 140%));
+            border-color: rgba(132, 161, 216, 0.22);
+        }
+        [data-design="solid"] .toolbar,
+        [data-design="solid"] .search-box,
+        [data-design="solid"] .quick-head,
+        [data-design="solid"] .quick-hover-preview,
+        [data-design="solid"] .quick-preview-overlay,
+        [data-design="solid"] .quick-preview-panel,
+        [data-design="solid"] .grid-header,
+        [data-design="solid"] .note-popup,
+        [data-design="solid"] .filone-input-modal,
+        [data-design="solid"] .colmgr,
+        [data-design="solid"] .fnr-panel,
+        [data-design="solid"] .cfm-panel,
+        [data-design="solid"] .vl-panel,
+        [data-design="solid"] .cell-log-panel,
+        [data-design="solid"] .fpop,
+        [data-design="solid"] .vl-suggestions,
+        [data-design="solid"] .colmgr-hdr,
+        [data-design="solid"] .colmgr-foot,
+        [data-design="solid"] .cfm-hdr,
+        [data-design="solid"] .cfm-foot,
+        [data-design="solid"] .vl-hdr,
+        [data-design="solid"] .vl-foot,
+        [data-design="solid"] .cell-log-hdr,
+        [data-design="solid"] .quick-preview-hdr,
+        [data-design="solid"] .quick-preview-foot,
+        [data-design="solid"] .note-popup h3,
+        [data-design="solid"] .note-popup-actions {
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+        }
+        [data-design="solid"] .note-popup::after,
+        [data-design="solid"] .filone-input-modal::after,
+        [data-design="solid"] .colmgr::after,
+        [data-design="solid"] .fnr-panel::after,
+        [data-design="solid"] .cfm-panel::after,
+        [data-design="solid"] .vl-panel::after,
+        [data-design="solid"] .cell-log-panel::after,
+        [data-design="solid"] .quick-preview-panel::after {
+            display: none;
+        }
+        [data-design="solid"] .note-popup::before,
+        [data-design="solid"] .filone-input-modal::before,
+        [data-design="solid"] .colmgr::before,
+        [data-design="solid"] .fnr-panel::before,
+        [data-design="solid"] .cfm-panel::before,
+        [data-design="solid"] .vl-panel::before,
+        [data-design="solid"] .cell-log-panel::before,
+        [data-design="solid"] .quick-preview-panel::before {
+            border-color: var(--border);
+            box-shadow: none;
+        }
+        @keyframes filoneOverlayIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        @keyframes filoneModalIn {
+            from { opacity: 0; transform: translateY(24px) scale(0.97); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes filoneCenteredModalIn {
+            from { opacity: 0; transform: translate(-50%, calc(-50% + 24px)) scale(0.97); }
+            to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        }
+        @keyframes filoneFloatingPanelIn {
+            from { opacity: 0; transform: translateY(-10px) scale(0.98); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes filonePopoverIn {
+            from { opacity: 0; transform: translateY(-6px) scale(0.98); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .note-popup-overlay,
+            .filone-input-overlay,
+            .colmgr-overlay,
+            .fnr-overlay,
+            .cfm-overlay,
+            .vl-overlay,
+            .cell-log-overlay,
+            .quick-preview-overlay,
+            .note-popup,
+            .filone-input-modal,
+            .quick-preview-panel,
+            .colmgr,
+            .cfm-panel,
+            .vl-panel,
+            .cell-log-panel,
+            .fnr-panel,
+            .fpop.show,
+            .vl-suggestions.show {
+                animation: none !important;
+            }
+        }
+
         /* iOS Safari mobile fix: previeni auto-zoom su focus input <16px */
         @media (max-width: 600px) {
             input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
@@ -1802,9 +2258,10 @@
         <div class="toolbar-sep"></div>
         <span class="toolbar-info" id="infoRighe">Caricamento...</span>
         <div class="toolbar-sep hide-mobile"></div>
-        <div class="search-box">
-            <span style="color:var(--text-muted);font-size:0.85em">&#x1F50D;</span>
-            <input type="text" class="search-input" id="globalSearch" placeholder="Cerca ovunque..." autocomplete="off">
+        <div class="search-box" id="sharedSearchBox" role="search" title="Cerca nel filone">
+            <span class="search-icon" aria-hidden="true"></span>
+            <input type="text" class="search-input" id="globalSearch" placeholder="Cerca ovunque..." autocomplete="off" aria-label="Cerca nel filone">
+            <button class="search-clear" type="button" onclick="clearSharedSearch()" title="Pulisci ricerca">&times;</button>
         </div>
         <button class="ribbon-toggle" id="ribbonToggle" onclick="toggleRibbon()" title="Mostra/nascondi strumenti">
             &#x2630; Strumenti
@@ -1819,34 +2276,13 @@
             <button class="tb" onclick="openFindReplace()" title="Trova e Sostituisci (Ctrl+H)">&#x1F50D; Sostituisci</button>
             <button class="tb" onclick="openVlookup()" title="Filtri Avanzati (Ctrl+L)">&#x2699; Filtri Avanzati</button>
             <div class="toolbar-sep"></div>
-            <div class="fmt-bar">
-                <button class="fmt-btn" id="fmtBold" onclick="toggleCellFormat('bold')" title="Grassetto (Ctrl+B)"><span class="fmt-icon">B</span></button>
-                <button class="fmt-btn" id="fmtItalic" onclick="toggleCellFormat('italic')" title="Corsivo (Ctrl+I)"><span class="fmt-icon fmt-icon-i">I</span></button>
-                <button class="fmt-btn" id="fmtUnderline" onclick="toggleCellFormat('underline')" title="Sottolineato (Ctrl+U)"><span class="fmt-icon fmt-icon-u">U</span></button>
-                <button class="fmt-btn" id="fmtStrike" onclick="toggleCellFormat('strikethrough')" title="Barrato (Ctrl+5)"><span class="fmt-icon fmt-icon-s">S</span></button>
-                <div class="fmt-sep"></div>
-                <div class="fmt-color-wrap" id="textColorWrap">
-                    <div class="fmt-color-preview" id="fmtTextColorPreview" onclick="toggleColorPalette('text')" title="Colore testo" style="color:var(--text)">A</div>
-                    <input type="color" id="fmtTextColor" value="#ef4444" onchange="setCellFormatColor('textColor', this.value); closeColorPalettes()">
-                    <div class="fmt-color-palette" id="textColorPalette"></div>
-                </div>
-                <div class="fmt-color-wrap" id="bgColorWrap">
-                    <div class="fmt-color-preview" id="fmtHighlightPreview" onclick="toggleColorPalette('bg')" title="Evidenzia cella" style="background:var(--bg-cell);color:var(--text-muted);font-size:0.7em">&#x1F58D;</div>
-                    <input type="color" id="fmtHighlight" value="#facc15" onchange="setCellFormatColor('bgColor', this.value); closeColorPalettes()">
-                    <div class="fmt-color-palette" id="bgColorPalette"></div>
-                </div>
-                <div class="fmt-sep"></div>
-                <button class="fmt-btn" onclick="clearCellFormat()" title="Cancella formattazione">&#x1F6AB;</button>
-            </div>
-            <div class="toolbar-sep"></div>
             <button class="tb" id="btnNuovoContatore" onclick="aggiungiNuovoContatoreFilone()" title="Aggiungi un nuovo contatore al filone (chiede il codice Eneltel, poi puoi riempire le altre celle cliccandoci)">&#x2795; Nuovo</button>
             <button class="tb" id="btnAggiungiNota" onclick="aggiungiNotaFilone()" title="Aggiungi nota con data (DD/MM) in testa alla cella selezionata">&#x1F4DD; Nota</button>
-            <button class="tb" id="btnCellNote" onclick="openCellNotePopup()" title="Pop-up nota sulla cella selezionata (stile Google Sheets, sync bidirezionale)">&#x1F4AC; Commento</button>
+            <button class="tb" id="btnCellNote" onclick="openCellNotePopup()" title="Commento sulla cella selezionata">&#x1F4AC; Commento</button>
             <button class="tb" id="btnCellHistory" onclick="showCellHistoryForSelection()" title="Mostra storico modifiche della cella selezionata">&#x1F4DC; Storico</button>
             <div class="toolbar-sep"></div>
             <button class="tb" id="btnHiddenCols" onclick="openColManager()" title="Gestione colonne">&#x2630; Colonne</button>
             <button class="tb" onclick="openCondFormat()" title="Formattazione condizionale">&#x1F3A8; Formato</button>
-            <button class="tb" id="btnStylesToggle" onclick="toggleStylesView()" title="Nascondi gli stili (vista pulita)">&#x1F441;&#xFE0F; Stili</button>
             <div class="toolbar-sep"></div>
             <button class="tb" id="btnRefresh" onclick="manualRefresh()" title="Ricarica dati dal server (F5)">&#x1F504;</button>
             <button class="tb" onclick="AlgecoTour.start(true)" title="Guida interattiva">&#x2753; Guida</button>
@@ -1872,33 +2308,61 @@
                 <div class="grid-body" id="gridBody"></div>
             </div>
         </div>
+        <div class="grid-empty-state" id="gridEmptyState">
+            <strong>Nessuna riga visibile</strong>
+            <span>I filtri correnti non trovano risultati.</span>
+            <button class="tb primary" type="button" onclick="clearAllGridFilters()">Pulisci filtri</button>
+        </div>
     </div>
 
     <div class="quick-wrap" id="quickWrap">
         <div class="quick-topbar quick-filterbar">
             <div class="quick-filters">
-                <input class="quick-input search" id="quickSearch" type="text" placeholder="Cerca nominativo, POD, indirizzo..." oninput="quickFilterChanged('search')" autocomplete="off">
-                <select class="quick-select" id="quickFilterLcl" onchange="quickFilterChanged('lcl')"><option value="">Tutti LCL</option></select>
-                <select class="quick-select" id="quickFilterComune" onchange="quickFilterChanged('comune')"><option value="">Tutti comuni</option></select>
-                <select class="quick-select" id="quickFilterPhone" onchange="quickFilterChanged('phone')">
-                    <option value="">Telefono: tutti</option>
-                    <option value="with">Con telefono</option>
-                    <option value="without">Senza telefono</option>
-                </select>
-                <select class="quick-select" id="quickFilterDate" onchange="quickFilterChanged('date')">
-                    <option value="">Date: tutte</option>
-                    <option value="to_plan">Da pianificare</option>
-                    <option value="planned">Pianificati</option>
-                    <option value="expired">Scaduti</option>
-                </select>
-                <select class="quick-select" id="quickFilterOperator" onchange="quickFilterChanged('operator')"><option value="">Tutti operatori</option></select>
-                <select class="quick-select" id="quickFilterAppointment" onchange="quickFilterChanged('appointment')">
-                    <option value="">Appuntamenti: tutti</option>
-                    <option value="with">Con appuntamento</option>
-                    <option value="without">Senza appuntamento</option>
-                </select>
-                <select class="quick-select" id="quickFilterTipo" onchange="quickFilterChanged('tipo')" style="display:none"><option value="">Tutte tipologie</option></select>
-                <select class="quick-select" id="quickFilterPosizione" onchange="quickFilterChanged('posizione')" style="display:none"><option value="">Tutte posizioni</option></select>
+                <label class="quick-field lcl" title="LCL">
+                    <span class="quick-icon">#</span>
+                    <select class="quick-select" id="quickFilterLcl" onchange="quickFilterChanged('lcl')"><option value="">Tutti LCL</option></select>
+                </label>
+                <label class="quick-field comune" title="Comune">
+                    <span class="quick-icon">🏠</span>
+                    <select class="quick-select" id="quickFilterComune" onchange="quickFilterChanged('comune')"><option value="">Tutti comuni</option></select>
+                </label>
+                <label class="quick-field phone" title="Telefono">
+                    <span class="quick-icon">☎</span>
+                    <select class="quick-select" id="quickFilterPhone" onchange="quickFilterChanged('phone')">
+                        <option value="">Telefono: tutti</option>
+                        <option value="with">Con telefono</option>
+                        <option value="without">Senza telefono</option>
+                    </select>
+                </label>
+                <label class="quick-field date" title="Data pianificazione">
+                    <span class="quick-icon">📅</span>
+                    <select class="quick-select" id="quickFilterDate" onchange="quickFilterChanged('date')">
+                        <option value="">Date: tutte</option>
+                        <option value="to_plan">Da pianificare</option>
+                        <option value="planned">Pianificati</option>
+                        <option value="expired">Scaduti</option>
+                    </select>
+                </label>
+                <label class="quick-field operator" title="Operatore">
+                    <span class="quick-icon">👤</span>
+                    <select class="quick-select" id="quickFilterOperator" onchange="quickFilterChanged('operator')"><option value="">Tutti operatori</option></select>
+                </label>
+                <label class="quick-field appointment" title="Appuntamenti">
+                    <span class="quick-icon">📌</span>
+                    <select class="quick-select" id="quickFilterAppointment" onchange="quickFilterChanged('appointment')">
+                        <option value="">Appuntamenti: tutti</option>
+                        <option value="with">Con appuntamento</option>
+                        <option value="without">Senza appuntamento</option>
+                    </select>
+                </label>
+                <label class="quick-field tipo" id="quickFilterTipoWrap" title="Tipologia" style="display:none">
+                    <span class="quick-icon">T</span>
+                    <select class="quick-select" id="quickFilterTipo" onchange="quickFilterChanged('tipo')"><option value="">Tutte tipologie</option></select>
+                </label>
+                <label class="quick-field posizione" id="quickFilterPosizioneWrap" title="Posizione misuratore" style="display:none">
+                    <span class="quick-icon">📍</span>
+                    <select class="quick-select" id="quickFilterPosizione" onchange="quickFilterChanged('posizione')"><option value="">Tutte posizioni</option></select>
+                </label>
             </div>
             <span class="quick-meta" id="quickStats">-</span>
         </div>
@@ -1931,6 +2395,7 @@
 
     <div class="toast" id="toast"></div>
     <div class="fpop" id="filterPopup"></div>
+    <div class="quick-hover-preview" id="quickHoverPreview"></div>
 
     <div class="quick-preview-overlay" id="quickPreviewOverlay" onclick="if(event.target===this)quickClosePreview()">
         <div class="quick-preview-panel" role="dialog" aria-modal="true">
@@ -1948,7 +2413,7 @@
         </div>
     </div>
 
-    <!-- Pop-up nota cella (stile Sheets) -->
+    <!-- Pop-up nota cella -->
     <div class="note-popup-overlay" id="notePopupOverlay" onclick="if(event.target===this)closeCellNotePopup()">
         <div class="note-popup" role="dialog" aria-modal="true">
             <h3>&#x1F4AC; Commento cella</h3>
@@ -1959,6 +2424,19 @@
                 <span class="spacer"></span>
                 <button class="tb" onclick="closeCellNotePopup()">Annulla</button>
                 <button class="tb primary" onclick="saveCellNote()">&#x1F4BE; Salva</button>
+            </div>
+        </div>
+    </div>
+    <div class="note-popup-overlay filone-input-overlay" id="filoneInputOverlay" onclick="if(event.target===this)closeFiloneInputModal(null)">
+        <div class="note-popup filone-input-modal" role="dialog" aria-modal="true" aria-labelledby="filoneInputTitle">
+            <h3 id="filoneInputTitle">&#x270D; Inserisci valore</h3>
+            <div class="filone-input-message" id="filoneInputMessage"></div>
+            <input class="filone-input-control" id="filoneInputSingle" type="text" autocomplete="off">
+            <textarea class="filone-input-control" id="filoneInputText" style="display:none"></textarea>
+            <div class="note-popup-actions">
+                <span class="spacer"></span>
+                <button class="tb" type="button" onclick="closeFiloneInputModal(null)" id="filoneInputCancel">Annulla</button>
+                <button class="tb primary" type="button" onclick="confirmFiloneInputModal()" id="filoneInputConfirm">&#x1F4BE; Salva</button>
             </div>
         </div>
     </div>
@@ -1984,10 +2462,6 @@
         <div class="cfm-hdr">
             <h3>&#x1F3A8; Formattazione Condizionale</h3>
             <button class="cfm-close" onclick="closeCondFormat()">&times;</button>
-        </div>
-        <div style="padding:8px 14px;font-size:0.8em;color:var(--text-muted);border-bottom:1px solid var(--border)">
-            <span id="cfmSheetsInfo">Regole importate da Sheets: <b id="cfmSheetsCount">0</b></span>
-            <button onclick="refreshCondFormatsFromSheets()" style="margin-left:8px;font-size:0.9em;padding:2px 8px;cursor:pointer" title="Rileggi le regole condizionali da Google Sheets">&#x1F504; Aggiorna da Sheets</button>
         </div>
         <div class="cfm-body" id="cfmBody"></div>
         <div class="cfm-foot">
@@ -2313,6 +2787,7 @@ function _tabApply(t, opts) {
     sortDir = t.sortDir || 'asc';
     var gsInp = qs('#globalSearch');
     if (gsInp) gsInp.value = t.globalSearch || '';
+    if (typeof updateSearchChrome === 'function') updateSearchChrome();
 
     // Layout colonne — solo se compatibile con gli header attuali
     if (Array.isArray(t.hiddenCols)) {
@@ -2597,9 +3072,6 @@ async function loadData() {
         buildRowIndex();
         detectColTypes();
         initCondFormat();
-        loadCellFormats();
-        loadStylesEnabled();
-        updateStylesToggleBtn();
         detectPodColumn();
         initColWidths();
         initColOrder();
@@ -2622,152 +3094,13 @@ async function loadData() {
             qs('#modeQuickBtn').classList.add('active');
             quickRender(true);
         }
-        // Recupera lo stato di sync pending (modifiche fatte nella sessione
-        // precedente e non ancora pushate, es. user che ha ricaricato prima
-        // del debounce). Se c'è qualcosa, viene flushato subito al server
-        // PRIMA di leggere la cache server (così non viene sovrascritto).
-        _loadFmtSyncState();
-        if (Object.keys(_fmtDirty).length > 0 || _fmtCleared.length > 0) {
-            _syncFormatsToServer().finally(function() { _loadFormatsFromServer(); });
-        } else {
-            _loadFormatsFromServer();
-        }
-        // Carica anche le regole condizionali da Sheets (silent: niente toast).
-        _loadCondFormatsFromSheets(true);
-
-        // Note cella (pop-up Sheets): cache locale come fallback immediato,
-        // poi flush degli eventuali pending pre-reload, poi pull dal server.
+        // Commenti cella: caricamento locale immediato, poi persistenza DB.
         _loadNotesLocalCache();
-        _loadNotesSyncState();
-        if (Object.keys(_notesDirty).length > 0 || _notesCleared.length > 0) {
-            _syncNotesToServer().finally(function() { _loadNotesFromServer(); });
-        } else {
-            _loadNotesFromServer();
-        }
-        _startNotesPolling();
+        _loadNotesFromServer();
     } catch (e) {
         qs('.loading-overlay div').innerHTML = '&#x274C; ' + esc(e.message) + '<br><button onclick="loadData()" style="margin-top:10px;padding:6px 16px;cursor:pointer">Riprova</button>';
     }
 }
-
-async function _loadFormatsFromServer() {
-    try {
-        var r = await fetch('/api/filone/formats?_=' + Date.now());
-        if (!r.ok) return;
-        var d = await r.json();
-        if (d.formats) {
-            loadCellFormatsFromServer(d.formats);
-            renderVisible(true);
-        }
-        // SEMPRE forziamo un refresh in background all'apertura della
-        // vista Excel (POST sicuro, già esistente: spawna un thread daemon
-        // gated da `_format_cache_running` quindi non si moltiplica). Così
-        // il polling cattura SEMPRE le modifiche fatte su Sheets nei
-        // secondi precedenti, anche se la cache appare "fresca".
-        try { fetch('/api/filone/formats/refresh', { method: 'POST' }); } catch(_) {}
-        _startFormatPolling(d);
-        // Avvia il timer che continua a triggerare refresh ogni 8s
-        // (gated → niente flooding, ma garantisce che le modifiche fatte
-        // su Sheets dopo il page load vengano effettivamente catturate).
-        _startRefreshTrigger();
-    } catch(e) {
-        // Formattazione non disponibile, usa cache locale
-    }
-}
-
-// Polling client-side per applicare la nuova cache quando il bg refresh
-// completa. Ogni richiesta è una semplice lettura di file JSON sul server,
-// quindi cheap (no chiamate Sheets in questa fase). Si ferma quando la
-// cache è di nuovo "fresca" o dopo timeout (~30s).
-var _formatPollTimer = null;
-var _formatPollStart = 0;
-var _formatPollInitialUpdated = null;
-function _startFormatPolling(initialResp) {
-    if (_formatPollTimer) return;
-    _formatPollStart = Date.now();
-    // Snapshot del timestamp `updated` della cache iniziale: il polling si
-    // ferma SOLO quando il server espone una cache con `updated` diverso
-    // (= un nuovo refresh è stato completato e committato dal bg thread).
-    _formatPollInitialUpdated = initialResp && initialResp.updated ? initialResp.updated : null;
-    // Polling ogni 1s: ora usiamo l'endpoint /version (~100 byte) invece
-    // del payload completo (~5MB), quindi è cheap pollare frequentemente.
-    _formatPollTimer = setInterval(_pollFormatRefresh, 1000);
-}
-async function _pollFormatRefresh() {
-    if (Date.now() - _formatPollStart > 45000) {
-        // Boot polling è scaduto: passo al polling continuo (più lento)
-        // che resta attivo mentre la pagina è aperta, così le modifiche
-        // future fatte su Sheets si applicano automaticamente senza che
-        // l'utente debba ricaricare.
-        clearInterval(_formatPollTimer); _formatPollTimer = null;
-        _startContinuousFormatPolling();
-        return;
-    }
-    await _checkAndApplyFormatRefresh();
-}
-
-// Effettua un check leggero (version endpoint) e se la cache è cambiata
-// scarica il payload completo e lo applica. Ritorna true se ha applicato
-// nuovi dati. Usata sia dal boot-polling (1s) che dal polling continuo (10s).
-async function _checkAndApplyFormatRefresh() {
-    try {
-        var rv = await fetch('/api/filone/formats/version?_=' + Date.now());
-        if (!rv.ok) return false;
-        var v = await rv.json();
-        if (!v) return false;
-        var changed = v.updated && _formatPollInitialUpdated && v.updated !== _formatPollInitialUpdated;
-        var freshFallback = !v.updated && !v.partial && (typeof v.age_seconds === 'number') && v.age_seconds < 5;
-        if (!(changed || freshFallback)) return false;
-        var rf = await fetch('/api/filone/formats?_=' + Date.now());
-        if (!rf.ok) return false;
-        var d = await rf.json();
-        if (d && d.formats) {
-            loadCellFormatsFromServer(d.formats);
-            renderVisible(true);
-            if (v.updated) _formatPollInitialUpdated = v.updated;
-            return true;
-        }
-        return false;
-    } catch(_) { return false; }
-}
-
-// Polling continuo (forever): ogni 5s controlla `version` (cheap),
-// se cambiato applica il payload. Pausa quando il tab è nascosto;
-// check immediato quando torna visibile.
-var _continuousFormatPollTimer = null;
-function _startContinuousFormatPolling() {
-    if (_continuousFormatPollTimer) return;
-    _continuousFormatPollTimer = setInterval(_continuousFormatPollTick, 5000);
-}
-async function _continuousFormatPollTick() {
-    if (document.hidden) return;
-    await _checkAndApplyFormatRefresh();
-}
-
-// Timer SEPARATO che fa scattare il bg refresh server-side periodicamente,
-// indipendentemente dal polling. Senza questo, il polling controllerebbe
-// sempre la stessa cache (nessuno triggera nuovi refresh). Il refresh è
-// gated da `_format_cache_running` quindi POSTs ravvicinati non si
-// moltiplicano: se uno è già in corso, gli altri sono no-op. Pausato
-// quando il tab è nascosto per non sprecare API quando nessuno guarda.
-var _refreshTriggerTimer = null;
-function _startRefreshTrigger() {
-    if (_refreshTriggerTimer) return;
-    _refreshTriggerTimer = setInterval(function() {
-        if (document.hidden) return;
-        try { fetch('/api/filone/formats/refresh', { method: 'POST' }); } catch(_) {}
-    }, 8000);
-}
-
-// Quando l'utente torna sul tab dopo averlo lasciato aperto in background,
-// fa subito un trigger di refresh + check, così applica eventuali
-// modifiche arrivate intanto senza dover aspettare il prossimo tick.
-document.addEventListener('visibilitychange', function() {
-    if (!document.hidden && (_continuousFormatPollTimer || _formatPollTimer)) {
-        try { fetch('/api/filone/formats/refresh', { method: 'POST' }); } catch(_) {}
-        setTimeout(_checkAndApplyFormatRefresh, 1500);
-    }
-});
 
 function buildRowIndex() {
     rowIndex = {};
@@ -3217,8 +3550,89 @@ function buildHeader() {
 // ============================================================
 // FILTER + SORT + SEARCH
 // ============================================================
+function pruneStaleGridFilters() {
+    var changed = false;
+    for (var cn in colFilters) {
+        if (headers.indexOf(cn) < 0) {
+            delete colFilters[cn];
+            changed = true;
+            continue;
+        }
+        var existing = new Set();
+        for (var i = 0; i < rawData.length; i++) {
+            existing.add((rawData[i][cn] != null ? rawData[i][cn] : '').toString().trim());
+        }
+        var kept = new Set();
+        colFilters[cn].forEach(function(v) {
+            if (existing.has(v)) kept.add(v);
+        });
+        if (kept.size === 0) {
+            delete colFilters[cn];
+            changed = true;
+        } else if (kept.size !== colFilters[cn].size) {
+            colFilters[cn] = kept;
+            changed = true;
+        }
+    }
+    if (podFilterSet) {
+        var filterColName = vlFilterCol || podColName;
+        if (!filterColName || headers.indexOf(filterColName) < 0) {
+            podFilterSet = null;
+            vlFilterCol = '';
+            changed = true;
+        } else {
+            var podExisting = new Set();
+            for (var r = 0; r < rawData.length; r++) {
+                podExisting.add((rawData[r][filterColName] != null ? rawData[r][filterColName] : '').toString().trim().toUpperCase());
+            }
+            var podKept = new Set();
+            podFilterSet.forEach(function(v) {
+                if (podExisting.has(v)) podKept.add(v);
+            });
+            if (podKept.size === 0) {
+                podFilterSet = null;
+                vlFilterCol = '';
+                changed = true;
+            } else if (podKept.size !== podFilterSet.size) {
+                podFilterSet = podKept;
+                changed = true;
+            }
+        }
+    }
+    return changed;
+}
+
+function hasActiveGridFilters() {
+    return Object.keys(colFilters || {}).length > 0
+        || Object.keys(dateRangeFilters || {}).length > 0
+        || !!(podFilterSet && podFilterSet.size)
+        || !!(colorFilterCol && colorFilterColor)
+        || !!((qs('#globalSearch') && qs('#globalSearch').value || '').trim());
+}
+
+function updateGridEmptyState() {
+    var el = qs('#gridEmptyState');
+    if (!el) return;
+    el.classList.toggle('show', rawData.length > 0 && filtered.length === 0 && hasActiveGridFilters());
+}
+
+function clearAllGridFilters() {
+    colFilters = {};
+    dateRangeFilters = {};
+    colorFilterCol = '';
+    colorFilterColor = '';
+    podFilterSet = null;
+    vlFilterCol = '';
+    var search = qs('#globalSearch');
+    if (search) search.value = '';
+    updateSearchChrome();
+    buildHeader();
+    applyFilters();
+}
+
 function applyFilters() {
     var q = qs('#globalSearch').value.toLowerCase().trim();
+    var prunedFilters = pruneStaleGridFilters();
     filtered = [];
     selRange = null;
 
@@ -3344,8 +3758,10 @@ function applyFilters() {
     updateLayout();
     visStart = -1; visEnd = -1;
     renderVisible(true);
+    updateGridEmptyState();
     updateStatus();
     updateActiveFilterBadges();
+    if (prunedFilters) buildHeader();
     // Sync stato per-tab (filtri/sort/ricerca) + aggiorna dirty dot
     if (typeof _tabsRender === 'function' && _tabsInited) {
         _tabsRender();
@@ -3358,11 +3774,39 @@ function getDisplayVal(row, colName) {
     return pending[ck] ? pending[ck].val : (row[colName] != null ? row[colName] : '').toString();
 }
 
+function updateSearchChrome() {
+    var box = qs('#sharedSearchBox');
+    var input = qs('#globalSearch');
+    if (!box || !input) return;
+    box.classList.toggle('has-value', !!input.value.trim());
+    input.placeholder = filoneMode === 'quick'
+        ? 'Cerca nella lista rapida...'
+        : 'Cerca ovunque...';
+}
+
+function runSharedSearch() {
+    updateSearchChrome();
+    if (filoneMode === 'quick') {
+        quickFilterChanged('search');
+    } else {
+        applyFilters();
+    }
+}
+
+function clearSharedSearch() {
+    var input = qs('#globalSearch');
+    if (!input) return;
+    input.value = '';
+    runSharedSearch();
+    input.focus();
+}
+
 // Search debounce
 var searchTimer;
 qs('#globalSearch').addEventListener('input', function() {
+    updateSearchChrome();
     clearTimeout(searchTimer);
-    searchTimer = setTimeout(applyFilters, 200);
+    searchTimer = setTimeout(runSharedSearch, 180);
 });
 
 // Prevent native undo/redo on search input — always redirect to cell undo stack
@@ -3533,34 +3977,20 @@ function fillRow(node, row, visIdx) {
         if (isInSelRange(visIdx, i)) cls += ' sel-range';
         if (editing && row._row === selRow && i === selCol) cls += ' editing';
 
-        // Formattazione: la regola condizionale, se fa match, ha PRIORITÀ
-        // ASSOLUTA e sostituisce completamente quella cell-level (per non
-        // essere "diluita" dai colori che arrivano dal foglio Sheets).
-        // Senza match cond, applichiamo la cell-level come al solito.
-        // Il toggle `stylesEnabled` permette di nascondere temporaneamente
-        // tutti gli stili (cell-level + cond) per una vista "pulita".
-        if (stylesEnabled) {
-            var condRule = getCondStyle(i, val);
-            var cfmt = getCellFormat(row._row, cn);
-            var fmtSrc = condRule || cfmt;
-            if (fmtSrc) {
-                if (fmtSrc.bold) cell.style.fontWeight = '700';
-                if (fmtSrc.italic) cell.style.fontStyle = 'italic';
-                var td = [];
-                if (fmtSrc.underline) td.push('underline');
-                if (fmtSrc.strikethrough) td.push('line-through');
-                if (td.length) cell.style.textDecoration = td.join(' ');
-                if (fmtSrc.textColor) cell.style.color = fmtSrc.textColor;
-                if (fmtSrc.bgColor) {
-                    cell.style.backgroundColor = fmtSrc.bgColor;
-                    // Se non è stato impostato un textColor esplicito,
-                    // calcoliamo un colore con contrasto sufficiente sullo
-                    // sfondo: rende il testo leggibile in entrambi i temi
-                    // (chiaro/scuro) qualunque sia lo sfondo del foglio.
-                    if (!fmtSrc.textColor) {
-                        var auto = getContrastTextColor(fmtSrc.bgColor);
-                        if (auto) cell.style.color = auto;
-                    }
+        var condRule = getCondStyle(i, val);
+        if (condRule) {
+            if (condRule.bold) cell.style.fontWeight = '700';
+            if (condRule.italic) cell.style.fontStyle = 'italic';
+            var td = [];
+            if (condRule.underline) td.push('underline');
+            if (condRule.strikethrough) td.push('line-through');
+            if (td.length) cell.style.textDecoration = td.join(' ');
+            if (condRule.textColor) cell.style.color = condRule.textColor;
+            if (condRule.bgColor) {
+                cell.style.backgroundColor = condRule.bgColor;
+                if (!condRule.textColor) {
+                    var auto = getContrastTextColor(condRule.bgColor);
+                    if (auto) cell.style.color = auto;
                 }
             }
         }
@@ -3570,7 +4000,7 @@ function fillRow(node, row, visIdx) {
             cls += ' find-match';
             if (fnrCurrentIdx >= 0 && fnrMatches[fnrCurrentIdx] && fnrMatches[fnrCurrentIdx].rn === row._row && fnrMatches[fnrCurrentIdx].ci === i) cls += ' find-current';
         }
-        // Pop-up nota cella (stile Sheets): triangolino in corner se presente
+        // Pop-up nota cella: triangolino in corner se presente
         var _note = cellNotes[row._row + ':' + cn];
         if (_note) {
             cls += ' has-note';
@@ -3735,7 +4165,6 @@ function selectCell(rn, ci, noRedraw) {
     qs('#stCell').textContent = 'Riga ' + rn + ' \u2022 ' + cn + ': ' + val;
 
     if (!noRedraw) renderVisible(true);
-    updateFormatToolbarState();
     if (typeof _tabsPersist === 'function') _tabsPersist();
 }
 
@@ -3928,15 +4357,87 @@ function buildNotaConData(testoNota, notaAttuale) {
     return nuovaNota;
 }
 
+var filoneInputModalResolve = null;
+
+function openFiloneInputModal(options) {
+    options = options || {};
+    return new Promise(function(resolve) {
+        if (filoneInputModalResolve) filoneInputModalResolve(null);
+        filoneInputModalResolve = resolve;
+
+        var overlay = qs('#filoneInputOverlay');
+        var title = qs('#filoneInputTitle');
+        var message = qs('#filoneInputMessage');
+        var single = qs('#filoneInputSingle');
+        var text = qs('#filoneInputText');
+        var confirm = qs('#filoneInputConfirm');
+        var cancel = qs('#filoneInputCancel');
+        var multiline = !!options.multiline;
+        var field = multiline ? text : single;
+
+        title.textContent = options.title || 'Inserisci valore';
+        message.textContent = options.message || '';
+        confirm.textContent = options.confirmLabel || 'Salva';
+        cancel.textContent = options.cancelLabel || 'Annulla';
+
+        single.style.display = multiline ? 'none' : '';
+        text.style.display = multiline ? '' : 'none';
+        single.value = options.value || '';
+        text.value = options.value || '';
+        single.placeholder = options.placeholder || '';
+        text.placeholder = options.placeholder || '';
+        single.type = options.type || 'text';
+
+        overlay.classList.add('show');
+        setTimeout(function() {
+            field.focus();
+            if (options.select !== false) field.select();
+        }, 40);
+    });
+}
+
+function closeFiloneInputModal(value) {
+    var overlay = qs('#filoneInputOverlay');
+    if (overlay) overlay.classList.remove('show');
+    var resolve = filoneInputModalResolve;
+    filoneInputModalResolve = null;
+    if (resolve) resolve(value);
+}
+
+function confirmFiloneInputModal() {
+    var text = qs('#filoneInputText');
+    var single = qs('#filoneInputSingle');
+    var active = text && text.style.display !== 'none' ? text : single;
+    closeFiloneInputModal(active ? active.value : '');
+}
+
+(function() {
+    function bindInputModalShortcut(el, multiline) {
+        if (!el) return;
+        el.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                closeFiloneInputModal(null);
+            } else if (e.key === 'Enter' && (!multiline || e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                confirmFiloneInputModal();
+            }
+        });
+    }
+    bindInputModalShortcut(qs('#filoneInputSingle'), false);
+    bindInputModalShortcut(qs('#filoneInputText'), true);
+})();
+
 // Aggiunge un nuovo contatore al filone (chiede solo Eneltel, le altre celle
 // vengono riempite dall'utente cliccandoci dopo).
 async function aggiungiNuovoContatoreFilone() {
-    const eneltel = prompt(
-        'Codice Eneltel del nuovo contatore (obbligatorio).\n\n' +
-        'Inserisci qui sotto il codice; le altre celle (POD, NOMINATIVO, ' +
-        'telefono, ecc.) potrai riempirle cliccando sulle celle vuote ' +
-        'della nuova riga subito dopo.'
-    );
+    const eneltel = await openFiloneInputModal({
+        title: 'Nuovo contatore',
+        message: 'Codice Eneltel del nuovo contatore (obbligatorio).\n\nLe altre celle (POD, NOMINATIVO, telefono, ecc.) potrai riempirle cliccando sulle celle vuote della nuova riga subito dopo.',
+        placeholder: 'Inserisci codice Eneltel',
+        confirmLabel: 'Aggiungi',
+        type: 'text'
+    });
     if (eneltel === null) return;
     const ek = eneltel.trim();
     if (!ek) { toast('Codice Eneltel mancante', 'error'); return; }
@@ -3981,7 +4482,7 @@ async function aggiungiNuovoContatoreFilone() {
     }
 }
 
-function aggiungiNotaFilone() {
+async function aggiungiNotaFilone() {
     if (selRow < 0 || selCol < 0) { toast('Seleziona prima una cella', 'warning'); return; }
     if (editing) commitEdit();
 
@@ -3996,7 +4497,14 @@ function aggiungiNotaFilone() {
         renderVisible(true);
     }
 
-    var testoNota = prompt('Inserisci la nota da aggiungere a "' + cn + '":');
+    var testoNota = await openFiloneInputModal({
+        title: 'Aggiungi nota',
+        message: 'La nota verrà aggiunta a "' + cn + '" con la data di oggi in testa.',
+        placeholder: 'Scrivi la nota da aggiungere',
+        confirmLabel: 'Aggiungi nota',
+        multiline: true,
+        select: false
+    });
     if (!testoNota || !testoNota.trim()) return;
 
     var valAttuale = getDisplayValByRn(rn, cn);
@@ -4209,27 +4717,6 @@ document.addEventListener('keydown', function(e) {
     if ((e.ctrlKey || e.metaKey) && _k === 'l') {
         e.preventDefault();
         openVlookup();
-        return;
-    }
-    // Formatting shortcuts (Ctrl+B, Ctrl+I, Ctrl+U, Ctrl+5)
-    if ((e.ctrlKey || e.metaKey) && _k === 'b' && !editing) {
-        e.preventDefault();
-        toggleCellFormat('bold');
-        return;
-    }
-    if ((e.ctrlKey || e.metaKey) && _k === 'i' && !editing) {
-        e.preventDefault();
-        toggleCellFormat('italic');
-        return;
-    }
-    if ((e.ctrlKey || e.metaKey) && _k === 'u' && !editing) {
-        e.preventDefault();
-        toggleCellFormat('underline');
-        return;
-    }
-    if ((e.ctrlKey || e.metaKey) && _k === '5' && !editing) {
-        e.preventDefault();
-        toggleCellFormat('strikethrough');
         return;
     }
     if (e.key === 'Escape' && qs('#vlPanel').classList.contains('show')) {
@@ -4950,13 +5437,26 @@ function setFiloneMode(mode) {
     document.body.classList.toggle('fast-mode', filoneMode === 'quick');
     qs('#modeGridBtn').classList.toggle('active', filoneMode === 'grid');
     qs('#modeQuickBtn').classList.toggle('active', filoneMode === 'quick');
+    updateSearchChrome();
     try { localStorage.setItem('filone_mode_v1', filoneMode); } catch(e) {}
     if (filoneMode === 'quick') {
         initQuickModeData();
         quickRender();
     } else {
-        updateLayout();
+        applyFilters();
+        refreshGridAfterReveal();
     }
+}
+
+function refreshGridAfterReveal() {
+    requestAnimationFrame(function() {
+        updateLayout();
+        visStart = -1;
+        visEnd = -1;
+        renderVisible(true);
+        updateGridEmptyState();
+        updateStatus();
+    });
 }
 
 async function loadQuickSettings() {
@@ -5023,10 +5523,12 @@ function quickVal(row, key) {
 }
 
 function quickPopulateFilters() {
-    qs('#quickFilterAppointment').style.display = quickCols.noteApp ? '' : 'none';
+    qs('#quickFilterAppointment').closest('.quick-field').style.display = quickCols.noteApp ? '' : 'none';
     if (!quickCols.noteApp) qs('#quickFilterAppointment').value = '';
-    qs('#quickFilterTipo').style.display = quickCols.tipo ? '' : 'none';
-    qs('#quickFilterPosizione').style.display = quickCols.posizione ? '' : 'none';
+    qs('#quickFilterTipoWrap').style.display = quickCols.tipo ? '' : 'none';
+    qs('#quickFilterPosizioneWrap').style.display = quickCols.posizione ? '' : 'none';
+    if (!quickCols.tipo) qs('#quickFilterTipo').value = '';
+    if (!quickCols.posizione) qs('#quickFilterPosizione').value = '';
     quickRefreshFilterOptions('search');
     quickPopulateOperatorControls();
 }
@@ -5067,6 +5569,64 @@ function quickDistinct(key, rows) {
     });
 }
 
+function quickNormalizePositionValue(value) {
+    var raw = (value || '').toString().trim();
+    if (!raw || raw.toUpperCase() === 'TUTTI') return null;
+    var compact = raw
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[_\-/]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    if (!compact || compact === 'posizione mis ante sost' || compact === 'posizione ante mis') {
+        return null;
+    }
+    if (compact.indexOf('centralizz') >= 0) {
+        return { key: 'centralizzato', label: '2 - Centralizzato' };
+    }
+    if (compact.indexOf('accessibil') >= 0 || compact.indexOf('esterno') >= 0) {
+        return { key: 'esterno', label: "3 - Accessibile dall'esterno" };
+    }
+    if (compact.indexOf('appart') >= 0) {
+        return { key: 'appartamento', label: "1 - Nell'appartamento" };
+    }
+    if (compact.indexOf('non conosciut') >= 0 || compact === '0') {
+        return { key: 'non_conosciuta', label: '0 - Non conosciuta' };
+    }
+    return { key: 'raw:' + compact, label: raw };
+}
+
+function quickPositionKey(row) {
+    var normalized = quickNormalizePositionValue(quickVal(row, 'posizione'));
+    return normalized ? normalized.key : '';
+}
+
+function quickDistinctPositions(rows) {
+    var preferredOrder = {
+        non_conosciuta: 0,
+        appartamento: 1,
+        centralizzato: 2,
+        esterno: 3
+    };
+    var map = new Map();
+    if (!quickCols.posizione) return [];
+    (rows || rawData).forEach(function(row) {
+        var normalized = quickNormalizePositionValue(quickVal(row, 'posizione'));
+        if (!normalized) return;
+        if (!map.has(normalized.key)) map.set(normalized.key, normalized);
+    });
+    return Array.from(map.values()).sort(function(a, b) {
+        var oa = preferredOrder[a.key];
+        var ob = preferredOrder[b.key];
+        if (oa !== undefined || ob !== undefined) {
+            if (oa === undefined) return 1;
+            if (ob === undefined) return -1;
+            return oa - ob;
+        }
+        return a.label.toLowerCase().localeCompare(b.label.toLowerCase());
+    });
+}
+
 function quickPopulateSelect(id, placeholder, values, keepInvalid) {
     var sel = qs('#' + id);
     if (!sel) return;
@@ -5082,9 +5642,25 @@ function quickPopulateSelect(id, placeholder, values, keepInvalid) {
     if (prev && (keepInvalid || values.indexOf(prev) >= 0)) sel.value = prev;
 }
 
+function quickPopulateOptionSelect(id, placeholder, options, keepInvalid) {
+    var sel = qs('#' + id);
+    if (!sel) return;
+    var prev = sel.value;
+    var values = options.map(function(o) { return o.value; });
+    var html = '<option value="">' + esc(placeholder) + '</option>';
+    options.forEach(function(opt) {
+        html += '<option value="' + esc(opt.value) + '">' + esc(opt.label) + '</option>';
+    });
+    if (prev && keepInvalid && values.indexOf(prev) < 0) {
+        html += '<option value="' + esc(prev) + '">' + esc(prev) + '</option>';
+    }
+    sel.innerHTML = html;
+    if (prev && (keepInvalid || values.indexOf(prev) >= 0)) sel.value = prev;
+}
+
 function quickFilterState() {
     return {
-        search: (qs('#quickSearch').value || '').trim().toLowerCase(),
+        search: (qs('#globalSearch').value || '').trim().toLowerCase(),
         lcl: qs('#quickFilterLcl').value,
         comune: qs('#quickFilterComune').value,
         phone: qs('#quickFilterPhone').value,
@@ -5101,6 +5677,37 @@ function quickFilterChanged(key) {
     quickRender();
 }
 
+function quickControlDisplayText(el) {
+    if (!el) return '';
+    if (el.tagName === 'SELECT') {
+        var opt = el.options[el.selectedIndex];
+        return opt ? opt.textContent : '';
+    }
+    return el.value || el.placeholder || '';
+}
+
+function quickAutosizeControl(id, minCh, maxCh) {
+    var el = qs('#' + id);
+    if (!el) return;
+    var field = el.closest('.quick-field');
+    if (!field || field.style.display === 'none') return;
+    var text = quickControlDisplayText(el);
+    var len = Array.from(String(text || '')).length;
+    var ch = Math.max(minCh || 8, Math.min(maxCh || 34, len + (el.tagName === 'SELECT' ? 1 : 2)));
+    field.style.setProperty('--quick-control-ch', ch);
+}
+
+function quickAutosizeFilters() {
+    quickAutosizeControl('quickFilterLcl', 8, 18);
+    quickAutosizeControl('quickFilterComune', 11, 28);
+    quickAutosizeControl('quickFilterPhone', 13, 20);
+    quickAutosizeControl('quickFilterDate', 10, 20);
+    quickAutosizeControl('quickFilterOperator', 13, 32);
+    quickAutosizeControl('quickFilterAppointment', 16, 22);
+    quickAutosizeControl('quickFilterTipo', 14, 30);
+    quickAutosizeControl('quickFilterPosizione', 14, 28);
+}
+
 function quickRowsForFilterOptions(skipKey) {
     var state = quickFilterState();
     return rawData.filter(function(row) {
@@ -5111,6 +5718,7 @@ function quickRowsForFilterOptions(skipKey) {
 function quickRefreshFilterOptions(preserveKey) {
     quickRefreshFilterOptionsPass(preserveKey);
     quickRefreshFilterOptionsPass(preserveKey);
+    quickAutosizeFilters();
 }
 
 function quickPreserveFilter(preserveKey, key) {
@@ -5135,7 +5743,14 @@ function quickRefreshFilterOptionsPass(preserveKey) {
         { value: 'without', label: 'Senza appuntamento', match: function(row) { return !quickHasAppointment(row); } }
     ], quickRowsForFilterOptions('appointment'), quickPreserveFilter(preserveKey, 'appointment'));
     quickPopulateSelect('quickFilterTipo', 'Tutte tipologie', quickDistinct('tipo', quickRowsForFilterOptions('tipo')), quickPreserveFilter(preserveKey, 'tipo'));
-    quickPopulateSelect('quickFilterPosizione', 'Tutte posizioni', quickDistinct('posizione', quickRowsForFilterOptions('posizione')), quickPreserveFilter(preserveKey, 'posizione'));
+    quickPopulateOptionSelect(
+        'quickFilterPosizione',
+        'Tutte posizioni',
+        quickDistinctPositions(quickRowsForFilterOptions('posizione')).map(function(p) {
+            return { value: p.key, label: p.label };
+        }),
+        quickPreserveFilter(preserveKey, 'posizione')
+    );
 }
 
 function quickPopulateStaticSelect(id, placeholder, options, rows, keepInvalid) {
@@ -5256,7 +5871,7 @@ function quickRowPassesFilters(row, state, skipKey) {
     if (skipKey !== 'lcl' && state.lcl && quickVal(row, 'lcl') !== state.lcl) return false;
     if (skipKey !== 'comune' && state.comune && quickVal(row, 'comune') !== state.comune) return false;
     if (skipKey !== 'tipo' && state.tipo && quickVal(row, 'tipo') !== state.tipo) return false;
-    if (skipKey !== 'posizione' && state.posizione && quickVal(row, 'posizione') !== state.posizione) return false;
+    if (skipKey !== 'posizione' && state.posizione && quickPositionKey(row) !== state.posizione) return false;
 
     var tel = quickVal(row, 'telefono').trim();
     if (skipKey !== 'phone') {
@@ -5325,9 +5940,17 @@ function quickAppendRows() {
     quickRendered += slice.length;
 }
 
+function quickFullAttr(title, text) {
+    text = (text || '').toString();
+    if (!text.trim()) return '';
+    return ' data-fulltitle="' + esc(title || '') + '" data-fulltext="' + esc(text) + '"';
+}
+
 function quickRowHtml(row) {
     var rn = String(row._row);
     var selected = quickSelectedRows.has(rn);
+    var nominativo = quickVal(row, 'nominativo') || 'N/D';
+    var comune = quickVal(row, 'comune') || 'N/D';
     var address = [quickVal(row, 'indirizzo'), quickVal(row, 'civico')].filter(Boolean).join(' ');
     var dataInfo = quickDateInfo(row);
     var dateBadge = quickDateBadge(dataInfo);
@@ -5335,15 +5958,17 @@ function quickRowHtml(row) {
     var tel = quickVal(row, 'telefono').trim();
     var pod = quickVal(row, 'pod').trim();
     var eneltel = quickVal(row, 'eneltel').trim();
+    var noteRaw = quickVal(row, 'noteApp');
+    var note = noteRaw || '-';
     return '<div class="quick-grid quick-row ' + (selected ? 'selected' : '') + '" data-rn="' + esc(rn) + '" onclick="quickToggleRow(\'' + esc(rn) + '\')">' +
         '<div><input type="checkbox" ' + (selected ? 'checked' : '') + ' onclick="event.stopPropagation(); quickToggleRow(\'' + esc(rn) + '\', this.checked)"></div>' +
-        '<div><div class="quick-main">' + esc(quickVal(row, 'nominativo') || 'N/D') + '</div><div class="quick-sub">riga ' + esc(rn) + '</div></div>' +
-        '<div><div class="quick-main">' + esc(quickVal(row, 'comune') || 'N/D') + '</div><div class="quick-sub">' + esc(address || '-') + '</div></div>' +
-        '<div>' + (tel ? '<span class="quick-badge">' + esc(tel) + '</span>' : '<span class="quick-badge empty">Senza</span>') + '</div>' +
+        '<div' + quickFullAttr('Nominativo', nominativo) + '><div class="quick-main">' + esc(nominativo) + '</div><div class="quick-sub">riga ' + esc(rn) + '</div></div>' +
+        '<div' + quickFullAttr('Indirizzo', comune + (address ? '\n' + address : '')) + '><div class="quick-main">' + esc(comune) + '</div><div class="quick-sub">' + esc(address || '-') + '</div></div>' +
+        '<div' + quickFullAttr('Telefono', tel) + '>' + (tel ? '<span class="quick-badge">' + esc(tel) + '</span>' : '<span class="quick-badge empty">Senza</span>') + '</div>' +
         '<div>' + dateBadge + '</div>' +
         '<div>' + (op && op.toUpperCase() !== 'TUTTI' ? '<span class="quick-badge">' + esc(quickOperatorLabel(op)) + '</span>' : '<span class="quick-badge empty">Senza</span>') + '</div>' +
-        '<div><div class="quick-muted">' + esc(quickVal(row, 'noteApp') || '-') + '</div></div>' +
-        '<div><span class="quick-badge">' + esc(quickVal(row, 'lcl') || '-') + '</span></div>' +
+        '<div' + quickFullAttr('NOTE APP', noteRaw) + '><div class="quick-muted">' + esc(note) + '</div></div>' +
+        '<div><span class="quick-badge quick-lcl">' + esc(quickVal(row, 'lcl') || '-') + '</span></div>' +
         '<div><div class="quick-main">' + esc(pod || '-') + '</div><div class="quick-sub">' + esc(eneltel || '-') + '</div></div>' +
         '</div>';
 }
@@ -5353,6 +5978,66 @@ function quickDateBadge(info) {
     if (info.state === 'expired') return '<span class="quick-badge empty">' + esc(info.raw) + '</span>';
     return '<span class="quick-badge">' + esc(info.raw) + '</span>';
 }
+
+function quickMoveHoverPreview(ev) {
+    var pop = qs('#quickHoverPreview');
+    if (!pop || !pop.classList.contains('show')) return;
+    var margin = 12;
+    var x = ev.clientX + 14;
+    var y = ev.clientY + 14;
+    var rect = pop.getBoundingClientRect();
+    if (x + rect.width + margin > window.innerWidth) x = ev.clientX - rect.width - 14;
+    if (y + rect.height + margin > window.innerHeight) y = ev.clientY - rect.height - 14;
+    pop.style.left = Math.max(margin, x) + 'px';
+    pop.style.top = Math.max(margin, y) + 'px';
+}
+
+function quickElementHasOverflow(el) {
+    if (!el) return false;
+    var nodes = el.querySelectorAll('.quick-main, .quick-sub, .quick-muted, .quick-badge');
+    if (!nodes.length) nodes = [el];
+    for (var i = 0; i < nodes.length; i++) {
+        var node = nodes[i];
+        if (!node || !node.textContent || !node.textContent.trim()) continue;
+        if (node.scrollWidth > node.clientWidth + 1) return true;
+        if (node.scrollHeight > node.clientHeight + 1) return true;
+    }
+    return false;
+}
+
+function quickShowHoverPreview(el, ev) {
+    var text = el ? (el.dataset.fulltext || '') : '';
+    var pop = qs('#quickHoverPreview');
+    if (!pop || !text.trim()) return;
+    if (!quickElementHasOverflow(el)) {
+        quickHideHoverPreview();
+        return;
+    }
+    var title = el.dataset.fulltitle || '';
+    pop.innerHTML = (title ? '<div class="quick-hover-title">' + esc(title) + '</div>' : '') + esc(text);
+    pop.classList.add('show');
+    quickMoveHoverPreview(ev);
+}
+
+function quickHideHoverPreview() {
+    var pop = qs('#quickHoverPreview');
+    if (pop) pop.classList.remove('show');
+}
+
+qs('#quickList').addEventListener('mouseover', function(ev) {
+    var el = ev.target.closest('[data-fulltext]');
+    if (!el || !qs('#quickList').contains(el)) return;
+    quickShowHoverPreview(el, ev);
+});
+qs('#quickList').addEventListener('mousemove', function(ev) {
+    quickMoveHoverPreview(ev);
+});
+qs('#quickList').addEventListener('mouseout', function(ev) {
+    var el = ev.target.closest('[data-fulltext]');
+    if (!el) return;
+    if (ev.relatedTarget && el.contains(ev.relatedTarget)) return;
+    quickHideHoverPreview();
+});
 
 function quickToggleRow(rn, forced) {
     rn = String(rn);
@@ -6225,50 +6910,6 @@ function autoFitColumn(ci) {
     renderVisible(true);
 }
 
-// ============================================================
-// CELL-LEVEL FORMATTING (synced with Google Sheets)
-// ============================================================
-var cellFormats = {}; // "rn:colName" -> {bold, italic, underline, strikethrough, textColor, bgColor}
-var _fmtDirty = {};   // Celle modificate dall'utente (da sincronizzare)
-var _fmtCleared = [];  // Celle resettate (da sincronizzare come clear)
-var _fmtSyncTimer = null;
-var _fmtSyncing = false;
-
-// Toggle globale "vista pulita": quando false, gli stili cell-level e
-// condizionali NON vengono applicati visivamente (le modifiche continuano a
-// essere salvate normalmente — è un filtro solo di rendering).
-var stylesEnabled = true;
-
-function loadStylesEnabled() {
-    try {
-        var s = localStorage.getItem('filone_styles_enabled');
-        if (s !== null) stylesEnabled = (s === 'true' || s === '1');
-    } catch(e) {}
-}
-
-function toggleStylesView() {
-    stylesEnabled = !stylesEnabled;
-    try { localStorage.setItem('filone_styles_enabled', stylesEnabled ? '1' : '0'); } catch(e) {}
-    updateStylesToggleBtn();
-    renderVisible(true);
-}
-
-function updateStylesToggleBtn() {
-    var btn = qs('#btnStylesToggle');
-    if (!btn) return;
-    if (stylesEnabled) {
-        btn.innerHTML = '\u{1F441}️ Stili';
-        btn.title = 'Nascondi gli stili (vista pulita)';
-        btn.classList.remove('off');
-        btn.style.opacity = '';
-    } else {
-        btn.innerHTML = '\u{1F6AB} Stili';
-        btn.title = 'Mostra gli stili';
-        btn.classList.add('off');
-        btn.style.opacity = '0.55';
-    }
-}
-
 // Restituisce un colore testo (#1a1a1a o #f5f5f5) con buon contrasto su
 // hexBg. Usata quando una cella ha solo bgColor: garantisce leggibilità
 // del testo qualunque sia il tema attivo.
@@ -6286,166 +6927,12 @@ function getContrastTextColor(hexBg) {
     return luma > 140 ? '#1a1a1a' : '#f5f5f5';
 }
 
-function loadCellFormats() {
-    // Carica dal localStorage come cache locale (il server sovrascriverà al load)
-    try {
-        var s = localStorage.getItem('filone_cell_formats');
-        if (s) cellFormats = JSON.parse(s);
-    } catch(e) { cellFormats = {}; }
-}
-
-function loadCellFormatsFromServer(serverFormats) {
-    // Sovrascrive con i formati ricevuti dal server (fonte di verità).
-    // Le celle con modifiche pending (in _fmtDirty) vengono però preservate
-    // dalla cache locale, perché il server potrebbe ancora non averle viste.
-    if (serverFormats && typeof serverFormats === 'object') {
-        var merged = serverFormats;
-        var dirtyKeys = Object.keys(_fmtDirty || {});
-        if (dirtyKeys.length > 0) {
-            merged = {};
-            for (var k in serverFormats) {
-                if (Object.prototype.hasOwnProperty.call(serverFormats, k)) merged[k] = serverFormats[k];
-            }
-            for (var i = 0; i < dirtyKeys.length; i++) {
-                var dk = dirtyKeys[i];
-                if (cellFormats[dk]) merged[dk] = cellFormats[dk];
-                else delete merged[dk];
-            }
-        }
-        cellFormats = merged;
-        saveCellFormatsLocal();
-    }
-}
-
-function saveCellFormatsLocal() {
-    try { localStorage.setItem('filone_cell_formats', JSON.stringify(cellFormats)); } catch(e) {}
-}
-
-// Persiste lo stato di sync pending (_fmtDirty / _fmtCleared) in
-// localStorage, così se l'utente ricarica la pagina prima del debounce
-// le modifiche non vengono perse: al boot vengono ricaricate e flushate.
-function _persistFmtSyncState() {
-    try {
-        localStorage.setItem('filone_fmt_dirty', JSON.stringify(_fmtDirty));
-        localStorage.setItem('filone_fmt_cleared', JSON.stringify(_fmtCleared));
-    } catch(e) {}
-}
-
-function _loadFmtSyncState() {
-    try {
-        var d = localStorage.getItem('filone_fmt_dirty');
-        if (d) _fmtDirty = JSON.parse(d) || {};
-    } catch(e) { _fmtDirty = {}; }
-    try {
-        var c = localStorage.getItem('filone_fmt_cleared');
-        if (c) _fmtCleared = JSON.parse(c) || [];
-    } catch(e) { _fmtCleared = []; }
-}
-
-function _scheduleFmtSync() {
-    // Debounce minimo: il flag _fmtSyncing già serializza le PUT (al massimo
-    // 1 in volo, le altre vengono accodate), quindi anche con click rapidi
-    // non c'è flooding di richieste verso Sheets. La latenza percepita
-    // è ~100ms + tempo API (~0.5-1s).
-    clearTimeout(_fmtSyncTimer);
-    _fmtSyncTimer = setTimeout(_syncFormatsToServer, 100);
-}
-
-async function _syncFormatsToServer() {
-    if (_fmtSyncing) { _scheduleFmtSync(); return; }
-    var dirtyKeys = Object.keys(_fmtDirty);
-    var clearedKeys = _fmtCleared.slice();
-    if (dirtyKeys.length === 0 && clearedKeys.length === 0) return;
-
-    _fmtSyncing = true;
-    var body = {};
-    // Snapshot della formattazione per ogni dirty key al momento dell'invio
-    // del PUT. Se durante il PUT in volo l'utente clicca un altro stile e
-    // cellFormats[k] cambia, NON dobbiamo cancellare la sua dirty flag al
-    // ritorno del PUT \u2014 la modifica \u00E8 ancora pending e va inviata al giro
-    // successivo. Senza questo snapshot la modifica pi\u00F9 recente veniva
-    // silenziosamente persa quando arrivavano stili in rapida successione.
-    var snapshot = {};
-    if (dirtyKeys.length > 0) {
-        var fmts = {};
-        for (var i = 0; i < dirtyKeys.length; i++) {
-            var k = dirtyKeys[i];
-            snapshot[k] = JSON.stringify(cellFormats[k] || null);
-            if (cellFormats[k]) {
-                // Send complete boolean state (explicit false to reset on Sheets)
-                var full = {
-                    bold: !!cellFormats[k].bold,
-                    italic: !!cellFormats[k].italic,
-                    underline: !!cellFormats[k].underline,
-                    strikethrough: !!cellFormats[k].strikethrough
-                };
-                if (cellFormats[k].textColor) full.textColor = cellFormats[k].textColor;
-                if (cellFormats[k].bgColor) full.bgColor = cellFormats[k].bgColor;
-                fmts[k] = full;
-            } else {
-                // All formatting removed -> treat as cleared
-                if (clearedKeys.indexOf(k) < 0) clearedKeys.push(k);
-            }
-        }
-        if (Object.keys(fmts).length > 0) body.formats = fmts;
-    }
-    if (clearedKeys.length > 0) {
-        body.cleared = clearedKeys;
-    }
-
-    try {
-        var r = await fetch('/api/filone/formats', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body)
-        });
-        if (r.ok) {
-            var d = await r.json();
-            // Cancella la dirty flag SOLO per le chiavi il cui valore non
-            // \u00E8 cambiato durante il PUT in volo. Se \u00E8 cambiato (l'utente ha
-            // cliccato un altro stile), la dirty resta e viene catturata
-            // dal prossimo ciclo di sync.
-            for (var i = 0; i < dirtyKeys.length; i++) {
-                var dk = dirtyKeys[i];
-                var current = JSON.stringify(cellFormats[dk] || null);
-                if (_fmtDirty[dk] && current === snapshot[dk]) {
-                    delete _fmtDirty[dk];
-                }
-            }
-            for (var i = 0; i < clearedKeys.length; i++) {
-                var ck = clearedKeys[i];
-                // Cleared: rimuovi solo se la cella \u00E8 ancora "vuota" (nessuna
-                // formattazione locale aggiunta nel frattempo).
-                if (!cellFormats[ck]) {
-                    var idx = _fmtCleared.indexOf(ck);
-                    if (idx >= 0) _fmtCleared.splice(idx, 1);
-                }
-            }
-            _persistFmtSyncState();
-        } else {
-            toast('\u274C Errore sincronizzazione formattazione', 'error');
-        }
-    } catch(e) {
-        toast('\u274C Errore rete sincronizzazione formattazione', 'error');
-    } finally {
-        _fmtSyncing = false;
-        // Se nel frattempo sono arrivate altre modifiche, rilancia
-        if (Object.keys(_fmtDirty).length > 0 || _fmtCleared.length > 0) {
-            _scheduleFmtSync();
-        }
-    }
-}
-
 // ============================================================
-// NOTE CELLA (pop-up tipo Sheets) \u2014 stato locale + sync bidirezionale
-// con il foglio Google Sheets. Una nota \u00E8 un testo libero associato a
+// NOTE CELLA: stato locale + sync con il server.
+// Una nota \u00E8 un testo libero associato a
 // (riga, colonna), distinto dal valore della cella.
 // ============================================================
 let cellNotes = {};         // "row:colName" -> "testo nota" (testo non vuoto)
-let _notesDirty = {};       // chiavi modificate localmente, da pushare
-let _notesCleared = [];     // chiavi rimosse localmente, da pushare
-let _notesSyncing = false;
-let _notesSyncTimer = null;
 let _notePopupKey = null;   // chiave "row:colName" in editing nel popup
 
 function _noteKey(rn, colName) { return rn + ':' + colName; }
@@ -6457,155 +6944,44 @@ function getCellNote(rn, colName) {
 function _persistNotesLocalCache() {
     try { localStorage.setItem('filone_cell_notes', JSON.stringify(cellNotes)); } catch (e) {}
 }
-function _persistNotesSyncState() {
-    try {
-        localStorage.setItem('filone_notes_dirty', JSON.stringify(_notesDirty));
-        localStorage.setItem('filone_notes_cleared', JSON.stringify(_notesCleared));
-    } catch (e) {}
-}
 function _loadNotesLocalCache() {
     try {
         var s = localStorage.getItem('filone_cell_notes');
         if (s) cellNotes = JSON.parse(s) || {};
     } catch (e) { cellNotes = {}; }
 }
-function _loadNotesSyncState() {
-    try {
-        var d = localStorage.getItem('filone_notes_dirty');
-        if (d) _notesDirty = JSON.parse(d) || {};
-    } catch (e) { _notesDirty = {}; }
-    try {
-        var c = localStorage.getItem('filone_notes_cleared');
-        if (c) _notesCleared = JSON.parse(c) || [];
-    } catch (e) { _notesCleared = []; }
-}
 
 async function _loadNotesFromServer() {
     try {
-        var r = await fetch('/api/filone/notes?_=' + Date.now());
+        var r = await fetch('/api/filone/notes');
         if (!r.ok) return;
-        var d = await r.json();
-        if (!d || !d.notes) return;
-        // I pending locali (_notesDirty / _notesCleared) NON vengono sovrascritti:
-        // sono modifiche che l'utente sta ancora pushando.
-        var dirtyKeys = _notesDirty || {};
-        var clearedSet = {};
-        for (var i = 0; i < _notesCleared.length; i++) clearedSet[_notesCleared[i]] = true;
-        var merged = {};
-        for (var k in d.notes) {
-            if (clearedSet[k]) continue;
-            if (dirtyKeys[k]) { merged[k] = cellNotes[k] || ''; continue; }
-            merged[k] = d.notes[k];
-        }
-        // Preserva anche le chiavi dirty che non esistono ancora sul server
-        for (var dk in dirtyKeys) {
-            if (cellNotes[dk]) merged[dk] = cellNotes[dk];
-        }
-        cellNotes = merged;
-        _persistNotesLocalCache();
-        renderVisible(true);
-        if (_notePopupKey && _notePopupOpen()) {
-            // Aggiorna textarea se il popup \u00E8 aperto sulla cella appena sincronizzata
-            var pk = _notePopupKey;
-            if (!dirtyKeys[pk]) {
-                var ta = qs('#notePopupText');
-                if (ta && ta.value !== (cellNotes[pk] || '')) {
-                    // Non sovrascrivere se l'utente sta scrivendo in questo momento
-                    if (document.activeElement !== ta) ta.value = cellNotes[pk] || '';
-                }
-            }
-        }
-        if (d.partial) {
-            // Cache parziale: ritenta a breve per riallinearsi
-            setTimeout(_loadNotesFromServer, 5000);
+        var data = await r.json();
+        if (data && data.notes && typeof data.notes === 'object') {
+            cellNotes = data.notes;
+            _persistNotesLocalCache();
+            renderVisible(true);
         }
     } catch (e) {}
 }
 
-// Polling continuo per recepire note inserite/modificate direttamente su Sheets
-var _notesPollTimer = null;
-var _notesInitialUpdated = null;
-function _startNotesPolling() {
-    if (_notesPollTimer) return;
-    _notesPollTimer = setInterval(_pollNotesRefresh, 30000); // 30s
-}
-async function _pollNotesRefresh() {
-    try {
-        var r = await fetch('/api/filone/notes/version?_=' + Date.now());
-        if (!r.ok) return;
-        var v = await r.json();
-        if (v.updated && v.updated !== _notesInitialUpdated) {
-            _notesInitialUpdated = v.updated;
-            await _loadNotesFromServer();
-        }
-    } catch (e) {}
-}
-
-function _scheduleNotesSync() {
-    clearTimeout(_notesSyncTimer);
-    _notesSyncTimer = setTimeout(_syncNotesToServer, 400);
-}
-
-async function _syncNotesToServer() {
-    if (_notesSyncing) { _scheduleNotesSync(); return; }
-    var dirtyKeys = Object.keys(_notesDirty);
-    var clearedKeys = _notesCleared.slice();
-    if (dirtyKeys.length === 0 && clearedKeys.length === 0) return;
-
-    _notesSyncing = true;
-    var body = {};
-    var snapshot = {};
-    if (dirtyKeys.length > 0) {
-        var notesPayload = {};
-        for (var i = 0; i < dirtyKeys.length; i++) {
-            var k = dirtyKeys[i];
-            var v = cellNotes[k] || '';
-            snapshot[k] = v;
-            if (v) {
-                notesPayload[k] = v;
-            } else {
-                // testo vuoto -> trattalo come clear
-                if (clearedKeys.indexOf(k) < 0) clearedKeys.push(k);
-            }
-        }
-        if (Object.keys(notesPayload).length > 0) body.notes = notesPayload;
-    }
-    if (clearedKeys.length > 0) body.cleared = clearedKeys;
-
+async function _saveCellNotesToServer(notes, cleared) {
     try {
         var r = await fetch('/api/filone/notes', {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body)
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({notes: notes || {}, cleared: cleared || []})
         });
-        if (r.ok) {
-            // Pulisci dirty SOLO per le chiavi il cui contenuto non \u00E8 cambiato
-            // mentre il PUT era in volo (idem pattern formats).
-            for (var i = 0; i < dirtyKeys.length; i++) {
-                var dk = dirtyKeys[i];
-                if (_notesDirty[dk] && (cellNotes[dk] || '') === snapshot[dk]) {
-                    delete _notesDirty[dk];
-                }
-            }
-            for (var j = 0; j < clearedKeys.length; j++) {
-                var ck = clearedKeys[j];
-                if (!cellNotes[ck]) {
-                    var idx = _notesCleared.indexOf(ck);
-                    if (idx >= 0) _notesCleared.splice(idx, 1);
-                }
-            }
-            _persistNotesSyncState();
-            _persistNotesLocalCache();
-        } else {
-            toast('\u274C Errore sincronizzazione note', 'error');
+        if (!r.ok) {
+            var data = await r.json().catch(function() { return {}; });
+            throw new Error(data.error || 'Salvataggio commento non riuscito');
+        }
+        var res = await r.json();
+        if (res.invalid && res.invalid.length) {
+            toast('Commento non salvato: riga non trovata', 'warning');
+            _loadNotesFromServer();
         }
     } catch (e) {
-        toast('\u274C Errore rete sincronizzazione note', 'error');
-    } finally {
-        _notesSyncing = false;
-        if (Object.keys(_notesDirty).length > 0 || _notesCleared.length > 0) {
-            _scheduleNotesSync();
-        }
+        toast('Commento salvato solo in locale: ' + e.message, 'warning');
     }
 }
 
@@ -6614,29 +6990,23 @@ function setCellNote(rn, colName, text) {
     var clean = (text || '').trim();
     if (clean) {
         cellNotes[key] = clean;
-        _notesDirty[key] = true;
-        var ci = _notesCleared.indexOf(key);
-        if (ci >= 0) _notesCleared.splice(ci, 1);
     } else {
         clearCellNote(rn, colName);
         return;
     }
     _persistNotesLocalCache();
-    _persistNotesSyncState();
-    _scheduleNotesSync();
     renderVisible(true);
+    var payload = {};
+    payload[key] = clean;
+    _saveCellNotesToServer(payload, []);
 }
 
 function clearCellNote(rn, colName) {
     var key = _noteKey(rn, colName);
-    var had = !!cellNotes[key];
     delete cellNotes[key];
-    delete _notesDirty[key];
-    if (had && _notesCleared.indexOf(key) < 0) _notesCleared.push(key);
     _persistNotesLocalCache();
-    _persistNotesSyncState();
-    _scheduleNotesSync();
     renderVisible(true);
+    _saveCellNotesToServer({}, [key]);
 }
 
 // ----- Popup edit -----
@@ -6747,197 +7117,21 @@ function deleteCellNote() {
     });
 })();
 
-function getSelectedCellKeys() {
-    var keys = [];
-    if (selRange) {
-        for (var vi = selRange.viMin; vi <= selRange.viMax; vi++) {
-            var di = filtered[vi];
-            if (di === undefined) continue;
-            var rn = rawData[di]._row;
-            for (var vp = selRange.vpMin; vp <= selRange.vpMax; vp++) {
-                var ci = colOrder[vp];
-                if (ci === undefined || hiddenCols.has(ci)) continue;
-                keys.push(rn + ':' + headers[ci]);
-            }
-        }
-    } else if (selRow >= 0 && selCol >= 0) {
-        keys.push(selRow + ':' + headers[selCol]);
-    }
-    return keys;
-}
-
-function toggleCellFormat(prop) {
-    var keys = getSelectedCellKeys();
-    if (keys.length === 0) { toast('Seleziona almeno una cella', 'warning'); return; }
-    var onCount = 0;
-    for (var i = 0; i < keys.length; i++) {
-        if (cellFormats[keys[i]] && cellFormats[keys[i]][prop]) onCount++;
-    }
-    var newVal = onCount <= keys.length / 2;
-    for (var i = 0; i < keys.length; i++) {
-        var ck = keys[i];
-        if (!cellFormats[ck]) cellFormats[ck] = {};
-        if (newVal) {
-            cellFormats[ck][prop] = true;
-        } else {
-            delete cellFormats[ck][prop];
-        }
-        if (Object.keys(cellFormats[ck]).length === 0) {
-            delete cellFormats[ck];
-        }
-        _fmtDirty[ck] = true;
-    }
-    saveCellFormatsLocal();
-    _persistFmtSyncState();
-    _scheduleFmtSync();
-    renderVisible(true);
-    updateFormatToolbarState();
-}
-
-// ── Color Palette ──
-var _defaultColors = [
-    '#000000','#434343','#666666','#999999','#b7b7b7','#cccccc','#d9d9d9','#ffffff',
-    '#e06666','#ea9999','#f4cccc','#fce5cd','#fff2cc','#d9ead3','#d0e0e3','#cfe2f3',
-    '#cc0000','#e69138','#f1c232','#6aa84f','#45818e','#3d85c6','#674ea7','#a64d79',
-    '#990000','#b45f06','#bf9000','#38761d','#134f5c','#0b5394','#351c75','#741b47',
-    '#ef4444','#f97316','#facc15','#22c55e','#06b6d4','#3b82f6','#8b5cf6','#ec4899',
-];
-
-function _buildPaletteHTML(type) {
-    var prop = type === 'text' ? 'textColor' : 'bgColor';
-    var inputId = type === 'text' ? 'fmtTextColor' : 'fmtHighlight';
-    var html = '<div class="fmt-color-palette-grid">';
-    for (var i = 0; i < _defaultColors.length; i++) {
-        html += '<div class="fmt-color-swatch" style="background:' + _defaultColors[i] + '" '
-            + 'onclick="pickPaletteColor(\'' + prop + '\',\'' + _defaultColors[i] + '\',\'' + type + '\')" '
-            + 'title="' + _defaultColors[i] + '"></div>';
-    }
-    html += '</div>';
-    html += '<div class="fmt-color-palette-row" onclick="qs(\'#' + inputId + '\').click()">'
-        + '<div class="fmt-custom-swatch">+</div> Colore personalizzato</div>';
-    return html;
-}
-
-function toggleColorPalette(type) {
-    var palId = type === 'text' ? 'textColorPalette' : 'bgColorPalette';
-    var otherId = type === 'text' ? 'bgColorPalette' : 'textColorPalette';
-    var pal = qs('#' + palId);
-    var other = qs('#' + otherId);
-    if (other) other.classList.remove('open');
-    if (!pal.innerHTML) pal.innerHTML = _buildPaletteHTML(type);
-    pal.classList.toggle('open');
-}
-
-function closeColorPalettes() {
-    var t = qs('#textColorPalette'), b = qs('#bgColorPalette');
-    if (t) t.classList.remove('open');
-    if (b) b.classList.remove('open');
-}
-
-function pickPaletteColor(prop, color, type) {
-    setCellFormatColor(prop, color);
-    closeColorPalettes();
-    // Sync the hidden input value too
-    if (type === 'text') qs('#fmtTextColor').value = color;
-    else qs('#fmtHighlight').value = color;
-}
-
-// Close palettes on outside click
-document.addEventListener('click', function(e) {
-    if (!e.target.closest('#textColorWrap') && !e.target.closest('#bgColorWrap')) {
-        closeColorPalettes();
-    }
-});
-
-function setCellFormatColor(prop, color) {
-    var keys = getSelectedCellKeys();
-    if (keys.length === 0) { toast('Seleziona almeno una cella', 'warning'); return; }
-    for (var i = 0; i < keys.length; i++) {
-        var ck = keys[i];
-        if (!cellFormats[ck]) cellFormats[ck] = {};
-        cellFormats[ck][prop] = color;
-        _fmtDirty[ck] = true;
-    }
-    saveCellFormatsLocal();
-    _persistFmtSyncState();
-    _scheduleFmtSync();
-    renderVisible(true);
-    updateFormatToolbarState();
-    if (prop === 'textColor') {
-        qs('#fmtTextColorPreview').style.color = color;
-    } else if (prop === 'bgColor') {
-        qs('#fmtHighlightPreview').style.background = color;
-        qs('#fmtHighlightPreview').style.color = '#000';
-    }
-}
-
-function clearCellFormat() {
-    var keys = getSelectedCellKeys();
-    if (keys.length === 0) { toast('Seleziona almeno una cella', 'warning'); return; }
-    for (var i = 0; i < keys.length; i++) {
-        delete cellFormats[keys[i]];
-        delete _fmtDirty[keys[i]];
-        _fmtCleared.push(keys[i]);
-    }
-    saveCellFormatsLocal();
-    _persistFmtSyncState();
-    _scheduleFmtSync();
-    renderVisible(true);
-    updateFormatToolbarState();
-}
-
-function updateFormatToolbarState() {
-    var ck = selRow >= 0 && selCol >= 0 ? selRow + ':' + headers[selCol] : '';
-    var fmt = ck && cellFormats[ck] ? cellFormats[ck] : {};
-    var boldBtn = qs('#fmtBold'), italicBtn = qs('#fmtItalic'), underBtn = qs('#fmtUnderline'), strikeBtn = qs('#fmtStrike');
-    if (boldBtn) boldBtn.classList.toggle('active', !!fmt.bold);
-    if (italicBtn) italicBtn.classList.toggle('active', !!fmt.italic);
-    if (underBtn) underBtn.classList.toggle('active', !!fmt.underline);
-    if (strikeBtn) strikeBtn.classList.toggle('active', !!fmt.strikethrough);
-    // Aggiorna icone colore testo e sfondo
-    var textPrev = qs('#fmtTextColorPreview');
-    var bgPrev = qs('#fmtHighlightPreview');
-    if (textPrev) {
-        textPrev.style.color = fmt.textColor || 'var(--text)';
-    }
-    if (bgPrev) {
-        if (fmt.bgColor) {
-            bgPrev.style.background = fmt.bgColor;
-            bgPrev.style.color = '#000';
-        } else {
-            bgPrev.style.background = 'var(--bg-cell)';
-            bgPrev.style.color = 'var(--text-muted)';
-        }
-    }
-}
-
-function getCellFormat(rn, cn) {
-    return cellFormats[rn + ':' + cn] || null;
-}
-
 // ============================================================
 // CONDITIONAL FORMATTING (custom rules, localStorage)
-// Due fonti: regole locali (utente, editabili) + regole importate da Sheets
-// (read-only, sincronizzate via /api/filone/cond_formats_sheets).
-// Entrambe vengono unite in `condRulesByCol` e applicate via getCondStyle.
 // ============================================================
 var condRules = []; // locale: [{col, op, value, textColor, bgColor, bold, italic, underline, strikethrough}]
-var condRulesFromSheets = []; // sincronizzate da Sheets (read-only)
 var condRulesByCol = {}; // colName -> [rules merged]
 
 function initCondFormat() {
     loadCondRules();
-    loadCondRulesSheetsCache();
     rebuildCondRulesByCol();
 }
 
 function rebuildCondRulesByCol() {
     condRulesByCol = {};
-    // Prima le regole Sheets, poi quelle locali (locali hanno priorità in
-    // caso di match multiplo, perché getCondStyle ritorna la prima che fa hit).
-    var all = condRulesFromSheets.concat(condRules);
-    for (var i = 0; i < all.length; i++) {
-        var r = all[i];
+    for (var i = 0; i < condRules.length; i++) {
+        var r = condRules[i];
         if (!r || !r.col) continue;
         if (!condRulesByCol[r.col]) condRulesByCol[r.col] = [];
         condRulesByCol[r.col].push(r);
@@ -6953,52 +7147,6 @@ function loadCondRules() {
         var s = localStorage.getItem('filone_cond_rules');
         if (s) condRules = JSON.parse(s);
     } catch(e) { condRules = []; }
-}
-
-function loadCondRulesSheetsCache() {
-    // Cache locale delle regole Sheets per partire subito anche se la rete
-    // è lenta; verranno comunque rinfrescate dalla fetch in background.
-    try {
-        var s = localStorage.getItem('filone_cond_rules_sheets');
-        if (s) condRulesFromSheets = JSON.parse(s);
-    } catch(e) { condRulesFromSheets = []; }
-}
-
-async function _loadCondFormatsFromSheets(silent) {
-    try {
-        var r = await fetch('/api/filone/cond_formats_sheets');
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        var d = await r.json();
-        if (d && Array.isArray(d.rules)) {
-            condRulesFromSheets = d.rules;
-            try { localStorage.setItem('filone_cond_rules_sheets', JSON.stringify(condRulesFromSheets)); } catch(_) {}
-            rebuildCondRulesByCol();
-            renderVisible(true);
-            updateCfmSheetsInfo();
-            if (!silent) {
-                var msg = 'Regole condizionali Sheets aggiornate: ' + (d.count || 0);
-                if (d.skipped) msg += ' (' + d.skipped + ' non mappabili saltate)';
-                toast('✅ ' + msg, 'success');
-            }
-        }
-    } catch(e) {
-        if (!silent) toast('❌ Errore lettura regole Sheets: ' + e.message, 'error');
-    }
-}
-
-async function refreshCondFormatsFromSheets() {
-    var btn = event && event.currentTarget;
-    if (btn) { btn.disabled = true; btn.style.opacity = '0.5'; }
-    try {
-        await _loadCondFormatsFromSheets(false);
-    } finally {
-        if (btn) { btn.disabled = false; btn.style.opacity = ''; }
-    }
-}
-
-function updateCfmSheetsInfo() {
-    var el = qs('#cfmSheetsCount');
-    if (el) el.textContent = condRulesFromSheets.length;
 }
 
 function evalCondRule(rule, cellVal) {
@@ -7056,7 +7204,6 @@ function openCondFormat() {
     qs('#cfmOverlay').classList.add('show');
     qs('#cfmPanel').classList.add('show');
     cfmRender();
-    updateCfmSheetsInfo();
 }
 
 function closeCondFormat() {
@@ -7595,6 +7742,7 @@ function vlGoToRow(tr) {
         colorFilterCol = '';
         colorFilterColor = '';
         qs('#globalSearch').value = '';
+        updateSearchChrome();
         buildHeader();
         applyFilters();
         // Find again
@@ -8378,7 +8526,7 @@ function vlExcelClear() {
             }
 
             // Protezione anti-race: se un valore è stato salvato di recente e il server
-            // restituisce ancora il vecchio dato (Google Sheets non ha propagato), mantieni
+            // restituisce ancora il vecchio dato, mantieni
             // il valore che abbiamo salvato
             _cleanExpiredSaves();
             var recentKeys = Object.keys(_recentSaves);
@@ -8498,7 +8646,7 @@ async function manualRefresh() {
                     target: '.toolbar',
                     title: 'Barra degli strumenti',
                     icon: '🛠\uFE0F',
-                    body: 'La toolbar contiene tutti i comandi della vista Excel: ricerca, trova e sostituisci, filtri avanzati, formattazione celle, note, storico, gestione colonne, formattazione condizionale e salvataggio.',
+                    body: 'La toolbar contiene tutti i comandi della vista Excel: ricerca, trova e sostituisci, filtri avanzati, note, storico, gestione colonne, formattazione condizionale e salvataggio.',
                     position: 'bottom'
                 },
                 {
@@ -8551,13 +8699,6 @@ async function manualRefresh() {
                     onLeave: function() {
                         if (typeof closeVlookup === 'function') closeVlookup();
                     }
-                },
-                {
-                    target: '.fmt-bar',
-                    title: 'Formattazione celle',
-                    icon: '\uD83C\uDFA8',
-                    body: 'Formatta le celle selezionate: <b>Grassetto</b> (Ctrl+B), <b>Corsivo</b> (Ctrl+I), <b>Sottolineato</b> (Ctrl+U), <b>Barrato</b> (Ctrl+5).<br><br>Puoi anche cambiare il <b>colore del testo</b> (A) e il <b>colore di sfondo</b> (\uD83D\uDD8D). Il pulsante \uD83D\uDEAB cancella tutta la formattazione.',
-                    position: 'bottom'
                 },
                 {
                     target: '#btnAggiungiNota',

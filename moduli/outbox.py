@@ -1,16 +1,15 @@
 # -*- coding: utf-8 -*-
-"""Outbox: modifiche locali pronte per essere consegnate al foglio Google.
+"""Outbox: modifiche locali pronte per l'export cambiamenti.
 
 Post-disconnessione Google Sheets (2026-05-21), il programma scrive solo
 nel DB. Le `pending_writes` in stato 'pending' rappresentano la coda di
-modifiche che la collega deve riportare a mano sul foglio.
+modifiche ancora da gestire fuori dal DB locale.
 
 Flusso:
   - Utente fa modifica → record in `pending_writes` (state='pending')
-  - Utente clicca "Scarica delta" → questo modulo produce un .xlsx sparso
-    con highlight sulle celle da copiare. Ordinato per `sheets_row`.
-  - Utente lo manda alla collega che lo applica sul foglio.
-  - Utente clicca "Segna consegnate" → tutte le pending correnti → state='done'.
+  - Utente clicca "Scarica cambiamenti" → questo modulo produce un .xlsx
+    compatto con solo POD e celle modificate. Ordinato per `sheets_row`.
+  - Utente clicca "Segna gestite" → tutte le pending correnti → state='done'.
   - (Oppure) al prossimo import-excel le pending pre-export vengono
     auto-marcate (vedi `excel_importer.py`).
 """
@@ -25,7 +24,7 @@ logger = logging.getLogger('mappa_algeco')
 def _list_pending_coalesced():
     """Per ogni (eneltel_key, lcl, column_name), tiene solo il pending più
     recente (created_ts massimo). Coalescing della storia in un singolo
-    valore "ultimo" da applicare al foglio.
+    valore "ultimo" da esportare.
 
     Returns:
         list[dict] con chiavi: eneltel_key, lcl, pod, column_name, new_value,
@@ -74,16 +73,15 @@ def stats():
 
 
 def build_outbox_xlsx():
-    """Genera il file Excel "delta" con SOLO le celle da copiare sul foglio.
+    """Genera il file Excel dei cambiamenti con SOLO le celle interessate.
 
-    Layout sparso:
-      - Header riga 1: stessi nomi colonna del foglio (da column_registry).
-      - Una riga per ogni eneltel con almeno una pending; le celle senza
-        pending sono VUOTE (= "non toccare"); le celle con pending hanno
-        il nuovo valore + highlight giallo. Eneltel e LCL sempre valorizzati
-        (per identificare la riga).
-      - Ordine: per `sheets_row` (così la collega scorre il file nello stesso
-        ordine del foglio).
+    Layout compatto:
+      - Un solo foglio.
+      - Prima colonna sempre `POD`, usata come identificativo leggibile.
+      - A seguire solo le colonne con modifiche pendenti, nell'ordine del
+        `column_registry`; niente colonne vuote globali, niente Eneltel.
+      - Una riga per ogni contatore con almeno una modifica esportabile.
+      - Celle modificate con nuovo valore + highlight giallo.
 
     Returns:
         (bytes, n_righe, n_celle): payload xlsx, n. righe scritte, n. celle valorizzate.
@@ -98,7 +96,7 @@ def build_outbox_xlsx():
     if not pending:
         return (None, 0, 0)
 
-    # Mappa headers dal DB (riusa lo stesso ordine del foglio originale)
+    # Mappa headers dal DB: serve solo per ordinare le colonne modificate.
     conn = _db.get_conn()
     headers_rows = conn.execute('''
         SELECT cr.column_name, cr.last_index, cr.chiave_interna
@@ -110,21 +108,21 @@ def build_outbox_xlsx():
         )
         ORDER BY cr.last_index
     ''').fetchall()
-    headers = [r['column_name'] for r in headers_rows]
-    # chiave_interna 'eneltel' → quale header è l'Eneltel; per fallback assumiamo 'Eneltel'
-    eneltel_col_name = None
-    lcl_col_name = None
-    for r in headers_rows:
-        if r['chiave_interna'] == 'eneltel':
-            eneltel_col_name = r['column_name']
-        if r['chiave_interna'] == 'lcl' or r['column_name'].strip().upper() == 'LCL':
-            lcl_col_name = r['column_name']
-    if not eneltel_col_name:
-        eneltel_col_name = 'Eneltel'
+    header_order = {
+        (r['column_name'] or '').strip().lower(): (r['last_index'] or 999999)
+        for r in headers_rows
+        if r['column_name']
+    }
 
     # Aggregazione pending per (eneltel, lcl) → {col_name: new_value}
     by_row = {}
+    changed_cols = {}
     for p in pending:
+        col_name = p['column_name'] or ''
+        chiave = _db.column_to_internal_key(conn, col_name)
+        if chiave == 'eneltel' or col_name.strip().lower() in ('eneltel', 'eneltel_key'):
+            continue
+
         ek = p['eneltel_key']
         lcl = p['lcl'] or ''
         key = (ek, lcl)
@@ -134,14 +132,37 @@ def build_outbox_xlsx():
                 '_eneltel': ek,
                 '_lcl': lcl,
                 '_pod': p['pod'] or '',
+                '_pod_changed': False,
                 'cells': {},
             }
-        by_row[key]['cells'][p['column_name']] = p['new_value'] or ''
+
+        if chiave == 'pod':
+            by_row[key]['_pod'] = p['new_value'] or ''
+            by_row[key]['_pod_changed'] = True
+            continue
+
+        by_row[key]['cells'][col_name] = p['new_value'] or ''
+        col_key = col_name.strip().lower()
+        if col_key and col_key not in changed_cols:
+            changed_cols[col_key] = col_name
+
+    ordered = sorted(
+        (r for r in by_row.values() if r['_pod_changed'] or r['cells']),
+        key=lambda r: (r['_sheets_row'], r['_eneltel']),
+    )
+    if not ordered:
+        return (None, 0, 0)
+
+    changed_headers = sorted(
+        changed_cols.values(),
+        key=lambda h: (header_order.get(h.strip().lower(), 999999), h.strip().lower()),
+    )
+    headers = ['POD'] + changed_headers
 
     # Crea workbook
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = 'Da applicare al foglio'
+    ws.title = 'Cambiamenti'
 
     # Header (con stile)
     bold = Font(bold=True)
@@ -152,43 +173,22 @@ def build_outbox_xlsx():
     # Fill per highlight celle modificate
     yellow = PatternFill(start_color='FFF59D', end_color='FFF59D', fill_type='solid')
 
-    # Mappa header → indice 1-based (case-sensitive + lookup case-insensitive)
+    # Mappa header → indice 1-based
     header_to_idx = {h: i + 1 for i, h in enumerate(headers)}
-    header_lookup_ci = {h.strip().lower(): h for h in headers}
-
-    def _resolve_header(name):
-        """Match esatto, poi case-insensitive."""
-        if name in header_to_idx:
-            return name
-        match = header_lookup_ci.get(name.strip().lower())
-        return match if match else name
+    header_to_idx_ci = {h.strip().lower(): i + 1 for i, h in enumerate(headers)}
 
     # Scrivi righe ordinate per sheets_row
-    ordered = sorted(by_row.values(), key=lambda r: (r['_sheets_row'], r['_eneltel']))
     n_celle = 0
     for row_idx, info in enumerate(ordered, start=2):
-        # Eneltel sempre presente per identificare
-        ek_col = header_to_idx.get(eneltel_col_name)
-        if ek_col:
-            ws.cell(row=row_idx, column=ek_col, value=info['_eneltel'])
-        # LCL se esiste
-        if lcl_col_name and info['_lcl']:
-            lcl_col = header_to_idx.get(lcl_col_name)
-            if lcl_col:
-                ws.cell(row=row_idx, column=lcl_col, value=info['_lcl'])
+        pod_cell = ws.cell(row=row_idx, column=1, value=info['_pod'])
+        if info['_pod_changed']:
+            pod_cell.fill = yellow
+            n_celle += 1
         # Celle modificate con highlight
         for col_name, new_val in info['cells'].items():
-            resolved = _resolve_header(col_name)
-            idx = header_to_idx.get(resolved)
+            idx = header_to_idx.get(col_name) or header_to_idx_ci.get(col_name.strip().lower())
             if idx is None:
-                # Colonna non nel registry: la aggiungiamo in coda (caso raro,
-                # es. pending verso una colonna creata dopo l'ultimo import)
-                headers.append(col_name)
-                header_to_idx[col_name] = len(headers)
-                header_lookup_ci[col_name.strip().lower()] = col_name
-                idx = len(headers)
-                c = ws.cell(row=1, column=idx, value=col_name)
-                c.font = bold
+                continue
             c = ws.cell(row=row_idx, column=idx, value=new_val)
             c.fill = yellow
             n_celle += 1
@@ -199,20 +199,6 @@ def build_outbox_xlsx():
 
     # Freeze prima riga
     ws.freeze_panes = 'A2'
-
-    # Aggiungi un secondo foglio "Riepilogo" più compatto (per audit visivo)
-    ws2 = wb.create_sheet('Riepilogo cambi')
-    ws2.append(['POD', 'LCL', 'Colonna', 'Nuovo valore', 'Eneltel'])
-    for c in ws2[1]:
-        c.font = bold
-    n_riep = 0
-    for info in ordered:
-        for col_name, new_val in info['cells'].items():
-            ws2.append([info['_pod'], info['_lcl'], col_name, new_val, info['_eneltel']])
-            n_riep += 1
-    for col_idx in range(1, 6):
-        ws2.column_dimensions[openpyxl.utils.get_column_letter(col_idx)].width = 22
-    ws2.freeze_panes = 'A2'
 
     # Serializza
     buf = io.BytesIO()
@@ -225,9 +211,9 @@ def build_full_xlsx():
     """Snapshot completo del filone dal DB → Excel (.xlsx).
 
     Esporta TUTTE le righe (escluse le orfane) e TUTTE le colonne registrate,
-    nell'ordine del foglio originale. Include il pending overlay (così l'export
+    nell'ordine delle colonne registrate. Include il pending overlay (così l'export
     riflette lo stato corrente come lo vede l'utente, comprese modifiche non
-    ancora consegnate). Niente highlight: è un dump pulito.
+    ancora da gestire). Niente highlight: è un dump pulito.
 
     Returns:
         (bytes, n_righe, n_colonne): payload xlsx + statistiche.
@@ -270,12 +256,12 @@ def build_full_xlsx():
 
 
 def mark_delivered(*, before_ts=None, user=None):
-    """Marca pending in stato 'done' (= consegnate alla collega).
+    """Marca pending in stato 'done' (= gestite).
 
     Args:
         before_ts: se fornito, marca SOLO le pending con created_ts <= before_ts.
-                   Utile per auto-mark dopo import-excel ("le precedenti
-                   all'export sono già nel foglio"). Se None, marca TUTTE
+                   Utile per auto-mark dopo import-excel (le precedenti
+                   all'export sono già state gestite). Se None, marca TUTTE
                    le pending correnti.
         user: chi ha cliccato (per audit).
 

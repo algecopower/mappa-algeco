@@ -19,6 +19,12 @@ import os
 
 logger = logging.getLogger('mappa_algeco')
 
+_PATTERN_INTESTAZIONE_LAVORO = re.compile(
+    r'^([A-Z][A-Z .\'-]+?)[ \t]+(A[EG]\d+)[ \t]+(\d+)[ \t]+(\d+)[ \t]*\n'
+    r'([^\n]*?)[ \t]+(\d{2}/\d{2}/\d{4})[ \t]+(\d{2}:\d{2})',
+    re.MULTILINE
+)
+
 
 def is_cellulare(numero: str) -> bool:
     """
@@ -404,13 +410,7 @@ def estrai_lavori_da_tabella(page) -> List[Dict]:
         text = page.extract_text() or ''
         
         # Trova tutti i lavori dal testo (AG o AE seguito da numero e N° lavoro)
-        pattern = re.compile(
-            r'([A-Z][A-Z\s]+)\s+(A[EG]\d+)\s+(\d+)\s+(\d+)\s*\n'
-            r'([A-Za-z]+)\s+(\d{2}/\d{2}/\d{4})\s+(\d{2}:\d{2})',
-            re.MULTILINE
-        )
-        
-        matches = list(pattern.finditer(text))
+        matches = list(_PATTERN_INTESTAZIONE_LAVORO.finditer(text))
         
         # Per ogni lavoro trovato, cerca i dati usando le coordinate
         for i, match in enumerate(matches):
@@ -595,14 +595,7 @@ def estrai_lavori_da_testo(text: str) -> List[Dict]:
     # dove: preposto=KEITA SIDI, matricola=AG18966/AE101392, n_lavoro=1, priorità=399
     
     # Trova tutti i match del pattern principale
-    pattern = re.compile(
-        r'([A-Z][A-Z\s]+)\s+(A[EG]\d+)\s+(\d+)\s+(\d+)\s*\n'  # Preposto, Matricola (AE o AG), N°lavoro, Priorità
-        r'([A-Za-z]+)\s+'  # Formazione (es. "Keita")
-        r'(\d{2}/\d{2}/\d{4})\s+(\d{2}:\d{2})',  # Data e ora
-        re.MULTILINE
-    )
-    
-    matches = list(pattern.finditer(text))
+    matches = list(_PATTERN_INTESTAZIONE_LAVORO.finditer(text))
     
     for i, match in enumerate(matches):
         matricola_operatore = match.group(2)  # AE101392, AG18966, ecc.

@@ -165,6 +165,18 @@ def _bootstrap_schema(conn):
             FOREIGN KEY (eneltel_key, lcl) REFERENCES filone(eneltel_key, lcl) ON DELETE CASCADE
         );
 
+        CREATE TABLE IF NOT EXISTS cell_comments (
+            eneltel_key TEXT NOT NULL,
+            lcl TEXT NOT NULL DEFAULT '',
+            column_name TEXT NOT NULL,
+            comment TEXT NOT NULL,
+            updated_ts INTEGER NOT NULL,
+            user TEXT,
+            source TEXT,
+            PRIMARY KEY (eneltel_key, lcl, column_name),
+            FOREIGN KEY (eneltel_key, lcl) REFERENCES filone(eneltel_key, lcl) ON DELETE CASCADE
+        );
+
         CREATE TABLE IF NOT EXISTS pending_writes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             eneltel_key TEXT NOT NULL,
@@ -754,6 +766,161 @@ def find_eneltel_by_sheets_row(row_num):
     return tup[0] if tup else None
 
 
+# ============================================================================
+# COMMENTI CELLA
+# ============================================================================
+def _parse_comment_ui_key(key):
+    """Converte una chiave UI 'riga:colonna' in (sheets_row, column_name)."""
+    if not key or ':' not in str(key):
+        return None
+    row_raw, column_name = str(key).split(':', 1)
+    column_name = column_name.strip()
+    if not column_name:
+        return None
+    try:
+        row_num = int(row_raw)
+    except (TypeError, ValueError):
+        return None
+    if row_num < 2:
+        return None
+    return row_num, column_name
+
+
+def get_cell_comments(*, include_orphans=False):
+    """Ritorna i commenti cella come dict 'sheets_row:colonna' -> testo.
+
+    Internamente i commenti sono ancorati a `(eneltel_key, lcl, column_name)`,
+    così sopravvivono meglio a reimport e riordini. La UI storica però lavora
+    su chiavi riga/colonna, quindi qui li rimaterializziamo sul `sheets_row`
+    corrente.
+    """
+    conn = get_conn()
+    where = '' if include_orphans else ' AND f.is_orphan=0'
+    cur = conn.execute(f'''
+        SELECT f.sheets_row, cc.column_name, cc.comment
+        FROM cell_comments cc
+        JOIN filone f
+          ON f.eneltel_key = cc.eneltel_key
+         AND COALESCE(f.lcl, '') = COALESCE(cc.lcl, '')
+        WHERE cc.comment <> ''{where}
+        ORDER BY f.sheets_row, cc.column_name
+    ''')
+    return {
+        f"{r['sheets_row']}:{r['column_name']}": r['comment']
+        for r in cur.fetchall()
+    }
+
+
+def set_cell_comments_by_anchor(conn, *, eneltel_key, lcl='', comments=None,
+                                user=None, source='local'):
+    """Upsert/delete commenti per una riga già risolta a `(eneltel_key, lcl)`.
+
+    Args:
+        conn: connessione SQLite già aperta; può essere dentro TX esterna.
+        comments: dict {column_name: testo}. Testo vuoto cancella il commento.
+
+    Returns:
+        dict con conteggi `written`/`deleted`.
+    """
+    comments = comments or {}
+    written = 0
+    deleted = 0
+    ek = normalize_eneltel(eneltel_key)
+    resolved_lcl = lcl or ''
+    if not ek:
+        return {'written': 0, 'deleted': 0}
+
+    now = _now_ts()
+    for column_name, text in comments.items():
+        col = str(column_name or '').strip()
+        if not col:
+            continue
+        clean = str(text or '').strip()
+        if clean:
+            conn.execute(
+                'INSERT INTO cell_comments(eneltel_key, lcl, column_name, comment, '
+                'updated_ts, user, source) VALUES (?, ?, ?, ?, ?, ?, ?) '
+                'ON CONFLICT(eneltel_key, lcl, column_name) DO UPDATE SET '
+                'comment=excluded.comment, updated_ts=excluded.updated_ts, '
+                'user=excluded.user, source=excluded.source',
+                (ek, resolved_lcl, col, clean, now, user, source),
+            )
+            written += 1
+        else:
+            cur = conn.execute(
+                "DELETE FROM cell_comments "
+                "WHERE eneltel_key=? AND COALESCE(lcl,'')=? AND column_name=?",
+                (ek, resolved_lcl, col),
+            )
+            deleted += max(cur.rowcount, 0)
+    return {'written': written, 'deleted': deleted}
+
+
+def set_cell_comments_from_ui(notes=None, cleared=None, *, user=None):
+    """Applica modifiche commenti arrivate dalla UI.
+
+    `notes` e `cleared` usano chiavi legacy 'sheets_row:column_name'. Le righe
+    vengono risolte al momento della scrittura per salvare su ancora stabile
+    `(eneltel_key, lcl)`.
+    """
+    notes = notes or {}
+    cleared = cleared or []
+    conn = get_conn()
+    invalid = []
+    written = 0
+    deleted = 0
+
+    def resolve(parsed):
+        row_num, column_name = parsed
+        row = conn.execute(
+            "SELECT eneltel_key, COALESCE(lcl,'') AS lcl "
+            "FROM filone WHERE sheets_row=? LIMIT 1",
+            (row_num,),
+        ).fetchone()
+        if not row:
+            return None
+        return row['eneltel_key'], row['lcl'], column_name
+
+    with conn:
+        for key, text in notes.items():
+            parsed = _parse_comment_ui_key(key)
+            resolved = resolve(parsed) if parsed else None
+            if not resolved:
+                invalid.append(str(key))
+                continue
+            ek, lcl, column_name = resolved
+            result = set_cell_comments_by_anchor(
+                conn,
+                eneltel_key=ek,
+                lcl=lcl,
+                comments={column_name: text},
+                user=user,
+                source='ui',
+            )
+            written += result['written']
+            deleted += result['deleted']
+
+        for key in cleared:
+            parsed = _parse_comment_ui_key(key)
+            resolved = resolve(parsed) if parsed else None
+            if not resolved:
+                invalid.append(str(key))
+                continue
+            ek, lcl, column_name = resolved
+            result = set_cell_comments_by_anchor(
+                conn,
+                eneltel_key=ek,
+                lcl=lcl,
+                comments={column_name: ''},
+                user=user,
+                source='ui',
+            )
+            written += result['written']
+            deleted += result['deleted']
+
+    return {'written': written, 'deleted': deleted, 'invalid': invalid}
+
+
 def list_pending_writes(state='pending', limit=400):
     """Drainer worker chiama questo: ritorna pending pronte alla scrittura."""
     conn = get_conn()
@@ -1083,8 +1250,8 @@ def stats():
     """Statistiche rapide sul DB (per /api/admin/db-stats e dump_db.py)."""
     conn = get_conn()
     out = {}
-    for tabella in ('filone', 'filone_extra', 'pending_writes', 'audit_log',
-                    'column_registry', 'filone_anomalies'):
+    for tabella in ('filone', 'filone_extra', 'cell_comments', 'pending_writes',
+                    'audit_log', 'column_registry', 'filone_anomalies'):
         out[tabella] = conn.execute(f'SELECT COUNT(*) AS c FROM {tabella}').fetchone()['c']
     out['pending_by_state'] = {
         r['state']: r['c'] for r in conn.execute(

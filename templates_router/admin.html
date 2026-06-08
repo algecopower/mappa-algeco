@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="it" data-theme="dark" data-design="glass">
+<html lang="it" data-theme="dark" data-design="solid">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -19,7 +19,7 @@
     if (t) document.documentElement.setAttribute('data-theme', t);
     var d = getCookie('algeco_design');
     if (!d) { try { d = localStorage.getItem('algeco_design'); } catch (_) {} }
-    if (d) document.documentElement.setAttribute('data-design', d);
+    document.documentElement.setAttribute('data-design', d || 'solid');
   })();
 </script>
 <style>
@@ -142,12 +142,10 @@
   }
   a { color: var(--accent); }
 
-  /* Header — acrylic. translateZ(0) lo promuove a layer dedicato così il
-     compositor non rivaluta il blur sul resto del DOM ad ogni scroll. */
+  /* Header — acrylic. Il blur vive in un layer interno più coprente:
+     resta glass, ma il contenuto sottostante non resta leggibile. */
   header.app-header {
-    background: var(--header-bg);
-    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    background: transparent;
     border-bottom: var(--panel-border);
     padding: 12px 20px;
     display: flex;
@@ -158,8 +156,40 @@
     top: 0;
     z-index: 50;
     transform: translateZ(0);
-    will-change: backdrop-filter;
+    isolation: isolate;
+    overflow: hidden;
+    backface-visibility: hidden;
   }
+  header.app-header::before,
+  header.app-header::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  header.app-header::before {
+    z-index: 0;
+    background: rgba(8, 20, 45, 0.82);
+    backdrop-filter: blur(22px) saturate(190%);
+    -webkit-backdrop-filter: blur(22px) saturate(190%);
+    transform: translateZ(0);
+  }
+  header.app-header::after {
+    z-index: 1;
+    background: var(--header-bg);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.12);
+  }
+  header.app-header > * {
+    position: relative;
+    z-index: 2;
+  }
+  [data-theme="light"] header.app-header::before { background: rgba(255, 255, 255, 0.82); }
+  [data-design="solid"] header.app-header::before {
+    background: var(--bg-secondary);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  [data-design="solid"] header.app-header::after { background: var(--header-bg); }
   .app-header .brand {
     display: flex; align-items: center; gap: 10px;
   }
@@ -437,6 +467,43 @@
     box-shadow: var(--panel-shadow);
   }
   .modal-content.wide { max-width: 880px; }
+  .modal-content.lettere-excel-modal {
+    padding: 0;
+    max-height: min(90vh, 860px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transform: translateZ(0);
+    contain: layout paint;
+  }
+  .modal-content.lettere-excel-modal .modal-head {
+    margin: 0;
+    padding: 18px 20px 14px;
+    flex: 0 0 auto;
+    background: var(--panel-bg-strong);
+    position: relative;
+    z-index: 2;
+  }
+  .lettere-excel-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    -webkit-overflow-scrolling: touch;
+    padding: 14px 16px 0;
+    transform: translateZ(0);
+    will-change: scroll-position;
+  }
+  .lettere-excel-actions {
+    flex: 0 0 auto;
+    margin: 0;
+    padding: 14px 16px;
+    background: var(--panel-bg-strong);
+    border-top: 1px solid var(--border);
+    position: relative;
+    z-index: 2;
+  }
   .modal-head {
     display: flex; justify-content: space-between; align-items: center;
     margin-bottom: 18px;
@@ -869,7 +936,7 @@
         <label style="display:flex; align-items:center; gap:8px; text-transform:none; font-size:13px;">
           <input type="checkbox" name="usa_localita_come_comune" style="width:auto;"> Usa la colonna "Località" al posto di "Comune"
         </label>
-        <div class="help">Attiva solo se sul foglio la colonna "Comune" è vuota e usi "Località" per raggruppare le zone.</div>
+        <div class="help">Attiva solo se nel file dati la colonna "Comune" è vuota e usi "Località" per raggruppare le zone.</div>
       </div>
 
       <div class="form-row">
@@ -916,10 +983,10 @@
         <div style="font-weight:600;margin-bottom:6px;">💡 A cosa serve questa pagina</div>
         <div style="font-size:13px;color:var(--text-secondary);line-height:1.5;">
           Il programma usa nomi standard per i suoi campi (Telefono, Email, ecc.).
-          Se sul tuo foglio Google quella colonna si chiama in modo diverso
+          Se nel file importato quella colonna si chiama in modo diverso
           (es. <b>"CELL CLIENTE"</b> invece di <b>"TELEFONO"</b>), scrivilo qui
           nella casella del campo Telefono e il programma lo riconoscerà automaticamente
-          a ogni importazione. <i>Lascia vuoto se il foglio usa già uno dei nomi
+          a ogni importazione. <i>Lascia vuoto se il file usa già uno dei nomi
           standard a destra.</i>
         </div>
       </div>
@@ -935,8 +1002,8 @@
       <div style="background:var(--bg-tertiary);padding:12px 14px;border-radius:8px;margin-bottom:14px;border-left:3px solid var(--ok);">
         <div style="font-weight:600;margin-bottom:6px;">💡 A cosa serve questa pagina</div>
         <div style="font-size:13px;color:var(--text-secondary);line-height:1.5;">
-          Vedi tutte le colonne presenti nel foglio. Da qui puoi <b>rinominare</b> o
-          <b>cancellare</b> una colonna se è cambiata sul foglio Google o se non
+          Vedi tutte le colonne registrate nel filone. Da qui puoi <b>rinominare</b> o
+          <b>cancellare</b> una colonna se è cambiata nei dati importati o se non
           la usi più.<br>
           <span style="color:var(--warn);">⚠️ Attenzione</span>: le colonne contrassegnate
           come <b>"standard del programma"</b> sono usate internamente — modificale
@@ -944,6 +1011,32 @@
         </div>
       </div>
       <div id="elencoContainer"><div class="log-empty"><span class="spinner"></span> Caricamento…</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="modalLettereExcel">
+  <div class="modal-content wide lettere-excel-modal">
+    <div class="modal-head">
+      <h2 id="lettereExcelTitle">Excel lettere</h2>
+      <button class="close" onclick="chiudiLettereExcel()">&times;</button>
+    </div>
+    <div class="lettere-excel-body">
+      <div style="background:var(--bg-tertiary);padding:12px 14px;border-radius:8px;margin-bottom:14px;border-left:3px solid var(--ok);">
+        <div style="font-weight:600;margin-bottom:6px;">Configurazione per provincia</div>
+        <div style="font-size:13px;color:var(--text-secondary);line-height:1.5;">
+          Le modifiche si applicano ai prossimi file Excel generati dagli orari lettere.
+          Puoi cambiare nomi dei fogli, intestazioni e condizioni che forzano
+          la colonna lettera a NO.
+        </div>
+      </div>
+      <div id="lettereExcelContainer"><div class="log-empty"><span class="spinner"></span> Caricamento…</div></div>
+    </div>
+    <div class="form-actions lettere-excel-actions" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <button class="btn secondary" onclick="ripristinaDefaultLettereExcel()">Ripristina default</button>
+      <button class="btn secondary" onclick="caricaLettereExcel()">Annulla modifiche</button>
+      <div style="flex:1"></div>
+      <button class="btn" onclick="salvaLettereExcel()">Salva</button>
     </div>
   </div>
 </div>
@@ -1071,21 +1164,21 @@
       <button class="close" onclick="chiudiImport()">&times;</button>
     </div>
     <div style="padding:8px 16px 4px;font-size:13px;color:var(--text-secondary);">
-      Scarica il foglio Google come <b>.csv</b> (più veloce) oppure <b>.xlsx</b> e caricalo qui. Il programma
-      farà un confronto cella per cella col DB locale: dove tu (o i colleghi
-      via programma) avete modificato qualcosa <b>dopo</b> la data dell'export,
-      vince la versione locale; altrimenti vincono i valori dell'Excel.
+      Carica un file <b>.csv</b> (più veloce) oppure <b>.xlsx</b>. Il programma
+      farà un confronto cella per cella col DB locale: dove qualcuno ha modificato
+      qualcosa nel programma <b>dopo</b> la data dell'export, vince la versione locale;
+      altrimenti vincono i valori del file.
     </div>
     <form id="formImportExcel" onsubmit="submitImportExcel(event)" style="padding:16px;">
       <div class="form-group">
         <label>File CSV o Excel</label>
         <input name="file" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
-        <div class="help">Consigliato CSV esportato da Google Sheets; accettati anche file Excel moderni (.xlsx). Limite suggerito ~50MB.</div>
+        <div class="help">Consigliato CSV; accettati anche file Excel moderni (.xlsx). Limite suggerito ~50MB.</div>
       </div>
       <div class="form-group">
         <label>Data e ora dell'export</label>
         <input name="export_ts" type="datetime-local" required>
-        <div class="help">Quando hai scaricato il file da Google Sheets. Importante per il merge: le modifiche fatte nel programma DOPO questo momento vincono sull'Excel.</div>
+        <div class="help">Quando è stato esportato il file. Importante per il merge: le modifiche fatte nel programma dopo questo momento vincono sul file importato.</div>
       </div>
       <div class="form-group">
         <label style="display:flex;align-items:center;gap:8px;font-weight:normal;">
@@ -1139,9 +1232,9 @@ function _syncToggleButtons() {
   if (tBtn) tBtn.textContent = document.documentElement.dataset.theme === 'dark' ? '🌙' : '☀️';
   const dBtn = document.getElementById('designToggle');
   if (dBtn) {
-    const cur = document.documentElement.dataset.design || 'glass';
+    const cur = document.documentElement.dataset.design || 'solid';
     dBtn.textContent = cur === 'glass' ? '✨' : '◻️';
-    dBtn.classList.toggle('active', cur === 'solid');
+    dBtn.classList.toggle('active', cur === 'glass');
     dBtn.title = cur === 'glass'
       ? 'Passa a tema solido (zero blur, più leggero su mobile)'
       : 'Passa a tema vetro (effetto glassmorfico)';
@@ -1159,7 +1252,7 @@ function toggleTheme() {
 
 function toggleDesign() {
   const html = document.documentElement;
-  const next = (html.dataset.design || 'glass') === 'glass' ? 'solid' : 'glass';
+  const next = (html.dataset.design || 'solid') === 'glass' ? 'solid' : 'glass';
   html.dataset.design = next;
   _setCrossDomainCookie('algeco_design', next);
   try { localStorage.setItem('algeco_design', next); } catch (_) {}
@@ -1357,11 +1450,12 @@ function rendiGrid(province) {
         ${openButtons}
         <button class="btn secondary" onclick="azione('${p.slug}','restart')" title="Riavvia il programma di questa provincia">🔄 Riavvia</button>
         <button class="btn danger" onclick="azione('${p.slug}','stop')" title="Ferma il programma di questa provincia">⏸ Ferma</button>
-        <button class="btn warn" onclick="apriImportExcel('${p.slug}')" title="Importa un nuovo file Excel scaricato dal foglio Google">📥 Importa Excel</button>
-        <button class="${obClass}" ${obDisabled} onclick="scaricaOutbox('${p.slug}')" title="Scarica il file Excel con le modifiche fatte dal programma da inviare alla collega">📤 Scarica delta${obLabel}</button>
-        ${obCount > 0 ? `<button class="btn secondary" onclick="segnaConsegnate('${p.slug}', ${obCount})" title="Marca tutte le modifiche correnti come gi&agrave; consegnate alla collega">✓ Segna consegnate</button>` : ''}
+        <button class="btn warn" onclick="apriImportExcel('${p.slug}')" title="Importa un nuovo file CSV o Excel">📥 Importa Excel</button>
+        <button class="${obClass}" ${obDisabled} onclick="scaricaOutbox('${p.slug}')" title="Scarica il file Excel con le modifiche fatte dal programma">📤 Scarica cambiamenti${obLabel}</button>
+        ${obCount > 0 ? `<button class="btn secondary" onclick="segnaConsegnate('${p.slug}', ${obCount})" title="Marca tutte le modifiche correnti come gi&agrave; gestite">✓ Segna gestite</button>` : ''}
         <button class="btn secondary" onclick="scaricaFiloneCompleto('${p.slug}')" title="Scarica l'intero filone (snapshot completo dei dati nel DB)">📋 Scarica completo</button>
         <button class="btn secondary" onclick="apriColonne('${p.slug}')" title="Gestisci la mappatura nomi colonne e l'elenco delle colonne registrate">🗂️ Colonne</button>
+        <button class="btn secondary" onclick="apriLettereExcel('${p.slug}')" title="Configura nomi fogli, colonne e regole dell'Excel lettere">📬 Excel lettere</button>
         <button class="btn secondary" onclick="apriOperatori('${p.slug}')" title="Gestisci gli operatori (matricola, nome, colore)">👥 Operatori</button>
         <button class="btn secondary" onclick="dbAction('${p.slug}','snapshot-db')" title="Crea una copia di sicurezza dei dati locali">💾 Backup</button>
       `;
@@ -1385,7 +1479,7 @@ function rendiGrid(province) {
         <button class="btn danger" onclick="elimina('${p.slug}')" title="Elimina la provincia">🗑️</button>
       </div>
       ${dbNotInit ? (stato === 'running'
-        ? '<div class="alert-banner">⚠️ Programma avviato ma vuoto. Clicca <b>"🪄 Configura (wizard)"</b> per allestire colonne e operatori interattivamente, oppure <b>"📥 Importa Excel"</b> per partire da un file della collega.</div>'
+        ? '<div class="alert-banner">⚠️ Programma avviato ma vuoto. Clicca <b>"🪄 Configura (wizard)"</b> per allestire colonne e operatori interattivamente, oppure <b>"📥 Importa Excel"</b> per partire da un file esistente.</div>'
         : '<div class="alert-banner">⚠️ Provincia nuova. Clicca "Avvia" per avviare il programma (crea un database vuoto), poi usa il wizard guidato o l\'import Excel.</div>') : ''}
     `;
     grid.appendChild(card);
@@ -1905,7 +1999,7 @@ async function utenteDelete(username) {
 
 
 // ============================================================
-// OUTBOX (modifiche locali da consegnare alla collega)
+// OUTBOX (modifiche locali da gestire)
 // ============================================================
 async function scaricaOutbox(slug) {
   try {
@@ -1915,7 +2009,7 @@ async function scaricaOutbox(slug) {
     if (!r.ok) {
       let msg = `HTTP ${r.status}`;
       try { const j = await r.json(); msg = j.message || j.error || msg; } catch (_) {}
-      toast(`Scarica delta fallito: ${msg}`, 'error');
+      toast(`Scarica cambiamenti fallito: ${msg}`, 'error');
       return;
     }
     // Estrai filename dal Content-Disposition
@@ -1933,7 +2027,7 @@ async function scaricaOutbox(slug) {
     a.href = url; a.download = fname; document.body.appendChild(a);
     a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    toast(`📤 Scaricato: ${nRows} contatori, ${nCells} celle. Inviare alla collega.`, 'success');
+    toast(`📤 Scaricato: ${nRows} contatori, ${nCells} celle modificate.`, 'success');
   } catch (e) {
     toast('Errore download: ' + e.message, 'error');
   }
@@ -1989,7 +2083,7 @@ function rendiMapping() {
   let html = `<table class="inspector-table" style="font-size:13px;width:100%;">
     <thead><tr>
       <th style="width:25%">Campo del programma</th>
-      <th style="width:30%">Come si chiama sul tuo foglio</th>
+      <th style="width:30%">Come si chiama nel file</th>
       <th style="width:45%">Nomi già riconosciuti</th>
     </tr></thead><tbody>`;
   for (let i = 0; i < _mappingRows.length; i++) {
@@ -2069,7 +2163,7 @@ function rendiElencoColonne(cols) {
   html += `<table class="inspector-table" style="font-size:13px;width:100%;">
     <thead><tr>
       <th style="width:5%">N°</th>
-      <th style="width:32%">Nome colonna sul foglio</th>
+      <th style="width:32%">Nome colonna nei dati</th>
       <th style="width:25%">Tipo</th>
       <th style="width:14%;text-align:right;">Contatori con valore</th>
       <th style="width:24%">Azioni</th>
@@ -2080,7 +2174,7 @@ function rendiElencoColonne(cols) {
       : '';
     const typeCell = c.is_typed
       ? `<span class="badge ok" title="Campo standard usato dal programma">⚙️ Standard del programma</span><br><small style="color:var(--text-muted);">campo: ${escapeHtml(c.chiave_interna || '—')}</small>${lockBadge}`
-      : `<span class="badge" style="background:var(--bg-tertiary);color:var(--text-secondary);">Personalizzata</span><br><small style="color:var(--text-muted);">aggiunta dal foglio</small>${lockBadge}`;
+      : `<span class="badge" style="background:var(--bg-tertiary);color:var(--text-secondary);">Personalizzata</span><br><small style="color:var(--text-muted);">aggiunta da import</small>${lockBadge}`;
     const vuotaCss = c.n_values === 0 ? 'color:var(--text-muted);font-style:italic;' : '';
     // Bottoni: se la colonna è protetta, disabilita con tooltip esplicativo
     let actionsHtml;
@@ -2125,7 +2219,7 @@ async function apriCreaColonna() {
   if (!_colonneSlug) return;
   const name = prompt(
     `Aggiungi una nuova colonna al filone di ${_colonneSlug}.\n\n` +
-    `Scrivi il nome esattamente come vuoi che appaia nel foglio Excel\n` +
+    `Scrivi il nome esattamente come vuoi che appaia nella vista dati\n` +
     `(es. "NOTE INTERNE", "STATO PRATICA", "BACK OFFICE").\n\n` +
     `La colonna sarà visibile nella vista Excel del filone e potrai\n` +
     `inserire valori cella per cella. Eliminala in qualunque momento\n` +
@@ -2158,7 +2252,7 @@ async function apriCreaColonna() {
 async function rinominaColonna(oldName) {
   const newName = prompt(
     `Come vuoi rinominare la colonna "${oldName}"?\n\n` +
-    `(Esempio: se sul foglio Google l'hai rinominata in modo diverso,\n` +
+    `(Esempio: se nei dati importati ha un nome diverso,\n` +
     `inserisci qui il nuovo nome così il programma la riconoscerà.)\n`,
     oldName
   );
@@ -2188,7 +2282,7 @@ async function eliminaColonna(name, isTyped, nValues) {
       `Questa azione NON si può annullare.`;
   } else {
     msg = `⚠️ ELIMINARE la colonna "${name}"?\n\n` +
-      `Questa è una colonna personalizzata (l'ha aggiunta la collega sul foglio). ` +
+      `Questa è una colonna personalizzata aggiunta da import. ` +
       `Verrà rimossa completamente, insieme ai ${nValues} valori che contiene.\n\n` +
       `Questa azione NON si può annullare.`;
   }
@@ -2201,6 +2295,212 @@ async function eliminaColonna(name, isTyped, nValues) {
       : `(${r.n_extra_deleted || 0} valori rimossi)`;
     toast(`🗑️ Colonna "${name}" ${azione} ${dettaglio}`, 'success');
     caricaElencoColonne();
+  } catch (e) {
+    toast('Errore: ' + e.message, 'error');
+  }
+}
+
+
+// ============================================================
+// EXCEL LETTERE
+// ============================================================
+let _lettereSlug = null;
+let _lettereConfig = null;
+let _lettereDefault = null;
+
+const LETTERE_LABELS = {
+  fogli: {
+    monofase: 'Foglio monofase',
+    emme2: 'Foglio EMME2',
+    semidiretti: 'Foglio semidiretti',
+    contatti_aziendali: 'Foglio contatti aziendali',
+    solo_monofase: 'Foglio solo monofase',
+    solo_trifase_diretti: 'Foglio solo trifase diretti',
+  },
+  nomi_colonne: {
+    nominativo: 'Nominativo cliente',
+    via: 'Via',
+    civico: 'Civico',
+    comune: 'Comune',
+    provincia: 'Provincia',
+    cap: 'CAP',
+    data_pianificazione: 'Data pianificazione',
+    ora_pianificazione: 'Ora pianificazione',
+    lettera: 'Lettera',
+    pod: 'POD',
+    operatore: 'Operatore',
+    posizione_mis: 'Posizione misuratore',
+    appuntamento: 'Appuntamento',
+  },
+  regole_no: {
+    appuntamento: 'Appuntamento presente',
+    accessibile_esterno: 'Misuratore accessibile dall’esterno',
+    civico_vuoto: 'Civico vuoto',
+    civico_senza_numero: 'Civico SN/SNC',
+  },
+  parole_chiave: {
+    lettera_no: 'Keyword nominativo per LETTERA = NO',
+    contatti_aziendali_escludi: 'Keyword nominativo da escludere dai contatti aziendali',
+  },
+  opzioni: {
+    unisci_trifase_diretti_in_monofase: 'Unisci trifase diretti nel foglio monofase',
+    crea_fogli_dettaglio: 'Crea i fogli finali solo monofase e solo trifase diretti',
+    escludi_enti_da_contatti_aziendali: 'Applica le keyword di esclusione ai contatti aziendali',
+  },
+};
+
+function cloneJson(obj) {
+  return JSON.parse(JSON.stringify(obj || {}));
+}
+
+function apriLettereExcel(slug) {
+  _lettereSlug = slug;
+  document.getElementById('lettereExcelTitle').textContent = `Excel lettere — ${slug}`;
+  document.getElementById('modalLettereExcel').classList.add('open');
+  caricaLettereExcel();
+}
+
+function chiudiLettereExcel() {
+  document.getElementById('modalLettereExcel').classList.remove('open');
+  _lettereSlug = null;
+  _lettereConfig = null;
+  _lettereDefault = null;
+}
+
+async function caricaLettereExcel() {
+  if (!_lettereSlug) return;
+  const cont = document.getElementById('lettereExcelContainer');
+  cont.innerHTML = '<div class="log-empty"><span class="spinner"></span> Caricamento…</div>';
+  try {
+    const r = await api('GET', `/api/provinces/${_lettereSlug}/lettere-excel-config`);
+    _lettereDefault = r.default || {};
+    _lettereConfig = r.config || cloneJson(_lettereDefault);
+    rendiLettereExcel();
+  } catch (e) {
+    cont.innerHTML = `<div class="log-empty" style="color:var(--error)">Errore: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function renderInputSection(title, sectionName, labels) {
+  const data = (_lettereConfig && _lettereConfig[sectionName]) || {};
+  let html = `<div style="margin-bottom:18px;">
+    <h3 style="margin:0 0 10px;font-size:15px;">${escapeHtml(title)}</h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;">`;
+  for (const [key, label] of Object.entries(labels)) {
+    html += `<label style="display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--text-secondary);">
+      <span>${escapeHtml(label)}</span>
+      <input type="text" data-lettere-section="${sectionName}" data-lettere-key="${key}"
+        value="${escapeHtml(data[key] || '')}"
+        style="width:100%;padding:7px 9px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);border-radius:4px;font-size:13px;">
+    </label>`;
+  }
+  html += '</div></div>';
+  return html;
+}
+
+function renderCheckboxSection(title, sectionName, labels) {
+  const data = (_lettereConfig && _lettereConfig[sectionName]) || {};
+  let html = `<div style="margin-bottom:18px;">
+    <h3 style="margin:0 0 10px;font-size:15px;">${escapeHtml(title)}</h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px;">`;
+  for (const [key, label] of Object.entries(labels)) {
+    const checked = data[key] ? 'checked' : '';
+    html += `<label style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg-tertiary);border-radius:6px;cursor:pointer;">
+      <input type="checkbox" data-lettere-section="${sectionName}" data-lettere-key="${key}" ${checked} style="width:auto;">
+      <span>${escapeHtml(label)}</span>
+    </label>`;
+  }
+  html += '</div></div>';
+  return html;
+}
+
+function renderKeywordSection() {
+  const data = (_lettereConfig && _lettereConfig.parole_chiave) || {};
+  let html = `<div style="margin-bottom:18px;">
+    <h3 style="margin:0 0 10px;font-size:15px;">Parole chiave nominativo</h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;">`;
+  for (const [key, label] of Object.entries(LETTERE_LABELS.parole_chiave)) {
+    const values = Array.isArray(data[key]) ? data[key] : [];
+    html += `<label style="display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--text-secondary);">
+      <span>${escapeHtml(label)}</span>
+      <textarea data-lettere-list-section="parole_chiave" data-lettere-list-key="${key}"
+        rows="5"
+        placeholder="Una parola o frase per riga"
+        style="width:100%;padding:8px 9px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);border-radius:4px;font-size:13px;resize:vertical;">${escapeHtml(values.join('\n'))}</textarea>
+      <small style="color:var(--text-muted);line-height:1.4;">
+        Il controllo cerca la parola/frase dentro il nominativo, senza distinguere maiuscole e minuscole.
+        Puoi separare anche con virgole o punto e virgola.
+      </small>
+    </label>`;
+  }
+  html += '</div></div>';
+  return html;
+}
+
+function rendiLettereExcel() {
+  const cont = document.getElementById('lettereExcelContainer');
+  if (!_lettereConfig) {
+    cont.innerHTML = '<div class="log-empty">Configurazione non caricata.</div>';
+    return;
+  }
+  let html = '';
+  html += renderInputSection('Nomi fogli', 'fogli', LETTERE_LABELS.fogli);
+  html += renderInputSection('Intestazioni colonne', 'nomi_colonne', LETTERE_LABELS.nomi_colonne);
+  html += renderInputSection('Valori colonna lettera', 'valori_lettera', {
+    si: "Valore SI",
+    no: "Valore NO",
+  });
+  html += renderKeywordSection();
+  html += renderCheckboxSection('Regole che impostano lettera a NO', 'regole_no', LETTERE_LABELS.regole_no);
+  html += renderCheckboxSection('Opzioni output', 'opzioni', LETTERE_LABELS.opzioni);
+  cont.innerHTML = html;
+}
+
+function parseKeywordTextarea(value) {
+  const out = [];
+  const seen = new Set();
+  for (const part of String(value || '').split(/[\n,;]+/)) {
+    const text = part.trim();
+    const key = text.toUpperCase();
+    if (text && !seen.has(key)) {
+      out.push(text);
+      seen.add(key);
+    }
+  }
+  return out;
+}
+
+function raccogliLettereExcel() {
+  const cfg = cloneJson(_lettereConfig);
+  for (const inp of document.querySelectorAll('[data-lettere-section]')) {
+    const section = inp.dataset.lettereSection;
+    const key = inp.dataset.lettereKey;
+    if (!cfg[section]) cfg[section] = {};
+    cfg[section][key] = inp.type === 'checkbox' ? inp.checked : inp.value.trim();
+  }
+  for (const inp of document.querySelectorAll('[data-lettere-list-section]')) {
+    const section = inp.dataset.lettereListSection;
+    const key = inp.dataset.lettereListKey;
+    if (!cfg[section]) cfg[section] = {};
+    cfg[section][key] = parseKeywordTextarea(inp.value);
+  }
+  return cfg;
+}
+
+function ripristinaDefaultLettereExcel() {
+  if (!_lettereDefault) return;
+  _lettereConfig = cloneJson(_lettereDefault);
+  rendiLettereExcel();
+  toast('Default ripristinati nella schermata. Premi Salva per applicarli.', 'success');
+}
+
+async function salvaLettereExcel() {
+  if (!_lettereSlug) return;
+  try {
+    const config = raccogliLettereExcel();
+    const r = await api('PUT', `/api/provinces/${_lettereSlug}/lettere-excel-config`, { config });
+    _lettereConfig = r.config || config;
+    toast(`✓ Configurazione Excel lettere salvata per ${_lettereSlug}`, 'success');
   } catch (e) {
     toast('Errore: ' + e.message, 'error');
   }
@@ -2241,16 +2541,16 @@ async function scaricaFiloneCompleto(slug) {
 
 async function segnaConsegnate(slug, count) {
   if (!confirm(
-    `Segnare come consegnate le ${count} modifiche pendenti di ${slug}?\n\n` +
-    `Da qui in poi il contatore "delta" riparte da zero. Usa questa azione DOPO ` +
-    `aver inviato l'Excel alla collega e averla vista applicarlo al foglio.\n\n` +
-    `Tip: se importi un Excel scaricato dopo che la collega ha applicato le tue ` +
-    `modifiche, il programma marca automaticamente come consegnate quelle ` +
-    `precedenti alla data di export — quindi non sempre serve cliccare qui.`
+    `Segnare come gestite le ${count} modifiche pendenti di ${slug}?\n\n` +
+    `Da qui in poi il contatore delle modifiche riparte da zero. Usa questa azione ` +
+    `dopo aver scaricato il file cambiamenti e completato la gestione esterna.\n\n` +
+    `Nota: se importi un Excel esportato dopo la gestione di queste modifiche, ` +
+    `il programma marca automaticamente come gestite quelle precedenti alla data ` +
+    `di export — quindi non sempre serve cliccare qui.`
   )) return;
   try {
     const r = await api('POST', `/api/provinces/${slug}/outbox/mark-delivered`);
-    toast(`✓ ${r.marked || 0} modifiche segnate come consegnate per ${slug}`, 'success');
+    toast(`✓ ${r.marked || 0} modifiche segnate come gestite per ${slug}`, 'success');
     setTimeout(caricaHealth, 800);
   } catch (e) {
     toast('Errore: ' + e.message, 'error');
@@ -2557,7 +2857,7 @@ function _labelSorgente(s) {
   // Traduzione friendly delle sorgenti audit_log
   const map = {
     'local': 'Dal programma',
-    'remote': 'Dal foglio',
+    'remote': 'Da import',
     'conflict_local_wins': 'Conflitto (vinto programma)',
     'bootstrap': 'Caricamento iniziale',
     'quarantine': 'Errore salvataggio',
@@ -2585,7 +2885,7 @@ function rendiInspector(data) {
   let html = '';
   // Dati attuali (può essere multi-LCL)
   html += '<div class="inspector-section"><h3>Dati attuali del contatore</h3>';
-  html += '<table class="inspector-table"><thead><tr><th>LCL</th><th>Riga foglio</th><th>POD</th><th>Nominativo</th><th>Comune</th><th>Operatore</th><th>Esito</th></tr></thead><tbody>';
+  html += '<table class="inspector-table"><thead><tr><th>LCL</th><th>Riga dati</th><th>POD</th><th>Nominativo</th><th>Comune</th><th>Operatore</th><th>Esito</th></tr></thead><tbody>';
   for (const r of data.filone) {
     html += `<tr>
       <td class="mono">${escapeHtml(r.lcl || '—')}</td>
@@ -2599,11 +2899,11 @@ function rendiInspector(data) {
   }
   html += '</tbody></table></div>';
 
-  // Modifiche in attesa di salvataggio sul foglio
+  // Modifiche in coda
   const pendingVivi = (data.pending_writes_recenti || []).filter(p => p.state === 'pending' || p.state === 'in_flight');
-  html += '<div class="inspector-section"><h3>Modifiche in attesa di salvataggio sul foglio (' + pendingVivi.length + ')</h3>';
+  html += '<div class="inspector-section"><h3>Modifiche in coda (' + pendingVivi.length + ')</h3>';
   if (pendingVivi.length === 0) {
-    html += '<div class="inspector-empty">Nessuna modifica in coda. Tutto già sincronizzato col foglio Google.</div>';
+    html += '<div class="inspector-empty">Nessuna modifica in coda.</div>';
   } else {
     html += '<table class="inspector-table"><thead><tr><th>Campo</th><th>Nuovo valore</th><th>Stato</th><th>Tentativi</th><th>Errore</th></tr></thead><tbody>';
     for (const p of pendingVivi) {

@@ -6143,8 +6143,48 @@ handle.addEventListener('mousedown', function(e) {
 let printMap = null;
 let printMarkers = [];
 let printLabels = [];
+let printLabelSpecs = [];
+let printLabelCompactMode = null;
 let printTecnicoFilter = '';
 let printContatoriData = [];
+let printLabelRelayoutTimer = null;
+let printLabelMoveFrame = null;
+let printLabelLastNavigationAt = 0;
+const PRINT_LABEL_MIN_VISIBLE_LINE_LENGTH = 9;
+
+function cancelPrintLabelRelayout() {
+    if (printLabelRelayoutTimer) {
+        clearTimeout(printLabelRelayoutTimer);
+        printLabelRelayoutTimer = null;
+    }
+}
+
+function schedulePrintLabelRelayout(clusters, delay = 650) {
+    cancelPrintLabelRelayout();
+    const mapRef = printMap;
+    printLabelRelayoutTimer = setTimeout(() => {
+        if (!printMap || printMap !== mapRef) return;
+
+        const idleFor = Date.now() - printLabelLastNavigationAt;
+        if (idleFor < delay) {
+            schedulePrintLabelRelayout(clusters, delay - idleFor);
+            return;
+        }
+
+        printLabelRelayoutTimer = null;
+        positionLabelsForPrint(clusters);
+    }, delay);
+}
+
+function schedulePrintLabelMoveUpdate(clusters) {
+    printLabelLastNavigationAt = Date.now();
+    if (printLabelMoveFrame) return;
+
+    printLabelMoveFrame = requestAnimationFrame(() => {
+        printLabelMoveFrame = null;
+        updateLabelPositions(clusters);
+    });
+}
 
 function openPrintPreview() {
     // Solo in vista percorso operatore
@@ -6223,6 +6263,11 @@ function closePrintPreview() {
     UiModal.close('printPreviewModal');
 
     // Pulizia aggressiva
+    cancelPrintLabelRelayout();
+    if (printLabelMoveFrame) {
+        cancelAnimationFrame(printLabelMoveFrame);
+        printLabelMoveFrame = null;
+    }
     cleanupPrintLabels();
 
     // Cleanup mappa
@@ -6235,10 +6280,13 @@ function closePrintPreview() {
 }
 
 function cleanupPrintLabels() {
+    cancelPrintLabelRelayout();
     // Pulizia aggressiva: rimuovi TUTTE le etichette e liste dal DOM
     document.querySelectorAll('.print-eneltel-label').forEach(el => el.remove());
     document.querySelectorAll('.print-cluster-list').forEach(el => el.remove());
     printLabels = [];
+    printLabelSpecs = [];
+    printLabelCompactMode = null;
     const svgLines = document.getElementById('printLabelLines');
     if (svgLines) svgLines.innerHTML = '';
 }
@@ -6251,6 +6299,7 @@ function initPrintMap() {
 
     // Rimuovi mappa esistente se presente
     if (printMap) {
+        cancelPrintLabelRelayout();
         printMap.remove();
     }
 
@@ -6363,22 +6412,20 @@ function renderPrintMap(perTecnico) {
 
     // Attendi che la mappa sia stabile prima di posizionare le etichette
     printMap.whenReady(() => {
-        setTimeout(() => {
-            positionLabelsForPrint(clusters);
-        }, 300);
+        schedulePrintLabelRelayout(clusters, 300);
     });
 
     // Riposiziona etichette durante e dopo il movimento/zoom
     printMap.on('move zoom', () => {
-        // Aggiornamento continuo durante il movimento
-        updateLabelPositions(clusters);
+        schedulePrintLabelMoveUpdate(clusters);
     });
 
-    printMap.on('moveend zoomend', () => {
-        // Ricalcolo completo alla fine del movimento
-        setTimeout(() => {
-            positionLabelsForPrint(clusters);
-        }, 50);
+    printMap.on('moveend', () => {
+        schedulePrintLabelMoveUpdate(clusters);
+    });
+
+    printMap.on('zoomend', () => {
+        schedulePrintLabelRelayout(clusters, 280);
     });
 
     // ============================================================
@@ -6395,19 +6442,22 @@ function renderPrintMap(perTecnico) {
     });
 
     // Aggiorna mappa quando lo slider viene trascinato
-    printZoomSlider.addEventListener('input', function() {
+    printZoomSlider.oninput = function() {
+        cancelPrintLabelRelayout();
         const zoom = parseFloat(this.value);
         printMap.setZoom(zoom);
         printZoomValue.textContent = zoom.toFixed(1) + 'x';
-    });
+    };
 
     // Pulsanti zoom +/-
-    document.getElementById('printZoomOut').addEventListener('click', function() {
+    document.getElementById('printZoomOut').onclick = function() {
+        cancelPrintLabelRelayout();
         printMap.zoomOut(0.5);
-    });
-    document.getElementById('printZoomIn').addEventListener('click', function() {
+    };
+    document.getElementById('printZoomIn').onclick = function() {
+        cancelPrintLabelRelayout();
         printMap.zoomIn(0.5);
-    });
+    };
 
     // Inizializza il valore dello slider dopo fitBounds
     setTimeout(() => {
@@ -6444,14 +6494,19 @@ function updateLabelPositions(clusters) {
         label.element.style.left = newX + 'px';
         label.element.style.top = newY + 'px';
 
-        // Ridisegna freccia solo se la distanza tra etichetta e marker e' apprezzabile
+        // Ridisegna il collegamento anche quando etichetta e marker si toccano.
         const elWidth = label.element.offsetWidth || (label.type === 'list' ? 70 : 55);
         const elHeight = label.element.offsetHeight || (label.type === 'list' ? 50 : 26);
-        const updLine = computeFutureLine(newX, newY, elWidth, elHeight, point.x, point.y);
-        const updLen = Math.hypot(updLine.x2 - updLine.x1, updLine.y2 - updLine.y1);
-        if (updLen >= 14) {
-            drawArrowToMarker(svgLines, { x: newX, y: newY }, elWidth, elHeight, point);
-        }
+        const markerTargetBox = label.markerTargetOffset ? {
+            x: point.x + label.markerTargetOffset.x,
+            y: point.y + label.markerTargetOffset.y,
+            width: label.markerTargetOffset.width,
+            height: label.markerTargetOffset.height
+        } : null;
+        drawLabelConnector(
+            svgLines, { x: newX, y: newY }, elWidth, elHeight,
+            point, markerTargetBox
+        );
     });
 }
 
@@ -6505,28 +6560,83 @@ function clusterMarkersForPrint(contatori) {
     return clusters;
 }
 
+function measurePrintMarkerPositions(clusters, mapRect) {
+    return clusters.map((cluster, clusterIdx) => {
+        const point = printMap.latLngToContainerPoint([cluster.lat, cluster.lon]);
+        const markerElement = printMarkers[clusterIdx]?.marker
+            ?.getElement()?.querySelector('.print-cluster-marker');
+
+        if (markerElement) {
+            const markerRect = markerElement.getBoundingClientRect();
+            const visualRects = [markerRect];
+            markerElement.querySelectorAll('.print-cluster-badge').forEach(badge => {
+                visualRects.push(badge.getBoundingClientRect());
+            });
+
+            const left = Math.min(...visualRects.map(rect => rect.left)) -
+                mapRect.left;
+            const top = Math.min(...visualRects.map(rect => rect.top)) -
+                mapRect.top;
+            const right = Math.max(...visualRects.map(rect => rect.right)) -
+                mapRect.left;
+            const bottom = Math.max(...visualRects.map(rect => rect.bottom)) -
+                mapRect.top;
+
+            return {
+                id: String(clusterIdx),
+                x: left,
+                y: top,
+                width: right - left,
+                height: bottom - top,
+                targetX: markerRect.left - mapRect.left,
+                targetY: markerRect.top - mapRect.top,
+                targetWidth: markerRect.width,
+                targetHeight: markerRect.height
+            };
+        }
+
+        const markerContentSize = cluster.contatori.length > 1 ? 28 : 24;
+        const markerVisualSize = markerContentSize + 8;
+        return {
+            id: String(clusterIdx),
+            x: point.x - markerContentSize / 2 - 1,
+            y: point.y - markerContentSize / 2 - 1,
+            width: markerVisualSize,
+            height: markerVisualSize,
+            targetX: point.x - markerContentSize / 2,
+            targetY: point.y - markerContentSize / 2,
+            targetWidth: markerContentSize + 6,
+            targetHeight: markerContentSize + 6
+        };
+    });
+}
+
 function positionLabelsForPrint(clusters) {
-    // Pulizia aggressiva
-    cleanupPrintLabels();
-
     const mapContainer = document.getElementById('printMap');
-    const mapRect = mapContainer.getBoundingClientRect();
     const svgLines = document.getElementById('printLabelLines');
+    if (!mapContainer || !svgLines) return;
+    const mapRect = mapContainer.getBoundingClientRect();
 
-    const placedBoxes = []; // Traccia tutte le etichette/liste posizionate
-    const placedLines = []; // Traccia le linee gia' tracciate per evitarne l'incrocio
+    printLabels = [];
+    svgLines.innerHTML = '';
+
+    const compactMode = printMap.getZoom() <= 16.25;
+    if (compactMode !== printLabelCompactMode) {
+        mapContainer.classList.toggle('print-labels-compact', compactMode);
+        printLabelSpecs.forEach(spec => {
+            if (spec.element) spec.element.remove();
+        });
+        printLabelSpecs = [];
+        printLabelCompactMode = compactMode;
+    }
+
     const SINGLE_LABEL_HEIGHT = 34;
     const SINGLE_LABEL_WIDTH = 55;
     const LIST_ITEM_HEIGHT = 22;
     const LIST_WIDTH = 75;
-    const PADDING = 10;
-    const MIN_LINE_LENGTH = 14; // Sotto questa lunghezza il tratteggio non viene disegnato (etichetta gia' adiacente al marker)
 
     // Raccoglie posizioni marker
-    const markerPositions = clusters.map(cluster => {
-        const point = printMap.latLngToContainerPoint([cluster.lat, cluster.lon]);
-        return { x: point.x - 15, y: point.y - 15, width: 30, height: 30 };
-    });
+    const markerPositions = measurePrintMarkerPositions(clusters, mapRect);
 
     // Mappa fasce orarie -> forme geometriche (B&W friendly)
     // Abbrevia orario: rimuove :00, mantiene minuti non-zero
@@ -6568,108 +6678,174 @@ function positionLabelsForPrint(clusters) {
         return null;
     }
 
-    clusters.forEach((cluster, clusterIdx) => {
-        const point = printMap.latLngToContainerPoint([cluster.lat, cluster.lon]);
-        const isCluster = cluster.contatori.length > 1;
+    function measureLabelElement(element, fallbackWidth, fallbackHeight) {
+        const baseRect = element.getBoundingClientRect();
+        let minX = 0;
+        let minY = 0;
+        let maxX = baseRect.width || fallbackWidth;
+        let maxY = baseRect.height || fallbackHeight;
 
-        if (!isCluster) {
-            // ========== CONTATORE SINGOLO ==========
-            const c = cluster.contatori[0];
-            const eneltelLast3 = c.eneltel.slice(-3);
-            const isApp = c.is_appuntamento;
-            const timeBadge = abbreviateTime(c.orari_lettere || '', c.ora_appuntamento, isApp);
+        element.querySelectorAll('.print-time-badge').forEach(child => {
+            const childRect = child.getBoundingClientRect();
+            minX = Math.min(minX, childRect.left - baseRect.left);
+            minY = Math.min(minY, childRect.top - baseRect.top);
+            maxX = Math.max(maxX, childRect.right - baseRect.left);
+            maxY = Math.max(maxY, childRect.bottom - baseRect.top);
+        });
 
-            // Trova posizione adiacente al marker
-            const pos = findAdjacentPosition(
-                point.x, point.y,
-                SINGLE_LABEL_WIDTH, SINGLE_LABEL_HEIGHT,
-                placedBoxes, markerPositions, mapRect, placedLines
-            );
+        return {
+            anchorWidth: baseRect.width || fallbackWidth,
+            anchorHeight: baseRect.height || fallbackHeight,
+            footprintWidth: maxX - minX,
+            footprintHeight: maxY - minY,
+            footprintOffsetX: minX,
+            footprintOffsetY: minY
+        };
+    }
 
-            // Crea etichetta singola
-            const labelEl = document.createElement('div');
-            labelEl.className = 'print-eneltel-label' + (isApp ? ' is-appuntamento' : '');
-            let innerHtml = isApp ? '<i class="print-phone-icon">☎</i>' : '';
-            innerHtml += eneltelLast3;
-            if (timeBadge) {
-                innerHtml += `<span class="print-time-badge">${timeBadge}</span>`;
-            }
-            labelEl.innerHTML = innerHtml;
-            labelEl.style.left = pos.x + 'px';
-            labelEl.style.top = pos.y + 'px';
-            labelEl.style.borderLeftColor = c.colore;
-            labelEl.style.borderLeftWidth = '4px';
-            labelEl.style.borderLeftStyle = 'solid';
+    if (printLabelSpecs.length !== clusters.length) {
+        printLabelSpecs.forEach(spec => {
+            if (spec.element) spec.element.remove();
+        });
+        printLabelSpecs = [];
+    }
 
-            mapContainer.appendChild(labelEl);
+    let labelSpecs = printLabelSpecs;
+    if (labelSpecs.length === 0) {
+        labelSpecs = clusters.map((cluster, clusterIdx) => {
+            const point = printMap.latLngToContainerPoint([cluster.lat, cluster.lon]);
+            const isCluster = cluster.contatori.length > 1;
+            let element;
+            let fallbackWidth;
+            let fallbackHeight;
 
-            placedBoxes.push({ x: pos.x, y: pos.y, width: SINGLE_LABEL_WIDTH, height: SINGLE_LABEL_HEIGHT });
-            printLabels.push({
-                element: labelEl,
-                type: 'single',
-                cluster: cluster,
-                position: pos,
-                markerPoint: { x: point.x, y: point.y }
-            });
-
-            // Disegna freccia dall'etichetta al marker solo se serve davvero
-            const sLine = computeFutureLine(pos.x, pos.y, SINGLE_LABEL_WIDTH, SINGLE_LABEL_HEIGHT, point.x, point.y);
-            if (lineLengthPx(sLine) >= MIN_LINE_LENGTH) {
-                drawArrowToMarker(svgLines, pos, SINGLE_LABEL_WIDTH, SINGLE_LABEL_HEIGHT, point);
-            }
-            placedLines.push(sLine);
-
-        } else {
-            // ========== CLUSTER MULTIPLO - LISTA ==========
-            const listHeight = cluster.contatori.length * LIST_ITEM_HEIGHT + 4;
-
-            // Trova posizione per la lista
-            const pos = findListPosition(
-                point.x, point.y,
-                LIST_WIDTH, listHeight,
-                placedBoxes, markerPositions, mapRect, placedLines
-            );
-
-            // Crea contenitore lista
-            const listEl = document.createElement('div');
-            listEl.className = 'print-cluster-list';
-            listEl.style.left = pos.x + 'px';
-            listEl.style.top = pos.y + 'px';
-
-            // Aggiungi ogni contatore come riga
-            cluster.contatori.forEach(c => {
-                const itemEl = document.createElement('div');
+            if (!isCluster) {
+                // ========== CONTATORE SINGOLO ==========
+                const c = cluster.contatori[0];
+                const eneltelLast3 = c.eneltel.slice(-3);
                 const isApp = c.is_appuntamento;
                 const timeBadge = abbreviateTime(c.orari_lettere || '', c.ora_appuntamento, isApp);
-                itemEl.className = 'print-cluster-list-item' + (isApp ? ' is-appuntamento' : '');
-                let itemHtml = `<span class="color-dot" style="background: ${c.colore};"></span>`;
-                if (isApp) itemHtml += '<i class="print-phone-icon">☎</i>';
-                itemHtml += c.eneltel.slice(-3);
+
+                // Crea etichetta singola
+                element = document.createElement('div');
+                element.className = 'print-eneltel-label' + (isApp ? ' is-appuntamento' : '');
+                let innerHtml = isApp ? '<i class="print-phone-icon">☎</i>' : '';
+                innerHtml += eneltelLast3;
                 if (timeBadge) {
-                    itemHtml += `<span class="print-list-time">${timeBadge}</span>`;
+                    innerHtml += `<span class="print-time-badge">${timeBadge}</span>`;
                 }
-                itemEl.innerHTML = itemHtml;
-                listEl.appendChild(itemEl);
-            });
+                element.innerHTML = innerHtml;
+                element.style.borderLeftColor = c.colore;
+                element.style.borderLeftWidth = '4px';
+                element.style.borderLeftStyle = 'solid';
+                fallbackWidth = SINGLE_LABEL_WIDTH;
+                fallbackHeight = SINGLE_LABEL_HEIGHT;
 
-            mapContainer.appendChild(listEl);
+            } else {
+                // ========== CLUSTER MULTIPLO - LISTA ==========
+                const listHeight = cluster.contatori.length * LIST_ITEM_HEIGHT + 4;
 
-            placedBoxes.push({ x: pos.x, y: pos.y, width: LIST_WIDTH, height: listHeight });
-            printLabels.push({
-                element: listEl,
-                type: 'list',
-                cluster: cluster,
-                position: pos,
-                markerPoint: { x: point.x, y: point.y }
-            });
+                // Crea contenitore lista
+                element = document.createElement('div');
+                element.className = 'print-cluster-list';
 
-            // Disegna freccia dalla lista al marker solo se serve davvero
-            const lLine = computeFutureLine(pos.x, pos.y, LIST_WIDTH, listHeight, point.x, point.y);
-            if (lineLengthPx(lLine) >= MIN_LINE_LENGTH) {
-                drawArrowToMarker(svgLines, pos, LIST_WIDTH, listHeight, point);
+                // Aggiungi ogni contatore come riga
+                cluster.contatori.forEach(c => {
+                    const itemEl = document.createElement('div');
+                    const isApp = c.is_appuntamento;
+                    const timeBadge = abbreviateTime(c.orari_lettere || '', c.ora_appuntamento, isApp);
+                    itemEl.className = 'print-cluster-list-item' + (isApp ? ' is-appuntamento' : '');
+                    let itemHtml = `<span class="color-dot" style="background: ${c.colore};"></span>`;
+                    if (isApp) itemHtml += '<i class="print-phone-icon">☎</i>';
+                    itemHtml += c.eneltel.slice(-3);
+                    if (timeBadge) {
+                        itemHtml += `<span class="print-list-time">${timeBadge}</span>`;
+                    }
+                    itemEl.innerHTML = itemHtml;
+                    element.appendChild(itemEl);
+                });
+                fallbackWidth = LIST_WIDTH;
+                fallbackHeight = listHeight;
             }
-            placedLines.push(lLine);
-        }
+
+            element.style.left = '-10000px';
+            element.style.top = '-10000px';
+            element.style.visibility = 'hidden';
+            mapContainer.appendChild(element);
+
+            const dimensions = measureLabelElement(element, fallbackWidth, fallbackHeight);
+            const markerBox = markerPositions[clusterIdx];
+            return {
+                id: String(clusterIdx),
+                cluster,
+                point,
+                element,
+                type: isCluster ? 'list' : 'single',
+                markerX: point.x,
+                markerY: point.y,
+                markerTargetBox: {
+                    x: markerBox.targetX,
+                    y: markerBox.targetY,
+                    width: markerBox.targetWidth,
+                    height: markerBox.targetHeight
+                },
+                width: dimensions.anchorWidth,
+                height: dimensions.anchorHeight,
+                ...dimensions
+            };
+        });
+        printLabelSpecs = labelSpecs;
+    } else {
+        labelSpecs.forEach((spec, clusterIdx) => {
+            const cluster = clusters[clusterIdx];
+            const point = printMap.latLngToContainerPoint([cluster.lat, cluster.lon]);
+            spec.cluster = cluster;
+            spec.point = point;
+            spec.markerX = point.x;
+            spec.markerY = point.y;
+            const markerBox = markerPositions[clusterIdx];
+            spec.markerTargetBox = {
+                x: markerBox.targetX,
+                y: markerBox.targetY,
+                width: markerBox.targetWidth,
+                height: markerBox.targetHeight
+            };
+        });
+    }
+
+    const layout = window.PrintLabelLayout.solveLabelLayout(
+        labelSpecs,
+        markerPositions,
+        { width: mapRect.width, height: mapRect.height }
+    );
+
+    labelSpecs.forEach(spec => {
+        const pos = layout[spec.id] || {
+            x: spec.point.x + 18,
+            y: spec.point.y - spec.anchorHeight / 2
+        };
+        spec.element.style.left = pos.x + 'px';
+        spec.element.style.top = pos.y + 'px';
+        spec.element.style.visibility = 'visible';
+
+        printLabels.push({
+            element: spec.element,
+            type: spec.type,
+            cluster: spec.cluster,
+            position: pos,
+            markerPoint: { x: spec.point.x, y: spec.point.y },
+            markerTargetOffset: {
+                x: spec.markerTargetBox.x - spec.point.x,
+                y: spec.markerTargetBox.y - spec.point.y,
+                width: spec.markerTargetBox.width,
+                height: spec.markerTargetBox.height
+            }
+        });
+
+        drawLabelConnector(
+            svgLines, pos, spec.anchorWidth, spec.anchorHeight,
+            spec.point, spec.markerTargetBox
+        );
     });
 }
 
@@ -6800,6 +6976,58 @@ function hasOverlap(x, y, width, height, placedBoxes, markerPositions) {
                y < box.y + box.height + SPACING &&
                y + height + SPACING > box.y;
     });
+}
+
+function drawLabelConnector(
+    svgLines, labelPos, labelWidth, labelHeight, markerPoint, markerTargetBox
+) {
+    const centerLine = computeFutureLine(
+        labelPos.x, labelPos.y, labelWidth, labelHeight,
+        markerPoint.x, markerPoint.y
+    );
+    const line = markerTargetBox ? {
+        x1: centerLine.x1,
+        y1: centerLine.y1,
+        x2: Math.max(
+            markerTargetBox.x,
+            Math.min(markerTargetBox.x + markerTargetBox.width, centerLine.x1)
+        ),
+        y2: Math.max(
+            markerTargetBox.y,
+            Math.min(markerTargetBox.y + markerTargetBox.height, centerLine.y1)
+        )
+    } : centerLine;
+    let visibleLine = line;
+    const length = lineLengthPx(line);
+    if (length < PRINT_LABEL_MIN_VISIBLE_LINE_LENGTH) {
+        const directionX = markerPoint.x - line.x1;
+        const directionY = markerPoint.y - line.y1;
+        const directionLength = Math.hypot(directionX, directionY);
+        if (directionLength > 0) {
+            const visibleLength = Math.min(
+                PRINT_LABEL_MIN_VISIBLE_LINE_LENGTH,
+                directionLength
+            );
+            visibleLine = {
+                x1: line.x1,
+                y1: line.y1,
+                x2: line.x1 + directionX / directionLength * visibleLength,
+                y2: line.y1 + directionY / directionLength * visibleLength
+            };
+        }
+    }
+
+    const connector = document.createElementNS(
+        'http://www.w3.org/2000/svg', 'line'
+    );
+    connector.setAttribute('x1', visibleLine.x1);
+    connector.setAttribute('y1', visibleLine.y1);
+    connector.setAttribute('x2', visibleLine.x2);
+    connector.setAttribute('y2', visibleLine.y2);
+    connector.setAttribute('class', 'print-label-arrow');
+    connector.setAttribute('stroke-dasharray', '4,3');
+    connector.setAttribute('stroke-linecap', 'round');
+    svgLines.appendChild(connector);
 }
 
 // Disegna freccia dalla lista al marker

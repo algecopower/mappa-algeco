@@ -3096,6 +3096,25 @@ body {
 .print-eneltel-label.is-appuntamento {
     border-style: dashed;
 }
+#printMap.print-labels-compact .print-eneltel-label {
+    padding: 3px 7px;
+    font-size: 12px;
+    letter-spacing: 0.5px;
+}
+#printMap.print-labels-compact .print-time-badge {
+    right: -4px;
+    font-size: 8px;
+    padding: 1px 3px;
+}
+#printMap.print-labels-compact .print-cluster-list-item {
+    padding: 2px 6px;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+}
+#printMap.print-labels-compact .print-cluster-list-item .print-list-time {
+    font-size: 9px;
+    margin-left: 3px;
+}
 .print-time-badge {
     position: absolute;
     bottom: -7px;
@@ -3191,8 +3210,6 @@ body {
     stroke-width: 2;
     fill: none;
 }
-
-
 
 /* Print zoom slider specific */
 .print-zoom-slider {

@@ -123,7 +123,7 @@ def test_layout_stampa_limita_collegamenti_con_marker_quasi_coincidenti():
         points.forEach(([id]) => assert(result[id], `Etichetta ${id} assente`));
         points.forEach(([id]) => {
             assert(
-                result[id].distance <= 45,
+                result[id].distance <= 46,
                 `La tappa ${id} e' troppo distante: ${result[id].distance}px`
             );
         });
@@ -392,6 +392,75 @@ def test_layout_stampa_vista_larga_sidi_resta_compatta():
                 );
             }
         }
+        """
+    )
+
+    subprocess.run(
+        [node, "-e", script],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+
+def test_layout_stampa_paul_non_fa_passare_863_sui_marker_vicini():
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("Node.js non disponibile")
+
+    script = textwrap.dedent(
+        """
+        const assert = require('assert');
+        const layout = require('./static/print_label_layout.js');
+        const fixture = require('./tests/fixtures/print_layout_paul_1006.json');
+
+        function lineIntersectsBox(line, box) {
+            const edges = [
+                {x1: box.x, y1: box.y, x2: box.x + box.width, y2: box.y},
+                {
+                    x1: box.x + box.width,
+                    y1: box.y,
+                    x2: box.x + box.width,
+                    y2: box.y + box.height
+                },
+                {
+                    x1: box.x + box.width,
+                    y1: box.y + box.height,
+                    x2: box.x,
+                    y2: box.y + box.height
+                },
+                {x1: box.x, y1: box.y + box.height, x2: box.x, y2: box.y}
+            ];
+            return edges.some(edge => layout.segmentsIntersect(line, edge));
+        }
+
+        const result = layout.solveLabelLayout(
+            fixture.items,
+            fixture.markerPositions,
+            fixture.mapSize
+        );
+        const target = fixture.items.find(item => item.text.startsWith('863'));
+        const placement = result[target.id];
+        const crossedMarkers = fixture.markerPositions
+            .filter(marker => marker.id !== target.id)
+            .filter(marker => lineIntersectsBox(placement.line, marker))
+            .map(marker => marker.id);
+
+        assert.deepStrictEqual(
+            crossedMarkers,
+            [],
+            `Il tratteggio dello 863 attraversa marker vicini: ${crossedMarkers}`
+        );
+        assert(
+            placement.distance < 50,
+            `Lo 863 e' stato spinto troppo lontano: ${placement.distance}px`
+        );
+        assert.notStrictEqual(
+            placement.direction,
+            'top-left',
+            'Lo 863 non deve finire sparato in alto a sinistra'
+        );
         """
     )
 

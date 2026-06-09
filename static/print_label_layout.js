@@ -33,6 +33,7 @@
         candidateSeedsPerDirection: 4,
         crossingPenalty: 900,
         lineThroughLabelPenalty: 350,
+        lineThroughMarkerPenalty: 3000,
         overlapPenalty: 5000,
         componentDistance: 105,
         beamComponentLimit: 12
@@ -197,6 +198,12 @@
         })) {
             return null;
         }
+        candidate.lineMarkerHits = markerPositions.filter(marker =>
+            String(marker.id) !== String(item.id) &&
+            lineIntersectsBox(candidate.line, marker, 1)
+        ).length;
+        candidate.baseCost += candidate.lineMarkerHits *
+            options.lineThroughMarkerPenalty;
         return candidate;
     }
 

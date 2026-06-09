@@ -55,7 +55,7 @@ _COLONNE_STRUTTURALI = [
     'COMUNE',             # comune (influenza analisi zone)
 ]
 
-from config import MATRICOLE_VIP
+from config import MATRICOLE_VIP, OPERATORI_DICT
 
 # Mappatura colonne personalizzata
 try:
@@ -337,6 +337,39 @@ def parse_data_flessibile(valore):
     return None
 
 
+def _costruisci_alias_operatori():
+    """Costruisce la mappa case-insensitive alias/nome/matricola → matricola."""
+    alias_operatori = {}
+    for nome, matricola in OPERATORI_DICT.items():
+        nome_pulito = str(nome).strip()
+        matricola_pulita = str(matricola).strip()
+        if not matricola_pulita:
+            continue
+        alias_operatori[matricola_pulita.casefold()] = matricola_pulita
+        if nome_pulito:
+            alias_operatori[nome_pulito.casefold()] = matricola_pulita
+
+    # Le matricole VIP hanno precedenza in caso di alias ambiguo.
+    for matricola in MATRICOLE_VIP:
+        matricola_pulita = str(matricola).strip()
+        if matricola_pulita:
+            alias_operatori[matricola_pulita.casefold()] = matricola_pulita
+
+    return alias_operatori
+
+
+def _normalizza_operatore(valore, alias_operatori=None):
+    """Converte nome display o matricola nella matricola canonica configurata."""
+    operatore = '' if pd.isna(valore) else str(valore).strip()
+    if not operatore:
+        return ''
+
+    if alias_operatori is None:
+        alias_operatori = _costruisci_alias_operatori()
+
+    return alias_operatori.get(operatore.casefold(), operatore)
+
+
 def carica_dati_db_locale(force=False):
     """Carica tutti i dati dal DB locale nel formato storico del FILONE.
 
@@ -577,7 +610,10 @@ def carica_dati_db_locale(force=False):
     # Operatore → TEC_K
     col_operatore = trova_colonna(df, ['Operatore', 'OPERATORE', 'TECNICO', 'Tecnico', 'Matricola'], chiave_mapping='operatore')
     if col_operatore:
-        df['TEC_K'] = df[col_operatore].fillna('').astype(str).str.strip()
+        alias_operatori = _costruisci_alias_operatori()
+        df['TEC_K'] = df[col_operatore].apply(
+            lambda valore: _normalizza_operatore(valore, alias_operatori)
+        )
     else:
         df['TEC_K'] = ''
 

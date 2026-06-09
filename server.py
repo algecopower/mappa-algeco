@@ -1157,6 +1157,10 @@ def update_settings():
         return jsonify({'error': 'Dati mancanti'}), 400
     
     try:
+        configurazione_operatori_cambiata = (
+            'operatori_vip' in data or 'operatori_dict' in data
+        )
+
         # Salva su file persistente
         from moduli.safe_json import json_write as _jw
         settings_dir = os.path.join('data', PROVINCIA_ATTIVA.lower())
@@ -1184,6 +1188,7 @@ def update_settings():
                 (config, 'OPERATORI_DICT'),
                 (mappa_html, 'OPERATORI_DICT'),
                 (gestionale, 'OPERATORI_DICT'),
+                (data_loader, 'OPERATORI_DICT'),
             ],
             'deposito': [
                 (config, 'DEPOSITO'),
@@ -1233,6 +1238,9 @@ def update_settings():
                 value = data[key]
                 for module, attr_name in targets:
                     setattr(module, attr_name, value)
+
+        if configurazione_operatori_cambiata:
+            data_loader.invalidate_data_cache()
         
         # Aggiorna anche il riferimento locale di server.py
         if 'operatori_vip' in data:
@@ -1267,7 +1275,11 @@ def update_settings():
             logger.warning(f"[SETTINGS] Rigenerazione config.json fallita: {e_cfg}")
 
         html_regen_ok = False
-        if _last_report is not None and _last_risultato_zone is not None:
+        if (
+            not configurazione_operatori_cambiata
+            and _last_report is not None
+            and _last_risultato_zone is not None
+        ):
             try:
                 from moduli.data_loader import carica_dati_db_locale
                 df_cached = carica_dati_db_locale(force=False)

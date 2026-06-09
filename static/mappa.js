@@ -6149,8 +6149,13 @@ let printTecnicoFilter = '';
 let printContatoriData = [];
 let printLabelRelayoutTimer = null;
 let printLabelMoveFrame = null;
+let printAutoFitFrame = null;
+let printAutoFitPassesRemaining = 0;
 let printLabelLastNavigationAt = 0;
 const PRINT_LABEL_MIN_VISIBLE_LINE_LENGTH = 9;
+const PRINT_AUTO_FIT_MAX_PASSES = 3;
+const PRINT_AUTO_FIT_PADDING = 26;
+const PRINT_AUTO_FIT_CENTER_TOLERANCE = 6;
 
 function cancelPrintLabelRelayout() {
     if (printLabelRelayoutTimer) {
@@ -6184,6 +6189,14 @@ function schedulePrintLabelMoveUpdate(clusters) {
         printLabelMoveFrame = null;
         updateLabelPositions(clusters);
     });
+}
+
+function cancelPrintAutoFit() {
+    if (printAutoFitFrame) {
+        cancelAnimationFrame(printAutoFitFrame);
+        printAutoFitFrame = null;
+    }
+    printAutoFitPassesRemaining = 0;
 }
 
 function openPrintPreview() {
@@ -6264,6 +6277,7 @@ function closePrintPreview() {
 
     // Pulizia aggressiva
     cancelPrintLabelRelayout();
+    cancelPrintAutoFit();
     if (printLabelMoveFrame) {
         cancelAnimationFrame(printLabelMoveFrame);
         printLabelMoveFrame = null;
@@ -6295,6 +6309,7 @@ function initPrintMap() {
     const printMapDiv = document.getElementById('printMap');
 
     // Pulizia aggressiva prima di ricreare
+    cancelPrintAutoFit();
     cleanupPrintLabels();
 
     // Rimuovi mappa esistente se presente
@@ -6345,6 +6360,7 @@ function initPrintMap() {
 function renderPrintMap(perTecnico) {
     printMarkers = [];
     printLabels = [];
+    printAutoFitPassesRemaining = PRINT_AUTO_FIT_MAX_PASSES;
 
     const allPoints = [];
     const allContatori = [];
@@ -6406,13 +6422,12 @@ function renderPrintMap(perTecnico) {
     // Centra mappa sui punti
     if (allPoints.length > 0) {
         const bounds = L.latLngBounds(allPoints);
-        bounds.extend([deposito.lat, deposito.lon]);
-        printMap.fitBounds(bounds, { padding: [80, 80] });
+        printMap.fitBounds(bounds, { padding: [80, 80], animate: false });
     }
 
     // Attendi che la mappa sia stabile prima di posizionare le etichette
     printMap.whenReady(() => {
-        schedulePrintLabelRelayout(clusters, 300);
+        schedulePrintLabelRelayout(clusters, 120);
     });
 
     // Riposiziona etichette durante e dopo il movimento/zoom
@@ -6444,6 +6459,7 @@ function renderPrintMap(perTecnico) {
     // Aggiorna mappa quando lo slider viene trascinato
     printZoomSlider.oninput = function() {
         cancelPrintLabelRelayout();
+        cancelPrintAutoFit();
         const zoom = parseFloat(this.value);
         printMap.setZoom(zoom);
         printZoomValue.textContent = zoom.toFixed(1) + 'x';
@@ -6452,10 +6468,12 @@ function renderPrintMap(perTecnico) {
     // Pulsanti zoom +/-
     document.getElementById('printZoomOut').onclick = function() {
         cancelPrintLabelRelayout();
+        cancelPrintAutoFit();
         printMap.zoomOut(0.5);
     };
     document.getElementById('printZoomIn').onclick = function() {
         cancelPrintLabelRelayout();
+        cancelPrintAutoFit();
         printMap.zoomIn(0.5);
     };
 
@@ -6608,6 +6626,139 @@ function measurePrintMarkerPositions(clusters, mapRect) {
             targetWidth: markerContentSize + 6,
             targetHeight: markerContentSize + 6
         };
+    });
+}
+
+function expandPrintContentBounds(bounds, rect, mapRect) {
+    if (!rect || rect.width <= 0 || rect.height <= 0) return;
+
+    const left = rect.left - mapRect.left;
+    const top = rect.top - mapRect.top;
+    const right = rect.right - mapRect.left;
+    const bottom = rect.bottom - mapRect.top;
+
+    bounds.minX = Math.min(bounds.minX, left);
+    bounds.minY = Math.min(bounds.minY, top);
+    bounds.maxX = Math.max(bounds.maxX, right);
+    bounds.maxY = Math.max(bounds.maxY, bottom);
+}
+
+function measurePrintContentBounds(mapRect) {
+    const bounds = {
+        minX: Infinity,
+        minY: Infinity,
+        maxX: -Infinity,
+        maxY: -Infinity
+    };
+
+    printMarkers.forEach(printMarker => {
+        const markerElement = printMarker.marker
+            ?.getElement()?.querySelector('.print-cluster-marker');
+        if (!markerElement) return;
+
+        expandPrintContentBounds(bounds, markerElement.getBoundingClientRect(), mapRect);
+        markerElement.querySelectorAll('.print-cluster-badge').forEach(badge => {
+            expandPrintContentBounds(bounds, badge.getBoundingClientRect(), mapRect);
+        });
+    });
+
+    printLabels.forEach(label => {
+        if (!label.element) return;
+
+        expandPrintContentBounds(bounds, label.element.getBoundingClientRect(), mapRect);
+        label.element.querySelectorAll('.print-time-badge').forEach(badge => {
+            expandPrintContentBounds(bounds, badge.getBoundingClientRect(), mapRect);
+        });
+    });
+
+    if (!Number.isFinite(bounds.minX) || !Number.isFinite(bounds.minY) ||
+        !Number.isFinite(bounds.maxX) || !Number.isFinite(bounds.maxY)) {
+        return null;
+    }
+
+    bounds.width = bounds.maxX - bounds.minX;
+    bounds.height = bounds.maxY - bounds.minY;
+    return bounds.width > 0 && bounds.height > 0 ? bounds : null;
+}
+
+function snapPrintZoomDown(zoom) {
+    return Math.floor(zoom * 4) / 4;
+}
+
+function autoFitPrintContent() {
+    if (!printMap || printAutoFitPassesRemaining <= 0) return;
+
+    const mapContainer = document.getElementById('printMap');
+    if (!mapContainer) return;
+
+    const mapRect = mapContainer.getBoundingClientRect();
+    const contentBounds = measurePrintContentBounds(mapRect);
+    if (!contentBounds) {
+        printAutoFitPassesRemaining -= 1;
+        scheduleInitialPrintAutoFit();
+        return;
+    }
+
+    const mapSize = printMap.getSize();
+    const padding = Math.min(
+        PRINT_AUTO_FIT_PADDING,
+        Math.max(8, mapSize.x / 5),
+        Math.max(8, mapSize.y / 5)
+    );
+    const usableWidth = Math.max(1, mapSize.x - padding * 2);
+    const usableHeight = Math.max(1, mapSize.y - padding * 2);
+    const scale = Math.min(
+        usableWidth / contentBounds.width,
+        usableHeight / contentBounds.height
+    );
+    if (!Number.isFinite(scale) || scale <= 0) {
+        printAutoFitPassesRemaining = 0;
+        return;
+    }
+
+    const currentZoom = printMap.getZoom();
+    const maxZoom = printMap.getMaxZoom();
+    const minZoom = printMap.getMinZoom();
+    let targetZoom = currentZoom + Math.log2(scale);
+    targetZoom = Math.max(minZoom, Math.min(maxZoom, targetZoom));
+    targetZoom = snapPrintZoomDown(targetZoom);
+    targetZoom = Math.max(minZoom, Math.min(maxZoom, targetZoom));
+
+    const centerPoint = L.point(
+        (contentBounds.minX + contentBounds.maxX) / 2,
+        (contentBounds.minY + contentBounds.maxY) / 2
+    );
+    const viewportCenter = L.point(mapSize.x / 2, mapSize.y / 2);
+    const needsPan = centerPoint.distanceTo(viewportCenter) >
+        PRINT_AUTO_FIT_CENTER_TOLERANCE;
+    const needsZoom = Math.abs(targetZoom - currentZoom) >= 0.25 &&
+        (scale < 0.98 || scale > 1.08);
+
+    if (!needsPan && !needsZoom) {
+        printAutoFitPassesRemaining = 0;
+        return;
+    }
+
+    printAutoFitPassesRemaining -= 1;
+    if (!needsZoom) {
+        printAutoFitPassesRemaining = 0;
+    }
+
+    printMap.setView(
+        printMap.containerPointToLatLng(centerPoint),
+        needsZoom ? targetZoom : currentZoom,
+        { animate: false }
+    );
+}
+
+function scheduleInitialPrintAutoFit() {
+    if (printAutoFitPassesRemaining <= 0 || printAutoFitFrame) return;
+
+    printAutoFitFrame = requestAnimationFrame(() => {
+        printAutoFitFrame = requestAnimationFrame(() => {
+            printAutoFitFrame = null;
+            autoFitPrintContent();
+        });
     });
 }
 
@@ -6847,6 +6998,8 @@ function positionLabelsForPrint(clusters) {
             spec.point, spec.markerTargetBox
         );
     });
+
+    scheduleInitialPrintAutoFit();
 }
 
 // Calcola la linea che collegherebbe etichetta -> marker (stessa logica di drawArrowToMarker).

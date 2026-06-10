@@ -32,6 +32,8 @@ def _rowcol_to_a1(row, col):
 logger = logging.getLogger('mappa_algeco')
 bp = Blueprint('sigilli', __name__)
 
+_COLONNA_MATRICOLA_INSTALLATA = 'Cod. Installato'
+
 
 # ============================================================================
 # API SIGILLI - Gestione inserimento sigilli contatori installati
@@ -251,7 +253,11 @@ def get_matricole_pending():
         idx_cliente = _trova_indice_multi(headers, 'NOMINATIVO', 'Nominativo', 'Cliente', 'CLIENTE', chiave_mapping='nominativo')
         idx_indirizzo = _trova_indice_multi(headers, 'Indirizzo', 'Via', 'VIA', chiave_mapping='indirizzo')
         idx_comune = _trova_indice_multi(headers, 'COMUNE', 'Comune', chiave_mapping='comune')
-        idx_matricola = _trova_indice_multi(headers, 'Matricola CE inst', 'Matricola misuratore installato', chiave_mapping='matricola_installata')
+        idx_matricola = _trova_indice_multi(
+            headers,
+            _COLONNA_MATRICOLA_INSTALLATA,
+            chiave_mapping='matricola_installata',
+        )
         idx_data_inst = _trova_indice_multi(headers, 'Data Installazione', 'DATA INSTALLAZIONE', chiave_mapping='data_installazione')
         idx_operatore = _trova_indice_multi(headers, 'Operatore', 'OPERATORE', chiave_mapping='operatore')
         idx_esito = _trova_indice_multi(headers, 'Esito', 'ESITO', chiave_mapping='esito')
@@ -353,12 +359,8 @@ def salva_matricola(eneltel):
             return jsonify({'error': f'Contatore {eneltel} non trovato'}), 404
 
         _header_map = get_header_map()
-        col_name_mat = None
-        for col_name in ['Matricola CE inst', 'Matricola misuratore installato', 'MATRICOLA CE INST']:
-            if col_name in _header_map:
-                col_name_mat = col_name
-                break
-        if col_name_mat is None:
+        col_name_mat = _COLONNA_MATRICOLA_INSTALLATA
+        if col_name_mat not in _header_map:
             return jsonify({'error': 'Colonna Matricola non trovata'}), 400
 
         # Risolvi colonna SMART TEST solo se richiesto

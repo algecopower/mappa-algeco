@@ -20,7 +20,72 @@ def test_bootstrap_schema_idempotente(db_isolato):
     db.get_conn()  # ri-esegue _bootstrap_schema
     s2 = db.stats()
     assert s1 == s2
-    assert s1['schema_version'] == '2'
+    assert s1['schema_version'] == '3'
+
+
+def test_migrazione_v3_rinomina_colonne_installato(db_isolato):
+    """La v3 mantiene i valori e rimuove gli header storici."""
+    db = db_isolato
+    conn = db.get_conn()
+    with conn:
+        db.upsert_filone_row(
+            conn,
+            eneltel_key='42',
+            sheets_row=2,
+            typed_values={
+                'lcl': 'A',
+                'matricola_installata': 'VALORE-STORICO',
+                'codice_installato': 'CODICE-STORICO',
+            },
+            extra_values={},
+            row_hash='r1',
+            source='bootstrap',
+        )
+        conn.execute(
+            '''
+            INSERT OR REPLACE INTO filone_extra(
+                eneltel_key, lcl, column_name, value
+            ) VALUES ('42', 'A', 'Cod. Installato', 'VALORE-ATTUALE')
+            '''
+        )
+        conn.execute(
+            "DELETE FROM column_registry WHERE column_name IN "
+            "('Cod. Installato', 'Matr. Installato')"
+        )
+        conn.execute(
+            '''
+            INSERT INTO column_registry(
+                column_name, chiave_interna, last_index, last_seen_ts
+            ) VALUES
+                ('Matricola CE inst', 'matricola_installata', 23, 100),
+                ('cod.', 'codice_installato', 24, 100)
+            '''
+        )
+        conn.execute(
+            "UPDATE sync_state SET value='2' WHERE key='schema_version'"
+        )
+
+    db.close_conn()
+    db._db_initialized_paths.clear()
+    conn = db.get_conn()
+
+    row = db.get_filone_row('42', lcl='A')
+    assert row['matricola_installata'] == 'VALORE-ATTUALE'
+    assert row['codice_installato'] == 'CODICE-STORICO'
+    registry = {
+        r['column_name']: r['chiave_interna']
+        for r in conn.execute(
+            "SELECT column_name, chiave_interna FROM column_registry"
+        )
+    }
+    assert registry['Cod. Installato'] == 'matricola_installata'
+    assert registry['Matr. Installato'] == 'codice_installato'
+    assert 'Matricola CE inst' not in registry
+    assert 'cod.' not in registry
+    assert conn.execute(
+        "SELECT COUNT(*) FROM filone_extra WHERE column_name IN "
+        "('Cod. Installato', 'Matr. Installato')"
+    ).fetchone()[0] == 0
 
 
 def test_record_local_change_coalesce_duplicates(db_isolato):

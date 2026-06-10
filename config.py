@@ -123,7 +123,7 @@ _COLONNE_SIGILLI_COMUNI = {
     'colonna_operatore': 'Operatore',
     'colonna_esito': 'Esito',
     'esito_ok_valore': 'Esito OK',
-    'colonna_matricola': 'Matricola CE inst',
+    'colonna_matricola': 'Cod. Installato',
 }
 
 CAMPI_MODIFICABILI = {p: _CAMPI_MODIFICABILI_COMUNI for p in PROVINCE}
@@ -262,12 +262,12 @@ MAPPATURA_COLONNE_DEFAULT = {
     'matricola_installata': {
         'label': 'Matricola CE Installato',
         'descrizione': 'Matricola del contatore installato',
-        'nomi_default': ['Matricola CE inst', 'Matricola misuratore installato', 'MATRICOLA CE INST'],
+        'nomi_default': ['Cod. Installato'],
     },
     'codice_installato': {
         'label': 'Codice CE Installato',
         'descrizione': 'Codice del contatore installato',
-        'nomi_default': ['cod.', 'Codice misuratore installat', 'CODICE CE INST'],
+        'nomi_default': ['Matr. Installato'],
     },
 }
 

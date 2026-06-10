@@ -48,7 +48,7 @@ COLONNE_NOTE = [
 # Colonne TEXT vs REAL (latitudine/longitudine sono numeriche)
 _COLONNE_REAL = {'latitudine', 'longitudine'}
 
-SCHEMA_VERSION_CORRENTE = 2
+SCHEMA_VERSION_CORRENTE = 3
 
 
 # ============================================================================
@@ -254,6 +254,9 @@ def _apply_migrations(conn, da_versione):
     if da_versione < 2:
         _migrate_v1_to_v2(conn)
         da_versione = 2
+    if da_versione < 3:
+        _migrate_v2_to_v3(conn)
+        da_versione = 3
 
     conn.execute(
         "UPDATE sync_state SET value=? WHERE key='schema_version'",
@@ -357,6 +360,164 @@ def _migrate_v1_to_v2(conn):
     ''')
 
     logger.info("[DB-migration] v2 applicato.")
+
+
+def _migrate_v2_to_v3(conn):
+    """Rende canonici i nomi correnti delle colonne del contatore installato.
+
+    Le colonne storiche:
+    - ``Matricola CE inst`` diventano ``Cod. Installato``;
+    - ``cod.`` diventa ``Matr. Installato``.
+
+    Gli import Torino eseguiti prima di questa migration avevano salvato i
+    nuovi header in ``filone_extra`` perché non erano ancora mappati. I valori
+    vengono trasferiti nei campi tipizzati prima di eliminare gli alias.
+    """
+    logger.info("[DB-migration] v2→v3: nomi correnti colonne installato")
+
+    groups = (
+        (
+            'Cod. Installato',
+            'matricola_installata',
+            ('Matricola CE inst', 'Matricola misuratore installato',
+             'MATRICOLA CE INST'),
+        ),
+        (
+            'Matr. Installato',
+            'codice_installato',
+            ('cod.', 'Codice misuratore installat', 'CODICE CE INST'),
+        ),
+    )
+
+    for canonical, internal_key, legacy_names in groups:
+        all_names = (*legacy_names, canonical)
+
+        # Prima gli alias storici, poi il nome corrente: il dato dell'export
+        # attuale vince se entrambe le versioni sono presenti.
+        for source_name in all_names:
+            conn.execute(
+                f'''
+                UPDATE filone
+                SET {internal_key} = (
+                    SELECT fe.value
+                    FROM filone_extra fe
+                    WHERE fe.eneltel_key = filone.eneltel_key
+                      AND COALESCE(fe.lcl, '') = COALESCE(filone.lcl, '')
+                      AND fe.column_name = ?
+                )
+                WHERE EXISTS (
+                    SELECT 1
+                    FROM filone_extra fe
+                    WHERE fe.eneltel_key = filone.eneltel_key
+                      AND COALESCE(fe.lcl, '') = COALESCE(filone.lcl, '')
+                      AND fe.column_name = ?
+                )
+                ''',
+                (source_name, source_name),
+            )
+
+        placeholders = ','.join('?' for _ in all_names)
+        conn.execute(
+            f'DELETE FROM filone_extra WHERE column_name IN ({placeholders})',
+            all_names,
+        )
+
+        # Coalesce delle pending attive: per la stessa cella conserva la più
+        # recente, poi rinomina anche gli stati storici.
+        active = conn.execute(
+            f'''
+            SELECT id, eneltel_key, COALESCE(lcl, '') AS lcl, column_name
+            FROM pending_writes
+            WHERE state IN ('pending', 'in_flight')
+              AND column_name IN ({placeholders})
+            ORDER BY id DESC
+            ''',
+            all_names,
+        ).fetchall()
+        winner_by_cell = {}
+        for row in active:
+            cell = (row['eneltel_key'], row['lcl'])
+            winner_by_cell.setdefault(cell, row['id'])
+        winner_ids = set(winner_by_cell.values())
+        for row in active:
+            if row['id'] not in winner_ids:
+                conn.execute('DELETE FROM pending_writes WHERE id=?', (row['id'],))
+        for pending_id in winner_ids:
+            conn.execute(
+                'UPDATE pending_writes SET column_name=? WHERE id=?',
+                (canonical, pending_id),
+            )
+        conn.execute(
+            f'''
+            UPDATE pending_writes
+            SET column_name=?
+            WHERE column_name IN ({','.join('?' for _ in legacy_names)})
+            ''',
+            (canonical, *legacy_names),
+        )
+
+        # Commenti cella: conserva il più recente per riga e usa il nome
+        # canonico anche per gli eventuali commenti storici.
+        comments = conn.execute(
+            f'''
+            SELECT eneltel_key, COALESCE(lcl, '') AS lcl, comment,
+                   updated_ts, user, source
+            FROM cell_comments
+            WHERE column_name IN ({placeholders})
+            ORDER BY updated_ts
+            ''',
+            all_names,
+        ).fetchall()
+        conn.execute(
+            f'DELETE FROM cell_comments WHERE column_name IN ({placeholders})',
+            all_names,
+        )
+        for row in comments:
+            conn.execute(
+                '''
+                INSERT OR REPLACE INTO cell_comments(
+                    eneltel_key, lcl, column_name, comment, updated_ts, user, source
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''',
+                (row['eneltel_key'], row['lcl'], canonical, row['comment'],
+                 row['updated_ts'], row['user'], row['source']),
+            )
+
+        registry_rows = conn.execute(
+            f'''
+            SELECT column_name, last_index, last_seen_ts
+            FROM column_registry
+            WHERE column_name IN ({placeholders})
+            ''',
+            all_names,
+        ).fetchall()
+        if registry_rows:
+            current = next(
+                (row for row in registry_rows if row['column_name'] == canonical),
+                None,
+            )
+            selected = current or max(
+                registry_rows,
+                key=lambda row: (
+                    row['last_seen_ts'] or 0,
+                    row['last_index'] or 0,
+                ),
+            )
+            conn.execute(
+                f'DELETE FROM column_registry WHERE column_name IN ({placeholders})',
+                all_names,
+            )
+            conn.execute(
+                '''
+                INSERT INTO column_registry(
+                    column_name, chiave_interna, last_index, last_seen_ts
+                ) VALUES (?, ?, ?, ?)
+                ''',
+                (canonical, internal_key, selected['last_index'],
+                 selected['last_seen_ts']),
+            )
+
+    logger.info("[DB-migration] v3 applicato.")
 
 
 # ============================================================================

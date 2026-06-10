@@ -769,6 +769,40 @@
             margin-bottom: 8px;
         }
 
+        .contact-name-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 6px;
+            margin-bottom: 8px;
+        }
+
+        .contact-name-row .contact-name {
+            flex: 1;
+            min-width: 0;
+            margin-bottom: 0;
+        }
+
+        .btn-copy-name {
+            width: 28px;
+            height: 28px;
+            border: 1px solid var(--border);
+            border-radius: 7px;
+            background: var(--bg-dark);
+            color: var(--text-muted);
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: all 0.2s;
+        }
+
+        .btn-copy-name:hover {
+            color: var(--primary);
+            border-color: var(--primary);
+            background: rgba(var(--accent-rgb), 0.10);
+        }
+
         .contact-details {
             display: grid;
             gap: 5px;
@@ -1443,9 +1477,26 @@
         .bulk-contact-item:last-child { border-bottom: none; }
         .bulk-contact-item:hover { background: rgba(52, 152, 219, 0.08); }
         .bulk-contact-item input[type="checkbox"] { flex-shrink: 0; }
-        .bulk-contact-name { flex: 1; font-weight: 500; }
-        .bulk-contact-email { color: var(--info); font-size: 0.85em; }
-        .bulk-contact-pod { color: var(--text-muted); font-size: 0.8em; }
+        .bulk-contact-main { flex: 1; min-width: 0; }
+        .bulk-contact-name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .bulk-contact-note {
+            color: var(--text-muted);
+            font-size: 0.78em;
+            margin-top: 2px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .bulk-contact-note i { color: var(--warning); margin-right: 3px; }
+        .bulk-contact-email {
+            color: var(--info);
+            font-size: 0.85em;
+            max-width: 210px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .bulk-contact-pod { color: var(--text-muted); font-size: 0.8em; flex-shrink: 0; }
 
         .bulk-select-all { margin-bottom: 8px; font-size: 0.9em; display: flex; align-items: center; gap: 6px; }
 
@@ -1507,6 +1558,16 @@
             color: var(--text-muted); font-size: 0.8em; flex-shrink: 0;
             max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
         }
+        .preview-card-header .preview-note {
+            color: var(--text-muted);
+            font-size: 0.78em;
+            max-width: 190px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            flex-shrink: 1;
+        }
+        .preview-card-header .preview-note i { color: var(--warning); margin-right: 3px; }
         .preview-card-body {
             display: none; padding: 12px 14px 14px; border-top: 1px solid var(--border);
         }
@@ -2344,10 +2405,19 @@
                 `;
                 return;
             }
-            
-            container.innerHTML = filtered.map(c => {
+
+            const contattiVisualizzati = ordinaContattiPerNominativo(filtered);
+            container.innerHTML = contattiVisualizzati.map(c => {
                 const isCompleted = completedStates[c.pod] || false;
                 const note = noteStates[c.pod] || '';
+                const nomeContatto = c.nome || 'Nome non disponibile';
+                const badgeContatto = c.is_azienda
+                    ? `<span class="tipo-badge ${c.tipo_contatto}">${
+                        c.tipo_contatto === 'condominio' ? '🏢 Condominio' :
+                        c.tipo_contatto === 'ente_pubblico' ? '🏛️ Ente' :
+                        '🏭 Azienda'
+                    }</span>`
+                    : '';
                 
                 return `
                 <div class="contact-card ${c.tipo} ${isCompleted ? 'completed' : ''}" data-pod="${c.pod}">
@@ -2360,7 +2430,14 @@
                         </span>
                     </div>
                     
-                    <div class="contact-name">${c.nome || 'Nome non disponibile'}${c.is_azienda ? `<span class="tipo-badge ${c.tipo_contatto}">${c.tipo_contatto === 'condominio' ? '🏢 Condominio' : c.tipo_contatto === 'ente_pubblico' ? '🏛️ Ente' : '🏭 Azienda'}</span>` : ''}</div>
+                    <div class="contact-name-row">
+                        <div class="contact-name">${escapeHtml(nomeContatto)}${badgeContatto}</div>
+                        ${c.nome ? `
+                            <button class="btn-copy-name" onclick="copiaNominativo('${c.pod}', event)" title="Copia nominativo">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                        ` : ''}
+                    </div>
                     
                     <div class="contact-details">
                         ${c.telefono ? `<div class="phone ${erratiStates[c.pod] ? 'phone-invalid' : ''}" id="phoneDisplay_${c.pod}"><i class="fas fa-phone"></i> ${c.telefono}${(c.telefono && !(c.telefono_filone || '').trim()) ? `<button class="btn-add-to-filone" onclick="event.stopPropagation(); aggiungiTelFilone('${c.pod}', '${escapeHtml(c.telefono)}')" title="Aggiungi questo numero al filone"><i class="fas fa-plus-circle"></i> Aggiungi al filone</button>` : ''}</div>` : ''}
@@ -3032,7 +3109,96 @@
         // Helper per escape HTML
         function escapeHtml(str) {
             if (!str) return '';
+            str = String(str);
             return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function normalizzaNominativo(nome) {
+            return String(nome || '')
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/\b\d{9,13}\b/g, '')
+                .replace(/[^\w\s]/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .toUpperCase();
+        }
+
+        function numeroLavoro(c) {
+            const match = String(c?.lavoro || '').match(/\d+/);
+            return match ? parseInt(match[0], 10) : 999999;
+        }
+
+        function ordinaContattiPerNominativo(lista) {
+            const gruppi = [];
+            const perNome = new Map();
+            lista.forEach((c, idx) => {
+                const nomeKey = normalizzaNominativo(c.nome);
+                const key = nomeKey || `__senza_nome_${c.pod || idx}`;
+                if (!perNome.has(key)) {
+                    const gruppo = { key, firstIdx: idx, items: [] };
+                    perNome.set(key, gruppo);
+                    gruppi.push(gruppo);
+                }
+                perNome.get(key).items.push(c);
+            });
+
+            gruppi.sort((a, b) => a.firstIdx - b.firstIdx);
+            return gruppi.flatMap(gruppo => {
+                if (gruppo.items.length < 2) return gruppo.items;
+                return gruppo.items
+                    .slice()
+                    .sort((a, b) => numeroLavoro(a) - numeroLavoro(b));
+            });
+        }
+
+        async function copiaNominativo(pod, ev) {
+            if (ev && ev.stopPropagation) ev.stopPropagation();
+            const contatto = contatti.find(c => c.pod === pod);
+            const nome = (contatto?.nome || '').trim();
+            if (!nome) {
+                showToast('Nominativo vuoto', 'warning');
+                return;
+            }
+
+            try {
+                await navigator.clipboard.writeText(nome);
+            } catch (e) {
+                const tmp = document.createElement('textarea');
+                tmp.value = nome;
+                tmp.style.position = 'fixed';
+                tmp.style.opacity = '0';
+                document.body.appendChild(tmp);
+                tmp.focus();
+                tmp.select();
+                document.execCommand('copy');
+                document.body.removeChild(tmp);
+            }
+            showToast('Nominativo copiato');
+        }
+
+        function testoNotaContatto(c) {
+            return (noteStates[c.pod] || c.note_filone || '').trim();
+        }
+
+        function formatDataBreveNota(dateStr) {
+            if (!dateStr) return '';
+            const valore = String(dateStr).trim();
+            let match = valore.match(/(\d{1,2})\/(\d{1,2})(?:\/\d{2,4})?/);
+            if (match) {
+                return `${match[1].padStart(2, '0')}/${match[2].padStart(2, '0')}`;
+            }
+            match = valore.match(/(\d{4})-(\d{2})-(\d{2})/);
+            if (match) {
+                return `${match[3]}/${match[2]}`;
+            }
+            return valore;
+        }
+
+        function dataPianificazioneNota(pod) {
+            const contatto = contatti.find(c => c.pod === pod);
+            if (!contatto) return '';
+            return formatDataBreveNota(contatto.data_pian_filone || contatto.data_intervento || '');
         }
 
         // Inizializza note da filone (sempre dal filone, è la fonte di verità)
@@ -3065,7 +3231,8 @@
         }
 
         // Aggiungi nota predefinita
-        async function aggiungiNota(pod, tipo, silent) {
+        async function aggiungiNota(pod, tipo, silent, opzioni) {
+            opzioni = opzioni || {};
             if (typeof event !== 'undefined' && event && event.stopPropagation) {
                 event.stopPropagation();
             }
@@ -3082,6 +3249,12 @@
             
             // "chiamare" e "numero errato" non hanno prefisso data
             let testoNota = (tipo === 'chiamare') ? tipo : `${prefisso} ${tipo}`;
+            if (tipo === 'mandata mail' && opzioni.includiDataPianificazione) {
+                const dataPian = opzioni.dataPianificazione || dataPianificazioneNota(pod);
+                if (dataPian) {
+                    testoNota = `${prefisso} mandata mail per il ${dataPian}`;
+                }
+            }
             
             // "numero errato" → segna direttamente sulla colonna telefono, non nelle note
             if (tipo === 'numero errato') {
@@ -3771,7 +3944,9 @@
 
         function apriBulkEmailModal() {
             // Filtra contatti che hanno email
-            const conEmail = contatti.filter(c => (c.email_filone || '').trim());
+            const conEmail = ordinaContattiPerNominativo(
+                contatti.filter(c => (c.email_filone || '').trim())
+            );
             if (conEmail.length === 0) {
                 showToast('Nessun contatto ha un indirizzo email sul filone', 'error');
                 return;
@@ -3790,11 +3965,18 @@
             }
 
             // Costruisci lista con split indirizzi singoli
-            const righe = []; // {pod, email, pec, nome, contatto}
+            const righe = []; // {pod, email, pec, nome, nota, contatto}
             for (const c of conEmail) {
                 const emails = splitEmails(c.email_filone);
                 for (const em of emails) {
-                    righe.push({ pod: c.pod, email: em.email, pec: em.pec, nome: c.nome || 'N/D', contatto: c });
+                    righe.push({
+                        pod: c.pod,
+                        email: em.email,
+                        pec: em.pec,
+                        nome: c.nome || 'N/D',
+                        nota: testoNotaContatto(c),
+                        contatto: c
+                    });
                 }
             }
 
@@ -3803,14 +3985,24 @@
 
             // Popola lista con ciascun indirizzo come riga separata
             const list = document.getElementById('bulkContactsList');
-            list.innerHTML = righe.map((r, i) => `
+            list.innerHTML = righe.map((r, i) => {
+                const notaHtml = r.nota ? `
+                    <div class="bulk-contact-note" title="${escapeHtml(r.nota)}">
+                        <i class="fas fa-sticky-note"></i>${escapeHtml(r.nota)}
+                    </div>
+                ` : '';
+                return `
                 <div class="bulk-contact-item ${r.pec ? 'is-pec' : ''}" data-is-pec="${r.pec}">
                     <input type="checkbox" class="bulk-contact-check" data-pod="${r.pod}" data-email="${escapeHtml(r.email)}" data-pec="${r.pec}" data-idx="${i}" ${r.pec ? '' : 'checked'}>
-                    <div class="bulk-contact-name">${escapeHtml(r.nome)}</div>
+                    <div class="bulk-contact-main">
+                        <div class="bulk-contact-name">${escapeHtml(r.nome)}</div>
+                        ${notaHtml}
+                    </div>
                     <div class="bulk-contact-email">${escapeHtml(r.email)}${r.pec ? '<span class="pec-badge">PEC</span>' : '<span class="pec-badge" style="background:var(--info)">MAIL</span>'}</div>
                     <div class="bulk-contact-pod">${r.pod || ''}</div>
                 </div>
-            `).join('');
+                `;
+            }).join('');
 
             document.getElementById('bulkEmailCount').textContent = `${numNormali} mail` + (numPec > 0 ? `, ${numPec} PEC` : '');
             document.getElementById('bulkPecCount').textContent = numPec > 0 ? `${numPec} PEC escluse` : '';
@@ -3866,7 +4058,7 @@
             }
         }
 
-        // Preview data: array of {pod, email, nome, subject, bodyHtml, contatto, allegati, edited}
+        // Preview data: array of {pod, email, nome, subject, bodyHtml, contatto, note, allegati, edited}
         let bulkPreviews = [];
         // Allegati: metadati caricati dal server
         let allegatiDisponibili = [];  // ['attestazione_piemonte.pdf', ...]
@@ -3965,6 +4157,7 @@
                     subject: subject,
                     bodyHtml: bodyText,
                     contatto: contattoData,
+                    note: testoNotaContatto(contatto),
                     allegati: getAllegatiDefault(contatto.tipologia_contatore || ''),
                     edited: false
                 });
@@ -4009,12 +4202,18 @@
             container.innerHTML = bulkPreviews.map((p, i) => {
                 const renderedHtml = buildEmailHtml(p.bodyHtml);
                 const allegatiHtml = renderAllegatiPreview(p.allegati || [], i);
+                const notaHtml = p.note ? `
+                    <span class="preview-note" title="${escapeHtml(p.note)}">
+                        <i class="fas fa-sticky-note"></i>${escapeHtml(p.note)}
+                    </span>
+                ` : '';
                 return `
                 <div class="preview-card ${i === 0 ? 'expanded' : ''}" id="previewCard${i}">
                     <div class="preview-card-header" onclick="togglePreviewCard(${i})">
                         <i class="fas fa-chevron-right preview-toggle"></i>
                         <span class="preview-dest">${escapeHtml(p.nome)} — ${escapeHtml(p.email)}</span>
-                        <span class="preview-pod">${p.pod}</span>
+                        ${notaHtml}
+                        <span class="preview-pod">${escapeHtml(p.pod)}</span>
                         ${(p.allegati || []).length > 0 ? `<span class="preview-allegati-badge"><i class="fas fa-paperclip"></i> ${p.allegati.length}</span>` : ''}
                         <span class="preview-card-badge" id="previewBadge${i}" style="display:none;">modificata</span>
                     </div>
@@ -4277,9 +4476,11 @@
 
             if (inviati > 0) {
                 showToast(`${inviati} email inviate con successo!`);
-                // Aggiungi nota "mandata mail" ai POD inviati
+                // Aggiungi nota "mandata mail per il GG/MM" ai POD inviati
                 for (const pod of podsInviati) {
-                    await aggiungiNota(pod, 'mandata mail', true);
+                    await aggiungiNota(pod, 'mandata mail', true, {
+                        includiDataPianificazione: true
+                    });
                 }
             }
         }

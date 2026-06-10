@@ -95,6 +95,52 @@ def salva_province(province):
         os.replace(tmp, PROVINCES_FILE)
 
 
+_SETTINGS_OVERRIDE_FIELDS = {
+    'operatori_vip',
+    'colori_operatori',
+    'operatori_dict',
+    'deposito',
+    'ora_inizio_giornata',
+    'ora_fine_giornata',
+    'velocita_media_kmh',
+    'tempo_intervento_min',
+    'data_inizio',
+    'data_fine',
+}
+
+
+def sincronizza_settings_provincia(slug, cfg, campi):
+    """Allinea gli override esistenti di settings.json alla dashboard admin.
+
+    Il backend carica settings.json dopo provinces.json: senza questo passaggio
+    un valore storico nel file per-provincia annullerebbe la modifica al riavvio.
+    """
+    settings_file = os.path.join(SCRIPT_DIR, 'data', slug.lower(), 'settings.json')
+    if not os.path.exists(settings_file):
+        return []
+
+    da_aggiornare = _SETTINGS_OVERRIDE_FIELDS.intersection(campi)
+    if not da_aggiornare:
+        return []
+
+    with open(settings_file, 'r', encoding='utf-8') as f:
+        settings = json.load(f)
+
+    aggiornati = []
+    for campo in sorted(da_aggiornare):
+        if campo in cfg:
+            settings[campo] = cfg[campo]
+            aggiornati.append(campo)
+
+    if aggiornati:
+        tmp = settings_file + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(settings, f, indent=2, ensure_ascii=False)
+        os.replace(tmp, settings_file)
+
+    return aggiornati
+
+
 def porta_libera_successiva(province, start=5001):
     """Trova la prima porta libera ≥ start non già usata da una provincia."""
     usate = {int(c.get('porta', 0)) for c in province.values()}
@@ -1302,7 +1348,19 @@ def _admin_update_province(slug):
 
     province[slug] = aggiornato
     salva_province(province)
+    try:
+        settings_aggiornati = sincronizza_settings_provincia(slug, aggiornato, body)
+    except (OSError, ValueError, TypeError) as e:
+        log.exception(f"[admin] {slug}: sincronizzazione settings.json fallita")
+        return jsonify({
+            'error': (
+                'provinces.json aggiornato, ma settings.json non è stato allineato: '
+                f'{e}'
+            ),
+        }), 500
     log.info(f"[admin] {slug} aggiornata. Campi cambiati: {cambi or 'nessuno strutturale'}")
+    if settings_aggiornati:
+        log.info(f"[admin] {slug}: override settings allineati: {settings_aggiornati}")
 
     backend_riavviato = False
     if cambi and pm.stato().get(slug) == 'running':

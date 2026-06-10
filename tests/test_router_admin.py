@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Test per helper di validazione della dashboard admin del router."""
+import json
 
 
 def test_router_rejects_reserved_and_conflicting_admin_hosts():
@@ -30,6 +31,39 @@ def test_router_port_validation_blocks_router_and_duplicates():
     porta, err = router._parse_port(5010, province)
     assert err is None
     assert porta == 5010
+
+
+def test_router_sincronizza_override_settings_esistenti(tmp_path, monkeypatch):
+    import router
+
+    data_dir = tmp_path / 'data' / 'torino'
+    data_dir.mkdir(parents=True)
+    settings_file = data_dir / 'settings.json'
+    settings_file.write_text(json.dumps({
+        'operatori_vip': ['VECCHIO'],
+        'colori_operatori': {'VECCHIO': '#000000'},
+        'operatori_dict': {'VECCHIO': 'VECCHIO'},
+        'mappatura_colonne': {'operatore': 'Tecnico'},
+    }), encoding='utf-8')
+    monkeypatch.setattr(router, 'SCRIPT_DIR', str(tmp_path))
+
+    cfg = {
+        'operatori_vip': ['AG67817'],
+        'colori_operatori': {'AG67817': '#3498db'},
+        'operatori_dict': {'ANGEL': 'AG67817'},
+    }
+    aggiornati = router.sincronizza_settings_provincia(
+        'TORINO',
+        cfg,
+        {'operatori_vip', 'colori_operatori', 'operatori_dict'},
+    )
+
+    settings = json.loads(settings_file.read_text(encoding='utf-8'))
+    assert set(aggiornati) == {'operatori_vip', 'colori_operatori', 'operatori_dict'}
+    assert settings['operatori_vip'] == ['AG67817']
+    assert settings['colori_operatori'] == {'AG67817': '#3498db'}
+    assert settings['operatori_dict'] == {'ANGEL': 'AG67817'}
+    assert settings['mappatura_colonne'] == {'operatore': 'Tecnico'}
 
 
 def test_server_cors_origins_includono_province_configurate(monkeypatch):

@@ -459,7 +459,7 @@ def invia_email_prova():
         body_plain = re.sub(r'<a[^>]*href="([^"]*?)"[^>]*>(.*?)</a>', r'\2 (\1)', body_html)
         body_plain = re.sub(r'<[^>]+>', '', body_plain)
         if firma_html:
-            body_plain += f'\n\n--\nUfficio Tecnico\nTelefono: 375 774 5644\nMail: {email_tecnico}\nwww.algecopower.it'
+            body_plain += f'\n\n--\nUfficio Tecnico\nTelefono: 011 025 2702\nMail: {email_tecnico}\nwww.algecopower.it'
 
         msg.attach(MIMEText(body_plain, 'plain', 'utf-8'))
         msg.attach(MIMEText(body_html_formatted, 'html', 'utf-8'))
@@ -577,7 +577,7 @@ def invia_singola_email():
         body_plain = re.sub(r'<a[^>]*href="([^"]*?)"[^>]*>(.*?)</a>', r'\2 (\1)', body_html)
         body_plain = re.sub(r'<[^>]+>', '', body_plain)
         if firma_html:
-            body_plain += f'\n\n--\nUfficio Tecnico\nTelefono: 375 774 5644\nMail: {email_tecnico}\nwww.algecopower.it'
+            body_plain += f'\n\n--\nUfficio Tecnico\nTelefono: 011 025 2702\nMail: {email_tecnico}\nwww.algecopower.it'
 
         # Parte alternativa (text + html)
         msg_alt = MIMEMultipart('alternative')

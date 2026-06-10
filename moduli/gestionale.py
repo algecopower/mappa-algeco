@@ -421,18 +421,13 @@ def genera_css_gestionale():
             align-items: center;
             padding: 18px 28px;
             margin: 0 0 20px 0;
-            border: 1px solid rgba(255, 255, 255, 0.08);
+            border: 1px solid var(--border);
             border-bottom: 2px solid #f39c12;
             border-radius: 14px;
             position: sticky;
             top: 12px;
-            /* Glass leggero: blur ridotto (10px) su area piccola → costo
-               trascurabile anche durante lo scroll. Lo sfondo del modal
-               ha gradients radiali, così il blur ha qualcosa da sfumare. */
-            background: var(--panel-bg-strong);
-            backdrop-filter: blur(10px) saturate(180%);
-            -webkit-backdrop-filter: blur(10px) saturate(180%);
-            box-shadow: 0 4px 18px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.06);
+            background: var(--surface-raised);
+            box-shadow: var(--surface-shadow);
             z-index: 10;
         }
         
@@ -571,27 +566,17 @@ def genera_css_gestionale():
         }
         
         .sigilli-card {
-            /* Acrylic: semi-trasparente sopra i gradient del modal,
-               con highlight inset sul top per il "bordo bagnato". Non è
-               sticky, quindi il blur è ricalcolato solo durante lo scroll
-               della parte di card visibile → costo basso. */
-            background: var(--panel-bg);
-            backdrop-filter: blur(14px) saturate(180%);
-            -webkit-backdrop-filter: blur(14px) saturate(180%);
+            background: var(--surface);
             border-radius: 12px;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            box-shadow:
-                0 4px 14px rgba(0, 0, 0, 0.18),
-                inset 0 1px 0 rgba(255, 255, 255, 0.06);
+            border: 1px solid var(--border);
+            box-shadow: var(--elev-1);
             padding: 15px;
             transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
         }
 
         .sigilli-card:hover {
             border-color: rgba(243, 156, 18, 0.55);
-            box-shadow:
-                0 8px 24px rgba(243, 156, 18, 0.15),
-                inset 0 1px 0 rgba(255, 255, 255, 0.08);
+            box-shadow: var(--elev-2);
             transform: translateY(-1px);
         }
         
@@ -876,15 +861,13 @@ def genera_css_gestionale():
             align-items: center;
             padding: 18px 28px;
             margin-bottom: 20px;
-            border: 1px solid rgba(255, 255, 255, 0.08);
+            border: 1px solid var(--border);
             border-bottom: 2px solid var(--accent);
             border-radius: 14px;
             position: sticky;
             top: 12px;
-            background: var(--panel-bg-strong);
-            backdrop-filter: blur(10px) saturate(180%);
-            -webkit-backdrop-filter: blur(10px) saturate(180%);
-            box-shadow: 0 4px 18px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.06);
+            background: var(--surface-raised);
+            box-shadow: var(--surface-shadow);
             z-index: 10;
         }
         
@@ -924,14 +907,10 @@ def genera_css_gestionale():
         
         /* Info card stile sidebar */
         .fullscreen-info-card {
-            background: var(--panel-bg);
-            backdrop-filter: blur(14px) saturate(180%);
-            -webkit-backdrop-filter: blur(14px) saturate(180%);
+            background: var(--surface);
             border-radius: 12px;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            box-shadow:
-                0 4px 14px rgba(0, 0, 0, 0.18),
-                inset 0 1px 0 rgba(255, 255, 255, 0.06);
+            border: 1px solid var(--border);
+            box-shadow: var(--elev-1);
             padding: 20px;
             margin-bottom: 20px;
         }

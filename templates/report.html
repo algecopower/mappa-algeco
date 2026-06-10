@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="it" data-theme="dark" data-design="solid">
+<html lang="it" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -23,9 +23,7 @@
                 }
             }
             const t = getCookie('algeco_theme') || getStored('algeco_theme') || 'dark';
-            const d = getCookie('algeco_design') || getStored('algeco_design') || 'solid';
             document.documentElement.setAttribute('data-theme', t);
-            document.documentElement.setAttribute('data-design', d);
         })();
     </script>
     <style>
@@ -33,19 +31,19 @@
             --primary: #25D366; --primary-dark: #128C7E;
             --danger: #e74c3c; --warning: #f39c12; --success: #27ae60;
             --info: #3498db; --purple: #9b59b6;
-            /* Card e bg ereditati da theme.css (acrylic). */
-            --bg-dark: transparent;
-            --bg-card: var(--panel-bg-strong);
-            --bg-card-hover: var(--panel-bg-strong);
+            /* Alias locali verso i token condivisi. */
+            --bg-dark: var(--bg-primary);
+            --bg-card: var(--surface-raised);
+            --bg-card-hover: var(--surface-raised);
             --bg-inner: rgba(255,255,255,0.03);
             --text: var(--text-primary);
             --text-muted: var(--text-secondary);
             --text-dim: var(--text-muted);
         }
         [data-theme="light"] {
-            --bg-dark: transparent;
-            --bg-card: var(--panel-bg-strong);
-            --bg-card-hover: var(--panel-bg-strong);
+            --bg-dark: var(--bg-primary);
+            --bg-card: var(--surface-raised);
+            --bg-card-hover: var(--surface-raised);
             --bg-inner: rgba(0,0,0,0.03);
             --text: var(--text-primary);
             --text-muted: var(--text-secondary);
@@ -54,12 +52,10 @@
 
         body { background: var(--body-bg) !important; }
 
-        /* Acrylic sui container principali */
+        /* Superfici principali */
         header, .panel, .kpi-card, .filter-bar, .op-detail {
-            backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-            -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-            border: var(--panel-border);
-            box-shadow: var(--panel-shadow);
+            border: var(--surface-border);
+            box-shadow: var(--surface-shadow);
         }
         [data-theme="light"] .op-detail { background: #f8f9fa; }
         [data-theme="light"] .tab-btn.active { background: #fff; }
@@ -112,7 +108,7 @@
         }
         .filter-bar label { font-size: 0.82em; color: var(--text-muted); font-weight: 600; }
         .filter-bar select, .filter-bar input[type="date"] {
-            background: var(--bg-inner); border: 1px solid var(--border);
+            background-color: var(--bg-inner); border: 1px solid var(--border);
             color: var(--text); padding: 7px 12px; border-radius: 8px; font-size: 0.85em;
         }
         .filter-bar .sep { width: 1px; height: 28px; background: var(--border); }

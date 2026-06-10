@@ -25,23 +25,15 @@
 .tour-tooltip {
     position: fixed;
     z-index: 100001;
-    /* Glass coerente con il design system: usa i token theme.css.
-       Su overlay scuro il blur è poco visibile ma il vetro rende
-       comunque le finiture (bordo + highlight inset) percepibili. */
-    background: var(--panel-bg-strong);
-    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    background: var(--surface-raised);
     color: var(--text-primary);
-    border: var(--panel-border);
+    border: var(--surface-border);
     border-radius: 14px;
     padding: 20px 22px 16px;
     max-width: 380px;
     min-width: 240px;
     width: max-content;
-    box-shadow:
-        0 20px 60px rgba(0, 0, 0, 0.5),
-        0 0 0 1px rgba(var(--accent-rgb), 0.12),
-        inset 0 1px 0 rgba(255, 255, 255, 0.10);
+    box-shadow: var(--elev-4);
     font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
     font-size: 14px;
     line-height: 1.55;
@@ -55,13 +47,8 @@
     transform: translateY(0);
 }
 
-/* Light theme: il glass usa i token light di theme.css automaticamente.
-   L'unico override resta la shadow, più morbida su sfondo chiaro. */
 [data-theme="light"] .tour-tooltip {
-    box-shadow:
-        0 20px 60px rgba(37, 99, 235, 0.15),
-        0 0 0 1px rgba(37, 99, 235, 0.10),
-        inset 0 1px 0 rgba(255, 255, 255, 0.95);
+    box-shadow: var(--elev-3);
 }
 
 /* Arrow pointing from tooltip to target */
@@ -234,26 +221,18 @@
     transition: opacity .3s;
 }
 .tour-welcome-card {
-    background: var(--panel-bg-strong);
-    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    background: var(--surface-raised);
     color: var(--text-primary);
-    border: var(--panel-border);
+    border: var(--surface-border);
     border-radius: 16px;
     padding: 36px 32px 28px;
     max-width: 440px;
     text-align: center;
-    box-shadow:
-        0 24px 60px rgba(0, 0, 0, 0.5),
-        0 0 0 1px rgba(var(--accent-rgb), 0.10),
-        inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    box-shadow: var(--elev-4);
     font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
 }
 [data-theme="light"] .tour-welcome-card {
-    box-shadow:
-        0 24px 60px rgba(37, 99, 235, 0.18),
-        0 0 0 1px rgba(37, 99, 235, 0.10),
-        inset 0 1px 0 rgba(255, 255, 255, 0.95);
+    box-shadow: var(--elev-3);
 }
 .tour-welcome-emoji {
     font-size: 48px;

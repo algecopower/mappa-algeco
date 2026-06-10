@@ -1,4 +1,4 @@
-/* Design tokens + acrylic + interactive states + Lucide:
+/* Design tokens solidi + stati interattivi + Lucide:
    tutto condiviso con le altre pagine in static/theme.css. */
 @import url("/static/theme.css");
 
@@ -11,15 +11,9 @@ body {
     font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
     background: var(--bg-primary);
     color: var(--text-primary);
-    /* Niente transition sul body: durante il toggle tema il bg anima
-       per 200ms e i panel sopra con backdrop-filter ricalcolano il
-       blur frame-by-frame per tutta la durata (laggy). Switch istantaneo. */
 }
 
-/* Mappa estesa a tutta la pagina + sidebar in overlay assoluto.
-   Necessario per il vero effetto acrilico: backdrop-filter ha bisogno
-   di pixel dietro l'elemento da campionare. Con la struttura side-by-side
-   (flex) la sidebar non aveva la mappa sotto, solo body uniforme. */
+/* Mappa estesa a tutta la pagina con sidebar in overlay assoluto. */
 .container { position: relative; height: 100vh; overflow: hidden; }
 
 /* Sidebar */
@@ -30,15 +24,12 @@ body {
     bottom: 0;
     width: 370px;
     background: var(--sidebar-bg);
-    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-    border-right: var(--panel-border);
+    border-right: var(--surface-border);
     display: flex;
     flex-direction: column;
     z-index: 1000;
-    box-shadow: var(--panel-shadow);
+    box-shadow: var(--surface-shadow);
     transition: width 0.3s ease;
-    will-change: backdrop-filter;
 }
 
 .sidebar.collapsed {
@@ -72,12 +63,9 @@ body {
 /* Header */
 .header {
     background: var(--header-bg);
-    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
     padding: 10px 14px;
-    border-bottom: var(--panel-border);
-    box-shadow: var(--panel-shadow);
-    will-change: backdrop-filter;
+    border-bottom: var(--surface-border);
+    box-shadow: var(--surface-shadow);
     position: relative;
     z-index: 5;
 }
@@ -129,10 +117,8 @@ body {
 .breadcrumb {
     display: none;
     padding: 6px 10px;
-    background: var(--panel-bg-strong);
-    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-    border-bottom: var(--panel-border);
+    background: var(--surface-raised);
+    border-bottom: var(--surface-border);
     align-items: center;
     gap: 8px;
     flex-wrap: nowrap;
@@ -396,7 +382,7 @@ body {
 /* Filters */
 .filters {
     padding: 10px 14px;
-    background: rgba(15, 52, 96, 0.3);
+    background: var(--bg-secondary);
     border-bottom: 1px solid var(--border);
 }
 
@@ -469,12 +455,10 @@ body {
     display: none !important;
     margin-top: 10px;
     padding: 12px;
-    background: var(--panel-bg);
-    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    background: var(--surface);
     border-radius: 12px;
-    border: var(--panel-border);
-    box-shadow: var(--panel-shadow);
+    border: var(--surface-border);
+    box-shadow: var(--surface-shadow);
     max-height: 0;
     overflow: hidden;
     transition: max-height 0.3s ease;
@@ -565,21 +549,14 @@ body {
     border-radius: 20px;
     font-size: 13px;
     outline: none;
-    background: var(--bg-secondary);
+    background-color: var(--bg-secondary);
     color: var(--text-primary);
     cursor: pointer;
     transition: all 0.3s;
-    appearance: none;
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 14px center;
 }
 
 .lcl-filter select:focus {
     border-color: var(--accent);
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23e84c65' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
 }
 
 .lcl-filter select:hover {
@@ -594,22 +571,15 @@ body {
     border-radius: 20px;
     font-size: 13px;
     outline: none;
-    background: var(--bg-secondary);
+    background-color: var(--bg-secondary);
     color: var(--text-primary);
     cursor: pointer;
     transition: all 0.3s;
-    appearance: none;
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 14px center;
     font-weight: 500;
 }
 
 #dataFilter:focus {
     border-color: var(--accent);
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23e84c65' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
 }
 
 #dataFilter:hover {
@@ -665,9 +635,7 @@ body {
     top: calc(100% + 4px);
     left: 0;
     right: 0;
-    background: var(--panel-bg-strong);
-    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    background: var(--surface-raised);
     border: 1px solid rgba(var(--accent-rgb), 0.45);
     border-radius: 12px;
     z-index: 1000;
@@ -917,9 +885,7 @@ body {
     top: calc(100% + 4px);
     left: 0;
     right: 0;
-    background: var(--panel-bg-strong);
-    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    background: var(--surface-raised);
     border: 1px solid rgba(var(--accent-rgb), 0.45);
     border-radius: 12px;
     z-index: 1000;
@@ -998,15 +964,14 @@ body {
     flex: 1;
     overflow-y: auto;
     padding: 10px;
-    /* Spazio in basso per far scorrere il contenuto dietro alla .stats-bar
-       (che è absolute in fondo alla sidebar → backdrop-filter visibile). */
+    /* Spazio riservato alla stats bar assoluta in fondo alla sidebar. */
     padding-bottom: 60px;
 }
-/* Scrollbar gestita dal tema globale (theme.css) — glass accent. */
+/* Scrollbar gestita dal tema globale (theme.css). */
 
 /* Zone Cards */
 .zone-card {
-    background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+    background: var(--surface);
     border-radius: 10px;
     padding: 11px 13px;
     margin-bottom: 8px;
@@ -1023,7 +988,7 @@ body {
 
 .zone-card.selected {
     border-color: var(--accent);
-    background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-tertiary) 100%);
+    background: var(--surface-raised);
 }
 
 .zone-header {
@@ -1146,7 +1111,7 @@ body {
 
 /* Tappa Cards */
 .tappa-card {
-    background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+    background: var(--surface);
     border-radius: 8px;
     padding: 10px 12px;
     margin-bottom: 7px;
@@ -1352,17 +1317,13 @@ body {
     font-size: 0.85em;
 }
 
-/* Stats bar — glass coerente con il resto della sidebar.
-   Posizionata absolute in fondo: il contenuto di .results scorre DIETRO
-   alla stats-bar attraverso il backdrop-filter (effetto blur live). */
+/* Stats bar fissa in fondo alla sidebar. */
 .stats-bar {
     position: absolute;
     left: 0;
     right: 0;
     bottom: 0;
-    background: var(--panel-bg);
-    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    background: var(--surface);
     padding: 6px 10px;
     display: flex;
     justify-content: space-around;
@@ -1418,7 +1379,7 @@ body {
     background: var(--bg-primary);
 }
 
-/* Zoom Slider — pill glassmorfica coerente con il design system */
+/* Zoom slider flottante */
 .zoom-slider-container {
     position: absolute;
     bottom: 20px;
@@ -1427,9 +1388,7 @@ body {
     display: flex;
     align-items: center;
     gap: 12px;
-    background: var(--panel-bg-strong);
-    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    background: var(--surface-raised);
     padding: 10px 18px;
     border-radius: 999px;
     border: 1px solid rgba(255, 255, 255, 0.12);
@@ -1601,7 +1560,6 @@ body {
 }
 
 /* Toast (notifica flottante).
-   Pill glass coerente con il design system.
    Varianti: .mappa-toast--success (default), --error, --warn, --info.
    Per retro-compat, .mappa-toast da solo = success. */
 .mappa-toast {
@@ -1609,9 +1567,7 @@ body {
     bottom: 24px;
     left: 50%;
     transform: translateX(-50%) translateY(80px);
-    background: var(--panel-bg-strong);
-    backdrop-filter: blur(18px) saturate(var(--panel-saturate));
-    -webkit-backdrop-filter: blur(18px) saturate(var(--panel-saturate));
+    background: var(--surface-raised);
     color: var(--text-primary);
     padding: 12px 22px;
     border-radius: 999px;
@@ -1660,13 +1616,9 @@ body {
     box-shadow: 0 2px 4px rgba(0,0,0,0.3);
 }
 
-/* Popup multi-contatore: header glass tintato accent (resta leggibile
-   sopra al popup Leaflet già vetroso, ma con un velo che lo identifica). */
+/* Popup multi-contatore */
 .popup-multi-header {
-    background:
-        linear-gradient(135deg, rgba(var(--accent-rgb), 0.55) 0%, rgba(29, 78, 216, 0.45) 100%);
-    backdrop-filter: blur(10px) saturate(180%);
-    -webkit-backdrop-filter: blur(10px) saturate(180%);
+    background: var(--accent-deep);
     color: white;
     padding: 12px;
     border-radius: 10px;
@@ -1759,17 +1711,15 @@ body {
 
 /* Popup mappa: blur ridotto (la mappa scorre sotto = costo continuo) */
 .leaflet-popup-content-wrapper {
-    background: var(--panel-bg-strong);
-    backdrop-filter: blur(calc(var(--panel-blur) * 0.6)) saturate(var(--panel-saturate));
-    -webkit-backdrop-filter: blur(calc(var(--panel-blur) * 0.6)) saturate(var(--panel-saturate));
+    background: var(--surface-raised);
     color: var(--text-primary);
     border-radius: 12px;
-    border: var(--panel-border);
-    box-shadow: var(--panel-shadow);
+    border: var(--surface-border);
+    box-shadow: var(--surface-shadow);
 }
 
 .leaflet-popup-tip {
-    background: var(--panel-bg-strong);
+    background: var(--surface-raised);
 }
 
 /* Forza font Inter dentro tutta la mappa Leaflet (popup, tooltip,
@@ -2169,19 +2119,17 @@ body {
     right: 12px;
     width: 260px;
     max-height: 480px;
-    background: var(--panel-bg-strong);
-    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-    border: var(--panel-border);
+    background: var(--surface-raised);
+    border: var(--surface-border);
     border-radius: 16px;
-    box-shadow: var(--panel-shadow);
+    box-shadow: var(--surface-shadow);
     z-index: 9999;
     transform: translateY(20px);
     opacity: 0;
     pointer-events: none;
     transition: all 0.3s cubic-bezier(.4,0,.2,1);
     overflow: hidden;
-    will-change: backdrop-filter, transform, opacity;
+    will-change: transform, opacity;
 }
 
 .gestionale-panel.visible {
@@ -2296,13 +2244,11 @@ body {
 /* Container .settings-modal: gestito da .ui-modal* (vedi UI-MODAL). */
 
 .settings-content {
-    background: var(--panel-bg-strong);
-    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    background: var(--surface-raised);
     padding: 0;
     border-radius: 16px;
-    border: var(--panel-border);
-    box-shadow: var(--panel-shadow);
+    border: var(--surface-border);
+    box-shadow: var(--surface-shadow);
     max-width: 640px;
     width: 94%;
     max-height: 85vh;
@@ -2334,7 +2280,7 @@ body {
 
 .settings-tabs {
     display: flex;
-    border-bottom: var(--panel-border);
+    border-bottom: var(--surface-border);
     padding: 0 16px;
     gap: 2px;
     flex-shrink: 0;
@@ -2628,8 +2574,8 @@ body {
     justify-content: flex-end;
     gap: 10px;
     padding: 16px 24px;
-    border-top: var(--panel-border);
-    background: var(--panel-bg);
+    border-top: var(--surface-border);
+    background: var(--surface);
     border-radius: 0 0 16px 16px;
     flex-shrink: 0;
 }
@@ -2900,17 +2846,17 @@ body {
 
 .settings-colonne-table select.col-mapped {
     border-color: #27ae60;
-    background: rgba(46, 204, 113, 0.05);
+    background-color: rgba(46, 204, 113, 0.05);
 }
 
 .settings-colonne-table select.col-unmapped {
     border-color: #e67e22;
-    background: rgba(230, 126, 34, 0.05);
+    background-color: rgba(230, 126, 34, 0.05);
 }
 
 .settings-colonne-table select.col-custom {
     border-color: #3498db;
-    background: rgba(52, 152, 219, 0.05);
+    background-color: rgba(52, 152, 219, 0.05);
 }
 
 .settings-colonne-table .col-status {
@@ -3747,8 +3693,6 @@ body {
     position: fixed;
     inset: 0;
     background: var(--modal-overlay-bg);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
     z-index: 10000;
     align-items: center;
     justify-content: center;
@@ -3769,13 +3713,11 @@ body {
 }
 
 .ui-modal-content {
-    background: var(--panel-bg-strong);
-    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    background: var(--surface-raised);
     color: var(--text-primary);
     border-radius: 16px;
-    border: var(--panel-border);
-    box-shadow: var(--panel-shadow);
+    border: var(--surface-border);
+    box-shadow: var(--surface-shadow);
     width: 100%;
     max-width: 550px;
     max-height: 90vh;
@@ -3795,8 +3737,7 @@ body {
    il container direttamente come child (fullscreenEditModal).
    Soluzione: rendiamo il .ui-modal stesso scrollabile, e disattiviamo
    il centering flex che impedisce di accedere al contenuto > 100vh.
-   Niente backdrop-filter: copriamo già tutta la viewport, il blur sarebbe
-   solo overhead durante lo scroll. */
+   Il contenuto occupa tutta la viewport e resta su una superficie opaca. */
 .ui-modal--fullscreen.visible {
     display: block;
     overflow-y: auto;
@@ -3804,14 +3745,7 @@ body {
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
     scroll-behavior: smooth;
-    /* Sfondo "acrylic" simulato: gradient + glow radiali — costa zero
-       ma dà profondità ai layer trasparenti sopra (header, card). */
-    background:
-        radial-gradient(1200px 600px at 15% -10%, rgba(59, 130, 246, 0.18), transparent 60%),
-        radial-gradient(1000px 500px at 110% 20%, rgba(139, 92, 246, 0.14), transparent 60%),
-        var(--bg-primary);
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
+    background: var(--bg-primary);
     contain: layout paint;
 }
 
@@ -3825,9 +3759,7 @@ body {
     border: 0;
     display: block;
     overflow: visible;
-    background: transparent;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
+    background: var(--bg-primary);
     box-shadow: none;
     animation: none;
 }
@@ -3883,8 +3815,8 @@ body {
 
 .ui-modal-footer {
     padding: 12px 20px;
-    background: var(--panel-bg);
-    border-top: var(--panel-border);
+    background: var(--surface);
+    border-top: var(--surface-border);
     display: flex;
     justify-content: flex-end;
     gap: 8px;

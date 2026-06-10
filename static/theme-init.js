@@ -19,9 +19,7 @@
 
     var root = document.documentElement;
     var theme = getCookie('algeco_theme') || getStored('algeco_theme') || getStored('admin_theme') || root.dataset.theme || 'dark';
-    var design = getCookie('algeco_design') || getStored('algeco_design') || root.dataset.design || 'solid';
     root.setAttribute('data-theme', theme);
-    root.setAttribute('data-design', design);
 
     function init() {
         if (typeof lucide !== 'undefined' && lucide.createIcons) {

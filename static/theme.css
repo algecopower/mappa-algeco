@@ -1,11 +1,11 @@
 /* ============================================================
-   THEME.CSS — design tokens + acrylic glassmorphism condivisi
-   tra tutte le pagine dell'app (mappa, calendario, dashboard,
-   filone, distinte, login, report).
+   THEME.CSS - design tokens solidi condivisi tra tutte le pagine
+   dell'app (mappa, calendario, dashboard, filone, distinte,
+   login, report).
 
-   Le variabili --panel-* / --space-* / --text-* / --radius-* sono
-   il "linguaggio visivo" comune. Ogni pagina aggiunge SOPRA le
-   sue regole specifiche.
+   Le variabili --surface-* / --space-* / --text-* / --radius-*
+   sono il linguaggio visivo comune. Ogni pagina aggiunge solo le
+   proprie regole di layout e dominio.
    ============================================================ */
 
 /* Font Inter caricato via @import: garantisce uniformità anche se
@@ -66,11 +66,11 @@ body, button, input, select, textarea {
 
     --focus-ring: 0 0 0 3px rgba(59, 130, 246, 0.35);
 
-    /* Elevazioni */
-    --elev-1: 0 1px 2px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.10);
-    --elev-2: 0 2px 4px rgba(0,0,0,0.10), 0 4px 8px rgba(0,0,0,0.12);
-    --elev-3: 0 4px 8px rgba(0,0,0,0.12), 0 8px 24px rgba(0,0,0,0.18);
-    --elev-4: 0 8px 16px rgba(0,0,0,0.16), 0 24px 48px rgba(0,0,0,0.24);
+    /* Elevazioni sobrie: le superfici restano leggibili senza glow. */
+    --elev-1: 0 1px 2px rgba(0, 0, 0, 0.12);
+    --elev-2: 0 4px 12px rgba(0, 0, 0, 0.16);
+    --elev-3: 0 10px 24px rgba(0, 0, 0, 0.20);
+    --elev-4: 0 18px 40px rgba(0, 0, 0, 0.24);
 
     /* Tema scuro (default).
        Accent primario: blu vivo (era #e94560 corallo). Tutto l'UI che
@@ -81,46 +81,32 @@ body, button, input, select, textarea {
     --bg-tertiary: #1e2a47;
     --text-primary: #eef2ff;
     --text-secondary: #b8c2d6;
-    --text-muted: #6c7898;
+    --text-muted: #8290ad;
     --select-option-bg: #111b30;
     --select-option-text: #eef2ff;
     --select-option-active-bg: #3b82f6;
     --select-option-active-text: #ffffff;
     --select-option-disabled-text: #6c7898;
+    --select-chevron: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23b8c2d6' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
     --accent: #3b82f6;             /* blue-500 */
     --accent-hover: #60a5fa;       /* blue-400 */
     --accent-deep: #1d4ed8;        /* blue-700 — per gradient depth */
     --accent-secondary: #818cf8;   /* indigo-400 — variante coordinata, era cyan */
     --accent-rgb: 59, 130, 246;
     --accent-secondary-rgb: 129, 140, 248;
-    --border: rgba(99, 124, 168, 0.18);
-    --shadow: rgba(0, 8, 32, 0.45);
+    --border: #2a3957;
+    --shadow: rgba(0, 0, 0, 0.28);
 
-    /* Acrylic glass — più "moderno":
-       blur più intenso (28px), saturate alto, bordo più luminoso,
-       inner glow accent sottile per dare luminescenza al vetro. */
-    --panel-blur: 28px;
-    --panel-saturate: 220%;
-    --panel-bg: rgba(17, 27, 48, 0.42);
-    --panel-bg-strong: rgba(30, 42, 71, 0.58);
-    --panel-tint: linear-gradient(135deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0) 55%);
-    --panel-border: 1px solid rgba(255, 255, 255, 0.22);
-    --panel-shadow:
-        0 12px 40px rgba(0, 8, 32, 0.5),
-        0 0 0 1px rgba(255, 255, 255, 0.04),
-        inset 0 1px 0 rgba(255, 255, 255, 0.14),
-        inset 0 0 24px rgba(59, 130, 246, 0.06);
-    --header-bg: linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0) 60%), linear-gradient(135deg, rgba(30, 64, 175, 0.55) 0%, rgba(17, 27, 48, 0.45) 100%);
-    --sidebar-bg: linear-gradient(135deg, rgba(255,255,255,0.10), rgba(255,255,255,0) 50%), linear-gradient(180deg, rgba(17, 27, 48, 0.50) 0%, rgba(11, 18, 32, 0.62) 100%);
-    --modal-overlay-bg: rgba(0, 4, 16, 0.38);
-    --modal-overlay-bg-strong: rgba(0, 4, 16, 0.55);
-
-    /* Body bg ambient: aurora blu sfumata */
-    --body-bg:
-        radial-gradient(ellipse at 18% 0%, rgba(59, 130, 246, 0.32) 0%, transparent 55%),
-        radial-gradient(ellipse at 82% 100%, rgba(99, 102, 241, 0.22) 0%, transparent 50%),
-        radial-gradient(ellipse at 50% 50%, rgba(14, 165, 233, 0.10) 0%, transparent 60%),
-        var(--bg-primary);
+    /* Superfici opache condivise. */
+    --surface: var(--bg-secondary);
+    --surface-raised: var(--bg-tertiary);
+    --surface-border: 1px solid var(--border);
+    --surface-shadow: var(--elev-2);
+    --header-bg: var(--bg-secondary);
+    --sidebar-bg: var(--bg-secondary);
+    --modal-overlay-bg: rgba(0, 0, 0, 0.56);
+    --modal-overlay-bg-strong: rgba(0, 0, 0, 0.68);
+    --body-bg: var(--bg-primary);
 
     /* color-scheme: dice al browser di usare i widget nativi
        (calendar picker, scrollbar, spinner number) in versione scura.
@@ -136,90 +122,49 @@ html[data-theme="light"],
     --bg-tertiary: #e0e7ff;
     --text-primary: #1e293b;
     --text-secondary: #475569;
-    --text-muted: #94a3b8;
+    --text-muted: #64748b;
     --select-option-bg: #ffffff;
     --select-option-text: #1e293b;
     --select-option-active-bg: #bfdbfe;
     --select-option-active-text: #1e293b;
     --select-option-disabled-text: #94a3b8;
+    --select-chevron: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23475569' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
     --accent: #2563eb;             /* blue-600 — più scuro per contrasto su bianco */
     --accent-hover: #3b82f6;       /* blue-500 */
     --accent-deep: #1e40af;        /* blue-800 */
     --accent-secondary: #6366f1;   /* indigo-500 */
     --accent-rgb: 37, 99, 235;
     --accent-secondary-rgb: 99, 102, 241;
-    --border: rgba(37, 99, 235, 0.18);
-    --shadow: rgba(15, 23, 42, 0.10);
+    --border: #cbd5e1;
+    --shadow: rgba(15, 23, 42, 0.12);
     --focus-ring: 0 0 0 3px rgba(37, 99, 235, 0.30);
 
-    --panel-saturate: 240%;
-    --panel-bg: rgba(255, 255, 255, 0.55);
-    --panel-bg-strong: rgba(255, 255, 255, 0.78);
-    --panel-tint: linear-gradient(135deg, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0) 55%);
-    --panel-border: 1px solid rgba(255, 255, 255, 0.7);
-    --panel-shadow:
-        0 12px 40px rgba(37, 99, 235, 0.10),
-        0 0 0 1px rgba(37, 99, 235, 0.05),
-        inset 0 1px 0 rgba(255, 255, 255, 0.95),
-        inset 0 0 32px rgba(37, 99, 235, 0.04);
-    --header-bg: linear-gradient(135deg, rgba(255,255,255,0.7), rgba(255,255,255,0) 60%), linear-gradient(135deg, rgba(219, 234, 254, 0.65) 0%, rgba(255, 255, 255, 0.55) 100%);
-    --sidebar-bg: linear-gradient(135deg, rgba(255,255,255,0.65), rgba(255,255,255,0) 50%), linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, rgba(238, 242, 255, 0.7) 100%);
-    --modal-overlay-bg: rgba(255, 255, 255, 0.4);
-    --modal-overlay-bg-strong: rgba(255, 255, 255, 0.6);
-
-    --body-bg:
-        radial-gradient(ellipse at 18% 0%, rgba(59, 130, 246, 0.16) 0%, transparent 55%),
-        radial-gradient(ellipse at 82% 100%, rgba(99, 102, 241, 0.12) 0%, transparent 50%),
-        radial-gradient(ellipse at 50% 50%, rgba(14, 165, 233, 0.06) 0%, transparent 60%),
-        var(--bg-primary);
-}
-
-[data-design="solid"] {
-    --panel-blur: 0;
-    --panel-saturate: 100%;
-    --panel-bg: var(--bg-secondary);
-    --panel-bg-strong: var(--bg-tertiary);
-    --panel-tint: none;
-    --panel-border: 1px solid var(--border);
-    --panel-shadow: 0 4px 16px var(--shadow);
-    --header-bg: linear-gradient(135deg, var(--bg-tertiary) 0%, var(--bg-secondary) 100%);
-    --sidebar-bg: linear-gradient(180deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
-    --modal-overlay-bg: rgba(0, 0, 0, 0.5);
-    --modal-overlay-bg-strong: rgba(0, 0, 0, 0.65);
+    --surface: var(--bg-secondary);
+    --surface-raised: #f8fafc;
+    --surface-border: 1px solid var(--border);
+    --surface-shadow: var(--elev-1);
+    --header-bg: var(--bg-secondary);
+    --sidebar-bg: var(--bg-secondary);
+    --modal-overlay-bg: rgba(15, 23, 42, 0.48);
+    --modal-overlay-bg-strong: rgba(15, 23, 42, 0.60);
     --body-bg: var(--bg-primary);
 }
 
-@media (max-width: 768px) {
-    :root { --panel-blur: 6px; }
-}
-
-@supports not (backdrop-filter: blur(1px)) {
-    :root {
-        --panel-bg: var(--bg-secondary);
-        --panel-bg-strong: var(--bg-tertiary);
-    }
-}
-
 /* ============================================================
-   UTILITY CLASSES per applicare acrylic facilmente.
-   Aggiungi .acrylic-card a un container e ottieni glass uniforme.
+   Utility riutilizzabili per superfici e pannelli.
    ============================================================ */
 
-.acrylic-card {
-    background: var(--panel-bg-strong);
-    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-    border: var(--panel-border);
+.surface-card {
+    background: var(--surface-raised);
+    border: var(--surface-border);
     border-radius: var(--radius-lg);
-    box-shadow: var(--panel-shadow);
+    box-shadow: var(--surface-shadow);
 }
 
-.acrylic-panel {
-    background: var(--panel-bg);
-    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-    border: var(--panel-border);
-    box-shadow: var(--panel-shadow);
+.surface-panel {
+    background: var(--surface);
+    border: var(--surface-border);
+    box-shadow: var(--surface-shadow);
 }
 
 /* Lucide icons inline */
@@ -248,7 +193,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* ============================================================
    SISTEMA BOTTONI UNIFICATO (.btn + varianti)
-   Stile acrylic coerente in tutta l'app. Le pagine che avevano
+   Stile solido coerente in tutta l'app. Le pagine che avevano
    override locali possono rimuoverli per ereditare da qui.
    ============================================================ */
 
@@ -319,7 +264,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .btn:disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; transform: none; box-shadow: none; }
 
-/* PRIMARY/ACCENT (blu) — stesso pattern di .orari-lettere-btn */
+/* PRIMARY/ACCENT (blu) */
 .btn-primary,
 .btn-accent,
 .btn-confirm,
@@ -327,7 +272,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .orari-lettere-btn,
 .vi-btn-verifica,
 .btn-print-confirm {
-    background: linear-gradient(135deg, var(--accent-hover) 0%, var(--accent-deep) 100%);
+    background: var(--accent);
     color: white;
 }
 .btn-primary:not(:disabled):hover,
@@ -337,57 +282,60 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .orari-lettere-btn:not(:disabled):hover,
 .vi-btn-verifica:not(:disabled):hover,
 .btn-print-confirm:not(:disabled):hover {
-    box-shadow: 0 6px 18px rgba(var(--accent-rgb), 0.40);
+    background: var(--accent-hover);
+    box-shadow: var(--elev-1);
 }
 
 /* SUCCESS (verde) */
 .btn-success,
 .btn-save-edit {
-    background: linear-gradient(135deg, #4ade80 0%, #15803d 100%);
+    background: #16a34a;
     color: white;
 }
 .btn-success:not(:disabled):hover,
 .btn-save-edit:not(:disabled):hover {
-    box-shadow: 0 6px 18px rgba(var(--success-rgb), 0.40);
+    background: #15803d;
+    box-shadow: var(--elev-1);
 }
 
 /* DANGER (rosso) */
 .btn-danger {
-    background: linear-gradient(135deg, #f87171 0%, #b91c1c 100%);
+    background: #dc2626;
     color: white;
 }
 .btn-danger:not(:disabled):hover {
-    box-shadow: 0 6px 18px rgba(var(--danger-rgb), 0.40);
+    background: #b91c1c;
+    box-shadow: var(--elev-1);
 }
 
 /* WARNING (ambra) */
 .btn-warning {
-    background: linear-gradient(135deg, #fbbf24 0%, #b45309 100%);
+    background: #d97706;
     color: white;
 }
 .btn-warning:not(:disabled):hover {
-    box-shadow: 0 6px 18px rgba(245, 158, 11, 0.40);
+    background: #b45309;
+    box-shadow: var(--elev-1);
 }
 
 /* INFO (ciano accent secondario) */
 .btn-info {
-    background: linear-gradient(135deg, var(--accent-secondary) 0%, var(--accent-deep) 100%);
+    background: var(--accent-secondary);
     color: white;
 }
 .btn-info:not(:disabled):hover {
-    box-shadow: 0 6px 18px rgba(var(--accent-secondary-rgb), 0.40);
+    background: var(--accent-deep);
+    box-shadow: var(--elev-1);
 }
 
-/* GHOST/SECONDARY (acrylic neutro) */
+/* GHOST/SECONDARY */
 .btn-ghost,
 .btn-secondary,
 .btn-cancel-edit,
 .btn-clear-advanced,
 .btn-print-cancel {
-    background: var(--panel-bg);
-    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: var(--surface);
+    border: var(--surface-border);
     color: var(--text-primary);
 }
 [data-theme="light"] .btn-ghost,
@@ -395,15 +343,15 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 [data-theme="light"] .btn-cancel-edit,
 [data-theme="light"] .btn-clear-advanced,
 [data-theme="light"] .btn-print-cancel {
-    border-color: rgba(0, 0, 0, 0.10);
+    border-color: var(--border);
 }
 .btn-ghost:not(:disabled):hover,
 .btn-secondary:not(:disabled):hover,
 .btn-cancel-edit:not(:disabled):hover,
 .btn-clear-advanced:not(:disabled):hover,
 .btn-print-cancel:not(:disabled):hover {
-    background: var(--panel-bg-strong);
-    border-color: rgba(var(--accent-rgb), 0.55);
+    background: var(--surface-raised);
+    border-color: var(--accent);
 }
 
 /* ICON-ONLY: quadrato */
@@ -435,7 +383,7 @@ input[type="month"],
 input[type="week"],
 select,
 textarea {
-    background: var(--bg-secondary);
+    background-color: var(--bg-secondary);
     border: 1px solid var(--border);
     color: var(--text-primary);
     padding: 8px 12px;
@@ -448,8 +396,9 @@ textarea {
 }
 
 select {
-    /* Custom chevron (l'icona nativa è bruttina e non si tinge) */
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23b8c2d6' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+    /* Le pagine devono personalizzare solo background-color: lo shorthand
+       "background" azzera repeat/size e può duplicare il chevron. */
+    background-image: var(--select-chevron);
     background-repeat: no-repeat;
     background-position: right 10px center;
     background-size: 12px 12px;
@@ -458,7 +407,6 @@ select {
 }
 
 [data-theme="light"] select {
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23475569' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
     color-scheme: light;
 }
 
@@ -498,7 +446,7 @@ select:disabled,
 textarea:disabled {
     opacity: 0.55;
     cursor: not-allowed;
-    background: var(--bg-tertiary);
+    background-color: var(--bg-tertiary);
 }
 
 /* Hover sottile su input/select abilitati */
@@ -578,9 +526,9 @@ input[type="radio"] {
 }
 
 /* ============================================================
-   SCROLLBAR GLASS — coerente in tutta l'app, su entrambi i temi.
+   SCROLLBAR - coerente in tutta l'app, su entrambi i temi.
    Firefox: scrollbar-width/color. WebKit: pseudo-element classico.
-   Thumb usa accent con bassa opacità per integrarsi con l'acrylic. */
+   Thumb usa l'accent con bassa opacità. */
 * {
     scrollbar-width: thin;
     scrollbar-color: rgba(var(--accent-rgb), 0.45) transparent;

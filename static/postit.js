@@ -248,7 +248,7 @@ var CSS = `
     border-radius: 6px;
     font-size: .82em;
     font-family: inherit;
-    background: var(--bg-secondary, #1e293b);
+    background-color: var(--bg-secondary, #1e293b);
     color: var(--text-primary, #eee);
     outline: none;
 }
@@ -412,7 +412,6 @@ var CSS = `
     position: fixed;
     inset: 0;
     background: rgba(0,0,0,.5);
-    backdrop-filter: blur(4px);
     z-index: 10000;
     display: flex;
     align-items: center;

@@ -768,13 +768,37 @@ function creaMarkerGruppo(gruppo, colore) {
 // ============================================================
 // TOGGLES
 // ============================================================
+function setSharedCookie(name, value) {
+    const maxAge = 60 * 60 * 24 * 365;
+    const secure = location.protocol === 'https:' ? '; Secure' : '';
+    const host = location.hostname;
+    let domain = '';
+
+    if (host.includes('.') && !/^\d+\.\d+\.\d+\.\d+$/.test(host)) {
+        const parts = host.split('.');
+        domain = `; domain=.${parts.slice(-2).join('.')}`;
+    }
+
+    document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=${maxAge}; SameSite=Lax${secure}${domain}`;
+}
+
+function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    document.body.setAttribute('data-theme', theme);
+    setSharedCookie('algeco_theme', theme);
+    try {
+        localStorage.setItem('algeco_theme', theme);
+    } catch (_) {
+        // Il cookie mantiene comunque la preferenza tra sottodomini.
+    }
+}
+
 function toggleTheme() {
     const body = document.body;
     const currentTheme = body.getAttribute('data-theme');
     const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-    body.setAttribute('data-theme', newTheme);
+    applyTheme(newTheme);
     setMapTiles(newTheme);
-    localStorage.setItem('algeco_theme', newTheme);
 
     const btn = document.getElementById('themeToggle');
     const iconName = newTheme === 'dark' ? 'moon' : 'sun';
@@ -798,10 +822,6 @@ if (document.readyState === 'loading') {
     window.refreshLucideIcons();
 }
 
-
-// Il toggle Stile (glass/solid) ora vive solo nella dashboard admin: la scelta
-// viene propagata via cookie `algeco_design` con domain=.mappa-algeco.com e il
-// bootstrap inline in mappa.html la applica prima del primo paint.
 
 let _refreshWaitingForSSE = false;
 

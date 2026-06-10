@@ -67,12 +67,10 @@ var CSS = `
     right: 12px;
     width: 400px;
     max-height: 540px;
-    background: var(--panel-bg-strong, var(--bg-secondary, #1e293b));
-    backdrop-filter: blur(var(--panel-blur, 18px)) saturate(var(--panel-saturate, 180%));
-    -webkit-backdrop-filter: blur(var(--panel-blur, 18px)) saturate(var(--panel-saturate, 180%));
-    border: var(--panel-border, 1px solid rgba(255,255,255,0.14));
+    background: var(--surface-raised, var(--bg-secondary, #1e293b));
+    border: var(--surface-border, 1px solid var(--border, #334155));
     border-radius: 16px;
-    box-shadow: var(--panel-shadow, 0 12px 40px rgba(0,0,0,.3));
+    box-shadow: var(--surface-shadow, 0 12px 40px rgba(0,0,0,.3));
     z-index: 9998;
     transform: translateY(20px);
     opacity: 0;
@@ -81,7 +79,7 @@ var CSS = `
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    will-change: backdrop-filter, transform, opacity;
+    will-change: transform, opacity;
 }
 .bacheca-panel.visible {
     transform: translateY(0);
@@ -95,7 +93,7 @@ var CSS = `
     align-items: center;
     justify-content: space-between;
     padding: 14px 16px;
-    border-bottom: var(--panel-border, 1px solid rgba(255,255,255,0.1));
+    border-bottom: var(--surface-border, 1px solid var(--border, #334155));
     background: linear-gradient(135deg, var(--accent, #3b82f6) 0%, var(--accent-hover, var(--accent-hover, #60a5fa)) 100%);
     color: white;
 }
@@ -264,7 +262,6 @@ var CSS = `
     position: fixed;
     inset: 0;
     background: rgba(0,0,0,.55);
-    backdrop-filter: blur(4px);
     z-index: 10001;
     display: flex;
     align-items: center;

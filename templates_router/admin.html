@@ -1,14 +1,13 @@
 <!DOCTYPE html>
-<html lang="it" data-theme="dark" data-design="solid">
+<html lang="it" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Gestione Province — Mappa Algeco</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script>
-  // Bootstrap pre-paint: legge tema + design da cookie (cross-subdominio,
-  // domain=.mappa-algeco.com) e poi da localStorage come fallback. In questo
-  // modo la scelta fatta in admin si propaga automaticamente alle mappe.
+  // Bootstrap pre-paint: legge il tema da cookie cross-subdominio e poi
+  // da localStorage come fallback.
   (function() {
     function getCookie(name) {
       var m = document.cookie.match(new RegExp('(?:^|;\\s*)' + name + '=([^;]+)'));
@@ -17,14 +16,11 @@
     var t = getCookie('algeco_theme');
     if (!t) { try { t = localStorage.getItem('admin_theme') || localStorage.getItem('algeco_theme'); } catch (_) {} }
     if (t) document.documentElement.setAttribute('data-theme', t);
-    var d = getCookie('algeco_design');
-    if (!d) { try { d = localStorage.getItem('algeco_design'); } catch (_) {} }
-    document.documentElement.setAttribute('data-design', d || 'solid');
   })();
 </script>
 <style>
   /* ============================================================
-     Palette e token glassmorfici allineati a /static/theme.css.
+     Palette e token solidi allineati a /static/theme.css.
      Inlined qui perché admin.html è servito dal router su un altro
      hostname (admin.mappa-algeco.com) e non monta /static.
      ============================================================ */
@@ -34,37 +30,24 @@
     --bg-tertiary: #1e2a47;
     --text-primary: #eef2ff;
     --text-secondary: #b8c2d6;
-    --text-muted: #6c7898;
+    --text-muted: #8290ad;
     --accent: #3b82f6;
     --accent-hover: #60a5fa;
     --accent-deep: #1d4ed8;
     --accent-rgb: 59, 130, 246;
-    --border: rgba(99, 124, 168, 0.18);
-    --shadow: rgba(0, 8, 32, 0.45);
+    --border: #2a3957;
+    --shadow: rgba(0, 0, 0, 0.28);
     --ok: #2ecc71;
     --warn: #f39c12;
     --error: #e74c3c;
 
-    /* Acrylic glass */
-    --panel-blur: 28px;
-    --panel-saturate: 220%;
-    --panel-bg: rgba(17, 27, 48, 0.42);
-    --panel-bg-strong: rgba(30, 42, 71, 0.58);
-    --panel-border: 1px solid rgba(255, 255, 255, 0.22);
-    --panel-shadow:
-        0 12px 40px rgba(0, 8, 32, 0.5),
-        0 0 0 1px rgba(255, 255, 255, 0.04),
-        inset 0 1px 0 rgba(255, 255, 255, 0.14),
-        inset 0 0 24px rgba(59, 130, 246, 0.06);
-    --header-bg: linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0) 60%),
-                 linear-gradient(135deg, rgba(30, 64, 175, 0.55) 0%, rgba(17, 27, 48, 0.45) 100%);
-    --modal-overlay-bg: rgba(0, 4, 16, 0.55);
-
-    --body-bg:
-        radial-gradient(ellipse at 18% 0%, rgba(59, 130, 246, 0.32) 0%, transparent 55%),
-        radial-gradient(ellipse at 82% 100%, rgba(99, 102, 241, 0.22) 0%, transparent 50%),
-        radial-gradient(ellipse at 50% 50%, rgba(14, 165, 233, 0.10) 0%, transparent 60%),
-        var(--bg-primary);
+    --surface: var(--bg-secondary);
+    --surface-raised: var(--bg-tertiary);
+    --surface-border: 1px solid var(--border);
+    --surface-shadow: 0 4px 12px var(--shadow);
+    --header-bg: var(--bg-secondary);
+    --modal-overlay-bg: rgba(0, 0, 0, 0.62);
+    --body-bg: var(--bg-primary);
     color-scheme: dark;
   }
   [data-theme="light"] {
@@ -73,123 +56,50 @@
     --bg-tertiary: #e0e7ff;
     --text-primary: #1e293b;
     --text-secondary: #475569;
-    --text-muted: #94a3b8;
+    --text-muted: #64748b;
     --accent: #2563eb;
     --accent-hover: #3b82f6;
     --accent-deep: #1e40af;
     --accent-rgb: 37, 99, 235;
-    --border: rgba(37, 99, 235, 0.18);
-    --shadow: rgba(15, 23, 42, 0.10);
+    --border: #cbd5e1;
+    --shadow: rgba(15, 23, 42, 0.12);
     --ok: #27ae60;
     --warn: #e67e22;
     --error: #c0392b;
     color-scheme: light;
 
-    --panel-saturate: 240%;
-    --panel-bg: rgba(255, 255, 255, 0.55);
-    --panel-bg-strong: rgba(255, 255, 255, 0.78);
-    --panel-border: 1px solid rgba(255, 255, 255, 0.7);
-    --panel-shadow:
-        0 12px 40px rgba(37, 99, 235, 0.10),
-        0 0 0 1px rgba(37, 99, 235, 0.05),
-        inset 0 1px 0 rgba(255, 255, 255, 0.95),
-        inset 0 0 32px rgba(37, 99, 235, 0.04);
-    --header-bg: linear-gradient(135deg, rgba(255,255,255,0.7), rgba(255,255,255,0) 60%),
-                 linear-gradient(135deg, rgba(219, 234, 254, 0.65) 0%, rgba(255, 255, 255, 0.55) 100%);
-    --modal-overlay-bg: rgba(255, 255, 255, 0.6);
-
-    --body-bg:
-        radial-gradient(ellipse at 18% 0%, rgba(59, 130, 246, 0.16) 0%, transparent 55%),
-        radial-gradient(ellipse at 82% 100%, rgba(99, 102, 241, 0.12) 0%, transparent 50%),
-        radial-gradient(ellipse at 50% 50%, rgba(14, 165, 233, 0.06) 0%, transparent 60%),
-        var(--bg-primary);
-  }
-  /* Override design solid: disattiva blur + sfondo tinta unita */
-  [data-design="solid"] {
-    --panel-blur: 0;
-    --panel-saturate: 100%;
-    --panel-bg: var(--bg-secondary);
-    --panel-bg-strong: var(--bg-tertiary);
-    --panel-border: 1px solid var(--border);
-    --panel-shadow: 0 4px 16px var(--shadow);
-    --header-bg: linear-gradient(135deg, var(--bg-tertiary) 0%, var(--bg-secondary) 100%);
-    --modal-overlay-bg: rgba(0, 0, 0, 0.6);
+    --surface: var(--bg-secondary);
+    --surface-raised: #f8fafc;
+    --surface-border: 1px solid var(--border);
+    --surface-shadow: 0 1px 3px var(--shadow);
+    --header-bg: var(--bg-secondary);
+    --modal-overlay-bg: rgba(15, 23, 42, 0.52);
     --body-bg: var(--bg-primary);
-  }
-  @media (max-width: 768px) { :root { --panel-blur: 6px; } }
-  @supports not (backdrop-filter: blur(1px)) {
-    :root { --panel-bg: var(--bg-secondary); --panel-bg-strong: var(--bg-tertiary); }
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
     font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
-    /* Aurora applicata su uno pseudo-elemento fisso così non viene ridipinta
-       a ogni scroll come accadrebbe con background-attachment: fixed. */
-    background: var(--bg-primary);
+    background: var(--body-bg);
     color: var(--text-primary);
     transition: background 0.3s ease, color 0.3s ease;
     min-height: 100vh;
     position: relative;
   }
-  body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    z-index: -1;
-    background: var(--body-bg);
-    pointer-events: none;
-  }
   a { color: var(--accent); }
 
-  /* Header — acrylic. Il blur vive in un layer interno più coprente:
-     resta glass, ma il contenuto sottostante non resta leggibile. */
   header.app-header {
-    background: transparent;
-    border-bottom: var(--panel-border);
+    background: var(--header-bg);
+    border-bottom: var(--surface-border);
     padding: 12px 20px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    box-shadow: var(--panel-shadow);
+    box-shadow: var(--surface-shadow);
     position: sticky;
     top: 0;
     z-index: 50;
-    transform: translateZ(0);
-    isolation: isolate;
-    overflow: hidden;
-    backface-visibility: hidden;
   }
-  header.app-header::before,
-  header.app-header::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-  }
-  header.app-header::before {
-    z-index: 0;
-    background: rgba(8, 20, 45, 0.82);
-    backdrop-filter: blur(22px) saturate(190%);
-    -webkit-backdrop-filter: blur(22px) saturate(190%);
-    transform: translateZ(0);
-  }
-  header.app-header::after {
-    z-index: 1;
-    background: var(--header-bg);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.12);
-  }
-  header.app-header > * {
-    position: relative;
-    z-index: 2;
-  }
-  [data-theme="light"] header.app-header::before { background: rgba(255, 255, 255, 0.82); }
-  [data-design="solid"] header.app-header::before {
-    background: var(--bg-secondary);
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-  }
-  [data-design="solid"] header.app-header::after { background: var(--header-bg); }
   .app-header .brand {
     display: flex; align-items: center; gap: 10px;
   }
@@ -205,11 +115,9 @@
     font-size: 13px;
   }
   .icon-toggle {
-    background: var(--panel-bg);
-    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    background: var(--surface);
     color: var(--text-primary);
-    border: var(--panel-border);
+    border: var(--surface-border);
     width: 34px; height: 34px;
     border-radius: 50%;
     cursor: pointer;
@@ -218,23 +126,19 @@
     transition: all 0.2s ease;
   }
   .icon-toggle:hover { background: var(--accent); color: white; border-color: var(--accent); }
-  .icon-toggle.design-toggle.active { background: var(--accent); color: white; border-color: var(--accent); }
-  /* Alias retro per markup pre-esistente */
-  .theme-toggle { background: var(--panel-bg); backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate)); -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate)); color: var(--text-primary); border: var(--panel-border); width: 34px; height: 34px; border-radius: 50%; cursor: pointer; font-size: 15px; display: inline-flex; align-items: center; justify-content: center; transition: all 0.2s ease; }
+  .theme-toggle { background: var(--surface); color: var(--text-primary); border: var(--surface-border); width: 34px; height: 34px; border-radius: 50%; cursor: pointer; font-size: 15px; display: inline-flex; align-items: center; justify-content: center; transition: all 0.2s ease; }
   .theme-toggle:hover { background: var(--accent); color: white; border-color: var(--accent); }
 
   main { max-width: 1280px; margin: 0 auto; padding: 20px 16px 40px; }
 
   /* Sezione health dashboard */
   .health-bar {
-    background: var(--panel-bg-strong);
-    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-    border: var(--panel-border);
+    background: var(--surface-raised);
+    border: var(--surface-border);
     border-radius: 16px;
     padding: 14px 16px;
     margin-bottom: 16px;
-    box-shadow: var(--panel-shadow);
+    box-shadow: var(--surface-shadow);
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: 12px;
@@ -244,14 +148,11 @@
     flex-direction: column;
     gap: 4px;
     padding: 10px 12px;
-    /* Traslucido senza backdrop-filter: è già figlio di .health-bar che ha
-       il blur, ripeterlo qui costa caro su scroll. */
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--surface);
     border-radius: 10px;
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--border);
     transition: transform 0.15s ease;
   }
-  [data-theme="light"] .health-card { border-color: rgba(0,0,0,0.05); }
   .health-card.alert { border-left: 3px solid var(--error); }
   .health-card.warn { border-left: 3px solid var(--warn); }
   .health-card.ok { border-left: 3px solid var(--ok); }
@@ -279,10 +180,8 @@
   }
   .toolbar input.search-eneltel,
   .toolbar select.search-prov-select {
-    /* Niente backdrop-filter qui: gli input sono troppi/ripetuti e il blur
-       per ognuno è costoso. Bg traslucido statico è visivamente equivalente. */
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.14);
+    background-color: var(--surface);
+    border: 1px solid var(--border);
     color: var(--text-primary);
     padding: 8px 12px;
     border-radius: 8px;
@@ -291,8 +190,8 @@
   }
   [data-theme="light"] .toolbar input.search-eneltel,
   [data-theme="light"] .toolbar select.search-prov-select {
-    background: rgba(255, 255, 255, 0.6);
-    border-color: rgba(0, 0, 0, 0.10);
+    background-color: var(--surface);
+    border-color: var(--border);
   }
   .toolbar input.search-eneltel { width: 200px; }
   .toolbar input.search-eneltel:focus,
@@ -302,9 +201,9 @@
     box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.25);
   }
 
-  /* Bottoni acrylic */
+  /* Bottoni */
   .btn {
-    background: linear-gradient(135deg, var(--accent-hover) 0%, var(--accent-deep) 100%);
+    background: var(--accent);
     color: white;
     border: none;
     padding: 8px 14px;
@@ -315,27 +214,25 @@
     transition: transform 0.15s ease, box-shadow 0.2s ease, filter 0.2s ease;
     display: inline-flex; align-items: center; gap: 6px;
   }
-  .btn:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(var(--accent-rgb), 0.40); }
+  .btn:hover { transform: translateY(-1px); background: var(--accent-hover); box-shadow: 0 2px 6px var(--shadow); }
   .btn:active { transform: translateY(0) scale(0.98); }
   .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
   .btn.secondary {
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--surface);
     color: var(--text-primary);
-    border: 1px solid rgba(255, 255, 255, 0.14);
+    border: 1px solid var(--border);
   }
-  [data-theme="light"] .btn.secondary { background: rgba(255, 255, 255, 0.6); }
-  [data-theme="light"] .btn.secondary { border-color: rgba(0, 0, 0, 0.10); }
   .btn.secondary:hover {
-    background: var(--panel-bg-strong);
-    border-color: rgba(var(--accent-rgb), 0.55);
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+    background: var(--surface-raised);
+    border-color: var(--accent);
+    box-shadow: 0 2px 6px var(--shadow);
   }
-  .btn.success { background: linear-gradient(135deg, #4ade80 0%, #15803d 100%); }
-  .btn.success:hover { box-shadow: 0 6px 18px rgba(46, 204, 113, 0.40); filter: none; }
-  .btn.warn { background: linear-gradient(135deg, #fbbf24 0%, #b45309 100%); color: white; }
-  .btn.warn:hover { box-shadow: 0 6px 18px rgba(245, 158, 11, 0.40); filter: none; }
-  .btn.danger { background: linear-gradient(135deg, #f87171 0%, #b91c1c 100%); }
-  .btn.danger:hover { box-shadow: 0 6px 18px rgba(239, 68, 68, 0.40); filter: none; }
+  .btn.success { background: #16a34a; }
+  .btn.success:hover { background: #15803d; }
+  .btn.warn { background: #d97706; color: white; }
+  .btn.warn:hover { background: #b45309; }
+  .btn.danger { background: #dc2626; }
+  .btn.danger:hover { background: #b91c1c; }
   .btn-icon-only {
     padding: 6px 8px;
     font-size: 13px;
@@ -348,13 +245,11 @@
     gap: 16px;
   }
   .card {
-    background: var(--panel-bg-strong);
-    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-    border: var(--panel-border);
+    background: var(--surface-raised);
+    border: var(--surface-border);
     border-radius: 16px;
     padding: 16px;
-    box-shadow: var(--panel-shadow);
+    box-shadow: var(--surface-shadow);
     transition: transform 0.2s ease, box-shadow 0.2s ease;
   }
   .card:hover { transform: translateY(-2px); box-shadow: 0 18px 48px rgba(0, 8, 32, 0.55); }
@@ -445,8 +340,6 @@
   .modal {
     position: fixed; inset: 0;
     background: var(--modal-overlay-bg);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
     display: none;
     align-items: center; justify-content: center;
     z-index: 100;
@@ -454,17 +347,15 @@
   }
   .modal.open { display: flex; }
   .modal-content {
-    background: var(--panel-bg-strong);
-    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-    border: var(--panel-border);
+    background: var(--surface-raised);
+    border: var(--surface-border);
     border-radius: 18px;
     padding: 24px;
     max-width: 640px;
     width: 100%;
     max-height: 90vh;
     overflow-y: auto;
-    box-shadow: var(--panel-shadow);
+    box-shadow: var(--surface-shadow);
   }
   .modal-content.wide { max-width: 880px; }
   .modal-content.lettere-excel-modal {
@@ -480,7 +371,7 @@
     margin: 0;
     padding: 18px 20px 14px;
     flex: 0 0 auto;
-    background: var(--panel-bg-strong);
+    background: var(--surface-raised);
     position: relative;
     z-index: 2;
   }
@@ -499,7 +390,7 @@
     flex: 0 0 auto;
     margin: 0;
     padding: 14px 16px;
-    background: var(--panel-bg-strong);
+    background: var(--surface-raised);
     border-top: 1px solid var(--border);
     position: relative;
     z-index: 2;
@@ -537,19 +428,14 @@
   .form-group select {
     width: 100%;
     padding: 9px 12px;
-    /* Bg traslucido senza blur: il modal genitore ha già il backdrop-filter. */
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    background-color: var(--surface);
+    border: 1px solid var(--border);
     border-radius: 8px;
     color: var(--text-primary);
     font-size: 14px;
     font-family: inherit;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
   }
-  [data-theme="light"] .form-group input,
-  [data-theme="light"] .form-group select { background: rgba(255, 255, 255, 0.7); }
-  [data-theme="light"] .form-group input,
-  [data-theme="light"] .form-group select { border-color: rgba(0,0,0,0.10); }
   .form-group input[type="time"] { font-family: 'JetBrains Mono', Consolas, monospace; }
   .form-group input:focus,
   .form-group select:focus {
@@ -579,15 +465,13 @@
   /* Toast */
   .toast {
     position: fixed; bottom: 24px; right: 24px;
-    background: var(--panel-bg-strong);
-    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    background: var(--surface-raised);
     color: var(--text-primary);
-    border: var(--panel-border);
+    border: var(--surface-border);
     border-left: 3px solid var(--accent);
     padding: 12px 18px;
     border-radius: 12px;
-    box-shadow: var(--panel-shadow);
+    box-shadow: var(--surface-shadow);
     z-index: 200;
     transform: translateY(20px);
     opacity: 0;
@@ -688,13 +572,11 @@
   /* Pannello live log */
   .logs-section {
     margin-top: 24px;
-    background: var(--panel-bg-strong);
-    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-    -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-    border: var(--panel-border);
+    background: var(--surface-raised);
+    border: var(--surface-border);
     border-radius: 16px;
     padding: 14px 16px;
-    box-shadow: var(--panel-shadow);
+    box-shadow: var(--surface-shadow);
   }
   .logs-head {
     display: flex; align-items: center; gap: 10px;
@@ -706,27 +588,19 @@
   }
   .logs-head select,
   .logs-pause-btn {
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    background-color: var(--surface);
+    border: 1px solid var(--border);
     color: var(--text-primary); padding: 5px 10px; border-radius: 6px;
     font-size: 12px; font-family: inherit;
   }
-  [data-theme="light"] .logs-head select,
-  [data-theme="light"] .logs-pause-btn { background: rgba(255, 255, 255, 0.7); }
-  [data-theme="light"] .logs-head select,
-  [data-theme="light"] .logs-pause-btn { border-color: rgba(0,0,0,0.10); }
   .logs-pause-btn { cursor: pointer; }
   .logs-pause-btn.paused { background: var(--accent); color: white; border-color: var(--accent); }
   .logs-container {
-    /* I log scrollano internamente: niente backdrop-filter qui o ogni log row
-       in scroll forza re-blur. Bg solido opaco, leggibilità migliore. */
-    background: rgba(0, 4, 16, 0.55);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
     border-radius: 10px; max-height: 360px; overflow-y: auto;
     font-family: 'JetBrains Mono', Consolas, monospace; font-size: 11px; line-height: 1.55;
   }
-  [data-theme="light"] .logs-container { background: rgba(255,255,255,0.45); border-color: rgba(0,0,0,0.08); }
-  [data-design="solid"] .logs-container { background: var(--bg-primary); }
   .log-row {
     padding: 3px 10px;
     display: grid; grid-template-columns: 130px 56px 78px 1fr; gap: 10px;
@@ -789,7 +663,6 @@
   </div>
   <div class="meta">
     <span id="userInfo">…</span>
-    <button class="icon-toggle design-toggle" id="designToggle" onclick="toggleDesign()" title="Passa tra effetto vetro e tema solido">✨</button>
     <button class="theme-toggle" onclick="toggleTheme()" title="Cambia tema chiaro/scuro">🌙</button>
   </div>
 </header>
@@ -1206,10 +1079,9 @@ let editingSlug = null;
 let _province = [];
 
 // ============================================================
-// THEME + DESIGN (glass/solid)
-// Le preferenze vengono persistite in cookie con domain=.mappa-algeco.com
+// THEME
+// La preferenza viene persistita in cookie con domain=.mappa-algeco.com
 // così la scelta fatta in admin si propaga alle mappe per provincia.
-// localStorage rimane come fallback per device senza cookie cross-subdominio.
 // ============================================================
 function _setCrossDomainCookie(name, value) {
   // 1 anno, domain wildcard sul parent → visibile da admin.* e da ogni provincia.*
@@ -1230,15 +1102,6 @@ function _setCrossDomainCookie(name, value) {
 function _syncToggleButtons() {
   const tBtn = document.querySelector('.theme-toggle');
   if (tBtn) tBtn.textContent = document.documentElement.dataset.theme === 'dark' ? '🌙' : '☀️';
-  const dBtn = document.getElementById('designToggle');
-  if (dBtn) {
-    const cur = document.documentElement.dataset.design || 'solid';
-    dBtn.textContent = cur === 'glass' ? '✨' : '◻️';
-    dBtn.classList.toggle('active', cur === 'glass');
-    dBtn.title = cur === 'glass'
-      ? 'Passa a tema solido (zero blur, più leggero su mobile)'
-      : 'Passa a tema vetro (effetto glassmorfico)';
-  }
 }
 
 function toggleTheme() {
@@ -1247,15 +1110,6 @@ function toggleTheme() {
   html.dataset.theme = next;
   _setCrossDomainCookie('algeco_theme', next);
   try { localStorage.setItem('algeco_theme', next); localStorage.setItem('admin_theme', next); } catch (_) {}
-  _syncToggleButtons();
-}
-
-function toggleDesign() {
-  const html = document.documentElement;
-  const next = (html.dataset.design || 'solid') === 'glass' ? 'solid' : 'glass';
-  html.dataset.design = next;
-  _setCrossDomainCookie('algeco_design', next);
-  try { localStorage.setItem('algeco_design', next); } catch (_) {}
   _syncToggleButtons();
 }
 

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="it" data-theme="dark" data-design="solid">
+<html lang="it" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -19,8 +19,8 @@
             --warning: #f59e0b;
             --success: #22c55e;
             --info: var(--accent-hover);
-            --bg-dark: transparent;
-            --bg-card: var(--panel-bg-strong);
+            --bg-dark: var(--bg-primary);
+            --bg-card: var(--surface-raised);
             --text: var(--text-primary);
             --text-muted: var(--text-secondary);
         }
@@ -32,31 +32,29 @@
             --warning: #d97706;
             --success: #16a34a;
             --info: var(--accent-hover);
-            --bg-dark: transparent;
-            --bg-card: var(--panel-bg-strong);
+            --bg-dark: var(--bg-primary);
+            --bg-card: var(--surface-raised);
             --text: var(--text-primary);
             --text-muted: var(--text-secondary);
         }
 
         body { background: var(--body-bg) !important; }
 
-        /* Acrylic sui container principali della pagina distinte */
+        /* Superfici principali della pagina distinte */
         .upload-section, .stats-section, .results-section,
         .lavoro-card, .modal-content, .toolbar, .filter-section {
-            backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-            -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-            border: var(--panel-border);
-            box-shadow: var(--panel-shadow);
+            border: var(--surface-border);
+            box-shadow: var(--surface-shadow);
         }
 
         [data-theme="light"] .upload-section {
-            background: var(--panel-bg-strong);
-            border-color: var(--panel-border);
+            background: var(--surface-raised);
+            border-color: var(--border);
         }
 
         [data-theme="light"] .upload-section label {
             border-color: var(--border);
-            background: var(--panel-bg);
+            background: var(--surface);
         }
 
         [data-theme="light"] .upload-section label:hover {
@@ -65,7 +63,7 @@
         }
 
         [data-theme="light"] .contact-card {
-            background: var(--panel-bg-strong);
+            background: var(--surface-raised);
             box-shadow: var(--elev-1);
         }
 
@@ -79,7 +77,7 @@
         }
 
         [data-theme="light"] header {
-            background: var(--panel-bg-strong);
+            background: var(--surface-raised);
             box-shadow: var(--elev-1);
         }
 
@@ -89,17 +87,17 @@
         }
 
         [data-theme="light"] .value-box {
-            background: var(--panel-bg);
+            background: var(--surface);
         }
 
         [data-theme="light"] .note-display {
-            background: var(--panel-bg);
+            background: var(--surface);
             color: var(--text-primary);
             border-color: var(--border);
         }
 
         [data-theme="light"] .note-dropdown {
-            background: var(--panel-bg-strong);
+            background: var(--surface-raised);
             border-color: var(--border);
             box-shadow: var(--elev-3);
         }
@@ -109,27 +107,27 @@
         }
 
         [data-theme="light"] .numeri-alternativi-box {
-            background: var(--panel-bg);
+            background: var(--surface);
             border-color: var(--border);
         }
 
         [data-theme="light"] .modal-content {
-            background: var(--panel-bg-strong);
+            background: var(--surface-raised);
             color: var(--text-primary);
         }
 
         [data-theme="light"] #messagePreview {
-            background: var(--panel-bg);
+            background: var(--surface);
             color: var(--text-primary);
         }
 
         [data-theme="light"] .template-tab {
-            background: var(--panel-bg);
+            background: var(--surface);
             color: var(--text-secondary);
         }
 
         [data-theme="light"] .template-tab:hover {
-            background: var(--panel-bg-strong);
+            background: var(--surface-raised);
         }
 
         [data-theme="light"] .template-tab.active {
@@ -139,7 +137,7 @@
 
         [data-theme="light"] .template-field input,
         [data-theme="light"] .template-field textarea {
-            background: var(--panel-bg);
+            background: var(--surface);
             color: var(--text-primary);
             border-color: var(--border);
         }
@@ -1080,8 +1078,6 @@
             right: 0;
             bottom: 0;
             background: rgba(0,0,0,0.35);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
             z-index: 1000;
             align-items: center;
             justify-content: center;
@@ -1456,14 +1452,14 @@
         .smtp-form label { display: block; font-size: 0.85em; color: var(--text-muted); margin-top: 8px; margin-bottom: 3px; }
         .smtp-form input, .smtp-form select {
             width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border);
-            background: var(--bg-card); color: var(--text); font-size: 0.9em; box-sizing: border-box;
+            background-color: var(--bg-card); color: var(--text); font-size: 0.9em; box-sizing: border-box;
         }
         .smtp-form .smtp-row { display: flex; gap: 10px; }
         .smtp-form .smtp-row > div { flex: 1; }
 
         .bulk-template-select {
             width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border);
-            background: var(--bg-card); color: var(--text); font-size: 1em; margin-bottom: 12px;
+            background-color: var(--bg-card); color: var(--text); font-size: 1em; margin-bottom: 12px;
         }
 
         .bulk-contacts-list {
@@ -1624,7 +1620,7 @@
         }
         .allegato-select {
             flex: 1; padding: 4px 6px; font-size: 0.82em; border-radius: 5px;
-            border: 1px solid var(--border); background: var(--bg-dark); color: var(--text);
+            border: 1px solid var(--border); background-color: var(--bg-dark); color: var(--text);
         }
         .allegato-add-btn {
             background: var(--success); color: white; border: none; border-radius: 5px;
@@ -1711,7 +1707,7 @@
             <!-- Selettore tipo documento -->
             <div style="margin-top: 12px; display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap;">
                 <span style="font-size: 0.85rem; color: var(--text-muted);">Tipo documento:</span>
-                <select id="tipoDocumento" style="padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); font-size: 0.85rem; cursor: pointer; -webkit-appearance: none; appearance: none; background-image: url('data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 12 12%22%3E%3Cpath fill=%22%23888%22 d=%22M6 8L1 3h10z%22/%3E%3C/svg%3E'); background-repeat: no-repeat; background-position: right 8px center; padding-right: 28px;">
+                <select id="tipoDocumento" style="padding: 6px 28px 6px 12px; border-radius: 6px; border: 1px solid var(--border); background-color: var(--bg-secondary); color: var(--text-primary); font-size: 0.85rem; cursor: pointer;">
                     <option value="auto" selected>🔍 Auto-rileva</option>
                     <option value="distinta">📋 Distinta Base</option>
                     <option value="modulo_maxy">📄 Modulo Maxy</option>
@@ -2826,7 +2822,7 @@
                     return `<div class="template-field">
                         <label>${def.label}</label>
                         <select class="template-field-input" data-field="${fieldId}" onchange="updateTemplatePreview()"
-                            style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 8px 10px; font-size: 13px;">
+                            style="background-color: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 8px 10px; font-size: 13px;">
                             ${optionsHtml}
                         </select>
                     </div>`;

@@ -25,21 +25,19 @@
          Le emoji "di contenuto" (📅 date, ✅ esiti, 🚗 km) restano. -->
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
-<body data-theme="dark" data-design="solid">
+<body data-theme="dark">
     <script>
-        // Applica tema + design salvati prima del primo paint per evitare FOUC.
+        // Applica il tema salvato prima del primo paint per evitare FOUC.
         // Priorità: cookie (impostato dalla dashboard admin con domain=.mappa-algeco.com,
         // così la scelta admin si propaga a tutte le mappe) → localStorage → default.
-        // Il toggle "Stile" (glass/solid) ora vive solo nella dashboard admin.
         (function () {
             function _cookie(n) {
                 var m = document.cookie.match(new RegExp('(?:^|;\\s*)' + n + '=([^;]+)'));
                 return m ? decodeURIComponent(m[1]) : null;
             }
-            var t = _cookie('algeco_theme') || localStorage.getItem('algeco_theme');
-            if (t) document.body.setAttribute('data-theme', t);
-            var d = _cookie('algeco_design') || localStorage.getItem('algeco_design') || 'solid';
-            if (d) document.body.setAttribute('data-design', d);
+            var t = _cookie('algeco_theme') || localStorage.getItem('algeco_theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', t);
+            document.body.setAttribute('data-theme', t);
         })();
     </script>
     <div class="page-loading-overlay" id="pageLoadingOverlay">
@@ -367,7 +365,7 @@
             <div class="print-preview-header">
                 <div class="print-preview-title">🖨️ Anteprima Stampa - <span id="printPreviewInfo"></span></div>
                 <div class="print-preview-actions">
-                    <select id="printTecnicoFilter" onchange="onPrintTecnicoChange()" style="padding: 10px 16px; border: 2px solid #e9ecef; border-radius: 8px; font-size: 14px; font-weight: 500; background: white; cursor: pointer; min-width: 180px;">
+                    <select id="printTecnicoFilter" onchange="onPrintTecnicoChange()" style="padding: 10px 32px 10px 16px; border: 2px solid #e9ecef; border-radius: 8px; font-size: 14px; font-weight: 500; background-color: white; cursor: pointer; min-width: 180px;">
                         <option value="">👥 Tutti i tecnici</option>
                     </select>
                     <button class="btn-print-cancel" onclick="closePrintPreview()"><i data-lucide="x"></i> Chiudi</button>

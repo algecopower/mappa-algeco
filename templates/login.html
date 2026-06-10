@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="it" data-theme="dark" data-design="solid">
+<html lang="it" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -27,17 +27,14 @@
         }
 
         .login-container {
-            /* Acrylic card pieno per il box login: serve leggibilità del form */
-            background: var(--panel-bg-strong);
-            backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-            -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+            background: var(--surface-raised);
             border-radius: var(--radius-xl);
             box-shadow: var(--elev-4);
             padding: 50px 40px;
             width: 100%;
             max-width: 420px;
             animation: slideUp 0.5s var(--easing);
-            border: var(--panel-border);
+            border: var(--surface-border);
         }
 
         @keyframes slideUp {
@@ -126,12 +123,12 @@
                 border-color var(--duration) var(--easing),
                 background-color var(--duration) var(--easing),
                 box-shadow var(--duration) var(--easing);
-            background: rgba(255, 255, 255, 0.04);
+            background: var(--surface);
             color: var(--text-primary);
         }
 
         [data-theme="light"] .form-group input {
-            background: rgba(255, 255, 255, 0.6);
+            background: var(--surface);
         }
 
         .form-group input::placeholder {

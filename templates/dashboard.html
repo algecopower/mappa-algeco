@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="it" data-theme="dark" data-design="solid">
+<html lang="it" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -25,9 +25,7 @@
                 }
             }
             const t = getCookie('algeco_theme') || getStored('algeco_theme') || 'dark';
-            const d = getCookie('algeco_design') || getStored('algeco_design') || 'solid';
             document.documentElement.setAttribute('data-theme', t);
-            document.documentElement.setAttribute('data-design', d);
         })();
     </script>
     <style>
@@ -39,11 +37,10 @@
             --success: #22c55e;
             --info: var(--accent-hover);
             --purple: #8b5cf6;
-            /* I container card e page bg sono ora ereditati dal theme acrylic
-               (theme.css). Le variabili locali puntano alle nuove. */
-            --bg-dark: transparent;
-            --bg-card: var(--panel-bg-strong);
-            --bg-card-hover: var(--panel-bg-strong);
+            /* Alias locali verso i token condivisi. */
+            --bg-dark: var(--bg-primary);
+            --bg-card: var(--surface-raised);
+            --bg-card-hover: var(--surface-raised);
             --bg-inner: rgba(255,255,255,0.03);
             --text: var(--text-primary);
             --text-muted: var(--text-secondary);
@@ -51,39 +48,31 @@
         }
 
         [data-theme="light"] {
-            --bg-dark: transparent;
-            --bg-card: var(--panel-bg-strong);
-            --bg-card-hover: var(--panel-bg-strong);
+            --bg-dark: var(--bg-primary);
+            --bg-card: var(--surface-raised);
+            --bg-card-hover: var(--surface-raised);
             --bg-inner: rgba(0,0,0,0.03);
             --text: var(--text-primary);
             --text-muted: var(--text-secondary);
             --text-dim: var(--text-muted);
         }
 
-        /* Acrylic sui container principali. NB: la dashboard ha 40+ panel/kpi
-           ripetuti — applicare backdrop-filter a tutti li trasforma in altrettanti
-           compositing layer che si ricalcolano ad ogni frame di scroll. Quindi
-           il blur va SOLO su header e .side-nav (statici, pochi); panel e
-           kpi-card usano bg traslucido equivalente visivamente ma economico. */
+        /* Superfici principali */
         header, .side-nav {
-            backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-            -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-            border: var(--panel-border) !important;
-            box-shadow: var(--panel-shadow);
-            transform: translateZ(0);
-            will-change: backdrop-filter;
+            border: var(--surface-border) !important;
+            box-shadow: var(--surface-shadow);
         }
         .panel, .kpi-card {
-            border: var(--panel-border) !important;
-            box-shadow: var(--panel-shadow);
+            border: var(--surface-border) !important;
+            box-shadow: var(--surface-shadow);
         }
 
         body { background: var(--body-bg) !important; }
         [data-theme="light"] .back-btn { color: #555; }
         [data-theme="light"] .back-btn:hover { color: var(--primary); }
-        [data-theme="light"] .op-card { background: rgba(255, 255, 255, 0.55); }
+        [data-theme="light"] .op-card { background: var(--surface); }
         [data-theme="light"] .op-card:hover { background: rgba(var(--accent-rgb), 0.08); }
-        [data-theme="light"] .item-row { background: rgba(255, 255, 255, 0.55); }
+        [data-theme="light"] .item-row { background: var(--surface); }
         [data-theme="light"] .item-row:hover { background: rgba(var(--accent-rgb), 0.08); }
         [data-theme="light"] .bar-track { background: rgba(0, 0, 0, 0.06); }
         [data-theme="light"] .hint { color: var(--text-muted); }
@@ -431,7 +420,7 @@
         }
         .report-filter label { font-size: 0.82em; color: var(--text-muted); font-weight: 600; }
         .report-filter select, .report-filter input[type="date"] {
-            background: var(--bg-inner); border: 1px solid var(--border);
+            background-color: var(--bg-inner); border: 1px solid var(--border);
             color: var(--text); padding: 6px 10px; border-radius: 8px; font-size: 0.85em;
         }
         .rp-tbl { width: 100%; border-collapse: collapse; font-size: 0.85em; }
@@ -684,7 +673,7 @@
             <h3><i class="fas fa-table"></i> Dettaglio per contratto LCL</h3>
             <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
                 <label style="font-size:0.78em; color:var(--text-muted);">Stato:</label>
-                <select id="lcl-filter-stato" onchange="renderAndamentoLCLTable()" style="background:var(--bg-inner); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:4px 8px; font-size:0.82em;">
+                <select id="lcl-filter-stato" onchange="renderAndamentoLCLTable()" style="background-color:var(--bg-inner); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:4px 8px; font-size:0.82em;">
                     <option value="">Tutti</option>
                     <option value="Attiva">Attivi</option>
                     <option value="Chiusa">Chiusi</option>

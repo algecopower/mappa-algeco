@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="it" data-theme="dark" data-design="solid">
+<html lang="it" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -18,29 +18,26 @@
             --success: #22c55e;
             --info: var(--accent-hover);
             --purple: #8b5cf6;
-            /* I container card e page bg sono ora ereditati dal theme acrylic
-               (theme.css). Le variabili locali puntano alle nuove. */
-            --bg-dark: transparent;
-            --bg-card: var(--panel-bg-strong);
+            /* Alias locali verso i token condivisi. */
+            --bg-dark: var(--bg-primary);
+            --bg-card: var(--surface-raised);
             --text: var(--text-primary);
             --text-muted: var(--text-secondary);
         }
 
         [data-theme="light"] {
-            --bg-dark: transparent;
-            --bg-card: var(--panel-bg-strong);
+            --bg-dark: var(--bg-primary);
+            --bg-card: var(--surface-raised);
             --text: var(--text-primary);
             --text-muted: var(--text-secondary);
         }
 
         body { background: var(--body-bg) !important; }
 
-        /* Acrylic sui container principali */
+        /* Superfici principali */
         header, .attivita-card, .modal-content, .empty-state {
-            backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-            -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-            border: var(--panel-border);
-            box-shadow: var(--panel-shadow);
+            border: var(--surface-border);
+            box-shadow: var(--surface-shadow);
         }
 
         [data-theme="light"] .back-btn {
@@ -52,8 +49,8 @@
         }
 
         [data-theme="light"] .attivita-card {
-            background: var(--panel-bg-strong);
-            box-shadow: var(--panel-shadow);
+            background: var(--surface-raised);
+            box-shadow: var(--surface-shadow);
         }
 
         [data-theme="light"] .attivita-card:hover {
@@ -66,19 +63,19 @@
         }
 
         [data-theme="light"] .modal-content {
-            background: var(--panel-bg-strong);
+            background: var(--surface-raised);
             color: var(--text-primary);
         }
 
         [data-theme="light"] .form-input {
-            background: rgba(255, 255, 255, 0.6);
+            background: var(--surface);
             color: var(--text-primary);
             border-color: var(--border);
         }
 
 
         [data-theme="light"] .calendar-grid .day {
-            background: var(--panel-bg);
+            background: var(--surface);
             border-color: var(--border);
         }
 
@@ -91,12 +88,12 @@
         }
 
         [data-theme="light"] .calendar-grid .day.other-month {
-            background: rgba(255, 255, 255, 0.4);
+            background: var(--bg-primary);
             color: var(--text-muted);
         }
 
         [data-theme="light"] .filter-btn {
-            background: rgba(255, 255, 255, 0.55);
+            background: var(--surface);
             color: var(--text-secondary);
         }
 
@@ -112,12 +109,12 @@
         }
 
         [data-theme="light"] .giorno-header {
-            background: rgba(255, 255, 255, 0.55);
+            background: var(--surface);
             color: var(--text-secondary);
         }
 
         [data-theme="light"] .tab-btn {
-            background: rgba(255, 255, 255, 0.55);
+            background: var(--surface);
             color: var(--text-secondary);
         }
 
@@ -202,14 +199,12 @@
         }
 
         .stat-card {
-            background: var(--panel-bg-strong);
-            backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-            -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
-            border: var(--panel-border);
+            background: var(--surface-raised);
+            border: var(--surface-border);
             border-radius: var(--radius-md);
             padding: 16px;
             text-align: center;
-            box-shadow: var(--panel-shadow);
+            box-shadow: var(--surface-shadow);
             transition: transform var(--duration) var(--easing), box-shadow var(--duration) var(--easing);
         }
 
@@ -994,8 +989,6 @@
             right: 0;
             bottom: 0;
             background: rgba(0, 0, 0, 0.45);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
             z-index: 1000;
             align-items: center;
             justify-content: center;

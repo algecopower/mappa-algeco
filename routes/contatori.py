@@ -1398,17 +1398,37 @@ def genera_orari_lettere():
         # Genera SEMPRE il file Excel lettere — anche in modalità sola lettura,
         # perché il file su disco non è una scrittura verso Sheets.
         file_excel = None
+        errore_excel = ''
         try:
             logger.info("📄 Generazione file Excel lettere...")
-            file_excel = _genera_excel(df, date_da_elaborare, tappe_per_fascia='auto' if auto_mode else tappe_per_fascia_fisso)
+            file_excel = _genera_excel(
+                df,
+                date_da_elaborare,
+                tappe_per_fascia='auto' if auto_mode else tappe_per_fascia_fisso,
+                utente=_get_username(),
+            )
             if file_excel:
                 logger.info(f"   ✅ Excel generato: {file_excel}")
         except Exception as ex_excel:
+            errore_excel = str(ex_excel)
             logger.warning(f"   ⚠️ Errore generazione Excel: {ex_excel}")
+
+        generazione_lettere = None
+        if file_excel:
+            try:
+                from moduli.lettere import get_generazione_by_file
+                generazione_lettere = get_generazione_by_file(os.path.basename(file_excel))
+            except Exception as ex_gen:
+                logger.warning(f"[Orari Lettere] Archivio generazione non letto: {ex_gen}")
 
         if read_only_attivo:
             msg = ('Excel generato. Modalità sola lettura attiva: '
                    'gli orari NON sono stati scritti sul foglio.')
+        elif errore_excel:
+            msg = (
+                'Orari lettere calcolati, ma il file Excel non è stato archiviato: '
+                f'{errore_excel}'
+            )
         else:
             msg = 'Orari lettere generati con successo'
         risultato = {
@@ -1423,7 +1443,11 @@ def genera_orari_lettere():
                 'saltati_occupati': saltati_occupati,
                 'saltati_non_trovati': saltati_non_trovati,
                 'colonna': col_dest_name,
-                'file_excel': os.path.basename(file_excel) if file_excel else ''
+                'file_excel': os.path.basename(file_excel) if file_excel else '',
+                'errore_excel': errore_excel,
+                'generazione_lettere_id': (
+                    generazione_lettere.get('id') if generazione_lettere else None
+                ),
             }
         }
 

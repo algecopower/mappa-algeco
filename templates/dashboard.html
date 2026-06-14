@@ -459,6 +459,7 @@
     <a href="#sec-filone"    class="sn-link" data-target="sec-filone"><i class="sn-icon fas fa-database"></i><span>Stato filone</span><span class="sn-collapsed-dot"></span></a>
     <a href="#sec-lcl"       class="sn-link" data-target="sec-lcl"><i class="sn-icon fas fa-chart-line"></i><span>Andamento LCL</span><span class="sn-collapsed-dot"></span></a>
     <a href="#sec-attivita"  class="sn-link" data-target="sec-attivita"><i class="sn-icon fas fa-clipboard-list"></i><span>Attività</span><span class="sn-collapsed-dot"></span></a>
+    <a href="#sec-lettere"   class="sn-link" data-target="sec-lettere"><i class="sn-icon fas fa-envelope-open-text"></i><span>Lettere</span><span class="sn-collapsed-dot"></span></a>
     <a href="#sec-report"    class="sn-link" data-target="sec-report"><i class="sn-icon fas fa-chart-pie"></i><span>Report</span><span class="sn-collapsed-dot"></span></a>
   </aside>
 
@@ -705,6 +706,45 @@
             <div class="panel-hint">Promemoria urgenti: scadenze e attività per oggi o con data imminente (entro 2 giorni). <a href="/calendario" style="color:var(--primary)">Apri calendario</a></div>
             <div id="bacheca-content"><div class="section-loading"><i class="fas fa-spinner fa-spin"></i></div></div>
         </div>
+    </div>
+
+    <!-- ══════════════ ARCHIVIO LETTERE ══════════════ -->
+    <div class="section-label" id="sec-lettere" onclick="toggleSection(this)"><i class="fas fa-chevron-down sec-chev"></i><i class="fas fa-envelope-open-text"></i> Feedback aziende lettere</div>
+
+    <div class="kpi-row" id="kpi-lettere">
+        <div class="kpi-card c-primary">
+            <div class="kpi-top"><span class="kpi-icon"><i class="fas fa-file-excel"></i></span></div>
+            <div class="kpi-value" id="k-let-gen">-</div>
+            <div class="kpi-label">Generazioni lettere</div>
+            <div class="kpi-explain">File Excel archiviati nel DB locale</div>
+        </div>
+        <div class="kpi-card c-blue">
+            <div class="kpi-top"><span class="kpi-icon"><i class="fas fa-building"></i></span></div>
+            <div class="kpi-value" id="k-let-az">-</div>
+            <div class="kpi-label">Aziende rilevate</div>
+            <div class="kpi-explain">Contatti aziendali riconosciuti nelle lettere</div>
+        </div>
+        <div class="kpi-card c-orange">
+            <div class="kpi-top"><span class="kpi-icon"><i class="fas fa-envelope"></i></span></div>
+            <div class="kpi-value" id="k-let-cop">-</div>
+            <div class="kpi-label">Copertura email/PEC</div>
+            <div class="kpi-explain">Aziende con almeno un indirizzo nel campo EMAIL</div>
+        </div>
+        <div class="kpi-card c-green">
+            <div class="kpi-top"><span class="kpi-icon"><i class="fas fa-reply"></i></span></div>
+            <div class="kpi-value" id="k-let-feed">-</div>
+            <div class="kpi-label">Tasso feedback</div>
+            <div class="kpi-explain">Risposte ricevute sulle aziende contattate</div>
+        </div>
+    </div>
+
+    <div class="panel" style="margin-bottom: 20px;">
+        <div class="panel-header">
+            <h3><i class="fas fa-envelope-open-text"></i> Dettaglio feedback lettere</h3>
+            <a href="/lettere" class="badge badge-blue" style="text-decoration:none;">Apri archivio</a>
+        </div>
+        <div class="panel-hint">Riepilogo degli invii mail/PEC e delle risposte registrate nella nuova sezione Archivio Lettere.</div>
+        <div id="lettere-feedback-content"><div class="section-loading"><i class="fas fa-spinner fa-spin"></i></div></div>
     </div>
 
     <!-- ══════════════ REPORT E STATISTICHE ══════════════ -->
@@ -1037,6 +1077,7 @@ function render(data) {
     renderAndamentoLCL(data.andamento_lcl || {});
     renderAttivita(c.prossime || [], c);
     renderBacheca(b);
+    renderLettereFeedback(data.lettere || {});
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1529,6 +1570,33 @@ function renderBacheca(b) {
         </div>`;
     }
     el.innerHTML = html;
+}
+
+function renderLettereFeedback(s) {
+    document.getElementById('k-let-gen').textContent = s.generazioni ?? 0;
+    document.getElementById('k-let-az').textContent = s.aziende ?? 0;
+    document.getElementById('k-let-cop').textContent = `${s.copertura_contatti ?? 0}%`;
+    document.getElementById('k-let-feed').textContent = `${s.tasso_feedback ?? 0}%`;
+
+    const el = document.getElementById('lettere-feedback-content');
+    if (!s.generazioni) {
+        el.innerHTML = '<div class="section-empty"><i class="fas fa-envelope-open-text"></i>Nessuna generazione lettere archiviata</div>';
+        return;
+    }
+    const inviiNormali = Math.max((s.invii_totali || 0) - (s.invii_pec || 0), 0);
+    el.innerHTML = `
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;">
+            <div class="op-stat"><div class="op-stat-val">${s.contattabili || 0}</div><div class="op-stat-lbl">aziende con email/PEC</div></div>
+            <div class="op-stat"><div class="op-stat-val">${s.contattate || 0}</div><div class="op-stat-lbl">aziende contattate</div></div>
+            <div class="op-stat"><div class="op-stat-val">${s.risposte || 0}</div><div class="op-stat-lbl">risposte registrate</div></div>
+            <div class="op-stat"><div class="op-stat-val">${s.invii_totali || 0}</div><div class="op-stat-lbl">invii totali</div></div>
+        </div>
+        <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;">
+            <span class="badge badge-blue">Mail: ${inviiNormali}</span>
+            <span class="badge badge-orange">PEC rilevate: ${s.invii_pec || 0}</span>
+            <span class="badge badge-green">Feedback: ${s.tasso_feedback || 0}%</span>
+        </div>
+    `;
 }
 
 // ═══════════════════════════════════════════════════════════

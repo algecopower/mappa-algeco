@@ -161,8 +161,8 @@
                 "distacco_text": {
                     "field": "distacco",
                     "values": {
-                        "no": "Vi informiamo inoltre che durante l’intervento NON è previsto il distacco della fornitura elettrica (in allegato la specifica tecnica di riferimento).",
-                        "si": "Vi informiamo inoltre che, durante l’intervento, è previsto un breve distacco della fornitura elettrica."
+                        "no": "Precisiamo inoltre che durante l’intervento NON è previsto il distacco della fornitura elettrica (in allegato la specifica tecnica di riferimento).",
+                        "si": "Facciamo presente che durante l’intervento è previsto un breve distacco della fornitura elettrica."
                     }
                 }
             },
@@ -184,12 +184,13 @@
                 "distacco_text_semplice": {
                     "field": "distacco",
                     "values": {
-                        "si": "Vi informiamo che durante l’intervento sarà necessario interrompere la fornitura per qualche minuto. Qualora fosse necessaria la vostra presenza per accedere al contatore, vi chiediamo di indicarci i vostri orari di apertura.",
-                        "no": "Vi informiamo inoltre che durante l’intervento NON è previsto il distacco della fornitura elettrica (in allegato la specifica tecnica di riferimento). Qualora fosse necessaria la vostra presenza per accedere al contatore, vi chiediamo di indicarci i vostri orari di apertura."
+                        "si": "Facciamo presente che durante l’intervento è previsto un breve distacco della fornitura elettrica.",
+                        "no": "Precisiamo inoltre che durante l’intervento NON è previsto il distacco della fornitura elettrica (in allegato la specifica tecnica di riferimento)."
                     }
                 }
             },
-"body": "Buongiorno,\nvi contattiamo da <a href=\"https://www.algecopower.it\" style=\"color:#0066cc;text-decoration:underline;\">Algeco Power Srl</a> per informarvi che la nostra società è stata incaricata da <a href=\"https://www.e-distribuzione.it/open-meter.html\" style=\"color:#0066cc;text-decoration:underline;\">E-Distribuzione</a> ad effettuare la sostituzione del vostro contatore di energia elettrica in oggetto, come da comunicazioni inviate a mezzo posta nelle scorse settimane, per il giorno:\n\n<strong>{data}</strong>\n\nLa sostituzione è obbligatoria, e avviene in attuazione a provvedimenti normativi che stabiliscono l'uso di sistemi di misurazione che soddisfino i requisiti richiesti dal D.Lgs. 102/2014, di recepimento della direttiva europea 2012/27/UE sull'efficienza energetica.\n\n{distacco_text_semplice}\n\nAlleghiamo l'aggiudicazione del bando di gara che attesta il nostro incarico e restiamo a disposizione per chiarimenti.\n\nCordiali saluti."
+
+"body": "Buongiorno,\nvi contattiamo da <a href=\"https://www.algecopower.it\" style=\"color:#0066cc;text-decoration:underline;\">Algeco Power Srl</a> per informarvi che la nostra società è stata incaricata da <a href=\"https://www.e-distribuzione.it/open-meter.html\" style=\"color:#0066cc;text-decoration:underline;\">E-Distribuzione</a> ad effettuare la sostituzione del vostro contatore di energia elettrica associato al POD in oggetto, come da comunicazioni inviate a mezzo posta nelle scorse settimane, per il giorno:\n\n<strong>{data}</strong>\n\nLa sostituzione è obbligatoria, e avviene in attuazione a provvedimenti normativi che stabiliscono l'uso di sistemi di misurazione che soddisfino i requisiti richiesti dal D.Lgs. 102/2014, di recepimento della direttiva europea 2012/27/UE sull'efficienza energetica.\n\n{distacco_text_semplice}\n\n<p style=\"color:red; font-weight:bold; background-color:yellow; padding:4px;\">CHIEDIAMO CORTESEMENTE DI RISPONDERE A QUESTA EMAIL PER CONFERMARE LA VOSTRA PRESENZA NELLA DATA INDICATA PRECISANDO I VOSTRI ORARI DI APERTURA</p>\nAlleghiamo l'aggiudicazione del bando di gara che attesta il nostro incarico e restiamo a disposizione per chiarimenti.\n\nCordiali saluti."
         }
     }
 }

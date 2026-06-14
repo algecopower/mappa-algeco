@@ -150,7 +150,6 @@ def test_genera_excel_lettere_template_fogli_e_filtri(tmp_path, monkeypatch):
         'MONOFASE',
         'EMME2',
         'SEMIDIRETTI',
-        'Contatti Aziendali',
         'SOLO MONOFASE',
         'SOLO TRIFASE DIRETTI',
     ]
@@ -175,14 +174,6 @@ def test_genera_excel_lettere_template_fogli_e_filtri(tmp_path, monkeypatch):
     assert emme2_by_name['Provincia di Torino'][8] == 'NO'
     assert semidiretti_by_name['Comune di Chieri'][8] == 'NO'
     assert semidiretti_by_name['Beta SRL'][8] == 'NO'
-
-    contatti = [
-        row[0]
-        for row in wb['Contatti Aziendali'].iter_rows(min_row=6, values_only=True)
-        if row[0]
-    ]
-    assert contatti == ['Alfa SRL', 'Beta SRL']
-
 
 def test_genera_excel_lettere_usa_config_personalizzata(tmp_path, monkeypatch):
     import config
@@ -270,7 +261,7 @@ def test_genera_excel_lettere_usa_config_personalizzata(tmp_path, monkeypatch):
     gel.genera_excel_lettere(df, ['2026-06-01'], filename=str(out))
 
     wb = load_workbook(out, data_only=True)
-    assert wb.sheetnames == ['PRIVATI', 'EMME2', 'SEMIDIRETTI', 'Contatti Aziendali', 'TRI DIRETTI']
+    assert wb.sheetnames == ['PRIVATI', 'EMME2', 'SEMIDIRETTI', 'TRI DIRETTI']
     assert wb['PRIVATI'].cell(1, 9).value == 'INVIO LETTERA'
     assert wb['PRIVATI'].cell(2, 1).value == 'Provincia di Torino'
     assert wb['PRIVATI'].cell(2, 9).value == 'SI'
@@ -278,9 +269,58 @@ def test_genera_excel_lettere_usa_config_personalizzata(tmp_path, monkeypatch):
     assert wb['SEMIDIRETTI'].cell(2, 9).value == 'NOPE'
     assert wb['TRI DIRETTI'].cell(2, 1).value == 'Alfa SRL'
 
-    contatti = [
-        row[0]
-        for row in wb['Contatti Aziendali'].iter_rows(min_row=6, values_only=True)
-        if row[0]
-    ]
-    assert 'Scuola di Chieri SRL' not in contatti
+
+def test_genera_excel_lettere_archivia_aziende_nel_db(
+    tmp_path, monkeypatch, db_isolato,
+):
+    import config
+    from moduli import percorso
+    from moduli import lettere
+
+    monkeypatch.setattr(config, 'PROVINCIA_ATTIVA', 'TORINO', raising=False)
+    monkeypatch.setattr(config, 'MATRICOLE_VIP', ['TEC1'], raising=False)
+    monkeypatch.setattr(percorso, 'ordina_percorso', lambda punti, *_args, **_kwargs: punti)
+    monkeypatch.setattr(gel, 'cerca_cap', lambda _comune: '10000')
+    monkeypatch.setattr(gel, 'cerca_provincia', lambda _comune: 'TO')
+
+    df = pd.DataFrame([{
+        'DATA_K': '2026-06-01',
+        'TEC_K': 'TEC1',
+        'ENEL_K': '123456',
+        'LCL': 'L1',
+        'TIPO_CE_K': 'TRIFASE DIRETTO',
+        'CLI_K': 'Alfa SRL',
+        'NOTE_K': 'Locale tecnico',
+        'CIVICO_K': '20',
+        'VIA_K': 'VIA MILANO',
+        'COMUNE': 'Torino',
+        'LOCALITA': '',
+        'POD_K': 'IT001E12345678',
+        'TEL_K': '0111234567',
+        'EMAIL_K': 'info@alfa.it / alfa@pec.it',
+        'IS_APPUNTAMENTO': False,
+        'ORA_APPUNTAMENTO': '',
+    }])
+
+    out = tmp_path / 'lettere_archiviate.xlsx'
+    gel.genera_excel_lettere(
+        df,
+        ['2026-06-01'],
+        filename=str(out),
+        archivia=True,
+        utente='tester',
+    )
+
+    wb = load_workbook(out, data_only=True)
+    assert 'Contatti Aziendali' not in wb.sheetnames
+
+    generazioni = lettere.list_generazioni()
+    assert len(generazioni) == 1
+    assert generazioni[0]['totale_righe'] == 1
+    assert generazioni[0]['totale_aziende'] == 1
+
+    aziende = lettere.list_aziende(generazione_id=generazioni[0]['id'])
+    assert len(aziende) == 1
+    assert aziende[0]['nominativo'] == 'Alfa SRL'
+    assert aziende[0]['telefono'] == '0111234567'
+    assert aziende[0]['email'] == 'info@alfa.it / alfa@pec.it'

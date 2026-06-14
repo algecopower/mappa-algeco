@@ -386,7 +386,14 @@ def classifica_contatore(punto):
 # assegna_fasce() è ora importata da moduli/fasce_orarie.py
 
 
-def genera_excel_lettere(df, date_da_elaborare, filename=None, tappe_per_fascia=None):
+def genera_excel_lettere(
+    df,
+    date_da_elaborare,
+    filename=None,
+    tappe_per_fascia=None,
+    archivia=None,
+    utente=None,
+):
     """
     Genera Excel per invio lettere con fogli allineati al template.
     Elabora le date specificate.
@@ -396,6 +403,9 @@ def genera_excel_lettere(df, date_da_elaborare, filename=None, tappe_per_fascia=
     - EMME2: Eneltel termina con A o B
     - SEMIDIRETTI: contatori trifase semidiretti
     - SOLO MONOFASE / SOLO TRIFASE DIRETTI: fogli tecnici in coda
+
+    I contatti aziendali non vengono più scritti in un foglio Excel: sono
+    registrati nell'Archivio Lettere del DB locale.
     """
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -415,6 +425,7 @@ def genera_excel_lettere(df, date_da_elaborare, filename=None, tappe_per_fascia=
         print("❌ Nessuna data definita in DATE_LETTERE")
         return None
     
+    filename_auto = filename is None
     if filename is None:
         # Formato: "LETTERE DAL giorno/mese AL giorno/mese.xlsx"
         data_inizio = datetime.strptime(date_da_elaborare[0], '%Y-%m-%d')
@@ -426,6 +437,12 @@ def genera_excel_lettere(df, date_da_elaborare, filename=None, tappe_per_fascia=
         cartella_lettere = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'output', 'lettere')
         os.makedirs(cartella_lettere, exist_ok=True)
         filename = os.path.join(cartella_lettere, nome_file)
+        if os.path.exists(filename):
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            base, ext = os.path.splitext(nome_file)
+            filename = os.path.join(cartella_lettere, f"{base} {timestamp}{ext}")
+    if archivia is None:
+        archivia = filename_auto
     
     print(f"\n📅 Date da elaborare: {len(date_da_elaborare)}")
     for d in date_da_elaborare:
@@ -571,23 +588,24 @@ def genera_excel_lettere(df, date_da_elaborare, filename=None, tappe_per_fascia=
         else:
             fogli_dettaglio_finali = fogli_dettaglio_finali[-1:]
     
-    # Stringa periodo
-    if len(date_da_elaborare) == 1:
-        periodo_str = f"Data: {formatta_data_italiana(date_da_elaborare[0])}"
-    else:
-        periodo_str = f"Dal {formatta_data_italiana(date_da_elaborare[0])} al {formatta_data_italiana(date_da_elaborare[-1])}"
-    
     # Per Pavia usa Località al posto di Comune
     usa_localita = (PROVINCIA_ATTIVA.upper() == 'PAVIA')
     
     headers = get_headers_lettere(lettere_cfg)
+    archive_rows = []
     
     # Verifica CAP disponibili per i comuni
     comuni_unici = set(str(p.get('COMUNE', '')).strip() for p in tutti_punti if p.get('COMUNE'))
     comuni_con_cap = sum(1 for c in comuni_unici if cerca_cap(c))
     print(f"\n📮 CAP trovati per {comuni_con_cap}/{len(comuni_unici)} comuni")
     
-    def scrivi_foglio_lettere(nome_foglio, contatori, fill_color, first_sheet=False):
+    def scrivi_foglio_lettere(
+        nome_foglio,
+        contatori,
+        fill_color,
+        first_sheet=False,
+        archivia_righe=True,
+    ):
         """Scrive un foglio lettere con intestazioni e ordine colonne del template."""
         if first_sheet:
             ws = wb.active
@@ -631,6 +649,15 @@ def genera_excel_lettere(df, date_da_elaborare, filename=None, tappe_per_fascia=
             via_raw = punto.get('VIA_K', '')
             civico_raw = punto.get('CIVICO_K', '')
             via_pulita, civico_pulito = separa_via_civico(via_raw, civico_raw)
+            tipo_ce = testo_pulito(punto.get('TIPO_CE_K', ''))
+            esclusa_da_aziende = (
+                opzioni_cfg.get('escludi_enti_da_contatti_aziendali', True)
+                and contiene_parola_chiave(
+                    punto.get('CLI_K', ''),
+                    lettere_cfg.get('parole_chiave', {}).get('contatti_aziendali_escludi', []),
+                )
+            )
+            is_azienda_archivio = (not esclusa_da_aziende) and is_azienda(nominativo, tipo_ce)
             
             values_by_key = {
                 'nominativo': nominativo,
@@ -648,6 +675,30 @@ def genera_excel_lettere(df, date_da_elaborare, filename=None, tappe_per_fascia=
                 'appuntamento': valore_lettera_si if is_app else '',
             }
             values = [values_by_key.get(chiave, '') for chiave in COLONNE_LETTERE_ORDINE]
+            if archivia_righe:
+                archive_rows.append({
+                    'source_sheet': nome_foglio,
+                    'row_num': row,
+                    'nominativo': nominativo,
+                    'via': via_pulita,
+                    'civico': civico_pulito,
+                    'comune': luogo_display,
+                    'provincia': sigla_prov_riga,
+                    'cap': cap,
+                    'data_pianificazione': punto.get('DATA_ITALIANA', ''),
+                    'ora_pianificazione': formatta_fascia_oraria(fascia),
+                    'lettera': lettera,
+                    'pod': punto.get('POD_K', ''),
+                    'operatore': punto.get('TEC_K', ''),
+                    'posizione_mis': punto.get('NOTE_K', ''),
+                    'appuntamento': valore_lettera_si if is_app else '',
+                    'tipo_misuratore': tipo_ce,
+                    'eneltel': punto.get('ENEL_K', ''),
+                    'lcl': punto.get('LCL', ''),
+                    'telefono': punto.get('TEL_K', ''),
+                    'email': punto.get('EMAIL_K', ''),
+                    'is_azienda': is_azienda_archivio,
+                })
             
             for col, value in enumerate(values, start=1):
                 chiave_colonna = COLONNE_LETTERE_ORDINE[col - 1]
@@ -701,100 +752,39 @@ def genera_excel_lettere(df, date_da_elaborare, filename=None, tappe_per_fascia=
     for nome_foglio, contatori, fill_color in fogli_principali:
         scrivi_foglio_lettere(nome_foglio, contatori, fill_color, first_sheet=first_sheet)
         first_sheet = False
-    
-    # ------------------------------------------------------------------
-    # Foglio "Contatti Aziendali"
-    # Elenca le aziende rilevate tra tutti i contatori del periodo,
-    # usando i criteri di moduli/rilevamento_aziende.is_azienda + tutti
-    # i Semidiretti (al 99% sono società). TEL/MAIL/PEC vuoti (da
-    # compilare manualmente). Dedupe per POD.
-    # ------------------------------------------------------------------
-    nome_foglio_aziende = nome_foglio_excel(
-        fogli_cfg.get('contatti_aziendali'), "Contatti Aziendali",
-    )
-    ws_aziende = wb.create_sheet(nome_foglio_aziende)
-
-    headers_aziende = ["NOMINATIVO", "COMUNE", "TEL", "MAIL", "PEC", "POD"]
-
-    ws_aziende['A1'] = "CONTATTI AZIENDALI"
-    ws_aziende['A1'].font = Font(bold=True, size=14)
-    ws_aziende['A1'].fill = header_fill
-    ws_aziende['A1'].alignment = Alignment(horizontal='left', vertical='center')
-    ws_aziende['A2'] = periodo_str
-    ws_aziende['A2'].font = Font(italic=True, size=11)
-
-    # Headers tabella (riga 5)
-    for col, header in enumerate(headers_aziende, start=1):
-        cell = ws_aziende.cell(row=5, column=col, value=header)
-        cell.fill = header_fill
-        cell.font = header_font
-        cell.alignment = Alignment(horizontal='center', vertical='center')
-        cell.border = thin_border
-
-    aziende_rows = []
-    pod_visti = set()
-    for punto in tutti_punti:
-        nominativo_raw = punto.get('CLI_K', '')
-        if (
-            opzioni_cfg.get('escludi_enti_da_contatti_aziendali', True)
-            and contiene_parola_chiave(
-                nominativo_raw,
-                lettere_cfg.get('parole_chiave', {}).get('contatti_aziendali_escludi', []),
-            )
-        ):
-            continue
-        nominativo = pulisci_nominativo(nominativo_raw) or ''
-        tipo_ce = str(punto.get('TIPO_CE_K', '')).strip()
-        if not is_azienda(nominativo, tipo_ce):
-            continue
-        pod = str(punto.get('POD_K', '')).strip()
-        chiave = pod.upper() if pod else f"__NOPOD__{nominativo.upper()}"
-        if chiave in pod_visti:
-            continue
-        pod_visti.add(chiave)
-        comune = (
-            str(punto.get('LOCALITA', '')).strip() if usa_localita
-            else str(punto.get('COMUNE', '')).strip()
-        )
-        aziende_rows.append((nominativo, comune, pod))
-
-    # Ordina per nominativo
-    aziende_rows.sort(key=lambda r: r[0].lower())
-
-    row = 6
-    for nominativo, comune, pod in aziende_rows:
-        values = [nominativo, comune, '', '', '', pod]
-        for col, value in enumerate(values, start=1):
-            cell = ws_aziende.cell(row=row, column=col, value=value)
-            cell.border = thin_border
-            cell.alignment = Alignment(vertical='center')
-        row += 1
-
-    if not aziende_rows:
-        ws_aziende.cell(row=6, column=1, value="Nessuna azienda rilevata")
-        ws_aziende.merge_cells(
-            start_row=6, start_column=1,
-            end_row=6, end_column=len(headers_aziende),
-        )
-        ws_aziende.cell(row=6, column=1).alignment = Alignment(horizontal='center')
-        ws_aziende.cell(row=6, column=1).font = Font(italic=True)
-
-    # Larghezze colonne: Nominativo, Comune, Tel, Mail, Pec, POD
-    col_widths_aziende = [35, 22, 16, 28, 28, 22]
-    for idx, width in enumerate(col_widths_aziende, start=1):
-        col_letter = chr(64 + idx)
-        ws_aziende.column_dimensions[col_letter].width = width
-
-    ws_aziende.freeze_panes = 'A6'
-
-    print(f"   📋 Foglio '{nome_foglio_aziende}': {len(aziende_rows)} aziende")
 
     for nome_foglio, contatori, fill_color in fogli_dettaglio_finali:
-        scrivi_foglio_lettere(nome_foglio, contatori, fill_color)
+        scrivi_foglio_lettere(nome_foglio, contatori, fill_color, archivia_righe=False)
     
     # Salva
     wb.save(filename)
     print(f"\n✅ File Excel salvato: {filename}")
+
+    if archivia:
+        try:
+            from moduli import lettere as lettere_archive
+            info = lettere_archive.registra_generazione(
+                filename,
+                date_da_elaborare[0],
+                date_da_elaborare[-1],
+                archive_rows,
+                provincia=PROVINCIA_ATTIVA,
+                user=utente,
+            )
+            print(
+                "🗄️ Archivio Lettere aggiornato: "
+                f"{info['totale_righe']} righe, {info['totale_aziende']} aziende"
+            )
+        except Exception as ex_archive:
+            if filename_auto:
+                try:
+                    os.remove(filename)
+                except OSError:
+                    pass
+            raise RuntimeError(
+                f'File Excel non mantenuto perché l’archiviazione nel DB è fallita: '
+                f'{ex_archive}'
+            ) from ex_archive
     
     return filename
 

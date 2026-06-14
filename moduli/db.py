@@ -48,7 +48,7 @@ COLONNE_NOTE = [
 # Colonne TEXT vs REAL (latitudine/longitudine sono numeriche)
 _COLONNE_REAL = {'latitudine', 'longitudine'}
 
-SCHEMA_VERSION_CORRENTE = 3
+SCHEMA_VERSION_CORRENTE = 4
 
 
 # ============================================================================
@@ -227,6 +227,8 @@ def _bootstrap_schema(conn):
         );
     ''')
 
+    _create_lettere_tables(conn)
+
     # Versione schema
     cur = conn.execute("SELECT value FROM sync_state WHERE key='schema_version'")
     row = cur.fetchone()
@@ -257,6 +259,9 @@ def _apply_migrations(conn, da_versione):
     if da_versione < 3:
         _migrate_v2_to_v3(conn)
         da_versione = 3
+    if da_versione < 4:
+        _migrate_v3_to_v4(conn)
+        da_versione = 4
 
     conn.execute(
         "UPDATE sync_state SET value=? WHERE key='schema_version'",
@@ -518,6 +523,146 @@ def _migrate_v2_to_v3(conn):
             )
 
     logger.info("[DB-migration] v3 applicato.")
+
+
+def _create_lettere_tables(conn):
+    """Crea le tabelle dell'Archivio Lettere.
+
+    Il campo email resta unico: puo' contenere uno o piu' indirizzi mail/PEC,
+    coerentemente con la colonna EMAIL del filone.
+    """
+    conn.executescript('''
+        CREATE TABLE IF NOT EXISTS lettere_generazioni (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            provincia TEXT NOT NULL,
+            file_name TEXT NOT NULL,
+            file_path TEXT NOT NULL,
+            file_hash TEXT,
+            periodo_da TEXT,
+            periodo_a TEXT,
+            created_ts INTEGER NOT NULL,
+            created_by TEXT,
+            totale_righe INTEGER NOT NULL DEFAULT 0,
+            totale_aziende INTEGER NOT NULL DEFAULT 0,
+            note TEXT,
+            UNIQUE(provincia, file_hash)
+        );
+        CREATE INDEX IF NOT EXISTS idx_lettere_generazioni_periodo
+            ON lettere_generazioni(provincia, periodo_da, periodo_a);
+
+        CREATE TABLE IF NOT EXISTS lettere_righe (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            generazione_id INTEGER NOT NULL,
+            source_sheet TEXT,
+            row_num INTEGER,
+            pod TEXT,
+            eneltel TEXT,
+            lcl TEXT,
+            nominativo TEXT,
+            via TEXT,
+            civico TEXT,
+            comune TEXT,
+            provincia_sigla TEXT,
+            cap TEXT,
+            data_pianificazione TEXT,
+            ora_pianificazione TEXT,
+            lettera TEXT,
+            operatore TEXT,
+            posizione_mis TEXT,
+            appuntamento TEXT,
+            tipo_misuratore TEXT,
+            telefono TEXT,
+            email TEXT,
+            is_azienda INTEGER NOT NULL DEFAULT 0,
+            raw_json TEXT,
+            FOREIGN KEY (generazione_id)
+                REFERENCES lettere_generazioni(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_lettere_righe_gen
+            ON lettere_righe(generazione_id);
+        CREATE INDEX IF NOT EXISTS idx_lettere_righe_pod
+            ON lettere_righe(pod);
+        CREATE INDEX IF NOT EXISTS idx_lettere_righe_data
+            ON lettere_righe(data_pianificazione);
+
+        CREATE TABLE IF NOT EXISTS lettere_contatti (
+            provincia TEXT NOT NULL,
+            contact_key TEXT NOT NULL,
+            pod TEXT,
+            nominativo TEXT,
+            comune TEXT,
+            telefono TEXT,
+            email TEXT,
+            created_ts INTEGER NOT NULL,
+            updated_ts INTEGER NOT NULL,
+            updated_by TEXT,
+            PRIMARY KEY (provincia, contact_key)
+        );
+        CREATE INDEX IF NOT EXISTS idx_lettere_contatti_pod
+            ON lettere_contatti(provincia, pod);
+
+        CREATE TABLE IF NOT EXISTS lettere_aziende_generazione (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            generazione_id INTEGER NOT NULL,
+            provincia TEXT NOT NULL,
+            contact_key TEXT NOT NULL,
+            pod TEXT,
+            nominativo TEXT,
+            comune TEXT,
+            data_pianificazione TEXT,
+            ora_pianificazione TEXT,
+            operatore TEXT,
+            tipo_misuratore TEXT,
+            lettera TEXT,
+            risposta INTEGER NOT NULL DEFAULT 0,
+            risposta_ts INTEGER,
+            risposta_by TEXT,
+            note TEXT,
+            created_ts INTEGER NOT NULL,
+            FOREIGN KEY (generazione_id)
+                REFERENCES lettere_generazioni(id) ON DELETE CASCADE,
+            UNIQUE(generazione_id, contact_key)
+        );
+        CREATE INDEX IF NOT EXISTS idx_lettere_aziende_gen
+            ON lettere_aziende_generazione(generazione_id);
+        CREATE INDEX IF NOT EXISTS idx_lettere_aziende_contact
+            ON lettere_aziende_generazione(provincia, contact_key);
+        CREATE INDEX IF NOT EXISTS idx_lettere_aziende_risposta
+            ON lettere_aziende_generazione(risposta);
+
+        CREATE TABLE IF NOT EXISTS lettere_invii (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            azienda_generazione_id INTEGER,
+            generazione_id INTEGER,
+            provincia TEXT NOT NULL,
+            contact_key TEXT,
+            pod TEXT,
+            email_dest TEXT NOT NULL,
+            is_pec INTEGER NOT NULL DEFAULT 0,
+            template_id TEXT,
+            subject TEXT,
+            sent_ts INTEGER NOT NULL,
+            sent_by TEXT,
+            status TEXT NOT NULL,
+            error TEXT,
+            detail_json TEXT,
+            FOREIGN KEY (azienda_generazione_id)
+                REFERENCES lettere_aziende_generazione(id) ON DELETE SET NULL,
+            FOREIGN KEY (generazione_id)
+                REFERENCES lettere_generazioni(id) ON DELETE SET NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_lettere_invii_azienda
+            ON lettere_invii(azienda_generazione_id, sent_ts);
+        CREATE INDEX IF NOT EXISTS idx_lettere_invii_contact
+            ON lettere_invii(provincia, contact_key, sent_ts);
+    ''')
+
+
+def _migrate_v3_to_v4(conn):
+    """Schema v4: archivio lettere e rubrica aziende."""
+    logger.info("[DB-migration] v3→v4: archivio lettere")
+    _create_lettere_tables(conn)
+    logger.info("[DB-migration] v4 applicato.")
 
 
 # ============================================================================
@@ -1411,8 +1556,12 @@ def stats():
     """Statistiche rapide sul DB (per /api/admin/db-stats e dump_db.py)."""
     conn = get_conn()
     out = {}
-    for tabella in ('filone', 'filone_extra', 'cell_comments', 'pending_writes',
-                    'audit_log', 'column_registry', 'filone_anomalies'):
+    for tabella in (
+        'filone', 'filone_extra', 'cell_comments', 'pending_writes',
+        'audit_log', 'column_registry', 'filone_anomalies',
+        'lettere_generazioni', 'lettere_righe', 'lettere_contatti',
+        'lettere_aziende_generazione', 'lettere_invii',
+    ):
         out[tabella] = conn.execute(f'SELECT COUNT(*) AS c FROM {tabella}').fetchone()['c']
     out['pending_by_state'] = {
         r['state']: r['c'] for r in conn.execute(

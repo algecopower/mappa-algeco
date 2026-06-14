@@ -23,7 +23,7 @@ from moduli.shared import (
     get_worksheet, get_header_map, find_row_by_pod,
     build_pod_row_map, safe_batch_update_by_name, _imposta_appuntamento_su_filone, _rimuovi_appuntamento_da_filone,
     _api_error, _get_colonna_note, _trova_indice_multi, _resolve_anchor_col_name,
-    _callbacks,
+    _callbacks, _get_username,
 )
 from moduli.distinte_manager import (
     parse_pdf_auto,
@@ -612,6 +612,29 @@ def invia_singola_email():
 
         # Salva in cartella Inviati
         _save_to_sent(smtp_settings, msg)
+
+        # Rende visibile l'invio anche nell'Archivio Lettere.
+        # Il vecchio flusso PDF non ha necessariamente una generazione associata,
+        # quindi lo storico viene legato al contatto stabile (POD).
+        try:
+            from moduli import lettere as lettere_store
+
+            lettere_store.registra_invio(
+                contact_key_value=lettere_store.contact_key(
+                    pod=pod,
+                    nominativo=contatto.get('nome') or contatto.get('nome_societa') or '',
+                    comune=contatto.get('comune') or '',
+                ),
+                pod=pod,
+                email_dest=email_dest,
+                template_id=template_id,
+                subject=subject,
+                status='sent',
+                user=_get_username(),
+                detail={'source': 'gestione_pdf', 'allegati': allegati_nomi},
+            )
+        except Exception:
+            logger.exception("[EMAIL] Invio riuscito ma registrazione storico fallita")
 
         logger.info(f"[EMAIL] Inviata a {email_dest} (POD {pod})")
         return jsonify({'ok': True, 'pod': pod, 'email': email_dest})
@@ -1276,4 +1299,3 @@ def salva_email_filone():
 
     except Exception as e:
         return _api_error(e, 'salvataggio email')
-

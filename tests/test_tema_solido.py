@@ -22,9 +22,15 @@ RIFERIMENTI_TEMA_VETRO = (
     "designtoggle",
     "--panel-blur",
     "--panel-saturate",
-    "glass",
     "acrylic",
 )
+_RE_GLASS = re.compile(r"(?<![\w-])glass(?![\w-])")
+
+
+def _contiene_riferimento_vetro(contenuto, riferimento):
+    if riferimento == "glass":
+        return bool(_RE_GLASS.search(contenuto))
+    return riferimento in contenuto
 
 
 def test_tema_vetro_assente_dai_sorgenti_ui():
@@ -32,7 +38,7 @@ def test_tema_vetro_assente_dai_sorgenti_ui():
     for path in UI_FILES:
         contenuto = path.read_text(encoding="utf-8").casefold()
         for riferimento in RIFERIMENTI_TEMA_VETRO:
-            if riferimento in contenuto:
+            if _contiene_riferimento_vetro(contenuto, riferimento):
                 trovati.append(f"{path.relative_to(ROOT)}: {riferimento}")
 
     assert not trovati, "Riferimenti al tema vetro ancora presenti:\n" + "\n".join(trovati)

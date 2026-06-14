@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="it" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2">
+    <title>Archivio Lettere - Algeco</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/static/theme.css">
+    <link rel="stylesheet" href="/static/lettere.css?v=7">
+    <script src="/static/theme-init.js"></script>
+    <script src="/static/csrf.js"></script>
+</head>
+<body>
+    <div class="lettere-shell">
+        <header class="lettere-header">
+            <div>
+                <h1><i class="fas fa-box-archive"></i> Archivio Lettere</h1>
+                <p>Generazioni Excel, aziende rilevate, recapiti e feedback.</p>
+            </div>
+            <div class="lettere-actions">
+                <a href="/" class="btn-soft"><i class="fas fa-map"></i> Mappa</a>
+                <a href="/dashboard" class="btn-soft"><i class="fas fa-chart-line"></i> Dashboard</a>
+                <button class="btn-primary" id="bulkOpenBtn" onclick="openBulkModal()" disabled>
+                    <i class="fas fa-paper-plane"></i> Invio bulk
+                </button>
+            </div>
+        </header>
+
+        <section class="kpi-grid" id="statsBox">
+            <div class="kpi"><span>-</span><small>Generazioni</small></div>
+            <div class="kpi"><span>-</span><small>Aziende</small></div>
+            <div class="kpi"><span>-</span><small>Con email/PEC</small></div>
+            <div class="kpi"><span>-</span><small>Feedback</small></div>
+        </section>
+
+        <section class="layout">
+            <aside class="side-panel">
+                <div class="panel-title">
+                    <h2>Generazioni</h2>
+                    <button class="icon-btn" onclick="loadAll()" title="Aggiorna">
+                        <i class="fas fa-rotate"></i>
+                    </button>
+                </div>
+                <button class="generation-item active" id="genAllBtn" onclick="selectGenerazione('')">
+                    <strong>Tutte le generazioni</strong>
+                    <span>Mostra l'intero archivio</span>
+                </button>
+                <div id="generazioniList" class="generazioni-list">
+                    <div class="loading"><i class="fas fa-spinner fa-spin"></i> Caricamento...</div>
+                </div>
+            </aside>
+
+            <main class="main-panel">
+                <div class="toolbar">
+                    <div>
+                        <h2>Aziende e contatti</h2>
+                        <p id="resultInfo">Caricamento...</p>
+                    </div>
+                    <div class="toolbar-controls">
+                        <label class="toolbar-filter">
+                            <input type="checkbox" id="filterIncomplete" onchange="toggleIncompleteFilter(this.checked)">
+                            Solo incompleti
+                        </label>
+                        <button class="btn-soft" id="researchQueueBtn" onclick="startContactResearchQueue()" title="Apre il primo contatto senza telefono o email">
+                            <i class="fas fa-magnifying-glass-location"></i> Coda ricerche
+                        </button>
+                        <input type="search" id="searchInput" placeholder="Cerca azienda, POD, comune o email">
+                        <button class="btn-soft" onclick="loadAziende()"><i class="fas fa-search"></i></button>
+                    </div>
+                </div>
+
+                <div class="table-wrap">
+                    <table class="lettere-table">
+                        <thead>
+                            <tr>
+                                <th><input type="checkbox" id="selectAll" onchange="toggleSelectAll(this.checked)"></th>
+                                <th>Azienda</th>
+                                <th>Intervento</th>
+                                <th>Telefono</th>
+                                <th>Email / PEC</th>
+                                <th>Invii e risposta</th>
+                            </tr>
+                        </thead>
+                        <tbody id="aziendeBody">
+                            <tr><td colspan="6" class="empty">Caricamento...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </main>
+        </section>
+    </div>
+
+    <div class="modal-backdrop" id="bulkModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2><i class="fas fa-paper-plane"></i> Invio mail/PEC in bulk</h2>
+                <button class="icon-btn" onclick="closeBulkModal()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <label>Template email</label>
+                <select id="templateSelect"></select>
+
+                <div class="bulk-hint">
+                    Gli indirizzi mail e PEC vengono letti dallo stesso campo <strong>Email / PEC</strong>.
+                    Le PEC sono solo evidenziate con badge dedicato.
+                </div>
+
+                <div class="bulk-list" id="bulkList"></div>
+
+                <div class="bulk-progress" id="bulkProgress" style="display:none;">
+                    <div class="progress-bar"><div id="progressFill"></div></div>
+                    <div id="progressText">0 / 0</div>
+                    <div id="bulkLog" class="bulk-log"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-soft" onclick="closeBulkModal()">Chiudi</button>
+                <button class="btn-primary" id="bulkSendBtn" onclick="sendBulk()">
+                    <i class="fas fa-paper-plane"></i> Invia selezionate
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-backdrop" id="researchModal">
+        <div class="modal research-modal">
+            <div class="modal-header">
+                <div>
+                    <h2><i class="fas fa-magnifying-glass-location"></i> Ricerca rapida contatti</h2>
+                    <div class="mini" id="researchProgress"></div>
+                </div>
+                <button class="icon-btn" onclick="closeContactResearch()" title="Chiudi">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body research-body">
+                <div class="research-top">
+                    <div class="research-company">
+                        <div>
+                            <div class="research-company-name" id="researchCompanyName"></div>
+                            <div class="mini" id="researchCompanyMeta"></div>
+                        </div>
+                        <button class="btn-primary" onclick="openExternalSources()" title="Mappe, elenchi e registri ufficiali">
+                            <i class="fas fa-layer-group"></i> Apri fonti esterne
+                        </button>
+                    </div>
+
+                    <div class="research-hint">
+                        Compila i recapiti mancanti cercando l'azienda online: ogni link apre una ricerca già pronta
+                        con nome e comune. Inserisci qui sotto telefono e email trovati, poi salva o passa al prossimo.
+                    </div>
+
+                    <label class="research-autoopen">
+                        <input type="checkbox" id="researchAutoOpen" checked>
+                        <span>Apri automaticamente le ricerche Google al cambio contatto</span>
+                    </label>
+                </div>
+
+                <div class="research-groups-wrap">
+                    <div class="research-groups" id="researchGroups"></div>
+                </div>
+
+                <div class="research-editor">
+                    <div class="research-field">
+                        <label for="researchPhone">Telefono trovato</label>
+                        <input id="researchPhone" type="text" placeholder="Telefono">
+                    </div>
+                    <div class="research-field">
+                        <label for="researchEmail">Email / PEC trovata</label>
+                        <input id="researchEmail" type="text" placeholder="mail@dominio.it / pec@pec.it">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-soft" onclick="closeContactResearch()">Chiudi</button>
+                <div class="research-footer-actions">
+                    <button class="btn-soft" onclick="navigateResearch(-1)" title="Contatto precedente nella coda">
+                        <i class="fas fa-arrow-left"></i> Precedente
+                    </button>
+                    <button class="btn-soft" onclick="saveResearchContact(false)">
+                        <i class="fas fa-floppy-disk"></i> Salva
+                    </button>
+                    <button class="btn-primary" onclick="saveResearchContact(true)">
+                        Salva e prossimo incompleto <i class="fas fa-arrow-right"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+    <script src="/static/lettere.js?v=6"></script>
+</body>
+</html>

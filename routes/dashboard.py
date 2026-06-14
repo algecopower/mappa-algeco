@@ -768,6 +768,13 @@ def api_dashboard():
             'items_urgenti': bacheca_urgenti[:5],
         }
 
+        try:
+            from moduli.lettere import statistiche_feedback
+            lettere_stats = statistiche_feedback()
+        except Exception as e:
+            logger.warning(f"[Dashboard] Statistiche lettere non disponibili: {e}")
+            lettere_stats = {}
+
         return jsonify({
             'success': True,
             'provincia': PROVINCIA_ATTIVA,
@@ -777,6 +784,7 @@ def api_dashboard():
             'andamento_lcl': andamento_lcl,
             'calendario': cal_stats,
             'bacheca': bacheca_stats,
+            'lettere': lettere_stats,
         })
 
     except Exception as e:

@@ -342,31 +342,6 @@ function openPrimaryResearchesFor(row) {
     showToast(`Aperte ${links.length} ricerche: ${labels}`);
 }
 
-function getExternalSourceLinks(row) {
-    const groups = buildResearchGroups(row);
-    const pick = (title, label) => (
-        groups.find(group => group.title === title)?.links.find(link => link.label === label)
-    );
-    return [
-        pick('Mappe e social', 'Google Maps'),
-        pick('Fonti ufficiali e elenchi', 'Pagine Gialle'),
-        pick('Fonti ufficiali e elenchi', 'Ufficio Camerale'),
-        pick('Fonti ufficiali e elenchi', 'INI-PEC'),
-        pick('Fonti ufficiali e elenchi', 'Registro Imprese'),
-    ].filter(Boolean);
-}
-
-function openExternalSources() {
-    const row = currentResearchContact();
-    if (!row) return;
-    const links = getExternalSourceLinks(row);
-    for (const link of links) {
-        window.open(link.url, '_blank', 'noopener,noreferrer');
-    }
-    const labels = links.map(link => link.label.toLowerCase()).join(', ');
-    showToast(`Aperte ${links.length} fonti esterne: ${labels}`);
-}
-
 function openPrimaryResearches() {
     openPrimaryResearchesFor(currentResearchContact());
 }

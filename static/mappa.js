@@ -8610,6 +8610,8 @@ let _planCardsBatchTimer = null;
 function enterPlanningMode(opts) {
     planningMode = true;
     document.getElementById('sidebar').classList.add('planning-mode');
+    // Pulisci la mappa dai marker/rotte della vista precedente (date, zone, ecc.)
+    clearMap();
     // Reset filters
     planFilterTel = 'tutti';
     planSelectedEnteltels.clear();
@@ -8671,6 +8673,14 @@ function exitPlanningMode() {
     _planCardsRendered = 0;
     markers = [];
     document.getElementById('sidebar').classList.remove('planning-mode');
+    // Resetta filtro data e operatore della vista normale per evitare
+    // che marker "fantasma" della data selezionata prima restino sulla mappa
+    document.getElementById('dataFilter').value = '';
+    currentDataFiltro = '';
+    document.getElementById('operatoreFilterContainer').classList.remove('visible');
+    resetOperatoreFilter();
+    currentOperatore = null;
+    currentView = 'zone';
     // Restore normal view
     preserveMapView = true;
     mostraVistaZone();

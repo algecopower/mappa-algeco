@@ -132,6 +132,29 @@ def api_lettere_update_contatto(contact_key):
         return jsonify({'error': str(e)}), 500
 
 
+@bp.route('/api/lettere/contatti-by-name', methods=['PUT'])
+@login_required
+def api_lettere_update_contatti_by_name():
+    """Aggiorna telefono/email per tutti i contatti con lo stesso nominativo."""
+    try:
+        data = request.get_json() or {}
+        nominativo = data.get('nominativo', '').strip()
+        if not nominativo:
+            return jsonify({'error': 'nominativo mancante'}), 400
+        result = lettere_store.update_contatti_by_nominativo(
+            nominativo,
+            telefono=data.get('telefono') if 'telefono' in data else None,
+            email=data.get('email') if 'email' in data else None,
+            user=_get_username(),
+        )
+        return jsonify({'success': True, **result})
+    except LookupError as e:
+        return jsonify({'error': str(e)}), 404
+    except Exception as e:
+        logger.exception("[Lettere] Errore update contatti by nominativo")
+        return jsonify({'error': str(e)}), 500
+
+
 @bp.route('/api/lettere/aziende/<int:azienda_id>/risposta', methods=['PUT'])
 @login_required
 def api_lettere_risposta(azienda_id):

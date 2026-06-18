@@ -313,6 +313,41 @@ select {
     padding: 7px 8px;
     font-size: .78rem;
 }
+.date-group-header-row {
+    cursor: pointer;
+    user-select: none;
+}
+.date-group-header-row:hover td {
+    background: rgba(var(--accent-rgb), .06);
+}
+.date-group-header-row td {
+    padding: 10px 8px !important;
+    border-bottom: 1px solid var(--border);
+}
+.date-group-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.date-group-header > i {
+    font-size: .72rem;
+    color: var(--text-muted);
+    width: 14px;
+    text-align: center;
+    transition: transform .15s ease;
+}
+.date-group-label {
+    font-weight: 900;
+    font-size: .92rem;
+    text-transform: capitalize;
+    color: var(--primary);
+}
+.date-group-count {
+    font-size: .76rem;
+    color: var(--text-muted);
+    font-weight: 600;
+    margin-left: auto;
+}
 .empty,
 .loading {
     color: var(--text-muted);

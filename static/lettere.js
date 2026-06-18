@@ -33,9 +33,16 @@ function fmtTs(ts) {
     return d.toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
 
+const MESI_IT = ['GENNAIO','FEBBRAIO','MARZO','APRILE','MAGGIO','GIUGNO',
+                 'LUGLIO','AGOSTO','SETTEMBRE','OTTOBRE','NOVEMBRE','DICEMBRE'];
+
 function periodoLabel(g) {
-    if (!g) return '';
-    return `${g.periodo_da || '?'} → ${g.periodo_a || '?'}`;
+    if (!g || !g.periodo_da) return g?.periodo_da || '?';
+    const [aY, aM, aD] = g.periodo_da.split('-').map(Number);
+    if (!g.periodo_a) return `${aD} ${MESI_IT[aM - 1]}`;
+    const [bY, bM, bD] = g.periodo_a.split('-').map(Number);
+    if (aM === bM && aY === bY) return `${aD}-${bD} ${MESI_IT[aM - 1]}`;
+    return `${aD} ${MESI_IT[aM - 1]} - ${bD} ${MESI_IT[bM - 1]}`;
 }
 
 function isPec(email) {
@@ -118,7 +125,7 @@ function renderGenerazioni() {
              onclick="selectGenerazione('${g.id}')"
              onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectGenerazione('${g.id}'); }">
             <strong>${esc(periodoLabel(g))}</strong>
-            <span>${esc(g.file_name)} · ${g.totale_aziende || 0} aziende</span>
+            <span>${g.totale_aziende || 0} aziende</span>
             <span>
                 ${fmtTs(g.created_ts)}
                 <a href="/api/lettere/generazioni/${g.id}/download" onclick="event.stopPropagation()">Scarica</a>
@@ -176,10 +183,22 @@ function hasMissingContact(a) {
 }
 
 function researchQueue() {
+    // Ordina per data (più vicina prima) poi alfabetico, dedup per nominativo
+    const today = new Date().toISOString().slice(0, 10);
+    const sorted = [...aziende]
+        .filter(a => hasMissingContact(a))
+        .sort((a, b) => {
+            const dA = parseDateToISO(a.data_pianificazione) || '9999-99-99';
+            const dB = parseDateToISO(b.data_pianificazione) || '9999-99-99';
+            // Date più vicine a oggi prima (ordine crescente)
+            if (dA !== dB) return dA < dB ? -1 : 1;
+            return (a.nominativo || '').localeCompare(b.nominativo || '', 'it', { sensitivity: 'base' });
+        });
     const seen = new Set();
-    return aziende.filter(a => {
-        if (!hasMissingContact(a) || seen.has(a.contact_key)) return false;
-        seen.add(a.contact_key);
+    return sorted.filter(a => {
+        const key = (a.nominativo || '').trim().toUpperCase();
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
         return true;
     });
 }
@@ -276,7 +295,8 @@ function renderContactResearch() {
         return;
     }
     const queue = researchQueue();
-    const queueIndex = queue.findIndex(a => a.contact_key === row.contact_key);
+    const currentNom = (row.nominativo || '').trim().toUpperCase();
+    const queueIndex = queue.findIndex(a => (a.nominativo || '').trim().toUpperCase() === currentNom);
     const missing = [
         !(row.telefono || '').trim() ? 'telefono' : '',
         splitEmails(row.email).length === 0 ? 'email/PEC' : ''
@@ -359,7 +379,8 @@ function navigateResearch(delta) {
     const queue = researchQueue();
     const row = currentResearchContact();
     if (!row || !queue.length) return;
-    const currentIndex = queue.findIndex(a => a.contact_key === row.contact_key);
+    const currentNom = (row.nominativo || '').trim().toUpperCase();
+    const currentIndex = queue.findIndex(a => (a.nominativo || '').trim().toUpperCase() === currentNom);
     if (currentIndex < 0) return;
     const next = queue[(currentIndex + delta + queue.length) % queue.length];
     researchContactKey = next.contact_key;
@@ -373,42 +394,52 @@ async function saveResearchContact(openNext) {
     const row = currentResearchContact();
     if (!row) return;
     const queue = researchQueue();
-    const currentIndex = queue.findIndex(a => a.contact_key === row.contact_key);
-    const nextKey = currentIndex >= 0 && queue.length > 1
-        ? queue[(currentIndex + 1) % queue.length].contact_key
-        : '';
-    const nextRow = nextKey
-        ? queue.find(a => a.contact_key === nextKey)
+    const currentNom = (row.nominativo || '').trim().toUpperCase();
+    const currentIndex = queue.findIndex(a => (a.nominativo || '').trim().toUpperCase() === currentNom);
+    const nextEntry = currentIndex >= 0 && queue.length > 1
+        ? queue[(currentIndex + 1) % queue.length]
         : null;
+    const nextNom = nextEntry ? (nextEntry.nominativo || '').trim().toUpperCase() : '';
+    const nextRow = nextEntry && nextNom !== currentNom ? nextEntry : null;
     const telefono = document.getElementById('researchPhone').value.trim();
     const email = document.getElementById('researchEmail').value.trim();
 
     // Apri subito le ricerche del prossimo contatto, mentre il click utente
     // è ancora valido per i popup del browser.
-    if (openNext && nextRow && nextKey !== row.contact_key && autoOpenResearchesEnabled()) {
+    if (openNext && nextRow && autoOpenResearchesEnabled()) {
         openPrimaryResearchesFor(nextRow);
     }
 
     try {
-        const res = await fetch(`/api/lettere/contatti/${encodeURIComponent(row.contact_key)}`, {
+        // Salva per nominativo: aggiorna tutti i contact_key con lo stesso nome
+        const res = await fetch('/api/lettere/contatti-by-name', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ telefono, email })
+            body: JSON.stringify({ nominativo: row.nominativo, telefono, email })
         });
         const data = await res.json();
         if (!data.success) throw new Error(data.error || 'Errore salvataggio');
 
-        for (const item of aziende.filter(a => a.contact_key === row.contact_key)) {
-            item.telefono = telefono;
-            item.email = email;
+        // Aggiorna localmente tutte le entry con lo stesso nominativo
+        const updatedKeys = new Set(data.updated_keys || []);
+        for (const item of aziende) {
+            if (updatedKeys.has(item.contact_key) ||
+                (item.nominativo || '').trim().toUpperCase() === currentNom) {
+                item.telefono = telefono;
+                item.email = email;
+            }
         }
         renderAziende();
         updateBulkButton();
         loadStats();
-        showToast(data.contatto?.sync_filone?.synced ? 'Salvato anche sul filone' : 'Contatto salvato');
+        const count = data.updated_count || 1;
+        const msg = count > 1
+            ? `Salvato per ${count} contatti con lo stesso nominativo`
+            : (data.synced_filone ? 'Salvato anche sul filone' : 'Contatto salvato');
+        showToast(msg);
 
-        if (openNext && nextKey && nextKey !== row.contact_key) {
-            researchContactKey = nextKey;
+        if (openNext && nextRow) {
+            researchContactKey = nextRow.contact_key;
             renderContactResearch();
         } else if (openNext) {
             closeContactResearch();
@@ -428,6 +459,42 @@ function visibleAziende() {
 
 function toggleIncompleteFilter(checked) {
     filterIncompleteOnly = Boolean(checked);
+    renderAziende();
+}
+
+const GIORNI_IT = ['Domenica','Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato'];
+const MESI_IT_LOWER = ['gennaio','febbraio','marzo','aprile','maggio','giugno',
+                       'luglio','agosto','settembre','ottobre','novembre','dicembre'];
+let collapsedDates = new Set();
+
+function parseDateToISO(dateStr) {
+    if (!dateStr) return '';
+    // Gestisce sia DD/MM/YYYY che YYYY-MM-DD
+    if (dateStr.includes('/')) {
+        const [d, m, y] = dateStr.split('/');
+        return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    }
+    return dateStr;
+}
+
+function formatDateGroupHeader(dateStr) {
+    if (!dateStr) return 'Data non specificata';
+    let d, m, y;
+    if (dateStr.includes('/')) {
+        [d, m, y] = dateStr.split('/').map(Number);
+    } else {
+        [y, m, d] = dateStr.split('-').map(Number);
+    }
+    const dt = new Date(y, m - 1, d);
+    return `${GIORNI_IT[dt.getDay()]} ${d} ${MESI_IT_LOWER[m - 1]} ${y}`;
+}
+
+function toggleDateGroup(dateStr) {
+    if (collapsedDates.has(dateStr)) {
+        collapsedDates.delete(dateStr);
+    } else {
+        collapsedDates.add(dateStr);
+    }
     renderAziende();
 }
 
@@ -451,12 +518,61 @@ function renderAziende() {
             : '<tr><td colspan="6" class="empty">Nessuna azienda trovata</td></tr>';
         return;
     }
-    body.innerHTML = visible.map(a => `
+
+    // Raggruppa per data_pianificazione, ordina per data (più vicina prima) poi alfabetico
+    const groups = new Map();
+    for (const a of visible) {
+        const dk = a.data_pianificazione || '';
+        if (!groups.has(dk)) groups.set(dk, []);
+        groups.get(dk).push(a);
+    }
+    // Ordina i gruppi per data crescente (più vicina prima)
+    const sortedKeys = [...groups.keys()].sort((a, b) => {
+        if (!a && !b) return 0;
+        if (!a) return 1;
+        if (!b) return -1;
+        const isoA = parseDateToISO(a);
+        const isoB = parseDateToISO(b);
+        return isoA < isoB ? -1 : isoA > isoB ? 1 : 0;
+    });
+    // Ordina le aziende all'interno di ogni gruppo per nominativo
+    for (const key of sortedKeys) {
+        groups.get(key).sort((a, b) =>
+            (a.nominativo || '').localeCompare(b.nominativo || '', 'it', { sensitivity: 'base' })
+        );
+    }
+
+    let html = '';
+    for (const dk of sortedKeys) {
+        const items = groups.get(dk);
+        const collapsed = collapsedDates.has(dk);
+        const incInGroup = items.filter(hasMissingContact).length;
+        const label = formatDateGroupHeader(dk);
+        html += `
+            <tr class="date-group-header-row" onclick="toggleDateGroup('${esc(dk)}')">
+                <td colspan="6">
+                    <div class="date-group-header">
+                        <i class="fas fa-chevron-${collapsed ? 'right' : 'down'}"></i>
+                        <span class="date-group-label">${esc(label)}</span>
+                        <span class="date-group-count">${items.length} aziende${incInGroup ? ` · ${incInGroup} da completare` : ''}</span>
+                    </div>
+                </td>
+            </tr>
+        `;
+        if (!collapsed) {
+            html += items.map(a => renderAziendaRow(a)).join('');
+        }
+    }
+    body.innerHTML = html;
+}
+
+function renderAziendaRow(a) {
+    return `
         <tr data-id="${a.id}">
             <td class="select-cell" data-label="Seleziona"><input type="checkbox" class="row-check" data-id="${a.id}" onchange="updateBulkButton()"></td>
             <td data-label="Azienda">
                 <div class="azienda-title">${esc(a.nominativo)}</div>
-                <div class="azienda-meta">${esc(a.comune || '')} · ${esc(a.pod || 'POD mancante')}</div>
+                <div class="azienda-meta">${esc([a.via, a.civico].filter(Boolean).join(' ') || '')}${a.comune ? ' · ' + esc(a.comune) : ''} · ${esc(a.pod || 'POD mancante')}</div>
                 <div class="mini file-meta">${esc(a.file_name || '')}</div>
                 <button class="research-trigger ${hasMissingContact(a) ? 'needs-contact' : ''}"
                         onclick="openContactResearch(${a.id})">
@@ -498,7 +614,7 @@ function renderAziende() {
                        onblur="saveRisposta(${a.id}, document.getElementById('risposta_${a.id}').checked, this.value)">
             </td>
         </tr>
-    `).join('');
+    `;
 }
 
 function saveOnEnter(event) {

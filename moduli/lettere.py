@@ -348,17 +348,29 @@ def get_generazione_by_file(file_name, provincia=None):
 
 
 def list_generazioni(limit=100, provincia=None):
+    """Lista generazioni, deduplicate per periodo.
+
+    Se lo stesso periodo (periodo_da, periodo_a) è stato generato più volte,
+    restituisce solo la generazione più recente (MAX id).
+    """
     provincia = (provincia or _provincia_attiva()).upper()
     conn = db.get_conn()
     rows = conn.execute(
         '''
-        SELECT *
-        FROM lettere_generazioni
-        WHERE provincia=?
+        SELECT g.*
+        FROM lettere_generazioni g
+        INNER JOIN (
+            SELECT MAX(id) AS max_id
+            FROM lettere_generazioni
+            WHERE provincia=?
+            GROUP BY provincia,
+                     COALESCE(periodo_da, ''),
+                     COALESCE(periodo_a, '')
+        ) latest ON g.id = latest.max_id
         ORDER BY
-            COALESCE(NULLIF(periodo_a, ''), NULLIF(periodo_da, ''), '0000-00-00') DESC,
-            COALESCE(NULLIF(periodo_da, ''), '0000-00-00') DESC,
-            id DESC
+            COALESCE(NULLIF(g.periodo_a, ''), NULLIF(g.periodo_da, ''), '0000-00-00') DESC,
+            COALESCE(NULLIF(g.periodo_da, ''), '0000-00-00') DESC,
+            g.id DESC
         LIMIT ?
         ''',
         (provincia, int(limit)),
@@ -394,6 +406,16 @@ def list_aziende(generazione_id=None, search='', limit=500, provincia=None):
     conn = db.get_conn()
     where = ['ag.provincia=?']
     params = [provincia]
+    # Escludi condomini (coerente con classifica_tipo_contatto)
+    where.append(
+        '''
+        NOT (
+            UPPER(COALESCE(ag.nominativo, '')) LIKE '%CONDOMINIO%'
+            OR UPPER(COALESCE(ag.nominativo, '')) LIKE '%COND.%'
+            OR UPPER(COALESCE(ag.nominativo, '')) LIKE '%COND %'
+        )
+        '''
+    )
     if generazione_id:
         where.append('ag.generazione_id=?')
         params.append(int(generazione_id))
@@ -460,8 +482,8 @@ def list_aziende(generazione_id=None, search='', limit=500, provincia=None):
             g.file_name,
             g.periodo_da,
             g.periodo_a,
-            c.telefono,
-            c.email,
+            COALESCE(NULLIF(c.telefono, ''), NULLIF(lr.telefono, ''), f.telefono) AS telefono,
+            COALESCE(NULLIF(c.email, ''), NULLIF(lr.email, ''), f.email) AS email,
             lr.via,
             lr.civico,
             lr.cap,
@@ -475,6 +497,15 @@ def list_aziende(generazione_id=None, search='', limit=500, provincia=None):
         JOIN lettere_generazioni g ON g.id=ag.generazione_id
         LEFT JOIN lettere_contatti c
           ON c.provincia=ag.provincia AND c.contact_key=ag.contact_key
+        LEFT JOIN (
+            SELECT
+                UPPER(TRIM(COALESCE(pod, ''))) AS pod,
+                MAX(telefono) AS telefono,
+                MAX(email) AS email
+            FROM filone
+            WHERE TRIM(COALESCE(pod, ''))!=''
+            GROUP BY 1
+        ) f ON f.pod=UPPER(TRIM(COALESCE(ag.pod, '')))
         LEFT JOIN righe_pod rp
           ON rp.generazione_id=ag.generazione_id
          AND rp.pod_norm=UPPER(TRIM(COALESCE(ag.pod, '')))
@@ -634,6 +665,71 @@ def update_contatto(contact_key_value, *, telefono=None, email=None, user=None, 
     return out
 
 
+def update_contatti_by_nominativo(nominativo, *, telefono=None, email=None, user=None, provincia=None):
+    """Aggiorna telefono/email per TUTTI i contatti con lo stesso nominativo.
+
+    Utile quando la stessa azienda compare con più contatori ma i recapiti
+    sono identici. Evita di dover reinserire i dati per ogni entry.
+    """
+    provincia = (provincia or _provincia_attiva()).upper()
+    nom = _clean(nominativo).upper()
+    if not nom:
+        raise ValueError('nominativo mancante')
+
+    conn = db.get_conn()
+    rows = conn.execute(
+        '''
+        SELECT contact_key, pod
+        FROM lettere_contatti
+        WHERE provincia=? AND UPPER(TRIM(COALESCE(nominativo, '')))=?
+        ''',
+        (provincia, nom),
+    ).fetchall()
+
+    if not rows:
+        raise LookupError('Nessun contatto trovato con questo nominativo')
+
+    now = _now_ts()
+    updated_keys = []
+    synced_any = False
+
+    with conn:
+        for row in rows:
+            ck = row['contact_key']
+            updates = ['updated_ts=?', 'updated_by=?']
+            params = [now, user]
+            if telefono is not None:
+                updates.append('telefono=?')
+                params.append(_clean(telefono))
+            if email is not None:
+                updates.append('email=?')
+                params.append(_clean(email))
+            params.extend([provincia, ck])
+            conn.execute(
+                f'''
+                UPDATE lettere_contatti
+                SET {', '.join(updates)}
+                WHERE provincia=? AND contact_key=?
+                ''',
+                params,
+            )
+            updated_keys.append(ck)
+
+    # Sync filone per ogni contatto con POD
+    for row in rows:
+        pod = row['pod'] or ''
+        if pod:
+            sync = _sync_contatto_su_filone(pod, telefono=telefono, email=email, user=user)
+            if sync.get('synced'):
+                synced_any = True
+
+    return {
+        'updated_keys': updated_keys,
+        'updated_count': len(updated_keys),
+        'synced_filone': synced_any,
+    }
+
+
 def set_risposta(azienda_id, risposta, note=None, user=None, provincia=None):
     provincia = (provincia or _provincia_attiva()).upper()
     conn = db.get_conn()
@@ -676,8 +772,8 @@ def get_azienda(azienda_id, provincia=None):
             g.file_name,
             g.periodo_da,
             g.periodo_a,
-            c.telefono,
-            c.email,
+            COALESCE(NULLIF(c.telefono, ''), NULLIF(lr.telefono, ''), f.telefono) AS telefono,
+            COALESCE(NULLIF(c.email, ''), NULLIF(lr.email, ''), f.email) AS email,
             lr.via,
             lr.civico,
             lr.cap,
@@ -702,6 +798,15 @@ def get_azienda(azienda_id, provincia=None):
         JOIN lettere_generazioni g ON g.id=ag.generazione_id
         LEFT JOIN lettere_contatti c
           ON c.provincia=ag.provincia AND c.contact_key=ag.contact_key
+        LEFT JOIN (
+            SELECT
+                UPPER(TRIM(COALESCE(pod, ''))) AS pod,
+                MAX(telefono) AS telefono,
+                MAX(email) AS email
+            FROM filone
+            WHERE TRIM(COALESCE(pod, ''))!=''
+            GROUP BY 1
+        ) f ON f.pod=UPPER(TRIM(COALESCE(ag.pod, '')))
         LEFT JOIN lettere_righe lr ON lr.id=(
             SELECT lr2.id
             FROM lettere_righe lr2

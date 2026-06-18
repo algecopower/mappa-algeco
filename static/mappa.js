@@ -5734,10 +5734,51 @@ function stampaTappe() {
         return copia;
     });
 
-    // Usa lo stesso ordinamento del percorso (algoritmo di ottimizzazione)
-    const tappeOrdinate = ordinaPercorsoJS(listaTappe);
-    listaTappe.length = 0;
-    tappeOrdinate.forEach(t => listaTappe.push(t));
+    // Riordina automaticamente per fascia oraria e poi per indirizzo
+    function estraiMinutiOrario(orarioStr) {
+        if (!orarioStr || typeof orarioStr !== 'string' || orarioStr.trim() === '') return 99999;
+        const match = orarioStr.match(/([0-9]{1,2})[:.h]([0-9]{2})/);
+        if (match) return parseInt(match[1]) * 60 + parseInt(match[2]);
+        const matchOra = orarioStr.match(/(?:^|[^0-9])([0-9]{1,2})(?:$|[^0-9])/);
+        if (matchOra) {
+            const ore = parseInt(matchOra[1]);
+            if (ore >= 0 && ore <= 23) return ore * 60;
+        }
+        return 99999;
+    }
+    function estraiMinutiFineOrario(orarioStr) {
+        if (!orarioStr || typeof orarioStr !== 'string' || orarioStr.trim() === '') return 99999;
+        const matches = [...orarioStr.matchAll(/([0-9]{1,2})[:.h]([0-9]{2})/g)];
+        if (matches.length >= 2) return parseInt(matches[1][1]) * 60 + parseInt(matches[1][2]);
+        const matchOre = [...orarioStr.matchAll(/(?:^|[^0-9])([0-9]{1,2})(?:$|[^0-9])/g)];
+        if (matchOre.length >= 2) {
+            const ore = parseInt(matchOre[matchOre.length - 1][1]);
+            if (ore >= 0 && ore <= 23) return ore * 60;
+        }
+        return 99999;
+    }
+
+    listaTappe.sort((a, b) => {
+        const orarioA = a._orari_display || '';
+        const orarioB = b._orari_display || '';
+        const minA = estraiMinutiOrario(orarioA);
+        const minB = estraiMinutiOrario(orarioB);
+        if (minA !== minB) return minA - minB;
+        
+        const fineA = estraiMinutiFineOrario(orarioA);
+        const fineB = estraiMinutiFineOrario(orarioB);
+        if (fineA !== fineB) return fineA - fineB;
+        
+        // A parità di fascia oraria, ordina per indirizzo
+        const viaA = (a.via || '').trim().toLowerCase();
+        const viaB = (b.via || '').trim().toLowerCase();
+        if (viaA !== viaB) return viaA.localeCompare(viaB, 'it');
+        
+        // A parità di indirizzo, ordina per civico (numerico)
+        const civA = parseInt(a.civico) || 0;
+        const civB = parseInt(b.civico) || 0;
+        return civA - civB;
+    });
 
     // Info operatore e data
     const nomeOp = currentOperatore === 'TUTTI' ? 'Senza Operatore' : getDisplayName(currentOperatore);
@@ -5796,7 +5837,7 @@ function stampaTappe() {
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
     font-family: Arial, Helvetica, sans-serif;
-    font-size: 11px;
+    font-size: 13px;
     color: #333;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
@@ -5832,7 +5873,7 @@ body {
 }
 table {
     border-collapse: collapse;
-    font-size: 10.5px;
+    font-size: 12.5px;
     width: 100%;
 }
 thead { display: table-header-group; }
@@ -5844,7 +5885,7 @@ th {
     padding: 5px 6px;
     text-align: center;
     font-weight: 600;
-    font-size: 9px;
+    font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.3px;
     white-space: nowrap;
@@ -5890,7 +5931,7 @@ tr:hover { background: #e8f4fd !important; }
 tr[draggable] { transition: opacity 0.2s; }
 tr.dragging { opacity: 0.4; background: #cfe2ff !important; }
 tr.drag-over { border-top: 3px solid #3a7bd5; }
-.drag-handle { user-select: none; font-size: 10px; color: #888; }
+.drag-handle { user-select: none; font-size: 12px; color: #888; }
 .drag-handle:active { cursor: grabbing; }
 .footer {
     margin-top: 6px;
@@ -5900,7 +5941,7 @@ tr.drag-over { border-top: 3px solid #3a7bd5; }
 }
 @media print {
     .no-print { display: none !important; }
-    body { font-size: 10.5px; }
+    body { font-size: 12.5px; }
     .header { margin-bottom: 4px; }
     th .resize-handle { display: none; }
     th { border-right: 1px solid rgba(255,255,255,0.1); }

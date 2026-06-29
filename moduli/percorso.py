@@ -210,7 +210,7 @@ def estrai_orario_e_fascia(testo):
     match = re.search(r'(\d{1,2})[:.;,](\d{2})', testo)
     if match:
         ore, minuti = int(match.group(1)), int(match.group(2))
-        if 0 <= ore <= 23 and 0 <= minuti <= 59:
+        if 6 <= ore <= 20 and 0 <= minuti <= 59:
             tot = ore * 60 + minuti
             return (tot, tot)
 
@@ -220,7 +220,7 @@ def estrai_orario_e_fascia(testo):
         num = match.group(1).zfill(4)
         if not (num.startswith('19') or num.startswith('20')):
             ore, minuti = int(num[:2]), int(num[2:])
-            if 0 <= ore <= 23 and 0 <= minuti <= 59:
+            if 6 <= ore <= 20 and 0 <= minuti <= 59:
                 tot = ore * 60 + minuti
                 return (tot, tot)
 

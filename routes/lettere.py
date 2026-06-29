@@ -5,7 +5,6 @@ Blueprint Archivio Lettere — generazioni Excel, contatti aziendali e invii bul
 import logging
 import os
 import re
-import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr
@@ -25,10 +24,10 @@ from routes.distinte import (
     _TEMPLATES_JSON,
     _attach_files_to_msg,
     _build_fields_for_contact,
-    _connect_smtp,
-    _load_smtp_settings,
+    connect_smtp,
+    load_smtp_settings,
     _resolve_template_server,
-    _save_to_sent,
+    save_to_sent,
 )
 
 logger = logging.getLogger('mappa_algeco')
@@ -244,7 +243,7 @@ def _build_email_message(
             tmpl.get('subject', ''), fields, email_tecnico=email_tecnico,
         ) if tmpl.get('subject') else f"Sostituzione contatore - {contatto.get('nome', '')}"
 
-    smtp_settings = _load_smtp_settings()
+    smtp_settings = load_smtp_settings()
     if not smtp_settings.get('host') or not smtp_settings.get('password'):
         raise RuntimeError('Configurazione SMTP incompleta')
 
@@ -349,7 +348,7 @@ def api_lettere_invia_email():
             allegati_nomi=allegati_nomi,
         )
 
-        server = _connect_smtp(smtp_settings, timeout=15)
+        server = connect_smtp(smtp_settings, timeout=15)
         try:
             server.send_message(msg)
         finally:
@@ -358,7 +357,7 @@ def api_lettere_invia_email():
             except Exception:
                 pass
 
-        _save_to_sent(smtp_settings, msg)
+        save_to_sent(smtp_settings, msg)
         lettere_store.registra_invio(
             azienda_generazione_id=azienda['id'],
             generazione_id=azienda['generazione_id'],

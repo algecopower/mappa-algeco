@@ -35,5 +35,53 @@
   "data_inizio": "2025-10-01",
   "data_fine": "",
   "intervallo_sync_secondi": 60,
-  "mappatura_colonne": {}
+  "mappatura_colonne": {},
+  "lettere_excel": {
+    "fogli": {
+      "monofase": "MONOFASE",
+      "emme2": "EMME2",
+      "semidiretti": "SEMIDIRETTI",
+      "contatti_aziendali": "Contatti Aziendali",
+      "solo_monofase": "SOLO MONOFASE",
+      "solo_trifase_diretti": "SOLO TRIFASE DIRETTI"
+    },
+    "nomi_colonne": {
+      "nominativo": "Nominativo_Cliente",
+      "via": "VIA",
+      "civico": "Numero_Civico",
+      "comune": "Comune",
+      "provincia": "PROVINCIA",
+      "cap": "CAP",
+      "data_pianificazione": "Data Pianificazione",
+      "ora_pianificazione": "Ora pianificazione",
+      "lettera": "LETTERA",
+      "pod": "POD",
+      "operatore": "Operatore",
+      "posizione_mis": "Posizione mis.",
+      "appuntamento": "Appuntamento"
+    },
+    "valori_lettera": {
+      "si": "SI'",
+      "no": "NO"
+    },
+    "regole_no": {
+      "appuntamento": true,
+      "accessibile_esterno": true,
+      "civico_vuoto": true,
+      "civico_senza_numero": true
+    },
+    "parole_chiave": {
+      "lettera_no": [
+        "COMUNE",
+        "PROVINCIA",
+        "FIBERCOP",
+        "ENEL SOLE",
+        "CITELUM"
+      ]
+    },
+    "opzioni": {
+      "unisci_trifase_diretti_in_monofase": true,
+      "crea_fogli_dettaglio": true
+    }
+  }
 }

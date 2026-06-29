@@ -20,7 +20,7 @@ def test_bootstrap_schema_idempotente(db_isolato):
     db.get_conn()  # ri-esegue _bootstrap_schema
     s2 = db.stats()
     assert s1 == s2
-    assert s1['schema_version'] == '4'
+    assert s1['schema_version'] == '6'
 
 
 def test_migrazione_v3_rinomina_colonne_installato(db_isolato):

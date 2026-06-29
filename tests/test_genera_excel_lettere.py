@@ -200,12 +200,10 @@ def test_genera_excel_lettere_usa_config_personalizzata(tmp_path, monkeypatch):
         },
         'parole_chiave': {
             'lettera_no': ['SCUOLA'],
-            'contatti_aziendali_escludi': ['SCUOLA'],
         },
         'opzioni': {
             'unisci_trifase_diretti_in_monofase': False,
             'crea_fogli_dettaglio': False,
-            'escludi_enti_da_contatti_aziendali': True,
         },
     }), raising=False)
 

@@ -1982,71 +1982,10 @@
             </div>
             <div class="modal-body">
                 <!-- SMTP Config -->
-                <div class="smtp-config-toggle" onclick="toggleSmtpConfig()">
-                    <i class="fas fa-cog"></i>
-                    <span id="smtpStatusText">Configurazione SMTP</span>
-                    <span id="smtpProvLabel" style="font-size:0.75em;background:var(--primary);color:white;padding:1px 7px;border-radius:4px;margin-left:4px;"></span>
-                    <i class="fas fa-chevron-down" id="smtpToggleIcon" style="font-size:0.7em;"></i>
-                </div>
-                <div class="smtp-form" id="smtpForm">
-                    <div class="smtp-row">
-                        <div>
-                            <label>Server SMTP</label>
-                            <input type="text" id="smtpHost" placeholder="es. smtp.gmail.com">
-                        </div>
-                        <div style="max-width: 100px;">
-                            <label>Porta</label>
-                            <input type="number" id="smtpPort" value="587">
-                        </div>
-                    </div>
-                    <div class="smtp-row">
-                        <div>
-                            <label>Username</label>
-                            <input type="text" id="smtpUsername" placeholder="email@dominio.it">
-                        </div>
-                        <div>
-                            <label>Password</label>
-                            <input type="password" id="smtpPassword" placeholder="Password o App Password">
-                        </div>
-                    </div>
-                    <div class="smtp-row">
-                        <div>
-                            <label>Email mittente</label>
-                            <input type="email" id="smtpFromEmail" placeholder="mittente@dominio.it">
-                        </div>
-                        <div>
-                            <label>Nome mittente</label>
-                            <input type="text" id="smtpFromName" value="Ufficio Tecnico Algeco Power">
-                        </div>
-                    </div>
-                    <div style="display:flex;align-items:center;gap:8px;margin-top:10px;">
-                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:0;">
-                            <input type="checkbox" id="smtpUseTls" checked> Usa TLS (consigliato)
-                        </label>
-                    </div>
-                    <div style="display:flex;gap:8px;margin-top:10px;">
-                        <button class="btn btn-primary" onclick="salvaSmtpSettings()" style="font-size:0.85em;">
-                            <i class="fas fa-save"></i> Salva
-                        </button>
-                        <button class="btn" onclick="testSmtpConnection()" style="font-size:0.85em;">
-                            <i class="fas fa-plug"></i> Testa Connessione
-                        </button>
-                    </div>
-                    <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);">
-                        <label style="font-size:0.85em;color:var(--text-muted);margin-bottom:4px;display:block;">
-                            <i class="fas fa-flask"></i> Invia email di prova
-                        </label>
-                        <div style="display:flex;gap:8px;align-items:center;">
-                            <input type="email" id="smtpTestEmail" placeholder="tua.email@personale.it"
-                                   style="flex:1;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-card);color:var(--text);font-size:0.9em;">
-                            <button class="btn" id="smtpTestSendBtn" onclick="inviaEmailDiProva()" style="font-size:0.85em;white-space:nowrap;">
-                                <i class="fas fa-paper-plane"></i> Invia prova
-                            </button>
-                        </div>
-                        <div style="font-size:0.75em;color:var(--text-muted);margin-top:4px;">
-                            Invia una email con dati fittizi al tuo indirizzo per verificare template, firma e ricezione.
-                        </div>
-                    </div>
+                <div class="smtp-config-toggle" style="cursor:default;">
+                    <span style="color:var(--text-muted);font-size:0.9em;">
+                        <i class="fas fa-info-circle"></i> Le credenziali SMTP si configurano nella Dashboard Admin.
+                    </span>
                 </div>
 
                 <!-- Template Selection -->
@@ -4019,7 +3958,7 @@
             bulkPreviews = [];
 
             // Carica SMTP settings
-            caricaSmtpSettings();
+            
 
             document.getElementById('bulkEmailModal').classList.add('active');
         }

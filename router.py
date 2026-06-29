@@ -740,6 +740,13 @@ def _admin_dispatch(path):
     if m and method == 'GET':
         return _admin_check() or _admin_dump_eneltel(m.group(1), m.group(2))
 
+    
+    m = re.match(r'^api/provinces/([A-Z0-9_]+)/smtp-settings$', p)
+    if m and method == 'GET':
+        return _admin_check() or _admin_proxy_simple(m.group(1), '/api/admin/smtp-settings', 'GET')
+    if m and method == 'PUT':
+        return _admin_check() or _admin_proxy_simple(m.group(1), '/api/admin/smtp-settings', 'PUT')
+
     m = re.match(r'^api/provinces/([A-Z0-9_]+)/import-excel$', p)
     if m and method == 'POST':
         return _admin_check() or _admin_import_excel(m.group(1))
@@ -756,6 +763,10 @@ def _admin_dispatch(path):
     m = re.match(r'^api/provinces/([A-Z0-9_]+)/export-full-excel$', p)
     if m and method == 'GET':
         return _admin_check() or _admin_export_full_excel(m.group(1))
+
+    m = re.match(r'^api/provinces/([A-Z0-9_]+)/export-comuni-excel$', p)
+    if m and method == 'GET':
+        return _admin_check() or _admin_export_comuni_excel(m.group(1))
 
     m = re.match(r'^api/provinces/([A-Z0-9_]+)/column-mapping$', p)
     if m and method == 'GET':
@@ -981,6 +992,33 @@ def _admin_export_full_excel(slug):
         return jsonify({'error': f'backend non raggiungibile: {e}'}), 502
     fwd_headers = {}
     for h in ('Content-Type', 'Content-Disposition', 'X-Filone-Rows', 'X-Filone-Cols'):
+        v = r.headers.get(h)
+        if v:
+            fwd_headers[h] = v
+    return (r.content, r.status_code, fwd_headers)
+
+
+def _admin_export_comuni_excel(slug):
+    """Forward download dell'Excel comuni dal backend (binary)."""
+    try:
+        province = carica_province()
+    except Exception as e:
+        return jsonify({'error': f'lettura provinces.json: {e}'}), 500
+    slug = slug.upper()
+    if slug not in province:
+        return jsonify({'error': f'provincia {slug} non trovata'}), 404
+    cfg = province[slug]
+    if pm.stato().get(slug) != 'running':
+        return jsonify({'error': f'backend {slug} non in esecuzione',
+                        'stato': pm.stato().get(slug, 'stopped')}), 503
+    url = f'http://127.0.0.1:{cfg["porta"]}/api/admin/export-comuni-excel'
+    headers = {'Cookie': request.headers.get('Cookie', '')}
+    try:
+        r = requests.get(url, headers=headers, timeout=120, stream=True)
+    except requests.RequestException as e:
+        return jsonify({'error': f'backend non raggiungibile: {e}'}), 502
+    fwd_headers = {}
+    for h in ('Content-Type', 'Content-Disposition'):
         v = r.headers.get(h)
         if v:
             fwd_headers[h] = v

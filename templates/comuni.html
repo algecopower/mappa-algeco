@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="it" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2">
+    <title>Gestione Comuni - Algeco</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/static/theme.css">
+    <link rel="stylesheet" href="/static/lettere.css">
+    <link rel="stylesheet" href="/static/comuni.css?v=21">
+    <script src="/static/theme-init.js"></script>
+    <script src="/static/csrf.js"></script>
+</head>
+<body>
+    <div class="lettere-shell">
+        <header class="lettere-header">
+            <div>
+                <h1><i class="fas fa-building"></i> Gestione Comuni</h1>
+                <p>Informazioni, contatti, uffici tecnici e invio email/PEC massivo ai comuni.</p>
+            </div>
+            <div class="lettere-actions">
+                <a href="/" class="btn-soft"><i class="fas fa-map"></i> Mappa</a>
+                <a href="/dashboard" class="btn-soft"><i class="fas fa-chart-line"></i> Dashboard</a>
+                <a href="/api/admin/export-comuni-excel" class="btn-soft" title="Scarica dati in Excel"><i class="fas fa-file-excel"></i> Export</a>
+                <button class="btn-primary" id="bulkOpenBtn" onclick="openBulkModal()" disabled>
+                    <i class="fas fa-paper-plane"></i> Invio bulk
+                </button>
+            </div>
+        </header>
+
+        <section class="kpi-grid kpi-grid-5" id="statsBox">
+            <div class="kpi"><span>-</span><small>Comuni totali</small></div>
+            <div class="kpi"><span>-</span><small>Contatori</small></div>
+            <div class="kpi"><span>-</span><small>Con Email</small></div>
+            <div class="kpi"><span>-</span><small>Senza contatti</small></div>
+            <div class="kpi"><span>-</span><small>ZTL attive</small></div>
+        </section>
+
+        <section class="layout">
+            <main class="main-panel" style="grid-column: 1 / span 2;">
+                <div class="toolbar">
+                    <div>
+                        <h2>Rubrica Comuni</h2>
+                        <p id="resultInfo">Caricamento...</p>
+                    </div>
+                    <div class="toolbar-controls">
+                        <div style="display:flex; gap:12px; align-items:center; background:var(--bg-secondary); padding:4px 12px; border-radius:6px; border:1px solid var(--border);">
+                            <label class="toolbar-filter" style="margin:0;"><input type="checkbox" id="f_no_email" onchange="applyFilters()"> No Email</label>
+                            <label class="toolbar-filter" style="margin:0;"><input type="checkbox" id="f_no_contatti" onchange="applyFilters()"> Nessun Contatto</label>
+                            <label class="toolbar-filter" style="margin:0;"><input type="checkbox" id="f_ztl_si" onchange="applyFilters()"> ZTL SÌ</label>
+                            <label class="toolbar-filter" style="margin:0;"><input type="checkbox" id="f_ztl_no" onchange="applyFilters()"> ZTL NO</label>
+                        </div>
+                        <button class="btn-soft" id="researchQueueBtn" onclick="startContactResearchQueue()" title="Apre il primo comune senza contatti">
+                            <i class="fas fa-magnifying-glass-location"></i> Coda ricerche
+                        </button>
+                        
+                        <!-- Import/Export Comuni -->
+                        <div class="dropdown">
+                            <button class="btn-soft" title="Importa o esporta l'anagrafica comuni in Excel">
+                                <i class="fas fa-file-excel"></i> Importa/Esporta
+                            </button>
+                            <div class="dropdown-content">
+                                <a href="/api/comuni/export-excel" target="_blank">
+                                    <i class="fas fa-download"></i> Scarica Template / Esporta
+                                </a>
+                                <a href="#" onclick="document.getElementById('importComuniFile').click(); return false;">
+                                    <i class="fas fa-upload"></i> Importa Template
+                                </a>
+                            </div>
+                        </div>
+                        <input type="file" id="importComuniFile" style="display:none" accept=".xlsx, .csv">
+                        
+                        <select id="filterLcl" onchange="applyFilters()" style="padding: 8px 12px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-main); border-radius: 6px; font-size: 13px;">
+                            <option value="">Tutti gli LCL</option>
+                        </select>
+                        <input type="search" id="searchInput" placeholder="Cerca comune, email, note">
+                        <button class="btn-soft" onclick="loadComuni()"><i class="fas fa-search"></i></button>
+                    </div>
+                </div>
+
+                <div class="table-wrap">
+                    <table class="lettere-table">
+                        <thead>
+                            <tr>
+                                <th style="width:3%;"><input type="checkbox" id="selectAll" onchange="toggleSelectAll(this.checked)"></th>
+                                <th style="width:44%;">Comune & Info (Note, ZTL, Zone)</th>
+                                <th style="width:26%;">Comune / Ufficio Tecnico</th>
+                                <th style="width:27%;">Polizia Municipale</th>
+                            </tr>
+                        </thead>
+                        <tbody id="comuniBody">
+                            <tr><td colspan="4" class="empty">Caricamento...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </main>
+        </section>
+    </div>
+
+    <div class="modal-backdrop" id="bulkModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2><i class="fas fa-paper-plane"></i> Invio mail/PEC in bulk ai Comuni</h2>
+                <button class="icon-btn" onclick="closeBulkModal()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <label>Seleziona Template Email</label>
+                <select id="templateSelect">
+                    <option value="comune">Sostituzione Contatori E-Distribuzione - COMUNE (con allegato Excel)</option>
+                    <option value="polizia">Sostituzione Contatori E-Distribuzione - POLIZIA MUNICIPALE</option>
+                </select>
+
+                <div class="bulk-hint">
+                    Le mail verranno inviate all'indirizzo del <strong>Comune / Ufficio Tecnico</strong> o alla <strong>Polizia Municipale</strong> a seconda del template scelto.<br>
+                    Il sistema allegherà in automatico <code>attestazione_provincia.pdf</code> e, se scegli il Comune, l'Excel generato al momento con la lista dei contatori.
+                </div>
+
+                <div class="bulk-list" id="bulkList"></div>
+
+                <label style="display:flex; align-items:center; gap:8px; margin-top:10px; margin-bottom:10px; font-size: 0.9em; cursor:pointer;">
+                    <input type="checkbox" id="bulkExcludePec" checked>
+                    <i class="fas fa-shield-alt" style="color:#e67e22;"></i> Escludi PEC
+                </label>
+
+                <button class="btn-soft" id="bulkPreviewBtn" onclick="generateBulkPreview()" style="margin-top: 10px; width: 100%;">
+                    <i class="fas fa-eye"></i> Genera Anteprima
+                </button>
+                
+                <div id="bulkPreviewSection" style="display:none; margin-top:15px; border-top: 1px solid var(--border); padding-top:15px; max-height:400px; overflow-y:auto;"></div>
+
+                <div id="bulkErrorsSummary" class="bulk-errors-summary" style="display:none;"></div>
+
+                <div class="bulk-progress" id="bulkProgress" style="display:none;">
+                    <div class="progress-bar"><div id="progressFill"></div></div>
+                    <div id="progressText">0 / 0</div>
+                    <div id="bulkLog" class="bulk-log"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-soft" onclick="closeBulkModal()">Chiudi</button>
+                <button class="btn-primary" id="bulkSendBtn" onclick="sendBulk()" style="display:none;">
+                    <i class="fas fa-paper-plane"></i> Invia selezionate
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-backdrop" id="researchModal">
+        <div class="modal research-modal">
+            <div class="modal-header">
+                <div>
+                    <h2><i class="fas fa-magnifying-glass-location"></i> Ricerca rapida contatti</h2>
+                    <div class="mini" id="researchProgress"></div>
+                </div>
+                <button class="icon-btn" onclick="closeContactResearch()" title="Chiudi">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body research-body">
+                <div class="research-top">
+                    <div class="research-company">
+                        <div class="research-company-name" id="researchComuneName"></div>
+                    </div>
+
+                    <div class="research-hint">
+                        Clicca i link qui sotto per cercare su Google i contatti mancanti del comune. Inseriscili negli appositi campi e salva.
+                    </div>
+
+                    <label class="research-autoopen">
+                        <input type="checkbox" id="researchAutoOpen" checked>
+                        <span>Apri automaticamente le ricerche Google al cambio comune</span>
+                    </label>
+                </div>
+
+                <div class="research-groups-wrap">
+                    <div class="research-groups" id="researchGroups"></div>
+                </div>
+
+                <div class="research-editor" style="grid-template-columns: 1fr 1fr;">
+                    <div>
+                        <div class="research-field">
+                            <label>Email Comune / Ufficio Tecnico</label>
+                            <input id="researchEmailComune" type="text" placeholder="mail@comune.it / pec@pec.it">
+                        </div>
+                        <div class="research-field" style="margin-top:6px;">
+                            <label>Telefono Comune</label>
+                            <input id="researchTelComune" type="text" placeholder="Telefono">
+                        </div>
+                    </div>
+                    <div>
+                        <div class="research-field">
+                            <label>Email Polizia Municipale</label>
+                            <input id="researchEmailPolizia" type="text" placeholder="mail_polizia@comune.it">
+                        </div>
+                        <div class="research-field" style="margin-top:6px;">
+                            <label>Telefono Polizia</label>
+                            <input id="researchTelPolizia" type="text" placeholder="Telefono">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-soft" onclick="closeContactResearch()">Chiudi</button>
+                <div class="research-footer-actions">
+                    <button class="btn-soft" onclick="navigateResearch(-1)" title="Comune precedente">
+                        <i class="fas fa-arrow-left"></i> Precedente
+                    </button>
+                    <button class="btn-soft" onclick="saveResearchContact(false)">
+                        <i class="fas fa-floppy-disk"></i> Salva
+                    </button>
+                    <button class="btn-primary" onclick="saveResearchContact(true)">
+                        Salva e prossimo <i class="fas fa-arrow-right"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+    <button id="scrollTopBtn" title="Torna in cima"><i class="fas fa-arrow-up"></i></button>
+    <script src="/static/comuni.js?v=28"></script>
+</body>
+</html>

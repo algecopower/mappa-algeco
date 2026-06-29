@@ -77,8 +77,10 @@ function isDataVisibile(dataStr) {
 function formatDate(dataStr) {
     if (!dataStr || dataStr.length !== 10) return dataStr;
     const parts = dataStr.split('-');
-    if (parts.length !== 3) return dataStr;
-    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    const giorni = ['dom', 'lun', 'mar', 'mer', 'gio', 'ven', 'sab'];
+    const d = new Date(dataStr);
+    const giornoStr = isNaN(d.getTime()) ? '' : ` (${giorni[d.getUTCDay()]})`;
+    return `${parts[2]}/${parts[1]}/${parts[0]}${giornoStr}`;
 }
 
 // Calcola contatori e zone visibili dai dati caricati
@@ -5011,7 +5013,8 @@ function createContatorePopup(c, num, colore, prevPoint) {
         html += `<div class="popup-row"><span class="popup-label">Telefono</span><span class="popup-value">${c.telefono}</span></div>`;
     }
     if (c.orari_lettere) {
-        html += `<div class="popup-row"><span class="popup-label">Orari lettera</span><span class="popup-value" style="color: #7ec8e3;">✉️ ${c.orari_lettere}</span></div>`;
+        const labelOrario = c.is_appuntamento ? 'Ora fissata' : 'Orari lettera';
+        html += `<div class="popup-row"><span class="popup-label">${labelOrario}</span><span class="popup-value" style="color: #7ec8e3;">✉️ ${c.orari_lettere}</span></div>`;
     }
     if (c.note) {
         html += `<div class="popup-row"><span class="popup-label">Posizione</span><span class="popup-value">${c.note}</span></div>`;

@@ -244,12 +244,10 @@ def get_config_lettere(config_override=None):
             },
             'parole_chiave': {
                 'lettera_no': ['COMUNE', 'PROVINCIA'],
-                'contatti_aziendali_escludi': ['COMUNE', 'PROVINCIA'],
             },
             'opzioni': {
                 'unisci_trifase_diretti_in_monofase': True,
                 'crea_fogli_dettaglio': True,
-                'escludi_enti_da_contatti_aziendali': True,
             },
         }
 
@@ -650,14 +648,7 @@ def genera_excel_lettere(
             civico_raw = punto.get('CIVICO_K', '')
             via_pulita, civico_pulito = separa_via_civico(via_raw, civico_raw)
             tipo_ce = testo_pulito(punto.get('TIPO_CE_K', ''))
-            esclusa_da_aziende = (
-                opzioni_cfg.get('escludi_enti_da_contatti_aziendali', True)
-                and contiene_parola_chiave(
-                    punto.get('CLI_K', ''),
-                    lettere_cfg.get('parole_chiave', {}).get('contatti_aziendali_escludi', []),
-                )
-            )
-            is_azienda_archivio = (not esclusa_da_aziende) and is_azienda(nominativo, tipo_ce)
+            is_azienda_archivio = is_azienda(nominativo, tipo_ce)
             
             values_by_key = {
                 'nominativo': nominativo,

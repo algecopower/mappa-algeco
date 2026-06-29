@@ -523,14 +523,14 @@ def carica_dati_db_locale(force=False):
     # Comune → COMUNE
     col_comune = trova_colonna(df, ['Comune', 'COMUNE'], chiave_mapping='comune')
     if col_comune:
-        df['COMUNE'] = df[col_comune].fillna('').astype(str).str.strip()
+        df['COMUNE'] = df[col_comune].fillna('').astype(str).str.strip().str.upper()
     else:
         df['COMUNE'] = ''
     
     # Località → LOCALITA (per Pavia, più dettagliata del comune)
     col_localita = trova_colonna(df, ['LOCALITA', 'Localita', 'Località', 'località'], chiave_mapping='localita')
     if col_localita:
-        df['LOCALITA'] = df[col_localita].fillna('').astype(str).str.strip()
+        df['LOCALITA'] = df[col_localita].fillna('').astype(str).str.strip().str.upper()
     else:
         df['LOCALITA'] = ''
     
@@ -674,12 +674,12 @@ def carica_dati_db_locale(force=False):
     # negazione/cancellazione/incertezza ("no app", "app annullata",
     # "app??", "app da fissare", "richiesta app", "forse app", ecc.).
     # Vedi `rileva_appuntamento` in moduli/percorso.py per i dettagli.
-    df['IS_APPUNTAMENTO'] = df['NOTE_APP_RAW'].apply(rileva_appuntamento)
+    df['IS_APPUNTAMENTO_NOTE'] = df['NOTE_APP_RAW'].apply(rileva_appuntamento)
 
     # Audit / log dei casi esclusi: NOTE che contengono "app" ma sono state
     # filtrate (utile in fase di tuning per capire i falsi negativi).
     note_con_app = df['NOTE_APP_RAW'].astype(str).str.contains(r'\bapp\b', case=False, regex=True, na=False)
-    note_escluse = df.loc[note_con_app & ~df['IS_APPUNTAMENTO'], 'NOTE_APP_RAW']
+    note_escluse = df.loc[note_con_app & ~df['IS_APPUNTAMENTO_NOTE'], 'NOTE_APP_RAW']
     if len(note_escluse) > 0:
         # Conta per motivo
         motivi = {}
@@ -695,55 +695,49 @@ def carica_dati_db_locale(force=False):
             motivo = motivo_non_appuntamento(nota) or 'altro'
             logger.debug(f"      [{motivo}] {nota[:80]}")
 
-    # Estrai orario appuntamento
-    def trova_orario(row):
-        if not row['IS_APPUNTAMENTO']:
+    # Estrai orario appuntamento dalle note
+    def trova_orario_note(row):
+        if not row['IS_APPUNTAMENTO_NOTE']:
             return None
         return estrai_orario(row['NOTE_APP_RAW'])
 
-    df['ORA_APPUNTAMENTO'] = df.apply(trova_orario, axis=1)
+    df['ORA_APPUNTAMENTO_NOTE'] = df.apply(trova_orario_note, axis=1)
     df['DETTAGLIO_APP'] = df['NOTE_APP_RAW']
     
-    # Leggi colonna "Orari" per le fasce orarie delle lettere
-    # Solo valori in formato "dalle x alle x" vengono considerati
+    # Leggi colonna "Orari" (usata per appuntamenti e per lettere)
     col_orari = trova_colonna(df, ['Orari', 'ORARI', 'orari', 'Orari lettere', 'ORARI LETTERE'], chiave_mapping='orari_lettere')
     if col_orari:
         orari_raw = df[col_orari].fillna('').astype(str).str.strip()
         # Pulisci valori non validi
         orari_raw[orari_raw.str.upper().isin(['NAN', 'NONE', 'NULL'])] = ''
-        # Tieni solo valori nel formato "dalle x alle x"
-        pattern_dalle_alle = re.compile(
-            r'dalle?\s*\d{1,2}(?:[:.]\d{2})?\s*alle?\s*\d{1,2}(?:[:.]\d{2})?',
-            re.IGNORECASE
-        )
-        df['ORARI_LETTERE'] = orari_raw.apply(
-            lambda v: v if v and pattern_dalle_alle.search(v) else ''
-        )
+        
+        # Estrai orario in modo robusto da qualsiasi stringa nella colonna
+        df['ORA_APPUNTAMENTO_ORARI'] = orari_raw.apply(lambda v: estrai_orario(v) if v else None)
+        
+        # Manteniamo la colonna usata dalle lettere come la stringa raw
+        df['ORARI_LETTERE'] = orari_raw
+        
         orari_lettere_count = (df['ORARI_LETTERE'] != '').sum()
         if orari_lettere_count > 0:
-            logger.info(f"   📬 Orari lettere: {orari_lettere_count} contatori con fascia oraria")
+            logger.info(f"   📬 Orari presenti in colonna 'Orari': {orari_lettere_count} contatori")
     else:
+        df['ORA_APPUNTAMENTO_ORARI'] = None
         df['ORARI_LETTERE'] = ''
         logger.warning("   ⚠️ Colonna 'Orari' non trovata nel FILONE")
 
-    # Fallback ORA_APPUNTAMENTO: per le righe con IS_APPUNTAMENTO=True che non
-    # hanno un orario nelle NOTE APP, usa la fascia oraria della colonna "Orari"
-    # (la stessa usata per le lettere). Evita appuntamenti senza orario, che
-    # finirebbero ordinati in modo incoerente e mostrati come "nan" in UI.
-    mask_app_senza_ora = df['IS_APPUNTAMENTO'] & df['ORA_APPUNTAMENTO'].isna()
-    if mask_app_senza_ora.any():
-        df.loc[mask_app_senza_ora, 'ORA_APPUNTAMENTO'] = (
-            df.loc[mask_app_senza_ora, 'ORARI_LETTERE']
-              .apply(lambda s: estrai_orario(s) if s else None)
-        )
-        recuperati = mask_app_senza_ora.sum() - (
-            df.loc[mask_app_senza_ora, 'ORA_APPUNTAMENTO'].isna().sum()
-        )
-        if recuperati > 0:
-            logger.info(
-                f"   🕒 Appuntamenti senza orario nelle NOTE: "
-                f"{recuperati} fasce recuperate dalla colonna 'Orari'"
-            )
+    # Un appuntamento è confermato SOLO se c'è la parola "APP" nelle note (senza essere un falso positivo)
+    df['IS_APPUNTAMENTO'] = df['IS_APPUNTAMENTO_NOTE']
+    
+    # Se è un appuntamento, l'orario delle NOTE (es. "APP 14:00") ha la priorità.
+    # Altrimenti, usa l'orario dalla colonna "Orari". Se non è un appuntamento, resta None.
+    def assegna_orario_finale(row):
+        if not row['IS_APPUNTAMENTO']:
+            return None
+        if pd.notna(row['ORA_APPUNTAMENTO_NOTE']) and row['ORA_APPUNTAMENTO_NOTE']:
+            return row['ORA_APPUNTAMENTO_NOTE']
+        return row['ORA_APPUNTAMENTO_ORARI']
+
+    df['ORA_APPUNTAMENTO'] = df.apply(assegna_orario_finale, axis=1)
 
     # ================================================================
     # FILTRI

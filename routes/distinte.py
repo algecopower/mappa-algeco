@@ -4,10 +4,8 @@ Blueprint per le API PDF E-Distribuzione — gestione distinte e moduli maxy.
 """
 import os
 import re
-import imaplib
 import tempfile
 import logging
-import smtplib
 import time
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -25,6 +23,7 @@ from moduli.shared import (
     _api_error, _get_colonna_note, _trova_indice_multi, _resolve_anchor_col_name,
     _callbacks, _get_username,
 )
+from moduli.smtp import load_smtp_settings, connect_smtp, save_to_sent
 from moduli.distinte_manager import (
     parse_pdf_auto,
     classifica_contatti,
@@ -59,7 +58,6 @@ def serve_whatsapp_redirect():
 
 # Percorso del file JSON dei template messaggi
 _TEMPLATES_JSON = os.path.join(_ROOT_DIR, 'data', 'distinte_templates.json')
-_SMTP_SETTINGS_JSON = os.path.join(_ROOT_DIR, 'data', 'smtp_settings.json')
 _ALLEGATI_DIR = os.path.join(_ROOT_DIR, 'data', 'allegati')
 
 # Mappa allegati di default per provincia
@@ -71,17 +69,7 @@ _ALLEGATI_DEFAULT = {
 _ALLEGATO_SEMIDIRETTA = 'informativa_semidiretta.pdf'
 
 
-def _load_smtp_settings(prov=None):
-    """Carica le impostazioni SMTP per la provincia specificata (o PROVINCIA_ATTIVA)."""
-    prov = (prov or PROVINCIA_ATTIVA).lower()
-    data = json_read(_SMTP_SETTINGS_JSON, default={})
-    # Supporta sia il vecchio formato flat che il nuovo per-provincia
-    if prov in data:
-        return data[prov]
-    # Fallback: formato flat legacy
-    if 'host' in data:
-        return data
-    return {}
+
 
 
 def _format_data_estesa(date_str):
@@ -169,133 +157,13 @@ def save_distinte_templates():
         return jsonify({'error': str(e)}), 500
 
 
-@bp.route('/api/distinte/smtp-settings', methods=['GET'])
-@login_required
-def get_smtp_settings():
-    """Restituisce le impostazioni SMTP per la provincia attiva (password mascherata)."""
-    settings = _load_smtp_settings()
-    # Maschera la password per sicurezza
-    if settings.get('password'):
-        settings['password_set'] = True
-        settings['password'] = ''
-    else:
-        settings['password_set'] = False
-    settings['provincia'] = PROVINCIA_ATTIVA
-    return jsonify(settings)
 
 
-@bp.route('/api/distinte/smtp-settings', methods=['PUT'])
-@login_required
-def save_smtp_settings():
-    """Salva le impostazioni SMTP per la provincia attiva."""
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({'error': 'Nessun dato ricevuto'}), 400
-
-        prov = PROVINCIA_ATTIVA.lower()
-
-        # Carica file esistente (tutte le province)
-        all_settings = json_read(_SMTP_SETTINGS_JSON, default={})
-
-        # Migra formato flat legacy se necessario
-        if 'host' in all_settings and prov not in all_settings:
-            old = {k: v for k, v in all_settings.items()}
-            all_settings = {'torino': old}
-
-        # Se la password non è stata modificata, mantieni quella esistente
-        existing = all_settings.get(prov, {})
-        if not data.get('password') and existing.get('password'):
-            data['password'] = existing['password']
-
-        # Rimuovi campo provincia dal salvataggio
-        data.pop('provincia', None)
-
-        # Validazione base
-        required = ['host', 'port', 'username', 'from_email']
-        for field in required:
-            if not data.get(field):
-                return jsonify({'error': f'Campo "{field}" obbligatorio'}), 400
-
-        all_settings[prov] = data
-        json_write(_SMTP_SETTINGS_JSON, all_settings, indent=4)
-        return jsonify({'ok': True})
-    except Exception as e:
-        logger.error(f"Errore salvataggio SMTP settings: {e}")
-        return jsonify({'error': str(e)}), 500
 
 
-def _connect_smtp(smtp_settings, timeout=15):
-    """Crea e restituisce una connessione SMTP autenticata.
-    Porta 465 → SSL diretto (SMTP_SSL). Porta 587 → STARTTLS."""
-    host = smtp_settings['host']
-    port = int(smtp_settings.get('port', 587))
-    username = smtp_settings.get('username', '')
-    password = smtp_settings.get('password', '')
-    use_tls = smtp_settings.get('use_tls', True)
-
-    if port == 465:
-        # SSL diretto (Aruba, ecc.)
-        server = smtplib.SMTP_SSL(host, port, timeout=timeout)
-    else:
-        server = smtplib.SMTP(host, port, timeout=timeout)
-        if use_tls:
-            server.starttls()
-
-    if username and password:
-        server.login(username, password)
-    return server
 
 
-def _save_to_sent(smtp_settings, msg):
-    """Salva una copia del messaggio nella cartella Inviati via IMAP.
-    Deriva l'host IMAP dall'host SMTP (es. smtps.aruba.it → imaps.aruba.it)."""
-    try:
-        smtp_host = smtp_settings.get('host', '')
-        username = smtp_settings.get('username', '')
-        password = smtp_settings.get('password', '')
 
-        if not smtp_host or not username or not password:
-            return
-
-        # Deriva host IMAP
-        imap_host = smtp_settings.get('imap_host', '')
-        if not imap_host:
-            imap_host = smtp_host.replace('smtps.', 'imaps.').replace('smtp.', 'imap.')
-
-        imap = imaplib.IMAP4_SSL(imap_host, 993, timeout=15)
-        imap.login(username, password)
-
-        # Prova cartelle comuni per "Inviati"
-        sent_folder = None
-        for folder_name in ['Sent', 'INBOX.Sent', 'Posta inviata', 'INBOX.Posta inviata']:
-            status, _ = imap.select(folder_name)
-            if status == 'OK':
-                sent_folder = folder_name
-                break
-
-        if not sent_folder:
-            # Lista tutte le cartelle e cerca una con "sent" o "inviat"
-            status, folders = imap.list()
-            if status == 'OK':
-                for f in folders:
-                    fname = f.decode('utf-8', errors='ignore').split('"')[-2] if b'"' in f else ''
-                    if fname and ('sent' in fname.lower() or 'inviat' in fname.lower()):
-                        sent_folder = fname
-                        break
-
-        if sent_folder:
-            msg_bytes = msg.as_bytes()
-            imaplib.Time2Internaldate(time.time())
-            imap.append(sent_folder, '\\Seen', None, msg_bytes)
-            logger.info(f"[IMAP] Email salvata in '{sent_folder}'")
-        else:
-            logger.warning("[IMAP] Cartella Inviati non trovata")
-
-        imap.logout()
-    except Exception as e:
-        # Non bloccare l'invio se IMAP fallisce
-        logger.warning(f"[IMAP] Errore salvataggio in Inviati: {e}")
 
 
 def _get_default_allegati(provincia, tipologia_contatore=''):
@@ -353,11 +221,11 @@ def get_allegati_disponibili():
 def test_smtp_connection():
     """Testa la connessione SMTP con le impostazioni attuali."""
     try:
-        settings = _load_smtp_settings()
+        settings = load_smtp_settings()
         if not settings.get('host'):
             return jsonify({'error': 'Configurazione SMTP mancante'}), 400
 
-        server = _connect_smtp(settings, timeout=10)
+        server = connect_smtp(settings, timeout=10)
         server.quit()
 
         return jsonify({'ok': True, 'message': 'Connessione SMTP riuscita!'})
@@ -416,7 +284,7 @@ def invia_email_prova():
         }
 
         # Carica SMTP settings
-        smtp_settings = _load_smtp_settings()
+        smtp_settings = load_smtp_settings()
         if not smtp_settings.get('host') or not smtp_settings.get('password'):
             return jsonify({'error': 'Configurazione SMTP incompleta. Salva prima le credenziali.'}), 400
 
@@ -465,7 +333,7 @@ def invia_email_prova():
         msg.attach(MIMEText(body_html_formatted, 'html', 'utf-8'))
 
         # Invio
-        server = _connect_smtp(smtp_settings, timeout=15)
+        server = connect_smtp(smtp_settings, timeout=15)
         try:
             server.send_message(msg)
         finally:
@@ -475,7 +343,7 @@ def invia_email_prova():
                 pass
 
         # Salva in cartella Inviati
-        _save_to_sent(smtp_settings, msg)
+        save_to_sent(smtp_settings, msg)
 
         logger.info(f"[EMAIL-TEST] Inviata email di prova a {email_dest}")
         return jsonify({'ok': True, 'email': email_dest})
@@ -535,7 +403,7 @@ def invia_singola_email():
         email_tecnico = tmpl_settings.get(f'email_{PROVINCIA_ATTIVA.lower()}', '')
 
         # Carica SMTP settings
-        smtp_settings = _load_smtp_settings()
+        smtp_settings = load_smtp_settings()
         if not smtp_settings.get('host') or not smtp_settings.get('password'):
             return jsonify({'error': 'Configurazione SMTP incompleta'}), 400
 
@@ -601,7 +469,7 @@ def invia_singola_email():
         msg['Date'] = email_utils.formatdate(localtime=True)
 
         # Connessione e invio (una connessione per email)
-        server = _connect_smtp(smtp_settings, timeout=15)
+        server = connect_smtp(smtp_settings, timeout=15)
         try:
             server.send_message(msg)
         finally:
@@ -611,7 +479,7 @@ def invia_singola_email():
                 pass
 
         # Salva in cartella Inviati
-        _save_to_sent(smtp_settings, msg)
+        save_to_sent(smtp_settings, msg)
 
         # Rende visibile l'invio anche nell'Archivio Lettere.
         # Il vecchio flusso PDF non ha necessariamente una generazione associata,

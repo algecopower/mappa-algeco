@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 Gestionale Mappa Contatori - Entry Point Unificato.
 
@@ -633,6 +633,7 @@ from routes.report import bp as report_bp
 from routes.lettere import bp as lettere_bp
 from routes.access_points import bp as access_points_bp
 from routes.verifica_indirizzi import bp as verifica_indirizzi_bp
+from routes.comuni import bp as comuni_bp
 
 app.register_blueprint(contatori_bp)
 app.register_blueprint(distinte_bp)
@@ -645,6 +646,7 @@ app.register_blueprint(report_bp)
 app.register_blueprint(lettere_bp)
 app.register_blueprint(access_points_bp)
 app.register_blueprint(verifica_indirizzi_bp)
+app.register_blueprint(comuni_bp)
 
 # ============================================================================
 # CSRF PROTECTION
@@ -852,6 +854,7 @@ def sse_stream():
 # ============================================================================
 # GOOGLE SHEETS + HELPER  fonte unica: moduli/shared.py
 # ============================================================================
+from moduli.smtp import load_smtp_settings, save_smtp_settings
 from moduli.shared import (
     get_worksheet, get_headers,
     _api_error,
@@ -1311,6 +1314,37 @@ def update_settings():
 # ============================================================================
 # API GESTIONE UTENTI (solo admin)
 # ============================================================================
+
+
+@app.route('/api/admin/smtp-settings', methods=['GET'])
+@admin_required
+def admin_get_smtp_settings():
+    try:
+        settings = load_smtp_settings(PROVINCIA_ATTIVA)
+        if settings.get('password'):
+            settings['password_set'] = True
+            settings['password'] = ''
+        else:
+            settings['password_set'] = False
+        return jsonify(settings)
+    except Exception as e:
+        logger.exception('[admin] errore /api/admin/smtp-settings GET')
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/smtp-settings', methods=['PUT'])
+@admin_required
+def admin_save_smtp_settings():
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Nessun dato ricevuto'}), 400
+        save_smtp_settings(data, PROVINCIA_ATTIVA)
+        return jsonify({'ok': True})
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        logger.exception('[admin] errore /api/admin/smtp-settings PUT')
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/admin/users', methods=['GET'])
 @admin_required
@@ -2379,6 +2413,7 @@ def api_admin_import_excel():
             tmp.name, export_ts=export_ts, sheet_name=sheet_name,
             dry_run=dry_run, user=user,
         )
+        
         # Se è stato un import reale (non dry-run), invalida la cache e triggera sync
         if not dry_run and result.get('success'):
             from moduli import shared as _shared

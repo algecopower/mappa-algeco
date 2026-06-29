@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 Configurazioni globali del progetto.
 Supporta multiple province con switch facile.
@@ -313,12 +313,10 @@ LETTERE_EXCEL_CONFIG_DEFAULT = {
     },
     'parole_chiave': {
         'lettera_no': ['COMUNE', 'PROVINCIA'],
-        'contatti_aziendali_escludi': ['COMUNE', 'PROVINCIA'],
     },
     'opzioni': {
         'unisci_trifase_diretti_in_monofase': True,
         'crea_fogli_dettaglio': True,
-        'escludi_enti_da_contatti_aziendali': True,
     },
 }
 

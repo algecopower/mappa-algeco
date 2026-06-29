@@ -48,7 +48,7 @@ COLONNE_NOTE = [
 # Colonne TEXT vs REAL (latitudine/longitudine sono numeriche)
 _COLONNE_REAL = {'latitudine', 'longitudine'}
 
-SCHEMA_VERSION_CORRENTE = 4
+SCHEMA_VERSION_CORRENTE = 6
 
 
 # ============================================================================
@@ -262,6 +262,12 @@ def _apply_migrations(conn, da_versione):
     if da_versione < 4:
         _migrate_v3_to_v4(conn)
         da_versione = 4
+    if da_versione < 5:
+        _migrate_v4_to_v5(conn)
+        da_versione = 5
+    if da_versione < 6:
+        _migrate_v5_to_v6(conn)
+        da_versione = 6
 
     conn.execute(
         "UPDATE sync_state SET value=? WHERE key='schema_version'",
@@ -664,6 +670,42 @@ def _migrate_v3_to_v4(conn):
     _create_lettere_tables(conn)
     logger.info("[DB-migration] v4 applicato.")
 
+
+def _migrate_v4_to_v5(conn):
+    """Schema v5: GESTIONE DEI COMUNI. Tabella info e recapiti per comune."""
+    logger.info("[DB-migration] v4→v5: gestione dei comuni")
+    conn.executescript('''
+        CREATE TABLE IF NOT EXISTS comuni_info (
+            provincia TEXT NOT NULL,
+            comune TEXT NOT NULL,
+            numero_ce TEXT,
+            ztl TEXT,
+            tipologie_zone TEXT,
+            polizia TEXT,
+            uff_tecnico TEXT,
+            protocollo TEXT,
+            fb TEXT,
+            email_comune TEXT,
+            email_polizia TEXT,
+            email_uff_tecnico TEXT,
+            telefono_comune TEXT,
+            telefono_polizia TEXT,
+            telefono_uff_tecnico TEXT,
+            pec_comune TEXT,
+            note TEXT,
+            last_updated_ts INTEGER NOT NULL,
+            PRIMARY KEY (provincia, comune)
+        );
+    ''')
+    logger.info("[DB-migration] v5 applicato.")
+
+def _migrate_v5_to_v6(conn):
+    """Schema v6: aggiunta indicazioni_ztl per differenziare la colonna Excel dal toggle."""
+    logger.info("[DB-migration] v5→v6: add indicazioni_ztl")
+    conn.executescript('''
+        ALTER TABLE comuni_info ADD COLUMN indicazioni_ztl TEXT;
+    ''')
+    logger.info("[DB-migration] v6 applicato.")
 
 # ============================================================================
 # HELPER NORMALIZZAZIONE & HASH

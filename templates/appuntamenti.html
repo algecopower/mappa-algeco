@@ -1,0 +1,1142 @@
+<!DOCTYPE html>
+<html lang="it" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2">
+    <title>Gestione Appuntamenti - Algeco</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/static/theme.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+    <script>
+        (function(){
+            function getCookie(name) {
+                var m = document.cookie.match(new RegExp('(?:^|;\\s*)' + name + '=([^;]+)'));
+                return m ? decodeURIComponent(m[1]) : null;
+            }
+            function getStored(name) {
+                try { return localStorage.getItem(name); } catch(_) { return null; }
+            }
+            const t = getCookie('algeco_theme') || getStored('algeco_theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', t);
+        })();
+    </script>
+    <style>
+        :root {
+            --primary: var(--accent);
+            --primary-dark: var(--accent-deep);
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --success: #22c55e;
+            --info: var(--accent-hover);
+            --purple: #8b5cf6;
+            --bg-dark: var(--bg-primary);
+            --bg-card: var(--surface-raised);
+            --bg-card-hover: var(--surface-raised);
+            --bg-inner: rgba(255,255,255,0.03);
+            --text: var(--text-primary);
+            --text-muted: var(--text-secondary);
+            --text-dim: var(--text-muted);
+        }
+        [data-theme="light"] {
+            --bg-dark: var(--bg-primary);
+            --bg-card: var(--surface-raised);
+            --bg-card-hover: var(--surface-raised);
+            --bg-inner: rgba(0,0,0,0.03);
+            --text: var(--text-primary);
+            --text-muted: var(--text-secondary);
+            --text-dim: var(--text-muted);
+        }
+
+        header, .side-nav { border: var(--surface-border) !important; box-shadow: var(--surface-shadow); }
+        .panel, .kpi-card { border: var(--surface-border) !important; box-shadow: var(--surface-shadow); }
+        body { background: var(--body-bg) !important; }
+
+        [data-theme="light"] .back-btn { color: #555; }
+        [data-theme="light"] .back-btn:hover { color: var(--primary); }
+        [data-theme="light"] .op-card { background: var(--surface); }
+        [data-theme="light"] .op-card:hover { background: rgba(var(--accent-rgb), 0.08); }
+        [data-theme="light"] .bar-track { background: rgba(0, 0, 0, 0.06); }
+        [data-theme="light"] .hint { color: var(--text-muted); }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text);
+            min-height: 100vh;
+        }
+        .container { max-width: 1500px; margin: 0 auto; padding: 20px; }
+
+        /* ---- Navigation ---- */
+        .nav-row { display: flex; align-items: center; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+        .back-btn {
+            background: none; border: none; color: var(--text);
+            text-decoration: none; padding: 8px 14px; border-radius: 8px;
+            display: inline-flex; align-items: center; gap: 6px;
+            cursor: pointer; font-size: 0.88em; transition: all 0.2s;
+        }
+        .back-btn:hover { color: var(--primary); }
+
+        /* ---- Header ---- */
+        header {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 22px 28px;
+            margin-bottom: 24px;
+            display: flex; align-items: center; justify-content: space-between;
+            flex-wrap: wrap; gap: 15px;
+        }
+        .header-left h1 { font-size: 1.5em; display: flex; align-items: center; gap: 10px; }
+        .header-left h1 i { color: var(--primary); }
+        .header-subtitle { font-size: 0.82em; color: var(--text-muted); margin-top: 4px; line-height: 1.4; }
+        .header-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .header-actions .meta {
+            font-size: 0.78em; color: var(--text-muted);
+            display: flex; align-items: center; gap: 5px;
+            background: var(--bg-inner); padding: 6px 12px; border-radius: 8px;
+        }
+        .btn-icon {
+            background: none; border: 1px solid var(--border);
+            color: var(--text); padding: 8px 12px; border-radius: 8px;
+            cursor: pointer; font-size: 0.9em; transition: all 0.2s;
+            display: flex; align-items: center; gap: 6px; text-decoration: none;
+        }
+        .btn-icon:hover { border-color: var(--primary); color: var(--primary); }
+        .btn-primary {
+            background: var(--primary); border-color: var(--primary); color: #fff;
+        }
+        .btn-primary:hover { background: var(--primary-dark); border-color: var(--primary-dark); color: #fff; }
+
+        /* ---- Filtri ---- */
+        .filter-bar {
+            background: var(--bg-card);
+            border-radius: 14px; padding: 16px 20px;
+            margin-bottom: 20px; display: flex; align-items: flex-end;
+            gap: 12px; flex-wrap: wrap;
+            border: var(--surface-border); box-shadow: var(--surface-shadow);
+        }
+        .filter-group { display: flex; flex-direction: column; gap: 4px; }
+        .filter-group label {
+            font-size: 0.72em; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 0.5px; color: var(--text-muted);
+        }
+        .filter-group input, .filter-group select {
+            background: var(--bg-inner); border: 1px solid var(--border);
+            color: var(--text); padding: 8px 12px; border-radius: 8px;
+            font-size: 0.85em; min-width: 130px;
+            transition: border-color 0.2s;
+        }
+        .filter-group input:focus, .filter-group select:focus {
+            outline: none; border-color: var(--primary);
+            box-shadow: var(--focus-ring);
+        }
+        .filter-group input[type="text"] { min-width: 180px; }
+        .filter-actions { display: flex; gap: 6px; align-items: center; margin-left: auto; }
+
+        /* ---- KPI cards ---- */
+        .kpi-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 14px; margin-bottom: 24px;
+        }
+        .kpi-card {
+            background: var(--bg-card);
+            border-radius: 14px; padding: 18px 20px;
+            border-left: 4px solid transparent;
+            transition: transform 0.2s;
+            position: relative; cursor: default;
+        }
+        .kpi-card:hover { transform: translateY(-2px); }
+        .kpi-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+        .kpi-icon { font-size: 1.3em; }
+        .kpi-value { font-size: 2em; font-weight: 800; line-height: 1.1; }
+        .kpi-label { font-size: 0.85em; color: var(--text); font-weight: 600; margin-top: 2px; }
+        .kpi-explain { font-size: 0.72em; color: var(--text-dim); margin-top: 4px; }
+        .kpi-card.c-green { border-left-color: var(--success); }
+        .kpi-card.c-blue { border-left-color: var(--info); }
+        .kpi-card.c-orange { border-left-color: var(--warning); }
+        .kpi-card.c-red { border-left-color: var(--danger); }
+        .kpi-card.c-purple { border-left-color: var(--purple); }
+        .kpi-card.c-primary { border-left-color: var(--primary); }
+
+        /* ---- Section label ---- */
+        .section-label {
+            font-size: 0.72em; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 1.5px; color: var(--text-muted);
+            margin-bottom: 12px; margin-top: 8px;
+            display: flex; align-items: center; gap: 8px;
+            cursor: pointer; user-select: none;
+            padding: 6px 8px; border-radius: 8px;
+            transition: background 0.15s, color 0.15s;
+        }
+        .section-label:hover { background: var(--bg-inner); color: var(--text); }
+        .section-label .sec-chev { width: 14px; transition: transform 0.2s; font-size: 0.9em; color: var(--text-muted); }
+        .section-label.collapsed .sec-chev { transform: rotate(-90deg); }
+        .section-label::after { content: ''; flex: 1; height: 1px; background: var(--border); opacity: 0.5; }
+
+        /* ---- Panel ---- */
+        .panel {
+            background: var(--bg-card);
+            border-radius: 14px; padding: 22px;
+        }
+
+        /* ---- Operator cards ---- */
+        .op-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; margin-bottom: 24px; }
+        .op-card {
+            background: var(--bg-inner); border-radius: 12px; padding: 16px 18px;
+            border-left: 4px solid #888; transition: all 0.2s;
+            cursor: pointer; position: relative;
+        }
+        .op-card:hover { transform: translateX(3px); box-shadow: var(--elev-2); }
+        .op-card.active {
+            background: rgba(var(--accent-rgb), 0.08);
+            box-shadow: var(--elev-2);
+        }
+        .op-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+        .op-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+        .op-card-header .op-name { font-weight: 700; font-size: 0.92em; flex: 1; }
+        .op-card-header .op-matricola { font-size: 0.7em; color: var(--text-muted); }
+        .op-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+        .op-stat { text-align: center; }
+        .op-stat-val { font-size: 1.2em; font-weight: 800; }
+        .op-stat-lbl { font-size: 0.65em; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+        .op-stat-val.warn { color: var(--warning); }
+        .op-stat-val.danger { color: var(--danger); }
+
+        /* ---- Tabella appuntamenti ---- */
+        .table-wrap { overflow-x: auto; border-radius: 12px; }
+        .app-table { width: 100%; border-collapse: collapse; font-size: 0.83em; }
+        .app-table thead { position: sticky; top: 0; z-index: 2; }
+        .app-table th {
+            background: rgba(var(--accent-rgb), 0.1);
+            color: var(--primary);
+            padding: 10px 12px;
+            text-align: left; font-weight: 700;
+            white-space: nowrap; cursor: pointer;
+            user-select: none; transition: background 0.15s;
+            border-bottom: 2px solid rgba(var(--accent-rgb), 0.2);
+        }
+        .app-table th:hover { background: rgba(var(--accent-rgb), 0.18); }
+        .app-table th .sort-icon { margin-left: 4px; font-size: 0.75em; opacity: 0.4; }
+        .app-table th.sorted .sort-icon { opacity: 1; color: var(--primary); }
+        .app-table td {
+            padding: 9px 12px;
+            border-bottom: 1px solid var(--border);
+            vertical-align: middle;
+        }
+        .app-table tbody tr { transition: background 0.12s; }
+        .app-table tbody tr:hover { background: rgba(var(--accent-rgb), 0.04); }
+        .app-table tbody tr.row-completato { opacity: 0.6; }
+        .app-table tbody tr.row-scaduto td:first-child { border-left: 3px solid var(--danger); }
+        .app-table tbody tr.row-oggi td:first-child { border-left: 3px solid var(--warning); }
+        .app-table tbody tr.row-domani td:first-child { border-left: 3px solid var(--info); }
+
+        /* Badge operatore nella tabella */
+        .op-badge {
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 3px 10px; border-radius: 12px; font-weight: 600;
+            font-size: 0.85em; white-space: nowrap;
+            background: rgba(255,255,255,0.06);
+        }
+        .op-badge .op-dot-sm { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+        .esito-badge {
+            display: inline-block; padding: 2px 8px; border-radius: 8px;
+            font-size: 0.78em; font-weight: 600;
+        }
+        .esito-ok { background: rgba(39,174,96,0.15); color: var(--success); }
+        .esito-pending { background: rgba(243,156,18,0.12); color: var(--warning); }
+        .esito-empty { color: var(--text-dim); font-style: italic; }
+
+        .td-note { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .td-tel { white-space: nowrap; }
+        .td-tel a { color: var(--primary); text-decoration: none; }
+        .td-tel a:hover { text-decoration: underline; }
+
+        /* ---- Contatore risultati ---- */
+        .results-bar {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 10px 16px; margin-bottom: 12px;
+            font-size: 0.82em; color: var(--text-muted);
+        }
+        .results-bar strong { color: var(--text); font-weight: 700; }
+
+        /* ---- Grafici ---- */
+        .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
+        .chart-panel {
+            background: var(--bg-card); border-radius: 14px; padding: 20px;
+            border: var(--surface-border); box-shadow: var(--surface-shadow);
+        }
+        .chart-panel h3 {
+            font-size: 0.95em; margin-bottom: 14px;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .chart-panel h3 i { color: var(--primary); }
+        .chart-container { position: relative; height: 250px; }
+
+        /* ---- Row expand ---- */
+        .expand-row { display: none; }
+        .expand-row.open { display: table-row; }
+        .expand-cell {
+            padding: 12px 20px !important; background: var(--bg-inner);
+            border-bottom: 2px solid rgba(var(--accent-rgb), 0.1);
+        }
+        .expand-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 8px;
+        }
+        .expand-field { font-size: 0.82em; }
+        .expand-field .ef-label { color: var(--text-muted); font-size: 0.85em; }
+        .expand-field .ef-value { font-weight: 600; margin-top: 2px; word-break: break-word; }
+        .expand-actions { margin-top: 10px; display: flex; gap: 8px; }
+        .expand-actions a {
+            font-size: 0.82em; color: var(--primary);
+            text-decoration: none; display: inline-flex;
+            align-items: center; gap: 4px;
+        }
+        .expand-actions a:hover { text-decoration: underline; }
+
+        /* ---- Pagination ---- */
+        .pagination {
+            display: flex; align-items: center; justify-content: center;
+            gap: 6px; margin-top: 16px; flex-wrap: wrap;
+        }
+        .pagination button {
+            background: var(--bg-inner); border: 1px solid var(--border);
+            color: var(--text); padding: 6px 12px; border-radius: 8px;
+            cursor: pointer; font-size: 0.82em; transition: all 0.15s;
+        }
+        .pagination button:hover { border-color: var(--primary); color: var(--primary); }
+        .pagination button.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+        .pagination button:disabled { opacity: 0.4; cursor: default; }
+
+        /* ---- Loading / empty ---- */
+        .loading-overlay {
+            display: flex; flex-direction: column; align-items: center;
+            justify-content: center; padding: 60px 20px; color: var(--text-muted);
+            gap: 12px;
+        }
+        .spinner {
+            width: 36px; height: 36px;
+            border: 3px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .empty-state {
+            text-align: center; padding: 40px 20px; color: var(--text-muted);
+        }
+        .empty-state i { font-size: 2em; opacity: 0.3; display: block; margin-bottom: 10px; }
+
+        /* ---- Toast ---- */
+        .toast {
+            position: fixed; bottom: 24px; right: 24px;
+            background: var(--success); color: #fff;
+            padding: 14px 22px; border-radius: 10px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+            z-index: 10000; font-size: 0.88em;
+            animation: slideUp 0.3s ease-out;
+        }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        /* ---- Responsive ---- */
+        @media (max-width: 1000px) {
+            .charts-row { grid-template-columns: 1fr; }
+            .kpi-row { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+            .op-grid { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+        }
+        @media (max-width: 600px) {
+            .container { padding: 12px; }
+            header { padding: 16px 18px; flex-direction: column; align-items: flex-start; }
+            .kpi-row { grid-template-columns: 1fr 1fr; gap: 10px; }
+            .kpi-card { padding: 14px; }
+            .kpi-value { font-size: 1.6em; }
+            .op-grid { grid-template-columns: 1fr; }
+            .filter-bar { flex-direction: column; align-items: stretch; }
+            .filter-group input, .filter-group select { min-width: 100%; }
+            .filter-actions { margin-left: 0; justify-content: stretch; }
+            .filter-actions .btn-icon { flex: 1; justify-content: center; }
+            .charts-row { gap: 14px; }
+            .header-left h1 { font-size: 1.15em; }
+            .panel { padding: 14px; }
+            .app-table { min-width: 900px; }
+            .toast { left: 12px; right: 12px; bottom: 12px; text-align: center; }
+        }
+        @media (max-width: 600px) {
+            input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+            select, textarea { font-size: 16px; }
+        }
+
+        /* Light overrides */
+        [data-theme="light"] .filter-bar { background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+        [data-theme="light"] .app-table th { background: #f0f4f0; color: #333; }
+        [data-theme="light"] .app-table td { border-bottom-color: #e8e8e8; }
+        [data-theme="light"] .op-badge { background: rgba(0,0,0,0.05); }
+        [data-theme="light"] .chart-panel { background: #fff; }
+    </style>
+    <script src="/static/csrf.js"></script>
+</head>
+<body>
+
+<div class="container">
+
+    <!-- Navigazione -->
+    <div class="nav-row">
+        <a href="/" class="back-btn"><i class="fas fa-map"></i> Mappa</a>
+        <a href="/dashboard" class="back-btn"><i class="fas fa-chart-line"></i> Dashboard</a>
+        <a href="/filone" class="back-btn"><i class="fas fa-table"></i> Filone</a>
+        <a href="/calendario" class="back-btn"><i class="fas fa-calendar-alt"></i> Calendario</a>
+    </div>
+
+    <!-- Header -->
+    <header>
+        <div class="header-left">
+            <h1><i class="fas fa-calendar-check"></i> Gestione Appuntamenti</h1>
+            <div class="header-subtitle" id="h-subtitle">Panoramica completa degli appuntamenti per operatore, data e comune</div>
+        </div>
+        <div class="header-actions">
+            <div class="meta" id="h-provincia"><i class="fas fa-map-marker-alt"></i> Caricamento...</div>
+            <button class="btn-icon" onclick="exportExcelFissatiOggi()" title="Scarica Excel appuntamenti di oggi"><i class="fas fa-file-excel" style="color: #27ae60;"></i> Excel (Oggi)</button>
+            <button class="btn-icon" onclick="exportExcel()" title="Esporta in Excel in base ai filtri correnti"><i class="fas fa-file-csv"></i> Excel (Filtri UI)</button>
+            <button class="btn-icon" onclick="loadData()" title="Ricarica dati"><i class="fas fa-sync-alt"></i> Aggiorna</button>
+            <button class="btn-icon" id="theme-toggle" onclick="toggleTheme()"><i class="fas fa-moon"></i></button>
+        </div>
+    </header>
+
+    <!-- Barra Filtri -->
+    <div class="filter-bar" id="filter-bar">
+        <div class="filter-group">
+            <label>Da</label>
+            <input type="date" id="f-data-da">
+        </div>
+        <div class="filter-group">
+            <label>A</label>
+            <input type="date" id="f-data-a">
+        </div>
+        <div class="filter-group">
+            <label>Operatore</label>
+            <select id="f-operatore">
+                <option value="">Tutti</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label>Comune</label>
+            <input type="text" id="f-comune" placeholder="Cerca comune...">
+        </div>
+        <div class="filter-group">
+            <label>Stato</label>
+            <select id="f-esito">
+                <option value="tutti">Tutti</option>
+                <option value="da_fare" selected>Da fare</option>
+                <option value="completati">Completati</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label>Cerca</label>
+            <input type="text" id="f-q" placeholder="Nominativo, telefono, POD...">
+        </div>
+        <div class="filter-actions">
+            <button class="btn-icon btn-primary" onclick="applyFilters()"><i class="fas fa-search"></i> Filtra</button>
+            <button class="btn-icon" onclick="resetFilters()"><i class="fas fa-times"></i> Reset</button>
+        </div>
+    </div>
+
+    <!-- KPI -->
+    <div class="kpi-row" id="kpi-row">
+        <div class="kpi-card c-primary">
+            <div class="kpi-top"><span class="kpi-icon">📊</span></div>
+            <div class="kpi-value" id="kpi-totale">—</div>
+            <div class="kpi-label">Totale nel periodo</div>
+        </div>
+        <div class="kpi-card c-orange">
+            <div class="kpi-top"><span class="kpi-icon">📅</span></div>
+            <div class="kpi-value" id="kpi-oggi">—</div>
+            <div class="kpi-label">Oggi</div>
+        </div>
+        <div class="kpi-card c-blue">
+            <div class="kpi-top"><span class="kpi-icon">📅</span></div>
+            <div class="kpi-value" id="kpi-domani">—</div>
+            <div class="kpi-label">Domani</div>
+        </div>
+        <div class="kpi-card c-purple">
+            <div class="kpi-top"><span class="kpi-icon">📅</span></div>
+            <div class="kpi-value" id="kpi-settimana">—</div>
+            <div class="kpi-label">Questa settimana</div>
+        </div>
+        <div class="kpi-card c-green">
+            <div class="kpi-top"><span class="kpi-icon">✅</span></div>
+            <div class="kpi-value" id="kpi-completati">—</div>
+            <div class="kpi-label">Completati</div>
+        </div>
+        <div class="kpi-card c-red">
+            <div class="kpi-top"><span class="kpi-icon">⚠️</span></div>
+            <div class="kpi-value" id="kpi-scaduti">—</div>
+            <div class="kpi-label">Scaduti</div>
+            <div class="kpi-explain">Data passata, esito non OK</div>
+        </div>
+    </div>
+
+    <!-- Operatori -->
+    <div class="section-label" id="sec-operatori" onclick="toggleSection(this)">
+        <i class="fas fa-chevron-down sec-chev"></i><i class="fas fa-hard-hat"></i> Appuntamenti per operatore
+    </div>
+    <div class="section-content" id="sec-operatori-content">
+        <div class="op-grid" id="op-grid">
+            <div class="loading-overlay"><div class="spinner"></div>Caricamento operatori...</div>
+        </div>
+    </div>
+
+    <!-- Grafici -->
+    <div class="section-label" id="sec-grafici" onclick="toggleSection(this)">
+        <i class="fas fa-chevron-down sec-chev"></i><i class="fas fa-chart-bar"></i> Grafici
+    </div>
+    <div class="section-content" id="sec-grafici-content">
+        <div class="charts-row">
+            <div class="chart-panel">
+                <h3><i class="fas fa-users"></i> Appuntamenti per operatore</h3>
+                <div class="chart-container"><canvas id="chart-operatori"></canvas></div>
+            </div>
+            <div class="chart-panel">
+                <h3><i class="fas fa-chart-area"></i> Distribuzione giornaliera</h3>
+                <div class="chart-container"><canvas id="chart-timeline"></canvas></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabella -->
+    <div class="section-label" id="sec-tabella" onclick="toggleSection(this)">
+        <i class="fas fa-chevron-down sec-chev"></i><i class="fas fa-list"></i> Elenco appuntamenti
+    </div>
+    <div class="section-content" id="sec-tabella-content">
+        <div class="results-bar" id="results-bar">
+            <span>Trovati <strong id="results-count">0</strong> appuntamenti</span>
+            <span id="results-info"></span>
+        </div>
+        <div class="panel">
+            <div class="table-wrap">
+                <table class="app-table" id="app-table">
+                    <thead>
+                        <tr>
+                            <th data-col="data_pianificata" onclick="sortTable('data_pianificata')">Data <i class="fas fa-sort sort-icon"></i></th>
+                            <th data-col="orario" onclick="sortTable('orario')">Ora <i class="fas fa-sort sort-icon"></i></th>
+                            <th data-col="nome_operatore" onclick="sortTable('nome_operatore')">Operatore <i class="fas fa-sort sort-icon"></i></th>
+                            <th data-col="nominativo" onclick="sortTable('nominativo')">Nominativo <i class="fas fa-sort sort-icon"></i></th>
+                            <th data-col="comune" onclick="sortTable('comune')">Comune <i class="fas fa-sort sort-icon"></i></th>
+                            <th data-col="indirizzo" onclick="sortTable('indirizzo')">Indirizzo <i class="fas fa-sort sort-icon"></i></th>
+                            <th data-col="telefono" onclick="sortTable('telefono')">Telefono <i class="fas fa-sort sort-icon"></i></th>
+                            <th data-col="note_appuntamento">Note App</th>
+                            <th data-col="esito" onclick="sortTable('esito')">Esito <i class="fas fa-sort sort-icon"></i></th>
+                        </tr>
+                    </thead>
+                    <tbody id="app-tbody">
+                        <tr><td colspan="9"><div class="loading-overlay"><div class="spinner"></div>Caricamento...</div></td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="pagination" id="pagination"></div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+// ============================================================================
+// STATO GLOBALE
+// ============================================================================
+let _data = null;       // risposta API completa
+let _filtered = [];     // appuntamenti filtrati (correnti)
+let _sortCol = 'data_pianificata';
+let _sortDir = 'asc';
+let _page = 1;
+const PAGE_SIZE = 50;
+let _activeOperator = null;
+
+let _chartOp = null;    // istanza Chart.js operatori
+let _chartTl = null;    // istanza Chart.js timeline
+
+// ============================================================================
+// INIZIALIZZAZIONE
+// ============================================================================
+document.addEventListener('DOMContentLoaded', () => {
+    initDateDefaults();
+    loadData();
+
+    // Enter sui filtri testo
+    document.getElementById('f-q').addEventListener('keydown', e => { if (e.key === 'Enter') applyFilters(); });
+    document.getElementById('f-comune').addEventListener('keydown', e => { if (e.key === 'Enter') applyFilters(); });
+});
+
+function initDateDefaults() {
+    const oggi = new Date();
+    // Default: da oggi meno 7 giorni a +30 giorni
+    const da = new Date(oggi); da.setDate(da.getDate() - 7);
+    const a = new Date(oggi); a.setDate(a.getDate() + 30);
+    document.getElementById('f-data-da').value = isoDate(da);
+    document.getElementById('f-data-a').value = isoDate(a);
+}
+
+function isoDate(d) {
+    return d.toISOString().slice(0, 10);
+}
+
+// ============================================================================
+// CARICAMENTO DATI
+// ============================================================================
+async function loadData() {
+    const params = buildQueryParams();
+    const url = '/api/appuntamenti?' + params.toString();
+
+    try {
+        const resp = await fetch(url, { credentials: 'same-origin' });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        _data = await resp.json();
+        if (_data.error) throw new Error(_data.error);
+
+        document.getElementById('h-provincia').innerHTML =
+            `<i class="fas fa-map-marker-alt"></i> ${_data.provincia || ''}`;
+
+        _filtered = _data.appuntamenti || [];
+        _page = 1;
+        _activeOperator = null;
+
+        populateOperatorFilter();
+        renderKPI();
+        renderOperators();
+        renderCharts();
+        renderTable();
+    } catch (err) {
+        console.error('Errore caricamento:', err);
+        document.getElementById('app-tbody').innerHTML =
+            `<tr><td colspan="9"><div class="empty-state"><i class="fas fa-exclamation-triangle"></i>Errore: ${err.message}</div></td></tr>`;
+    }
+}
+
+function buildQueryParams() {
+    const params = new URLSearchParams();
+    const da = document.getElementById('f-data-da').value;
+    const a = document.getElementById('f-data-a').value;
+    const op = document.getElementById('f-operatore').value;
+    const comune = document.getElementById('f-comune').value.trim();
+    const esito = document.getElementById('f-esito').value;
+    const q = document.getElementById('f-q').value.trim();
+
+    if (da) params.set('data_da', da);
+    if (a) params.set('data_a', a);
+    if (op) params.set('operatore', op);
+    if (comune) params.set('comune', comune);
+    if (esito) params.set('esito', esito);
+    if (q) params.set('q', q);
+    return params;
+}
+
+function applyFilters() {
+    _activeOperator = null;
+    loadData();
+}
+
+function resetFilters() {
+    initDateDefaults();
+    document.getElementById('f-operatore').value = '';
+    document.getElementById('f-comune').value = '';
+    document.getElementById('f-esito').value = 'da_fare';
+    document.getElementById('f-q').value = '';
+    _activeOperator = null;
+    loadData();
+}
+
+// ============================================================================
+// POPULATE OPERATORE FILTER
+// ============================================================================
+function populateOperatorFilter() {
+    const sel = document.getElementById('f-operatore');
+    const currentVal = sel.value;
+    const ops = _data.operatori || [];
+    sel.innerHTML = '<option value="">Tutti</option>';
+    ops.forEach(o => {
+        const opt = document.createElement('option');
+        opt.value = o.matricola;
+        opt.textContent = `${o.nome} (${o.totale})`;
+        sel.appendChild(opt);
+    });
+    sel.value = currentVal || '';
+}
+
+// ============================================================================
+// KPI
+// ============================================================================
+function renderKPI() {
+    const s = _data.stats || {};
+    animateValue('kpi-totale', s.totale || 0);
+    animateValue('kpi-oggi', s.oggi || 0);
+    animateValue('kpi-domani', s.domani || 0);
+    animateValue('kpi-settimana', s.settimana || 0);
+    animateValue('kpi-completati', s.completati || 0);
+    animateValue('kpi-scaduti', s.scaduti || 0);
+}
+
+function animateValue(id, target) {
+    const el = document.getElementById(id);
+    const duration = 500;
+    const start = parseInt(el.textContent) || 0;
+    if (start === target) { el.textContent = target; return; }
+    const startTime = performance.now();
+    function update(now) {
+        const progress = Math.min((now - startTime) / duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
+        el.textContent = Math.round(start + (target - start) * eased);
+        if (progress < 1) requestAnimationFrame(update);
+    }
+    requestAnimationFrame(update);
+}
+
+// ============================================================================
+// OPERATORI
+// ============================================================================
+function renderOperators() {
+    const grid = document.getElementById('op-grid');
+    const ops = _data.operatori || [];
+
+    if (!ops.length) {
+        grid.innerHTML = '<div class="empty-state"><i class="fas fa-user-slash"></i>Nessun operatore con appuntamenti</div>';
+        return;
+    }
+
+    grid.innerHTML = ops.map(o => `
+        <div class="op-card ${_activeOperator === o.matricola ? 'active' : ''}"
+             style="border-left-color:${o.colore}"
+             onclick="filterByOperator('${o.matricola}')"
+             title="Click per filtrare tabella">
+            <div class="op-card-header">
+                <div class="op-dot" style="background:${o.colore}"></div>
+                <span class="op-name">${esc(o.nome)}</span>
+                <span class="op-matricola">${esc(o.matricola)}</span>
+            </div>
+            <div class="op-stats">
+                <div class="op-stat">
+                    <div class="op-stat-val">${o.oggi}</div>
+                    <div class="op-stat-lbl">Oggi</div>
+                </div>
+                <div class="op-stat">
+                    <div class="op-stat-val">${o.domani}</div>
+                    <div class="op-stat-lbl">Domani</div>
+                </div>
+                <div class="op-stat">
+                    <div class="op-stat-val">${o.settimana}</div>
+                    <div class="op-stat-lbl">Settim.</div>
+                </div>
+                <div class="op-stat">
+                    <div class="op-stat-val ${o.scaduti > 0 ? 'danger' : ''}">${o.da_fare}</div>
+                    <div class="op-stat-lbl">Da fare</div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function filterByOperator(matricola) {
+    if (_activeOperator === matricola) {
+        _activeOperator = null;
+        _filtered = _data.appuntamenti || [];
+    } else {
+        _activeOperator = matricola;
+        _filtered = (_data.appuntamenti || []).filter(a => a.operatore === matricola);
+    }
+    _page = 1;
+    renderOperators();
+    renderTable();
+    // Scrolla alla tabella
+    document.getElementById('sec-tabella').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ============================================================================
+// GRAFICI
+// ============================================================================
+function renderCharts() {
+    renderChartOperatori();
+    renderChartTimeline();
+}
+
+function _chartColors() {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    return {
+        gridColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
+        textColor: isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)',
+    };
+}
+
+function renderChartOperatori() {
+    const ctx = document.getElementById('chart-operatori');
+    if (_chartOp) _chartOp.destroy();
+
+    const ops = _data.operatori || [];
+    const cc = _chartColors();
+
+    _chartOp = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: ops.map(o => o.nome),
+            datasets: [
+                {
+                    label: 'Da fare',
+                    data: ops.map(o => o.da_fare),
+                    backgroundColor: ops.map(o => o.colore + 'CC'),
+                    borderRadius: 6,
+                    borderSkipped: false,
+                },
+                {
+                    label: 'Completati',
+                    data: ops.map(o => o.completati),
+                    backgroundColor: ops.map(() => 'rgba(39, 174, 96, 0.5)'),
+                    borderRadius: 6,
+                    borderSkipped: false,
+                },
+            ],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'top', labels: { color: cc.textColor, boxWidth: 12, padding: 12 } },
+            },
+            scales: {
+                x: { stacked: true, grid: { display: false }, ticks: { color: cc.textColor, font: { size: 11 } } },
+                y: { stacked: true, beginAtZero: true, grid: { color: cc.gridColor }, ticks: { color: cc.textColor, precision: 0 } },
+            },
+        },
+    });
+}
+
+function renderChartTimeline() {
+    const ctx = document.getElementById('chart-timeline');
+    if (_chartTl) _chartTl.destroy();
+
+    const dist = _data.distribuzione_date || {};
+    const labels = Object.keys(dist).sort();
+    const values = labels.map(d => dist[d]);
+    const cc = _chartColors();
+
+    const oggi = new Date().toISOString().slice(0, 10);
+    const bgColors = labels.map(d => {
+        if (d === oggi) return 'rgba(245, 158, 11, 0.7)';
+        if (d < oggi) return 'rgba(var(--accent-rgb), 0.3)';
+        return 'rgba(var(--accent-rgb), 0.6)';
+    });
+
+    _chartTl = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels.map(d => formatDateShort(d)),
+            datasets: [{
+                label: 'Appuntamenti',
+                data: values,
+                backgroundColor: labels.map(d => d === oggi ? '#f59e0b' : '#3b82f6'),
+                borderRadius: 4,
+                borderSkipped: false,
+            }],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { grid: { display: false }, ticks: { color: cc.textColor, font: { size: 10 }, maxRotation: 45 } },
+                y: { beginAtZero: true, grid: { color: cc.gridColor }, ticks: { color: cc.textColor, precision: 0 } },
+            },
+        },
+    });
+}
+
+// ============================================================================
+// TABELLA
+// ============================================================================
+function renderTable() {
+    const tbody = document.getElementById('app-tbody');
+    const rows = getSortedRows();
+    const total = rows.length;
+    const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    if (_page > totalPages) _page = totalPages;
+
+    const start = (_page - 1) * PAGE_SIZE;
+    const pageRows = rows.slice(start, start + PAGE_SIZE);
+
+    document.getElementById('results-count').textContent = total;
+    const infoEl = document.getElementById('results-info');
+    if (_activeOperator) {
+        const op = (_data.operatori || []).find(o => o.matricola === _activeOperator);
+        infoEl.innerHTML = `<span style="color:var(--primary)">Filtro: ${esc(op ? op.nome : _activeOperator)}</span>
+            <button class="btn-icon" style="margin-left:8px;padding:4px 8px;font-size:0.78em" onclick="filterByOperator('${_activeOperator}')"><i class="fas fa-times"></i></button>`;
+    } else {
+        infoEl.textContent = '';
+    }
+
+    if (!pageRows.length) {
+        tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state"><i class="fas fa-calendar-times"></i>Nessun appuntamento trovato con i filtri selezionati</div></td></tr>';
+        document.getElementById('pagination').innerHTML = '';
+        return;
+    }
+
+    const oggi = new Date().toISOString().slice(0, 10);
+    const domani = isoDate(new Date(Date.now() + 86400000));
+
+    tbody.innerHTML = pageRows.map((app, i) => {
+        const idx = start + i;
+        const isCompletato = app.esito && app.esito.toLowerCase().includes('ok');
+        const isScaduto = !isCompletato && app.data_pianificata && app.data_pianificata < oggi;
+        const isOggi = app.data_pianificata === oggi;
+        const isDomani = app.data_pianificata === domani;
+
+        let rowClass = '';
+        if (isCompletato) rowClass = 'row-completato';
+        else if (isScaduto) rowClass = 'row-scaduto';
+        else if (isOggi) rowClass = 'row-oggi';
+        else if (isDomani) rowClass = 'row-domani';
+
+        const colore = getOperatorColor(app.operatore);
+
+        let esitoHtml;
+        if (isCompletato) esitoHtml = `<span class="esito-badge esito-ok">${esc(app.esito)}</span>`;
+        else if (app.esito) esitoHtml = `<span class="esito-badge esito-pending">${esc(app.esito)}</span>`;
+        else esitoHtml = '<span class="esito-badge esito-empty">—</span>';
+
+        const telHtml = app.telefono
+            ? `<a href="tel:${app.telefono}">${esc(app.telefono)}</a>`
+            : '<span style="color:var(--text-dim)">—</span>';
+
+        return `
+            <tr class="${rowClass}" onclick="toggleExpand(${idx})" style="cursor:pointer" title="Click per dettagli">
+                <td><strong>${formatDate(app.data_pianificata)}</strong></td>
+                <td>${esc(app.orario) || '<span style="color:var(--text-dim)">—</span>'}</td>
+                <td>${app.operatore
+                    ? `<span class="op-badge"><span class="op-dot-sm" style="background:${colore}"></span>${esc(app.nome_operatore || app.operatore)}</span>`
+                    : '<span style="color:var(--text-dim)">N/A</span>'}</td>
+                <td>${esc(app.nominativo) || '—'}</td>
+                <td>${esc(app.comune) || '—'}</td>
+                <td>${esc(app.indirizzo)}${app.civico ? ' ' + esc(app.civico) : ''}</td>
+                <td class="td-tel">${telHtml}</td>
+                <td class="td-note" title="${esc(app.note_appuntamento)}">${esc(app.note_appuntamento)}</td>
+                <td>${esitoHtml}</td>
+            </tr>
+            <tr class="expand-row" id="expand-${idx}">
+                <td colspan="9" class="expand-cell">
+                    <div class="expand-grid">
+                        <div class="expand-field"><span class="ef-label">Eneltel</span><div class="ef-value">${esc(app.eneltel_key)}</div></div>
+                        <div class="expand-field"><span class="ef-label">POD</span><div class="ef-value">${esc(app.pod) || '—'}</div></div>
+                        <div class="expand-field"><span class="ef-label">LCL</span><div class="ef-value">${esc(app.lcl) || '—'}</div></div>
+                        <div class="expand-field"><span class="ef-label">Località</span><div class="ef-value">${esc(app.localita) || '—'}</div></div>
+                        <div class="expand-field"><span class="ef-label">Email</span><div class="ef-value">${esc(app.email) || '—'}</div></div>
+                        <div class="expand-field"><span class="ef-label">Data Installazione</span><div class="ef-value">${esc(app.data_installazione) || '—'}</div></div>
+                        <div class="expand-field"><span class="ef-label">Note complete</span><div class="ef-value">${esc(app.note_appuntamento)}</div></div>
+                    </div>
+                    <div class="expand-actions">
+                        <a href="/filone?cerca=${encodeURIComponent(app.eneltel_key)}" target="_blank"><i class="fas fa-external-link-alt"></i> Apri nel filone</a>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    renderPagination(total, totalPages);
+}
+
+function toggleExpand(idx) {
+    const el = document.getElementById('expand-' + idx);
+    if (el) el.classList.toggle('open');
+}
+
+function getSortedRows() {
+    const arr = [..._filtered];
+    arr.sort((a, b) => {
+        let va = a[_sortCol] || '';
+        let vb = b[_sortCol] || '';
+        if (typeof va === 'string') va = va.toLowerCase();
+        if (typeof vb === 'string') vb = vb.toLowerCase();
+        if (va < vb) return _sortDir === 'asc' ? -1 : 1;
+        if (va > vb) return _sortDir === 'asc' ? 1 : -1;
+        return 0;
+    });
+    return arr;
+}
+
+function sortTable(col) {
+    if (_sortCol === col) {
+        _sortDir = _sortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+        _sortCol = col;
+        _sortDir = 'asc';
+    }
+    // Aggiorna header
+    document.querySelectorAll('.app-table th').forEach(th => {
+        th.classList.remove('sorted');
+        const icon = th.querySelector('.sort-icon');
+        if (icon) {
+            icon.className = 'fas fa-sort sort-icon';
+        }
+    });
+    const th = document.querySelector(`.app-table th[data-col="${col}"]`);
+    if (th) {
+        th.classList.add('sorted');
+        const icon = th.querySelector('.sort-icon');
+        if (icon) icon.className = `fas fa-sort-${_sortDir === 'asc' ? 'up' : 'down'} sort-icon`;
+    }
+    _page = 1;
+    renderTable();
+}
+
+// ============================================================================
+// PAGINAZIONE
+// ============================================================================
+function renderPagination(total, totalPages) {
+    const el = document.getElementById('pagination');
+    if (totalPages <= 1) { el.innerHTML = ''; return; }
+
+    let html = `<button ${_page <= 1 ? 'disabled' : ''} onclick="goPage(${_page - 1})"><i class="fas fa-chevron-left"></i></button>`;
+
+    const maxButtons = 7;
+    let startP = Math.max(1, _page - Math.floor(maxButtons / 2));
+    let endP = Math.min(totalPages, startP + maxButtons - 1);
+    if (endP - startP < maxButtons - 1) startP = Math.max(1, endP - maxButtons + 1);
+
+    if (startP > 1) {
+        html += `<button onclick="goPage(1)">1</button>`;
+        if (startP > 2) html += `<button disabled>…</button>`;
+    }
+    for (let p = startP; p <= endP; p++) {
+        html += `<button class="${p === _page ? 'active' : ''}" onclick="goPage(${p})">${p}</button>`;
+    }
+    if (endP < totalPages) {
+        if (endP < totalPages - 1) html += `<button disabled>…</button>`;
+        html += `<button onclick="goPage(${totalPages})">${totalPages}</button>`;
+    }
+    html += `<button ${_page >= totalPages ? 'disabled' : ''} onclick="goPage(${_page + 1})"><i class="fas fa-chevron-right"></i></button>`;
+    el.innerHTML = html;
+}
+
+function goPage(p) {
+    _page = p;
+    renderTable();
+    document.getElementById('sec-tabella').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ============================================================================
+// SEZIONI COLLASSABILI
+// ============================================================================
+function toggleSection(label) {
+    label.classList.toggle('collapsed');
+    const contentId = label.id + '-content';
+    const content = document.getElementById(contentId);
+    if (content) {
+        content.style.display = label.classList.contains('collapsed') ? 'none' : '';
+    }
+}
+
+// ============================================================================
+// EXPORT EXCEL
+// ============================================================================
+function exportExcelFissatiOggi() {
+    const oggi = new Date().toISOString().slice(0, 10);
+    window.open(`/api/boxbeat/excel/${oggi}`, '_blank');
+}
+function exportExcel() {
+    const rows = getSortedRows();
+    if (!rows.length) { showToast('Nessun dato da esportare', 'var(--warning)'); return; }
+
+    showToast('Generazione Excel in corso...', 'var(--info)');
+
+    fetch('/api/appuntamenti/excel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rows: rows })
+    })
+    .then(res => {
+        if (!res.ok) throw new Error('Errore nella generazione del file Excel');
+        
+        // Estrai nome file dagli header, se presente, altrimenti fallback
+        let filename = 'appuntamenti_filtrati.xlsx';
+        const disp = res.headers.get('Content-Disposition');
+        if (disp && disp.indexOf('filename=') !== -1) {
+            const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disp);
+            if (matches != null && matches[1]) { 
+                filename = matches[1].replace(/['"]/g, '');
+            }
+        }
+        
+        return res.blob().then(blob => ({ blob, filename }));
+    })
+    .then(({ blob, filename }) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('Download completato', 'var(--success)');
+    })
+    .catch(err => {
+        console.error(err);
+        showToast('Errore durante il download', 'var(--danger)');
+    });
+}
+
+// ============================================================================
+// HELPERS
+// ============================================================================
+function esc(s) {
+    if (!s) return '';
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function formatDate(iso) {
+    if (!iso || iso.length < 10) return '<span style="color:var(--text-dim)">—</span>';
+    const [y, m, d] = iso.split('-');
+    return `${d}/${m}/${y}`;
+}
+
+function formatDateShort(iso) {
+    if (!iso) return '';
+    const [y, m, d] = iso.split('-');
+    return `${parseInt(d)}/${parseInt(m)}`;
+}
+
+function getOperatorColor(matricola) {
+    if (!_data || !_data.operatori) return '#888';
+    const op = _data.operatori.find(o => o.matricola === matricola);
+    return op ? op.colore : '#888';
+}
+
+function showToast(msg, bg) {
+    const div = document.createElement('div');
+    div.className = 'toast';
+    if (bg) div.style.background = bg;
+    div.textContent = msg;
+    document.body.appendChild(div);
+    setTimeout(() => div.remove(), 3000);
+}
+
+// ============================================================================
+// TEMA
+// ============================================================================
+function toggleTheme() {
+    const html = document.documentElement;
+    const current = html.getAttribute('data-theme');
+    const next = current === 'dark' ? 'light' : 'dark';
+    html.setAttribute('data-theme', next);
+    try {
+        localStorage.setItem('algeco_theme', next);
+        document.cookie = `algeco_theme=${next};path=/;max-age=${365*86400};SameSite=Lax`;
+    } catch(_) {}
+    const icon = document.querySelector('#theme-toggle i');
+    if (icon) icon.className = next === 'dark' ? 'fas fa-moon' : 'fas fa-sun';
+    // Ricostruisci i grafici con i colori del tema corrente
+    if (_data) renderCharts();
+}
+// Icona iniziale
+(function() {
+    const t = document.documentElement.getAttribute('data-theme');
+    const icon = document.querySelector('#theme-toggle i');
+    if (icon) icon.className = t === 'dark' ? 'fas fa-moon' : 'fas fa-sun';
+})();
+</script>
+
+</body>
+</html>

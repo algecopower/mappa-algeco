@@ -930,7 +930,7 @@ def genera_excel_boxbeat(data_str: str = None, dati_filone: dict = None,
     # Salva
     data_dir = os.path.join(SCRIPT_DIR, 'data')
     os.makedirs(data_dir, exist_ok=True)
-    filepath = os.path.join(data_dir, f'boxbeat_appuntamenti_{data_str}.xlsx')
+    filepath = os.path.join(data_dir, f'appuntamenti_{data_str}.xlsx')
     wb.save(filepath)
     print(f"[Appuntamenti Excel] Generato {filepath} con {len(appuntamenti)} appuntamenti")
     return filepath

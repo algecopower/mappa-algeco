@@ -66,3 +66,5 @@ Desktop.ini
 .idea/
 *.swp
 *.swo
+data/appuntamenti_*.xlsx
+data/user_workflows.json

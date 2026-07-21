@@ -106,7 +106,7 @@ def _calcola_report(backup, data_da, data_a):
     i_data_inst = _col_index(headers, ['Data Installazione', 'DATA INSTALLAZIONE'])
     i_tipo_mis = _col_index(headers, ['Tipo_Misuratore', 'TIPO_MISURATORE'])
 
-    app_re = re.compile(r'\bapp\b', re.IGNORECASE)
+    from moduli.appuntamenti_core import rileva_appuntamento
 
     # Strutture dati
     per_operatore = defaultdict(lambda: {
@@ -144,7 +144,7 @@ def _calcola_report(backup, data_da, data_a):
 
         data_pian = _parse_data(data_raw)
         is_installato = bool(esito and 'ok' in esito.lower())
-        is_appuntamento = bool(note and app_re.search(note))
+        is_appuntamento = rileva_appuntamento(note)
 
         # Pianificati nel range
         if data_pian and da_str <= data_pian <= a_str:

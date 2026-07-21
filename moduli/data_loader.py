@@ -78,6 +78,8 @@ from config import USA_LOCALITA_COME_COMUNE
 from .percorso import (
     normalizza_eneltel,
     estrai_orario,
+)
+from .appuntamenti_core import (
     rileva_appuntamento,
     motivo_non_appuntamento,
 )
@@ -673,12 +675,12 @@ def carica_dati_db_locale(force=False):
     # come token, MA non deve essere preceduta/seguita da pattern di
     # negazione/cancellazione/incertezza ("no app", "app annullata",
     # "app??", "app da fissare", "richiesta app", "forse app", ecc.).
-    # Vedi `rileva_appuntamento` in moduli/percorso.py per i dettagli.
+    # Vedi `rileva_appuntamento` in moduli/appuntamenti_core.py per i dettagli.
     df['IS_APPUNTAMENTO_NOTE'] = df['NOTE_APP_RAW'].apply(rileva_appuntamento)
 
     # Audit / log dei casi esclusi: NOTE che contengono "app" ma sono state
     # filtrate (utile in fase di tuning per capire i falsi negativi).
-    note_con_app = df['NOTE_APP_RAW'].astype(str).str.contains(r'\bapp\b', case=False, regex=True, na=False)
+    note_con_app = df['NOTE_APP_RAW'].astype(str).str.contains(r'^\W*app\b', case=False, regex=True, na=False)
     note_escluse = df.loc[note_con_app & ~df['IS_APPUNTAMENTO_NOTE'], 'NOTE_APP_RAW']
     if len(note_escluse) > 0:
         # Conta per motivo

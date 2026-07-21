@@ -3964,10 +3964,11 @@ function mostraVistaComuni(searchQuery = '') {
         document.getElementById('breadcrumb').classList.remove('visible');
     }
 
-    // Filtra contatori per data se necessario (usa contatoriVisibili per vista normale)
-    let contatoriDaUsare = contatoriVisibili;
+    // Filtra contatori per data se necessario
+    // Se c'è un filtro LCL, usiamo TUTTI i contatori (anche passati) per mostrare l'intero appalto sulla mappa
+    let contatoriDaUsare = currentLCL ? contatori : contatoriVisibili;
     if (currentDataFiltro) {
-        contatoriDaUsare = contatoriVisibili.filter(c => c.data === currentDataFiltro);
+        contatoriDaUsare = contatoriDaUsare.filter(c => c.data === currentDataFiltro);
     }
 
     // Raggruppa contatori per comune

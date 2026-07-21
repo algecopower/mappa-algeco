@@ -506,7 +506,7 @@ def dividi_zone_grandi(zone, centroidi, max_comuni=25, max_rapporto_comuni_conta
 
         for sotto_zona_comuni in sotto_zone:
             contatore_nuove_zone[0] += 1
-            nuovo_nome = f"ZONA_S{contatore_nuove_zone[0]}"
+            nuovo_nome = f"{zona_nome}_SUB{contatore_nuove_zone[0]}"
 
             # Calcola centroide pesato
             lat_sum = 0

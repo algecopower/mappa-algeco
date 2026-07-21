@@ -14,7 +14,8 @@
       "AG18966",
       "AG63397",
       "AG67817",
-      "AE94428"
+      "AE94428",
+      "AG05928"
     ],
     "colori_operatori": {
       "AE101392": "#e74c3c",
@@ -22,7 +23,8 @@
       "AG18966": "#2ecc71",
       "AG63397": "#bf33db",
       "AG67817": "#7f33db",
-      "AE94428": "#db33a6"
+      "AE94428": "#db33a6",
+      "AG05928": "#a0db33"
     },
     "operatori_dict": {
       "PAUL": "AE101392",
@@ -30,7 +32,8 @@
       "SIDI": "AG18966",
       "MOHAMED": "AG63397",
       "ANGEL": "AG67817",
-      "ALECCI": "AE94428"
+      "ALECCI": "AE94428",
+      "GUINDO": "AG05928"
     },
     "file_mappa": "templates/mappa_torino.html",
     "ora_inizio_giornata": 540,
@@ -57,7 +60,8 @@
       "AE101392",
       "AG67817",
       "AF09076",
-      "AG18966"
+      "AG18966",
+      "AG69238"
     ],
     "colori_operatori": {
       "AF34814": "#e74c3c",
@@ -69,7 +73,8 @@
       "AE101392": "#db7f33",
       "AG67817": "#db335d",
       "AF09076": "#33dbbf",
-      "AG18966": "#d833db"
+      "AG18966": "#d833db",
+      "AG69238": "#bfdb33"
     },
     "operatori_dict": {
       "ALESSANDRO": "AF34814",
@@ -81,7 +86,8 @@
       "PAUL": "AE101392",
       "ANGEL": "AG67817",
       "SIMONE": "AF09076",
-      "SIDI": "AG18966"
+      "SIDI": "AG18966",
+      "TORTI": "AG69238"
     },
     "file_mappa": "templates/mappa_pavia.html",
     "usa_localita_come_comune": true,

@@ -5,7 +5,7 @@ Blueprint per le route del Calendario e dei Promemoria Appuntamento.
 import os
 import logging
 from datetime import datetime
-from flask import Blueprint, request, jsonify, session, send_file
+from flask import Blueprint, request, jsonify, session, send_file, render_template
 
 from moduli.auth import login_required
 from moduli.shared import (
@@ -21,7 +21,8 @@ from moduli.calendario import (
     salva_user_promemoria_settings, registra_appuntamento_excel,
     genera_excel_boxbeat,
 )
-from config import PROVINCIA_ATTIVA
+from config import PROVINCIA_ATTIVA, PROVINCE
+from moduli.workflow import get_user_workflow, update_workflow_state, update_workflow_template
 
 logger = logging.getLogger('mappa_algeco')
 
@@ -36,7 +37,37 @@ bp = Blueprint('calendario', __name__)
 @login_required
 def calendario_page():
     """Pagina calendario/attività condivise."""
-    return send_file(os.path.join(os.path.dirname(__file__), '..', 'templates', 'calendario.html'))
+    return render_template('calendario.html', 
+                           province=PROVINCE, 
+                           provincia_attiva=PROVINCIA_ATTIVA)
+
+
+# ============================================================================
+# WORKFLOW GIORNALIERO
+# ============================================================================
+
+@bp.route('/api/workflow', methods=['GET'])
+@login_required
+def api_get_workflow():
+    utente = session.get('username', 'Sconosciuto')
+    return jsonify(get_user_workflow(utente))
+
+@bp.route('/api/workflow/state', methods=['POST'])
+@login_required
+def api_post_workflow_state():
+    utente = session.get('username', 'Sconosciuto')
+    dati = request.json
+    task_id = dati.get('task_id')
+    is_completed = dati.get('completed', False)
+    return jsonify(update_workflow_state(utente, task_id, is_completed))
+
+@bp.route('/api/workflow/template', methods=['POST'])
+@login_required
+def api_post_workflow_template():
+    utente = session.get('username', 'Sconosciuto')
+    dati = request.json
+    new_template = dati.get('template', [])
+    return jsonify(update_workflow_template(utente, new_template))
 
 
 @bp.route('/api/calendario', methods=['GET'])
@@ -300,7 +331,7 @@ def api_download_boxbeat_excel(data_str):
         response = send_file(
             filepath,
             as_attachment=True,
-            download_name=f'boxbeat_appuntamenti_{data_str}.xlsx',
+            download_name=f'appuntamenti_{data_str}.xlsx',
             mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
         response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'

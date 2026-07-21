@@ -343,8 +343,7 @@ def _calcola_statistiche_filone(backup: dict) -> dict:
     # Comuni per operatore domani
     comuni_op_domani = defaultdict(Counter)
 
-    import re
-    app_re = re.compile(r'\bapp\b', re.IGNORECASE)
+    from moduli.appuntamenti_core import rileva_appuntamento
 
     for row in righe:
         data_raw = _cell(row, i_data)
@@ -370,7 +369,7 @@ def _calcola_statistiche_filone(backup: dict) -> dict:
 
         # Esito
         is_installato = bool(esito and 'ok' in esito.lower())
-        is_appuntamento = bool(note and app_re.search(note))
+        is_appuntamento = rileva_appuntamento(note)
 
         if data_pian:
             contatori_con_data += 1

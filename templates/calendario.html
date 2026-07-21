@@ -1060,11 +1060,18 @@
             font-size: 0.95em;
             font-family: inherit;
             transition: border-color 0.2s;
+            overflow: hidden;
         }
 
         .form-input:focus {
-            outline: none;
+            outline: none !important;
             border-color: var(--primary);
+            box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary), transparent 70%);
+        }
+
+        /* Fix per allineamento interno input date/time su Chrome/Safari */
+        .form-input::-webkit-datetime-edit {
+            padding: 2px 4px;
         }
 
         textarea.form-input {
@@ -1396,9 +1403,7 @@
                 <button class="btn btn-sm btn-accent" onclick="apriModalBoxBeatSettings()" title="Impostazioni Promemoria">
                     <i class="fas fa-cog"></i> Promemoria
                 </button>
-                <button class="btn btn-sm btn-accent" onclick="scaricaExcelBoxBeat()" title="Scarica Excel appuntamenti di oggi" aria-label="Scarica Excel">
-                    <i class="fas fa-file-excel"></i>
-                </button>
+
                 <button class="btn btn-sm btn-success" onclick="apriModalNuova()">
                     <i class="fas fa-plus"></i>
                     Nuova Attività
@@ -1430,6 +1435,28 @@
             <div class="stat-card">
                 <div class="stat-value" style="color: #e91e63" id="statBoxbeat">0</div>
                 <div class="stat-label">Appuntamenti Oggi</div>
+            </div>
+        </div>
+
+        <!-- Workflow Giornaliero Panel -->
+        <div class="boxbeat-panel" id="workflowPanel" style="margin-bottom: 20px; border-left: 4px solid var(--primary);">
+            <div class="boxbeat-panel-header" onclick="toggleWorkflowPanel(event)">
+                <h2>
+                    <i class="fas fa-tasks"></i>
+                    La mia Giornata
+                </h2>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span class="boxbeat-badge" id="workflowBadge" style="background:var(--primary);">0 / 0</span>
+                    <button class="btn btn-sm" style="background: rgba(255,255,255,0.2); color: white;" onclick="event.stopPropagation(); apriModalWorkflow()">
+                        <i class="fas fa-cog"></i> Configura
+                    </button>
+                    <button class="boxbeat-collapse-btn" title="Comprimi/Espandi">
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                </div>
+            </div>
+            <div id="workflowLista" style="padding: 15px; display: flex; flex-direction: column; gap: 10px;">
+                <!-- Workflow tasks go here -->
             </div>
         </div>
 
@@ -1527,18 +1554,19 @@
             <button class="filter-btn prov-filter active" data-prov="tutte" onclick="filtraProvincia('tutte')">
                 <i class="fas fa-globe"></i> Tutte
             </button>
-            <button class="filter-btn prov-filter" data-prov="TORINO" onclick="filtraProvincia('TORINO')">
-                <i class="fas fa-map-marker-alt"></i> Torino
+            {% for p_id, p_data in province.items() %}
+            <button class="filter-btn prov-filter" data-prov="{{ p_id }}" onclick="filtraProvincia('{{ p_id }}')">
+                <i class="fas fa-map-marker-alt"></i> {{ p_data.nome }}
             </button>
-            <button class="filter-btn prov-filter" data-prov="PAVIA" onclick="filtraProvincia('PAVIA')">
-                <i class="fas fa-map-marker-alt"></i> Pavia
-            </button>
+            {% endfor %}
             <button class="filter-btn prov-filter" data-prov="nessuna" onclick="filtraProvincia('nessuna')">
                 <i class="fas fa-minus-circle"></i> Senza prov.
             </button>
 
-            <label style="margin-left: auto; font-size: 0.85em; display: flex; align-items: center; gap: 6px; cursor: pointer; color: var(--text-muted);">
-                <input type="checkbox" id="mostraCompletate" checked onchange="caricaAttivita()"> Completate
+            <!-- Allineamento completate come bottone -->
+            <label class="filter-btn" style="margin-left: auto; display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;">
+                <input type="checkbox" id="mostraCompletate" onchange="caricaAttivita()" style="cursor: pointer; width: 14px; height: 14px; accent-color: var(--success);">
+                Completate
             </label>
         </div>
 
@@ -1600,8 +1628,9 @@
                     <label>Provincia</label>
                     <select class="form-input" id="inputProvincia">
                         <option value="">-- Nessuna --</option>
-                        <option value="TORINO">Torino</option>
-                        <option value="PAVIA">Pavia</option>
+                        {% for p_id, p_data in province.items() %}
+                        <option value="{{ p_id }}">{{ p_data.nome }}</option>
+                        {% endfor %}
                     </select>
                 </div>
             </div>
@@ -1704,8 +1733,10 @@
                 <div class="form-group">
                     <label>Provincia</label>
                     <select class="form-input" id="bbProvincia">
-                        <option value="TORINO">Torino</option>
-                        <option value="PAVIA">Pavia</option>
+                        <option value="">-- Nessuna --</option>
+                        {% for p_id, p_data in province.items() %}
+                        <option value="{{ p_id }}">{{ p_data.nome }}</option>
+                        {% endfor %}
                     </select>
                 </div>
                 <div class="form-group full-width">
@@ -1777,6 +1808,31 @@
     <!-- Toast -->
     <div class="toast" id="toast"></div>
 
+    <!-- Modal Workflow Settings -->
+    <div class="modal-overlay" id="modalWorkflow">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2 style="color: var(--primary);"><i class="fas fa-tasks"></i> Configura La mia Giornata</h2>
+                <button class="modal-close-btn" onclick="chiudiModalWorkflow()" title="Chiudi"><i data-lucide="x"></i></button>
+            </div>
+            <p style="color: var(--text-muted); font-size: 0.9em; margin-bottom: 16px;">
+                Gestisci le tue procedure standard giornaliere. Queste attività compariranno ogni giorno automaticamente.
+            </p>
+            <div id="workflowEditorList" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px; max-height: 400px; overflow-y: auto; padding: 4px;">
+                <!-- Template editor items -->
+            </div>
+            <button class="btn btn-sm" style="background: var(--surface); border: 1px dashed var(--border); width: 100%; color: var(--text);" onclick="aggiungiWorkflowTask()">
+                <i class="fas fa-plus"></i> Aggiungi Task
+            </button>
+            <div class="modal-footer" style="margin-top: 20px;">
+                <button class="btn btn-sm btn-ghost" onclick="chiudiModalWorkflow()">Annulla</button>
+                <button class="btn btn-sm btn-primary" onclick="salvaWorkflowTemplate()">
+                    <i class="fas fa-save"></i> Salva Procedure
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Floating Selection Toolbar -->
     <div class="selection-toolbar" id="selectionToolbar">
         <span class="sel-count" id="selCount">0 selezionate</span>
@@ -1795,6 +1851,7 @@
     // =========================================================================
     // STATO
     // =========================================================================
+    const PROVINCIA_ATTIVA = "{{ provincia_attiva }}";
     let attivitaList = [];
     let categoriaFiltro = 'tutte';
     let provinciaFiltro = 'tutte';
@@ -1935,6 +1992,7 @@
             if (loader) loader.remove();
 
             renderVista();
+            if (typeof renderWorkflow === 'function') renderWorkflow();
         } catch(e) {
             const loader = document.getElementById('loadingIndicator');
             if (loader) loader.remove();
@@ -2431,7 +2489,7 @@
         document.getElementById('inputOra').value = '';
         document.getElementById('inputOraFine').value = '';
         document.getElementById('inputDescrizione').value = '';
-        document.getElementById('inputProvincia').value = '';
+        document.getElementById('inputProvincia').value = PROVINCIA_ATTIVA;
         selezionaCategoria('promemoria');
         document.getElementById('modalAttivita').classList.add('active');
         setTimeout(() => document.getElementById('inputTitolo').focus(), 100);
@@ -2472,7 +2530,7 @@
         document.getElementById('bbVia').value = bb.via || '';
         document.getElementById('bbCivico').value = bb.civico || '';
         document.getElementById('bbComune').value = bb.comune || '';
-        document.getElementById('bbProvincia').value = att.provincia || 'TORINO';
+        document.getElementById('bbProvincia').value = att.provincia || PROVINCIA_ATTIVA;
         document.getElementById('bbNote').value = bb.note || '';
         document.getElementById('modalBoxBeat').classList.add('active');
     }
@@ -2659,6 +2717,21 @@
         setTimeout(() => { t.style.display = 'none'; }, 3000);
     }
 
+    document.addEventListener('DOMContentLoaded', () => {
+        caricaUtente();
+        caricaImpostazioniBoxBeat();
+        
+        // Disabilita mostra completate all'avvio
+        const chkCompletate = document.getElementById('mostraCompletate');
+        if (chkCompletate) chkCompletate.checked = false;
+        
+        caricaAttivita();
+        caricaWorkflow();
+        
+        // Gestione filtri visualizzazione
+        const fDa = document.getElementById('filterDataDa');
+    });
+
     // Keyboard shortcuts
     document.addEventListener('keydown', e => {
         if (e.key === 'Escape') {
@@ -2829,6 +2902,7 @@
         });
         renderBoxBeatPanel();
         aggiornaStatBoxBeat();
+        if (typeof renderWorkflow === 'function') renderWorkflow();
         renderVista();
         checkBoxBeatDeadline();
 
@@ -3182,7 +3256,194 @@
             const panel = document.getElementById('boxbeatPanel');
             if (panel) panel.classList.add('collapsed');
         }
+        if (localStorage.getItem('workflow_collapsed') === '1') {
+            const wpanel = document.getElementById('workflowPanel');
+            if (wpanel) wpanel.classList.add('collapsed');
+        }
     })();
+
+    // =========================================================================
+    // WORKFLOW GIORNALIERO
+    // =========================================================================
+    let workflowData = { template: [], current_state: {} };
+
+    function toggleWorkflowPanel(event) {
+        const panel = document.getElementById('workflowPanel');
+        panel.classList.toggle('collapsed');
+        localStorage.setItem('workflow_collapsed', panel.classList.contains('collapsed') ? '1' : '0');
+    }
+
+    async function caricaWorkflow() {
+        try {
+            const r = await fetch('/api/workflow');
+            const data = await r.json();
+            workflowData = data;
+            renderWorkflow();
+        } catch (e) {
+            console.error('Errore caricamento workflow', e);
+        }
+    }
+
+    function renderWorkflow() {
+        const container = document.getElementById('workflowLista');
+        if (!container) return;
+        container.innerHTML = '';
+        
+        let completati = 0;
+        let totali = workflowData.template.length;
+
+        // Aggiunta dinamica conteggio appuntamenti/promemoria odierni
+        const oggiStr = new Date().toISOString().split('T')[0];
+        let appuntamentiOggi = 0;
+        let promemoriaOggi = 0;
+        
+        attivitaList.forEach(a => {
+            if (a.data === oggiStr && !a.completata) {
+                if (a.categoria === 'appuntamento') appuntamentiOggi++;
+                if (a.categoria === 'promemoria') promemoriaOggi++;
+            }
+        });
+        
+        if (appuntamentiOggi > 0 || promemoriaOggi > 0) {
+            const divDyn = document.createElement('div');
+            divDyn.style.padding = '8px';
+            divDyn.style.background = 'rgba(233, 30, 99, 0.1)';
+            divDyn.style.borderRadius = '8px';
+            divDyn.style.border = '1px dashed #e91e63';
+            divDyn.style.color = 'var(--text)';
+            divDyn.style.fontSize = '0.9em';
+            divDyn.style.marginBottom = '10px';
+            
+            let html = `<strong><i class="fas fa-calendar-day"></i> Impegni di oggi a calendario:</strong><br>`;
+            if (appuntamentiOggi > 0) html += `- ${appuntamentiOggi} Appuntamenti da completare<br>`;
+            if (promemoriaOggi > 0) html += `- ${promemoriaOggi} Promemoria pendenti`;
+            
+            divDyn.innerHTML = html;
+            container.appendChild(divDyn);
+        }
+
+        // Sort by time if available
+        const sortedTemplate = [...workflowData.template].sort((a, b) => {
+            const ta = a.time || '23:59';
+            const tb = b.time || '23:59';
+            return ta.localeCompare(tb);
+        });
+
+        // Render template tasks
+        sortedTemplate.forEach(t => {
+            const isDone = !!workflowData.current_state[t.id];
+            if (isDone) completati++;
+            
+            const div = document.createElement('div');
+            div.style.display = 'flex';
+            div.style.alignItems = 'center';
+            div.style.gap = '10px';
+            div.style.padding = '8px';
+            div.style.background = 'var(--surface)';
+            div.style.borderRadius = '8px';
+            div.style.border = '1px solid var(--border)';
+            div.style.cursor = 'pointer';
+            if (isDone) div.style.opacity = '0.6';
+            
+            div.onclick = () => toggleWorkflowTask(t.id, !isDone);
+            
+            const timeBadge = t.time ? `<span style="font-size:0.85em; background:var(--bg); padding:2px 6px; border-radius:10px; color:var(--text-muted);"><i class="fas fa-clock"></i> ${t.time}</span>` : '';
+            
+            div.innerHTML = `
+                <input type="checkbox" ${isDone ? 'checked' : ''} onclick="event.stopPropagation(); toggleWorkflowTask('${t.id}', this.checked)" style="width:16px; height:16px; cursor:pointer; accent-color:var(--primary);">
+                <div style="flex:1; display:flex; align-items:center; gap:8px;">
+                    <span style="${isDone ? 'text-decoration:line-through; color:var(--text-muted);' : ''}">${t.text}</span>
+                    ${timeBadge}
+                </div>
+            `;
+            container.appendChild(div);
+        });
+
+        document.getElementById('workflowBadge').textContent = `${completati} / ${totali}`;
+    }
+
+    async function toggleWorkflowTask(taskId, isCompleted) {
+        workflowData.current_state[taskId] = isCompleted;
+        renderWorkflow(); // optimistic update
+        
+        try {
+            await fetch('/api/workflow/state', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ task_id: taskId, completed: isCompleted })
+            });
+        } catch (e) {
+            console.error('Errore salvataggio task', e);
+        }
+    }
+
+    function apriModalWorkflow() {
+        const container = document.getElementById('workflowEditorList');
+        container.innerHTML = '';
+        
+        workflowData.template.forEach(t => {
+            container.appendChild(creaWorkflowEditorRow(t.id, t.text, t.time));
+        });
+        
+        document.getElementById('modalWorkflow').classList.add('active');
+    }
+
+    function chiudiModalWorkflow() {
+        document.getElementById('modalWorkflow').classList.remove('active');
+    }
+
+    function creaWorkflowEditorRow(id, text, time) {
+        const div = document.createElement('div');
+        div.className = 'workflow-edit-row';
+        div.style.display = 'flex';
+        div.style.gap = '8px';
+        div.style.padding = '2px';
+        div.innerHTML = `
+            <input type="hidden" class="wf-id" value="${id || ''}">
+            <input type="time" class="form-input wf-time" value="${time || ''}" style="width: 105px; flex-shrink: 0;" title="Fascia oraria">
+            <input type="text" class="form-input wf-text" value="${text || ''}" placeholder="Descrizione procedura..." style="flex:1;">
+            <button class="btn btn-sm" style="background:var(--danger); color:white;" onclick="this.parentElement.remove()">
+                <i class="fas fa-trash"></i>
+            </button>
+        `;
+        return div;
+    }
+
+    function aggiungiWorkflowTask() {
+        const container = document.getElementById('workflowEditorList');
+        const newId = 't_' + Math.random().toString(36).substr(2, 9);
+        container.appendChild(creaWorkflowEditorRow(newId, '', ''));
+    }
+
+    async function salvaWorkflowTemplate() {
+        const rows = document.querySelectorAll('.workflow-edit-row');
+        const newTemplate = [];
+        
+        rows.forEach(r => {
+            const text = r.querySelector('.wf-text').value.trim();
+            const time = r.querySelector('.wf-time').value;
+            let id = r.querySelector('.wf-id').value;
+            if (text) {
+                if (!id) id = 't_' + Math.random().toString(36).substr(2, 9);
+                newTemplate.push({id: id, text: text, time: time});
+            }
+        });
+        
+        try {
+            const res = await fetch('/api/workflow/template', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ template: newTemplate })
+            });
+            const data = await res.json();
+            workflowData = data;
+            renderWorkflow();
+            chiudiModalWorkflow();
+            showToast('Procedure salvate!');
+        } catch (e) {
+            showToast('Errore salvataggio', true);
+        }
+    }
 
     </script>
 </body>

@@ -20,7 +20,6 @@ Uso tipico (chiamato da trigger_sync_after_edit):
     # else: fallback al sync_loop classico
 """
 import os
-import re
 import logging
 
 logger = logging.getLogger('mappa_algeco')
@@ -65,15 +64,11 @@ STRUCTURAL_FIELDS_DB = {
 }
 
 
-# Regex per rilevare il pattern "APP" in una nota (allineato a data_loader.py:620).
-_PAT_APP = re.compile(r'\bapp\b', re.IGNORECASE)
-
+from moduli.appuntamenti_core import rileva_appuntamento
 
 def _is_app(text):
-    """True se la nota contiene il pattern 'APP' (= appuntamento)."""
-    if not text:
-        return False
-    return bool(_PAT_APP.search(text))
+    """True se la nota indica un appuntamento (logica unificata)."""
+    return rileva_appuntamento(text)
 
 
 def _note_change_is_soft(old_value, new_value):

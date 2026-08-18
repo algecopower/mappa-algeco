@@ -287,9 +287,31 @@ let routePolylines = [];  // Polyline delle rotte OSRM
 let routeOrarioFetchSeq = 0;
 let mostraRotteAttivo = false;
 
-// Pin & Date Navigation
-let pinnedContatore = null;
-let pinnedMarker = null;
+// Pin & Date Navigation (Multi-Pin)
+let pinnedContatori = new Map(); // Map<eneltel, contatore>
+let pinnedMarkers = new Map();   // Map<eneltel, L.Marker>
+let lastModalSearchResults = []; // Cache ultimi risultati ricerca modale
+
+// Retrocompatibilità per codice o estensioni che accedono a pinnedContatore
+try {
+    Object.defineProperty(window, 'pinnedContatore', {
+        get: function() {
+            if (!pinnedContatori || pinnedContatori.size === 0) return null;
+            return pinnedContatori.values().next().value;
+        },
+        set: function(val) {
+            if (!val) {
+                if (pinnedContatori) pinnedContatori.clear();
+            } else {
+                if (pinnedContatori) pinnedContatori.set(val.eneltel, val);
+            }
+        },
+        configurable: true
+    });
+} catch (e) {
+    console.warn('Getter pinnedContatore non supportato:', e);
+}
+
 let tempSchedulabileMarker = null; // Marker temporaneo per contatore schedulabile
 let availableDates = [];
 let currentDateIndex = -1;
@@ -398,9 +420,9 @@ map.on('popupopen', async function(e) {
                 localC.smart_test = fresh.smart_test ?? localC.smart_test;
             }
 
-            // Aggiorna anche il pinnedContatore se è lo stesso
-            if (pinnedContatore && pinnedContatore.eneltel === eneltel && localC) {
-                Object.assign(pinnedContatore, localC);
+            // Aggiorna anche i contatori pinnati se presenti
+            if (pinnedContatori && pinnedContatori.has(eneltel) && localC) {
+                Object.assign(pinnedContatori.get(eneltel), localC);
             }
 
             // Ri-renderizza il popup solo se ancora aperto
@@ -479,10 +501,10 @@ function clearMap() {
         map.removeLayer(tempSchedulabileMarker);
         tempSchedulabileMarker = null;
     }
-    // Rimuovi pinnedMarker dalla mappa (verrà ricreato se serve)
-    if (pinnedMarker) {
-        map.removeLayer(pinnedMarker);
-        pinnedMarker = null;
+    // Rimuovi pinnedMarkers dalla mappa (verranno ricreati se serve)
+    if (pinnedMarkers && pinnedMarkers.size > 0) {
+        pinnedMarkers.forEach(m => map.removeLayer(m));
+        pinnedMarkers.clear();
     }
     clearRoutes();
 }
@@ -1525,7 +1547,10 @@ function toggleAdvancedSearchModal() {
     const id = 'advancedSearchModal';
     const isOpening = !UiModal.isOpen(id);
     UiModal.toggle(id);
-    if (isOpening) restoreAdvancedSearchData();
+    if (isOpening) {
+        restoreAdvancedSearchData();
+        aggiornaModalPinnedBar();
+    }
 }
 
 function clearModalAdvancedSearch() {
@@ -1536,7 +1561,9 @@ function clearModalAdvancedSearch() {
     document.getElementById('modalSearchVia').value = '';
     document.getElementById('modalSearchTelefono').value = '';
     document.getElementById('modalSearchResults').innerHTML = '';
+    lastModalSearchResults = [];
     localStorage.removeItem('advancedSearchData');
+    aggiornaModalPinnedBar();
 }
 
 // ============================================================
@@ -1767,6 +1794,411 @@ async function generaOrariLettere() {
     }
 }
 
+// ============================================================
+// MULTI-PIN STATE & HELPER FUNCTIONS
+// ============================================================
+
+function isContatorePinned(eneltel) {
+    return pinnedContatori.has(eneltel);
+}
+
+function getPinnedContatoriList() {
+    return Array.from(pinnedContatori.values());
+}
+
+function renderPinnedMarkers(allPoints = null) {
+    // Rimuovi vecchi marker pinnati
+    pinnedMarkers.forEach(m => map.removeLayer(m));
+    pinnedMarkers.clear();
+
+    if (pinnedContatori.size === 0) {
+        updatePinnedToolbar();
+        return;
+    }
+
+    const pinIcon = L.divIcon({
+        className: 'marker-pinned',
+        html: `<div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 3px solid white; box-shadow: 0 4px 12px rgba(0,0,0,0.4); font-size: 16px;">📌</div>`,
+        iconSize: [32, 32],
+        iconAnchor: [16, 16]
+    });
+
+    pinnedContatori.forEach((c, eneltel) => {
+        if (isValidCoordinate(c.lat, c.lon)) {
+            const marker = L.marker([c.lat, c.lon], { icon: pinIcon, zIndexOffset: 10000 })
+                .bindPopup(() => createContatorePopup(c, '📌', '#f5576c'))
+                .addTo(map);
+            marker.contatore = c;
+            pinnedMarkers.set(eneltel, marker);
+            if (allPoints && Array.isArray(allPoints)) {
+                allPoints.push([c.lat, c.lon]);
+            }
+        }
+    });
+
+    updatePinnedToolbar();
+}
+
+function updatePinnedToolbar() {
+    const count = pinnedContatori.size;
+    const toolbar = document.getElementById('pinnedFloatingToolbar');
+    const countEl = document.getElementById('pinnedCountText');
+    const labelEl = document.getElementById('pinnedLabelText');
+
+    if (toolbar && countEl) {
+        if (count > 0) {
+            countEl.textContent = count;
+            if (labelEl) labelEl.textContent = count === 1 ? 'fissato' : 'fissati';
+            toolbar.style.display = 'block';
+        } else {
+            toolbar.style.display = 'none';
+        }
+    }
+
+    aggiornaModalPinnedBar();
+}
+
+function aggiornaModalPinnedBar() {
+    const bar = document.getElementById('modalPinnedStatusBar');
+    if (!bar) return;
+
+    const count = pinnedContatori.size;
+    if (count === 0) {
+        bar.style.display = 'none';
+        bar.innerHTML = '';
+        return;
+    }
+
+    bar.style.display = 'flex';
+    bar.innerHTML = `
+        <div class="modal-pinned-status-info">
+            <span>📌 Contatori fissati:</span>
+            <span class="modal-pinned-count-badge">${count}</span>
+        </div>
+        <div class="modal-pinned-actions">
+            <button class="btn-modal-pinned-show" onclick="mostraContatoriPinnatiSullaMappa()">
+                <i data-lucide="map"></i> Mostra sulla mappa (${count})
+            </button>
+            <button class="btn-modal-pinned-clear" onclick="unpinAllContatori()">
+                <i data-lucide="trash-2"></i> Svuota pin
+            </button>
+        </div>
+    `;
+    if (window.refreshLucideIcons) window.refreshLucideIcons();
+}
+
+function pinContatore(eneltel, autoFly = false) {
+    const contatore = contatori.find(c => c.eneltel === eneltel);
+    if (!contatore) return;
+
+    pinnedContatori.set(eneltel, contatore);
+
+    if (autoFly) {
+        vaiAContatoreSingolo(eneltel);
+        return;
+    }
+
+    if (!pinnedMarkers.has(eneltel) && isValidCoordinate(contatore.lat, contatore.lon)) {
+        const pinIcon = L.divIcon({
+            className: 'marker-pinned',
+            html: `<div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 3px solid white; box-shadow: 0 4px 12px rgba(0,0,0,0.4); font-size: 16px;">📌</div>`,
+            iconSize: [32, 32],
+            iconAnchor: [16, 16]
+        });
+        const marker = L.marker([contatore.lat, contatore.lon], { icon: pinIcon, zIndexOffset: 10000 })
+            .bindPopup(() => createContatorePopup(contatore, '📌', '#f5576c'))
+            .addTo(map);
+        marker.contatore = contatore;
+        pinnedMarkers.set(eneltel, marker);
+    }
+
+    updatePinnedToolbar();
+    aggiornaStatoPinInModal();
+}
+
+function unpinContatore(eneltel = null) {
+    if (!eneltel) {
+        unpinAllContatori();
+        return;
+    }
+
+    const wasContatore = pinnedContatori.get(eneltel);
+    pinnedContatori.delete(eneltel);
+
+    if (pinnedMarkers.has(eneltel)) {
+        map.removeLayer(pinnedMarkers.get(eneltel));
+        pinnedMarkers.delete(eneltel);
+    }
+
+    updatePinnedToolbar();
+    aggiornaStatoPinInModal();
+
+    if (wasContatore && (currentView === 'detail' || currentView === 'tuttiOperatori' || currentView === 'operatore' || currentView === 'multiOperatori')) {
+        preserveMapView = true;
+        if (currentView === 'detail') {
+            ridisegnaVistaDettaglioSenzaSidebar();
+        } else if (currentView === 'tuttiOperatori' || currentView === 'multiOperatori') {
+            ridisegnaVistaOperatoriSenzaSidebar();
+        } else if (currentView === 'operatore') {
+            ridisegnaVistaSingoloOperatoreSenzaSidebar();
+        }
+    }
+}
+
+function togglePinContatore(eneltel) {
+    if (pinnedContatori.has(eneltel)) {
+        unpinContatore(eneltel);
+    } else {
+        pinContatore(eneltel, false);
+    }
+}
+
+function togglePinAllSearchResults() {
+    if (!lastModalSearchResults || lastModalSearchResults.length === 0) return;
+
+    const displayList = lastModalSearchResults.slice(0, 100);
+    const allPinned = displayList.every(c => pinnedContatori.has(c.eneltel));
+
+    if (allPinned) {
+        displayList.forEach(c => {
+            pinnedContatori.delete(c.eneltel);
+            if (pinnedMarkers.has(c.eneltel)) {
+                map.removeLayer(pinnedMarkers.get(c.eneltel));
+                pinnedMarkers.delete(c.eneltel);
+            }
+        });
+    } else {
+        displayList.forEach(c => {
+            pinnedContatori.set(c.eneltel, c);
+        });
+        renderPinnedMarkers();
+    }
+
+    updatePinnedToolbar();
+    aggiornaStatoPinInModal();
+}
+
+function unpinAllContatori() {
+    pinnedContatori.clear();
+    pinnedMarkers.forEach(m => map.removeLayer(m));
+    pinnedMarkers.clear();
+
+    updatePinnedToolbar();
+    aggiornaStatoPinInModal();
+
+    if (currentView === 'detail') {
+        preserveMapView = true;
+        ridisegnaVistaDettaglioSenzaSidebar();
+    } else if (currentView === 'tuttiOperatori' || currentView === 'multiOperatori') {
+        preserveMapView = true;
+        ridisegnaVistaOperatoriSenzaSidebar();
+    } else if (currentView === 'operatore') {
+        preserveMapView = true;
+        ridisegnaVistaSingoloOperatoreSenzaSidebar();
+    }
+}
+
+function mostraContatoriPinnatiSullaMappa() {
+    if (UiModal.isOpen('advancedSearchModal')) {
+        UiModal.close('advancedSearchModal');
+    }
+    if (pinnedContatori.size === 0) return;
+
+    renderPinnedMarkers();
+    centraMappaSuPinnati();
+}
+
+function centraMappaSuPinnati() {
+    if (pinnedContatori.size === 0) return;
+
+    const pts = [];
+    pinnedContatori.forEach(c => {
+        if (isValidCoordinate(c.lat, c.lon)) pts.push([c.lat, c.lon]);
+    });
+
+    if (pts.length === 0) return;
+
+    if (pts.length === 1) {
+        map.flyTo(pts[0], 18);
+        const eneltel = pinnedContatori.keys().next().value;
+        setTimeout(() => {
+            const mk = pinnedMarkers.get(eneltel);
+            if (mk) mk.openPopup();
+        }, 400);
+    } else {
+        const bounds = L.latLngBounds(pts);
+        map.fitBounds(bounds, { padding: [60, 60] });
+    }
+}
+
+function vaiAContatoreSingolo(eneltel) {
+    const c = contatori.find(x => x.eneltel === eneltel);
+    if (!c) return;
+
+    pinnedContatori.set(eneltel, c);
+
+    if (UiModal.isOpen('advancedSearchModal')) {
+        UiModal.close('advancedSearchModal');
+    }
+
+    const zonaDelContatore = zone.find(z => {
+        return z.comuni.some(comune => comune.toLowerCase() === (c.comune || '').toLowerCase());
+    });
+
+    const targetZona = zonaDelContatore ? zonaDelContatore.nome : c.comune;
+    apriDettaglio(targetZona, c.data);
+
+    setTimeout(() => {
+        if (isValidCoordinate(c.lat, c.lon)) {
+            map.flyTo([c.lat, c.lon], 18);
+            setTimeout(() => {
+                const mk = pinnedMarkers.get(eneltel) || markers.find(m => m.contatore && m.contatore.eneltel === eneltel);
+                if (mk) mk.openPopup();
+            }, 500);
+        }
+    }, 300);
+}
+
+function pinContatoreFromPopup(eneltel) {
+    const contatore = contatori.find(c => c.eneltel === eneltel);
+    if (!contatore) return;
+
+    if (pinnedContatori.has(eneltel)) {
+        unpinContatore(eneltel);
+        return;
+    }
+
+    pinnedContatori.set(eneltel, contatore);
+
+    if (tempSchedulabileMarker) {
+        map.removeLayer(tempSchedulabileMarker);
+        tempSchedulabileMarker = null;
+    }
+
+    const pinIcon = L.divIcon({
+        className: 'marker-pinned',
+        html: `<div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 3px solid white; box-shadow: 0 4px 12px rgba(0,0,0,0.4); font-size: 16px;">📌</div>`,
+        iconSize: [32, 32],
+        iconAnchor: [16, 16]
+    });
+
+    if (pinnedMarkers.has(eneltel)) {
+        map.removeLayer(pinnedMarkers.get(eneltel));
+    }
+    const marker = L.marker([contatore.lat, contatore.lon], { icon: pinIcon, zIndexOffset: 10000 })
+        .bindPopup(() => createContatorePopup(contatore, '📌', '#f5576c'))
+        .addTo(map);
+    marker.contatore = contatore;
+    pinnedMarkers.set(eneltel, marker);
+    marker.openPopup();
+
+    updatePinnedToolbar();
+    aggiornaStatoPinInModal();
+
+    if (currentView === 'detail') {
+        preserveMapView = true;
+        ridisegnaVistaDettaglioSenzaSidebar();
+    } else if (currentView === 'tuttiOperatori' || currentView === 'multiOperatori') {
+        preserveMapView = true;
+        ridisegnaVistaOperatoriSenzaSidebar();
+    } else if (currentView === 'operatore') {
+        preserveMapView = true;
+        ridisegnaVistaSingoloOperatoreSenzaSidebar();
+    }
+}
+
+function ridisegnaVistaDettaglioSenzaSidebar() {
+    if (currentView !== 'detail' || !currentZona) return;
+    const zonaInfo = zone.find(z => z.nome === currentZona);
+    let contatoriData;
+    const dataLabel = showAllDatesInDetail ? 'Tutte' : currentData;
+
+    if (!zonaInfo) {
+        if (showAllDatesInDetail) {
+            contatoriData = contatori.filter(c =>
+                c.comune.toUpperCase() === currentZona.toUpperCase() &&
+                !c.annullato &&
+                isValidCoordinate(c.lat, c.lon)
+            );
+        } else {
+            contatoriData = contatori.filter(c =>
+                c.data === currentData &&
+                c.comune.toUpperCase() === currentZona.toUpperCase()
+            );
+        }
+    } else {
+        const comuniZona = zonaInfo.comuni.map(c => c.toLowerCase());
+        if (showAllDatesInDetail) {
+            contatoriData = contatori.filter(c =>
+                comuniZona.includes(c.comune.toLowerCase()) &&
+                !c.annullato &&
+                isValidCoordinate(c.lat, c.lon)
+            );
+        } else {
+            contatoriData = contatori.filter(c =>
+                c.data === currentData &&
+                comuniZona.includes(c.comune.toLowerCase())
+            );
+        }
+    }
+
+    if (currentLCL) contatoriData = contatoriData.filter(c => c.lcl === currentLCL);
+    if (filterAppuntamentiOnly) contatoriData = contatoriData.filter(c => c.is_appuntamento);
+
+    const perTecnico = {};
+    contatoriData.forEach(c => {
+        const tec = c.tecnico || 'TUTTI';
+        if (!perTecnico[tec]) perTecnico[tec] = [];
+        perTecnico[tec].push(c);
+    });
+
+    Object.keys(perTecnico).forEach(tec => {
+        perTecnico[tec] = ordinaPercorsoJS(perTecnico[tec]);
+    });
+
+    preserveMapView = true;
+    renderDettaglioMappa(perTecnico, dataLabel);
+}
+
+function ridisegnaVistaOperatoriSenzaSidebar() {
+    let contatoriData = contatori.filter(c => c.data === currentData);
+    if (currentView === 'multiOperatori') {
+        const selOps = getSelectedOperatori();
+        contatoriData = contatoriData.filter(c => selOps.includes(c.tecnico || 'TUTTI'));
+    }
+    if (currentLCL) contatoriData = contatoriData.filter(c => c.lcl === currentLCL);
+
+    const operatoriMap = new Map();
+    contatoriData.forEach(c => {
+        const tec = c.tecnico || 'TUTTI';
+        if (!operatoriMap.has(tec)) operatoriMap.set(tec, []);
+        operatoriMap.get(tec).push(c);
+    });
+
+    const percorsiPerOperatore = [];
+    operatoriMap.forEach((contatoriOp, op) => {
+        percorsiPerOperatore.push({
+            operatore: op,
+            percorso: ordinaPercorsoJS(contatoriOp),
+            colore: getColore(op)
+        });
+    });
+
+    preserveMapView = true;
+    renderPercorsoTuttiOperatoriMappa(percorsiPerOperatore, currentData);
+}
+
+function ridisegnaVistaSingoloOperatoreSenzaSidebar() {
+    let contatoriOp = contatori.filter(c =>
+        c.data === currentData &&
+        (c.tecnico || 'TUTTI') === currentOperatore
+    );
+    if (currentLCL) contatoriOp = contatoriOp.filter(c => c.lcl === currentLCL);
+    const percorsoOrdinato = ordinaPercorsoJS(contatoriOp);
+    preserveMapView = true;
+    renderPercorsoOperatoreMappa(percorsoOrdinato, currentData, currentOperatore);
+}
+
 function applyModalAdvancedSearch() {
     const nominativo = document.getElementById('modalSearchNominativo').value.trim().toLowerCase();
     const pod = document.getElementById('modalSearchPod').value.trim().toLowerCase();
@@ -1777,10 +2209,8 @@ function applyModalAdvancedSearch() {
 
     if (!nominativo && !pod && !eneltel && !comune && !via && !telefono) return;
 
-    // Salva i dati nel localStorage
     saveAdvancedSearchData();
 
-    // Cerca in TUTTI i contatori (non solo nella zona/data corrente)
     let risultati = contatori.filter(c => {
         let match = true;
         if (nominativo && !(c.cliente || '').toLowerCase().includes(nominativo)) match = false;
@@ -1792,386 +2222,118 @@ function applyModalAdvancedSearch() {
         return match;
     });
 
+    lastModalSearchResults = risultati;
     const resultsDiv = document.getElementById('modalSearchResults');
 
     if (risultati.length === 0) {
-        resultsDiv.innerHTML = '<div class="no-results">Nessun contatore trovato</div>';
+        resultsDiv.innerHTML = '<div class="no-results" style="padding: 20px; text-align: center; color: var(--text-muted);">🔍 Nessun contatore trovato con i criteri specificati</div>';
+        aggiornaModalPinnedBar();
         return;
     }
 
-    resultsDiv.innerHTML = risultati.slice(0, 10).map(c => `
-        <div class="pin-result-item ${pinnedContatore && pinnedContatore.eneltel === c.eneltel ? 'pinned' : ''}"
-             onclick="pinContatore('${c.eneltel}')">
-            <div style="display: flex; align-items: center; justify-content: space-between;">
-                <div class="pin-result-name">${c.cliente}</div>
-                <button class="tappa-edit-btn" onclick="event.stopPropagation(); toggleAdvancedSearchModal(); apriVistaModifica('${c.eneltel}')" title="Modifica" style="opacity: 0.7; font-size: 1.2em;">✏️</button>
+    renderModalSearchResultsMarkup(risultati);
+    aggiornaModalPinnedBar();
+}
+
+function renderModalSearchResultsMarkup(risultati) {
+    const resultsDiv = document.getElementById('modalSearchResults');
+    if (!resultsDiv) return;
+
+    const displayList = risultati.slice(0, 100);
+    const allPinned = displayList.length > 0 && displayList.every(c => pinnedContatori.has(c.eneltel));
+
+    let html = `
+        <div class="pin-results-header">
+            <div class="pin-results-count">
+                <span>🔍 <strong>${risultati.length}</strong> contator${risultati.length === 1 ? 'e trovato' : 'i trovati'}</span>
+                ${risultati.length > 100 ? '<small style="color:var(--text-muted);">(primi 100)</small>' : ''}
             </div>
-            <div class="pin-result-info">
-                📍 ${c.comune} - ${c.via || 'N/A'}<br>
-                🔢 ${c.eneltel || 'N/A'} | ⚡ ${c.pod || 'N/A'}<br>
-                📅 ${formatDate(c.data)}
+            <div class="pin-results-actions">
+                <button class="btn-pin-batch" onclick="togglePinAllSearchResults()">
+                    ${allPinned ? '❌ Sblocca tutti' : '📌 Pinna tutti (' + displayList.length + ')'}
+                </button>
             </div>
         </div>
-    `).join('');
-}
+        <div class="pin-results-list">
+    `;
 
-function pinContatore(eneltel) {
-    pinnedContatore = contatori.find(c => c.eneltel === eneltel);
-    if (!pinnedContatore) return;
-
-    toggleAdvancedSearchModal();
-
-    // Trova la zona che contiene questo contatore
-    const zonaDelContatore = zone.find(z => {
-        return z.comuni.some(comune => comune.toLowerCase() === pinnedContatore.comune.toLowerCase());
+    displayList.forEach(c => {
+        const isPinned = pinnedContatori.has(c.eneltel);
+        html += `
+            <div class="pin-result-item ${isPinned ? 'pinned' : ''}" data-eneltel="${c.eneltel}" onclick="togglePinContatore('${c.eneltel}')">
+                <div class="pin-result-left">
+                    <button class="btn-pin-checkbox ${isPinned ? 'pinned' : ''}" 
+                            onclick="event.stopPropagation(); togglePinContatore('${c.eneltel}')" 
+                            title="${isPinned ? 'Rimuovi pin' : 'Fissa sulla mappa'}">
+                        ${isPinned ? '📌' : '➕'}
+                    </button>
+                </div>
+                <div class="pin-result-main">
+                    <div class="pin-result-name-row">
+                        <span class="pin-result-name">${c.cliente || 'N/D'}</span>
+                        ${c.is_appuntamento ? '<span class="pin-badge-app">☎️ App.</span>' : ''}
+                        ${isPinned ? '<span class="pin-badge-pinned">📌 Pinnato</span>' : ''}
+                    </div>
+                    <div class="pin-result-info">
+                        📍 <strong>${c.comune || 'N/D'}</strong> - ${c.via || 'N/D'}${c.civico ? ', ' + c.civico : ''}<br>
+                        🔢 ${c.eneltel || 'N/D'} | ⚡ ${c.pod || 'N/D'} | 📅 ${formatDate(c.data)}
+                    </div>
+                </div>
+                <div class="pin-result-actions" onclick="event.stopPropagation()">
+                    <button class="btn-pin-goto" onclick="vaiAContatoreSingolo('${c.eneltel}')" title="Apri e centra sulla mappa">
+                        🗺️ Vai
+                    </button>
+                    <button class="tappa-edit-btn" onclick="toggleAdvancedSearchModal(); apriVistaModifica('${c.eneltel}')" title="Modifica" style="opacity: 0.7; font-size: 1.1em;">
+                        ✏️
+                    </button>
+                </div>
+            </div>
+        `;
     });
 
-    if (!zonaDelContatore) {
-        console.error('Zona non trovata per il contatore', pinnedContatore);
-        return;
-    }
+    html += `</div>`;
+    resultsDiv.innerHTML = html;
+    if (window.refreshLucideIcons) window.refreshLucideIcons();
+}
 
-    // Naviga alla vista dettaglio della zona e data del contatore
-    apriDettaglio(zonaDelContatore.nome, pinnedContatore.data);
+function aggiornaStatoPinInModal() {
+    if (lastModalSearchResults && lastModalSearchResults.length > 0) {
+        const items = document.querySelectorAll('.pin-result-item[data-eneltel]');
+        items.forEach(el => {
+            const eneltel = el.dataset.eneltel;
+            const isPinned = pinnedContatori.has(eneltel);
+            el.classList.toggle('pinned', isPinned);
 
-    // Zoom automatico sul contatore pinnato dopo il rendering
-    setTimeout(() => {
-        if (pinnedContatore) {
-            map.flyTo([pinnedContatore.lat, pinnedContatore.lon], 18);
-            // Apri il popup del marker pinnato (priorità al pinnedMarker rosa)
-            setTimeout(() => {
-                if (pinnedMarker) {
-                    pinnedMarker.openPopup();
-                } else {
-                    const marker = markers.find(m => m.contatore && m.contatore.eneltel === pinnedContatore.eneltel);
-                    if (marker) marker.openPopup();
+            const btn = el.querySelector('.btn-pin-checkbox');
+            if (btn) {
+                btn.classList.toggle('pinned', isPinned);
+                btn.innerHTML = isPinned ? '📌' : '➕';
+                btn.title = isPinned ? 'Rimuovi pin' : 'Fissa sulla mappa';
+            }
+
+            const nameRow = el.querySelector('.pin-result-name-row');
+            if (nameRow) {
+                let badge = nameRow.querySelector('.pin-badge-pinned');
+                if (isPinned && !badge) {
+                    const span = document.createElement('span');
+                    span.className = 'pin-badge-pinned';
+                    span.textContent = '📌 Pinnato';
+                    nameRow.appendChild(span);
+                } else if (!isPinned && badge) {
+                    badge.remove();
                 }
-            }, 500);
-        }
-    }, 300);
-}
-
-function unpinContatore() {
-    const wasContatore = pinnedContatore ? { ...pinnedContatore } : null;
-    const wasEneltel = wasContatore ? wasContatore.eneltel : null;
-    pinnedContatore = null;
-    if (pinnedMarker) {
-        map.removeLayer(pinnedMarker);
-        pinnedMarker = null;
-    }
-
-    // Controlla se il contatore appena unpinnato è uno schedulabile
-    // (non ha data, o data nel passato, e non è annullato)
-    let isSchedulabile = false;
-    if (wasContatore) {
-        const oggiStr = getOggiStr();
-        isSchedulabile = !wasContatore.annullato && 
-            (!wasContatore.data || wasContatore.data === '' || wasContatore.data < oggiStr);
-    }
-
-    if (isSchedulabile && wasContatore && isValidCoordinate(wasContatore.lat, wasContatore.lon)) {
-        if (currentView === 'detail') {
-            // In vista dettaglio, fai il re-render completo per aggiornare tutti i marker
-            // (il contatore schedulabile verrà renderizzato normalmente nel loop)
-        } else if (currentView === 'tuttiOperatori' || currentView === 'operatore' || currentView === 'multiOperatori') {
-            // Le viste percorso hanno già i circleMarker schedulabili se filtro attivo
-            // Basta ri-renderizzare la mappa, il circleMarker ricompare da solo
-        } else {
-            // In viste zone/comuni non serve fare nulla di speciale
-            // Il marker schedulabile non è visibile in queste viste
-        }
-    }
-
-    if (currentView === 'detail') {
-        // Ricrea solo la mappa senza pulire la sidebar
-        const zonaInfo = zone.find(z => z.nome === currentZona);
-        let contatoriData;
-        const dataLabel = showAllDatesInDetail ? 'Tutte' : currentData;
-
-        if (!zonaInfo) {
-            // È un comune singolo, non una zona
-            if (showAllDatesInDetail) {
-                contatoriData = contatori.filter(c =>
-                    c.comune.toUpperCase() === currentZona.toUpperCase() &&
-                    !c.annullato &&
-                    isValidCoordinate(c.lat, c.lon)
-                );
-            } else {
-                contatoriData = contatori.filter(c =>
-                    c.data === currentData &&
-                    c.comune.toUpperCase() === currentZona.toUpperCase()
-                );
             }
-        } else {
-            // È una zona
-            const comuniZona = zonaInfo.comuni.map(c => c.toLowerCase());
-            if (showAllDatesInDetail) {
-                contatoriData = contatori.filter(c =>
-                    comuniZona.includes(c.comune.toLowerCase()) &&
-                    !c.annullato &&
-                    isValidCoordinate(c.lat, c.lon)
-                );
-            } else {
-                contatoriData = contatori.filter(c =>
-                    c.data === currentData &&
-                    comuniZona.includes(c.comune.toLowerCase())
-                );
-            }
-        }
-
-        if (currentLCL) {
-            contatoriData = contatoriData.filter(c => c.lcl === currentLCL);
-        }
-        if (filterAppuntamentiOnly) {
-            contatoriData = contatoriData.filter(c => c.is_appuntamento);
-        }
-
-        const perTecnico = {};
-        contatoriData.forEach(c => {
-            const tec = c.tecnico || 'TUTTI';
-            if (!perTecnico[tec]) perTecnico[tec] = [];
-            perTecnico[tec].push(c);
         });
 
-        Object.keys(perTecnico).forEach(tec => {
-            perTecnico[tec] = ordinaPercorsoJS(perTecnico[tec]);
-        });
-
-        // Ricrea solo la mappa, non la sidebar - preserva zoom
-        preserveMapView = true;
-        renderDettaglioMappa(perTecnico, dataLabel);
-
-        // Dopo il render, cerca il marker del contatore appena unpinnato e apri il suo popup
-        if (wasEneltel) {
-            setTimeout(() => {
-                const m = markers.find(mk => mk.contatore && mk.contatore.eneltel === wasEneltel);
-                if (m) m.openPopup();
-            }, 100);
+        const batchBtn = document.querySelector('.btn-pin-batch');
+        if (batchBtn) {
+            const displayList = lastModalSearchResults.slice(0, 100);
+            const allPinned = displayList.length > 0 && displayList.every(c => pinnedContatori.has(c.eneltel));
+            batchBtn.innerHTML = allPinned ? '❌ Sblocca tutti' : '📌 Pinna tutti (' + displayList.length + ')';
         }
-    } else if (currentView === 'tuttiOperatori') {
-        // Ricostruisci la mappa con tutti gli operatori
-        let contatoriData = contatori.filter(c => c.data === currentData);
-        if (currentLCL) contatoriData = contatoriData.filter(c => c.lcl === currentLCL);
-        const operatoriMap = new Map();
-        contatoriData.forEach(c => {
-            const tec = c.tecnico || 'TUTTI';
-            if (!operatoriMap.has(tec)) operatoriMap.set(tec, []);
-            operatoriMap.get(tec).push(c);
-        });
-        const percorsiPerOperatore = [];
-        operatoriMap.forEach((contatoriOp, op) => {
-            percorsiPerOperatore.push({
-                operatore: op,
-                percorso: ordinaPercorsoJS(contatoriOp),
-                colore: getColore(op)
-            });
-        });
-        preserveMapView = true;
-        renderPercorsoTuttiOperatoriMappa(percorsiPerOperatore, currentData);
-        if (wasEneltel) {
-            setTimeout(() => {
-                const m = markers.find(mk => mk.contatore && mk.contatore.eneltel === wasEneltel);
-                if (m) m.openPopup();
-            }, 100);
-        }
-    } else if (currentView === 'multiOperatori') {
-        // Ricostruisci la mappa per gli operatori selezionati
-        const selOps = getSelectedOperatori();
-        let contatoriData = contatori.filter(c => c.data === currentData && selOps.includes(c.tecnico || 'TUTTI'));
-        if (currentLCL) contatoriData = contatoriData.filter(c => c.lcl === currentLCL);
-        const operatoriMap = new Map();
-        contatoriData.forEach(c => {
-            const tec = c.tecnico || 'TUTTI';
-            if (!operatoriMap.has(tec)) operatoriMap.set(tec, []);
-            operatoriMap.get(tec).push(c);
-        });
-        const percorsiPerOperatore2 = [];
-        operatoriMap.forEach((contatoriOp, op) => {
-            percorsiPerOperatore2.push({
-                operatore: op,
-                percorso: ordinaPercorsoJS(contatoriOp),
-                colore: getColore(op)
-            });
-        });
-        preserveMapView = true;
-        renderPercorsoTuttiOperatoriMappa(percorsiPerOperatore2, currentData);
-        if (wasEneltel) {
-            setTimeout(() => {
-                const m = markers.find(mk => mk.contatore && mk.contatore.eneltel === wasEneltel);
-                if (m) m.openPopup();
-            }, 100);
-        }
-    } else if (currentView === 'operatore') {
-        // Ricostruisci la mappa per singolo operatore
-        let contatoriOp = contatori.filter(c =>
-            c.data === currentData &&
-            (c.tecnico || 'TUTTI') === currentOperatore
-        );
-        if (currentLCL) contatoriOp = contatoriOp.filter(c => c.lcl === currentLCL);
-        const percorsoOrdinato = ordinaPercorsoJS(contatoriOp);
-        preserveMapView = true;
-        renderPercorsoOperatoreMappa(percorsoOrdinato, currentData, currentOperatore);
-        if (wasEneltel) {
-            setTimeout(() => {
-                const m = markers.find(mk => mk.contatore && mk.contatore.eneltel === wasEneltel);
-                if (m) m.openPopup();
-            }, 100);
-        }
-    } else if (currentView === 'zone') {
-        // In vista zone, basta che il pin marker sia stato rimosso
-        // (già fatto sopra)
-    } else if (currentView === 'comuni') {
-        // In vista comuni, idem
-    }
-}
-
-function pinContatoreFromPopup(eneltel) {
-    // Trova il contatore nell'array usando l'eneltel
-    const contatore = contatori.find(c => c.eneltel === eneltel);
-    if (!contatore) return;
-
-    // Se è già pinnato, rimuovi il pin
-    if (pinnedContatore && pinnedContatore.eneltel === eneltel) {
-        unpinContatore();
-        return;
     }
 
-    // Altrimenti salva in pinnedContatore
-    pinnedContatore = contatore;
-
-    // Chiudi tutti i popup aperti
-    map.closePopup();
-
-    // Se c'era un marker temporaneo schedulabile, trasformalo nel marker pinned
-    if (tempSchedulabileMarker) {
-        map.removeLayer(tempSchedulabileMarker);
-        tempSchedulabileMarker = null;
-    }
-    
-    // Crea subito il marker pinned sulla mappa
-    const pinIcon = L.divIcon({
-        className: 'marker-pinned',
-        html: `<div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 3px solid white; box-shadow: 0 4px 12px rgba(0,0,0,0.4); font-size: 16px;">📌</div>`,
-        iconSize: [32, 32],
-        iconAnchor: [16, 16]
-    });
-    if (pinnedMarker) map.removeLayer(pinnedMarker);
-    pinnedMarker = L.marker([contatore.lat, contatore.lon], { icon: pinIcon, zIndexOffset: 10000 })
-        .bindPopup(() => createContatorePopup(contatore, '📌', '#f5576c'))
-        .addTo(map);
-    pinnedMarker.openPopup();
-
-    // Ricarica solo la mappa mantenendo la sidebar invariata
-    if (currentView === 'detail') {
-        // Ottieni i contatori attuali dalla sidebar
-        const zonaInfo = zone.find(z => z.nome === currentZona);
-        let contatoriData;
-        const dataLabel = showAllDatesInDetail ? 'Tutte' : currentData;
-
-        if (!zonaInfo) {
-            // È un comune singolo, non una zona
-            if (showAllDatesInDetail) {
-                contatoriData = contatori.filter(c =>
-                    c.comune.toUpperCase() === currentZona.toUpperCase() &&
-                    !c.annullato &&
-                    isValidCoordinate(c.lat, c.lon)
-                );
-            } else {
-                contatoriData = contatori.filter(c =>
-                    c.data === currentData &&
-                    c.comune.toUpperCase() === currentZona.toUpperCase()
-                );
-            }
-        } else {
-            // È una zona
-            const comuniZona = zonaInfo.comuni.map(c => c.toLowerCase());
-            if (showAllDatesInDetail) {
-                contatoriData = contatori.filter(c =>
-                    comuniZona.includes(c.comune.toLowerCase()) &&
-                    !c.annullato &&
-                    isValidCoordinate(c.lat, c.lon)
-                );
-            } else {
-                contatoriData = contatori.filter(c =>
-                    c.data === currentData &&
-                    comuniZona.includes(c.comune.toLowerCase())
-                );
-            }
-        }
-
-        if (currentLCL) {
-            contatoriData = contatoriData.filter(c => c.lcl === currentLCL);
-        }
-        if (filterAppuntamentiOnly) {
-            contatoriData = contatoriData.filter(c => c.is_appuntamento);
-        }
-
-        const perTecnico = {};
-        contatoriData.forEach(c => {
-            const tec = c.tecnico || 'TUTTI';
-            if (!perTecnico[tec]) perTecnico[tec] = [];
-            perTecnico[tec].push(c);
-        });
-
-        Object.keys(perTecnico).forEach(tec => {
-            perTecnico[tec] = ordinaPercorsoJS(perTecnico[tec]);
-        });
-
-        // Ricarica solo la mappa, non la sidebar - preserva zoom
-        preserveMapView = true;
-        renderDettaglioMappa(perTecnico, dataLabel);
-    } else if (currentView === 'tuttiOperatori') {
-        // Ricostruisci la mappa con tutti gli operatori
-        let contatoriData = contatori.filter(c => c.data === currentData);
-        if (currentLCL) contatoriData = contatoriData.filter(c => c.lcl === currentLCL);
-        const operatoriMap = new Map();
-        contatoriData.forEach(c => {
-            const tec = c.tecnico || 'TUTTI';
-            if (!operatoriMap.has(tec)) operatoriMap.set(tec, []);
-            operatoriMap.get(tec).push(c);
-        });
-        const percorsiPerOperatore = [];
-        operatoriMap.forEach((contatoriOp, op) => {
-            percorsiPerOperatore.push({
-                operatore: op,
-                percorso: ordinaPercorsoJS(contatoriOp),
-                colore: getColore(op)
-            });
-        });
-        preserveMapView = true;
-        renderPercorsoTuttiOperatoriMappa(percorsiPerOperatore, currentData);
-    } else if (currentView === 'multiOperatori') {
-        // Ricostruisci la mappa per gli operatori selezionati
-        const selOps = getSelectedOperatori();
-        let contatoriData = contatori.filter(c => c.data === currentData && selOps.includes(c.tecnico || 'TUTTI'));
-        if (currentLCL) contatoriData = contatoriData.filter(c => c.lcl === currentLCL);
-        const operatoriMap = new Map();
-        contatoriData.forEach(c => {
-            const tec = c.tecnico || 'TUTTI';
-            if (!operatoriMap.has(tec)) operatoriMap.set(tec, []);
-            operatoriMap.get(tec).push(c);
-        });
-        const percorsiPerOperatore2 = [];
-        operatoriMap.forEach((contatoriOp, op) => {
-            percorsiPerOperatore2.push({
-                operatore: op,
-                percorso: ordinaPercorsoJS(contatoriOp),
-                colore: getColore(op)
-            });
-        });
-        preserveMapView = true;
-        renderPercorsoTuttiOperatoriMappa(percorsiPerOperatore2, currentData);
-    } else if (currentView === 'operatore') {
-        // Ricostruisci la mappa per singolo operatore
-        let contatoriOp = contatori.filter(c =>
-            c.data === currentData &&
-            (c.tecnico || 'TUTTI') === currentOperatore
-        );
-        if (currentLCL) contatoriOp = contatoriOp.filter(c => c.lcl === currentLCL);
-        const percorsoOrdinato = ordinaPercorsoJS(contatoriOp);
-        preserveMapView = true;
-        renderPercorsoOperatoreMappa(percorsoOrdinato, currentData, currentOperatore);
-    }
+    aggiornaModalPinnedBar();
 }
 
 function saveAdvancedSearchData() {
@@ -2956,9 +3118,9 @@ function renderPercorsoTuttiOperatoriMappa(percorsiPerOperatore, data) {
             colore: colore
         }));
         
-        // Filtra il contatore pinnato PRIMA del raggruppamento
-        const contPerMappa = pinnedContatore
-            ? listaConIndice.filter(c => c.eneltel !== pinnedContatore.eneltel)
+        // Filtra i contatori pinnati PRIMA del raggruppamento
+        const contPerMappa = (pinnedContatori && pinnedContatori.size > 0)
+            ? listaConIndice.filter(c => !pinnedContatori.has(c.eneltel))
             : listaConIndice;
         
         // Raggruppa contatori sovrapposti
@@ -3039,23 +3201,8 @@ function renderPercorsoTuttiOperatoriMappa(percorsiPerOperatore, data) {
         aggiungiMarkerSchedulabili(allPoints);
     }
     
-    // Aggiungi marker pinned se presente
-    if (pinnedContatore) {
-        const pinIcon = L.divIcon({
-            className: 'marker-pinned',
-            html: `<div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 3px solid white; box-shadow: 0 4px 12px rgba(0,0,0,0.4); font-size: 16px;">📌</div>`,
-            iconSize: [32, 32],
-            iconAnchor: [16, 16]
-        });
-
-        if (pinnedMarker) map.removeLayer(pinnedMarker);
-
-        pinnedMarker = L.marker([pinnedContatore.lat, pinnedContatore.lon], { icon: pinIcon, zIndexOffset: 10000 })
-            .bindPopup(() => createContatorePopup(pinnedContatore, '📌', '#f5576c'))
-            .addTo(map);
-
-        allPoints.push([pinnedContatore.lat, pinnedContatore.lon]);
-    }
+    // Aggiungi marker pinned se presenti
+    renderPinnedMarkers(allPoints);
     
     // Ripristina la vista salvata o centra sui punti
     if (savedCenter && savedZoom) {
@@ -3422,9 +3569,9 @@ function renderPercorsoOperatoreMappa(lista, data, operatore) {
         colore: colore
     }));
     
-    // Filtra il contatore pinnato PRIMA del raggruppamento
-    const contPerMappa = pinnedContatore
-        ? listaConIndice.filter(c => c.eneltel !== pinnedContatore.eneltel)
+    // Filtra i contatori pinnati PRIMA del raggruppamento
+    const contPerMappa = (pinnedContatori && pinnedContatori.size > 0)
+        ? listaConIndice.filter(c => !pinnedContatori.has(c.eneltel))
         : listaConIndice;
     
     // Raggruppa contatori sovrapposti
@@ -3519,23 +3666,8 @@ function renderPercorsoOperatoreMappa(lista, data, operatore) {
         aggiungiMarkerSchedulabili(allPoints);
     }
     
-    // Aggiungi marker pinned se presente
-    if (pinnedContatore) {
-        const pinIcon = L.divIcon({
-            className: 'marker-pinned',
-            html: `<div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 3px solid white; box-shadow: 0 4px 12px rgba(0,0,0,0.4); font-size: 16px;">📌</div>`,
-            iconSize: [32, 32],
-            iconAnchor: [16, 16]
-        });
-
-        if (pinnedMarker) map.removeLayer(pinnedMarker);
-
-        pinnedMarker = L.marker([pinnedContatore.lat, pinnedContatore.lon], { icon: pinIcon, zIndexOffset: 10000 })
-            .bindPopup(() => createContatorePopup(pinnedContatore, '📌', '#f5576c'))
-            .addTo(map);
-
-        allPoints.push([pinnedContatore.lat, pinnedContatore.lon]);
-    }
+    // Aggiungi marker pinned se presenti
+    renderPinnedMarkers(allPoints);
     
     // Ripristina la vista salvata o centra sui punti
     if (savedCenter && savedZoom) {
@@ -3868,19 +4000,8 @@ function renderZoneMappa(zoneFiltrate) {
         zoneCircles.push(marker);
     });
 
-    // Aggiungi marker pinned se presente (persiste in tutte le viste)
-    if (pinnedContatore) {
-        const pinIcon = L.divIcon({
-            className: 'marker-pinned',
-            html: `<div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 3px solid white; box-shadow: 0 4px 12px rgba(0,0,0,0.4); font-size: 16px;">📌</div>`,
-            iconSize: [32, 32],
-            iconAnchor: [16, 16]
-        });
-        if (pinnedMarker) map.removeLayer(pinnedMarker);
-        pinnedMarker = L.marker([pinnedContatore.lat, pinnedContatore.lon], { icon: pinIcon, zIndexOffset: 10000 })
-            .bindPopup(() => createContatorePopup(pinnedContatore, '📌', '#f5576c'))
-            .addTo(map);
-    }
+    // Aggiungi marker pinned se presenti (persistono in tutte le viste)
+    renderPinnedMarkers();
 
     // Ripristina vista salvata o centra sui punti
     if (savedCenter && savedZoom) {
@@ -4014,19 +4135,8 @@ function renderRisultatiRicercaMappa(contatoriTrovati) {
         map.fitBounds(bounds, { padding: [50, 50] });
     }
 
-    // Aggiungi marker pinned se presente
-    if (pinnedContatore) {
-        const pinIcon = L.divIcon({
-            className: 'marker-pinned',
-            html: `<div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 3px solid white; box-shadow: 0 4px 12px rgba(0,0,0,0.4); font-size: 16px;">📌</div>`,
-            iconSize: [32, 32],
-            iconAnchor: [16, 16]
-        });
-        if (pinnedMarker) map.removeLayer(pinnedMarker);
-        pinnedMarker = L.marker([pinnedContatore.lat, pinnedContatore.lon], { icon: pinIcon, zIndexOffset: 10000 })
-            .bindPopup(() => createContatorePopup(pinnedContatore, '📌', '#f5576c'))
-            .addTo(map);
-    }
+    // Aggiungi marker pinned se presenti
+    renderPinnedMarkers();
 }
 
 // ============================================================
@@ -4353,19 +4463,8 @@ function renderComuniMappa(comuniList) {
         zoneCircles.push(marker);
     });
 
-    // Aggiungi marker pinned se presente (persiste in tutte le viste)
-    if (pinnedContatore) {
-        const pinIcon = L.divIcon({
-            className: 'marker-pinned',
-            html: `<div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 3px solid white; box-shadow: 0 4px 12px rgba(0,0,0,0.4); font-size: 16px;">📌</div>`,
-            iconSize: [32, 32],
-            iconAnchor: [16, 16]
-        });
-        if (pinnedMarker) map.removeLayer(pinnedMarker);
-        pinnedMarker = L.marker([pinnedContatore.lat, pinnedContatore.lon], { icon: pinIcon, zIndexOffset: 10000 })
-            .bindPopup(() => createContatorePopup(pinnedContatore, '📌', '#f5576c'))
-            .addTo(map);
-    }
+    // Aggiungi marker pinned se presenti (persistono in tutte le viste)
+    renderPinnedMarkers();
 
     // Ripristina vista salvata o centra sui punti (usa solo coordinate valide)
     if (savedCenter && savedZoom) {
@@ -4930,10 +5029,10 @@ function renderDettaglioMappa(perTecnico, data) {
         });
     });
     
-    // Filtra il contatore pinnato PRIMA del raggruppamento
-    // (evita che finisca in un gruppo sovrapposto creando duplicati)
-    const contPerMappa = pinnedContatore
-        ? tuttiContatori.filter(c => c.eneltel !== pinnedContatore.eneltel)
+    // Filtra i contatori pinnati PRIMA del raggruppamento
+    // (evita che finiscano in un gruppo sovrapposto creando duplicati)
+    const contPerMappa = (pinnedContatori && pinnedContatori.size > 0)
+        ? tuttiContatori.filter(c => !pinnedContatori.has(c.eneltel))
         : tuttiContatori;
 
     // Raggruppa contatori sovrapposti
@@ -5002,23 +5101,8 @@ function renderDettaglioMappa(perTecnico, data) {
         allPoints.push([gruppo.lat, gruppo.lon]);
     });
     
-    // Aggiungi marker pinned se presente
-    if (pinnedContatore) {
-        const pinIcon = L.divIcon({
-            className: 'marker-pinned',
-            html: `<div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 3px solid white; box-shadow: 0 4px 12px rgba(0,0,0,0.4); font-size: 16px;">📌</div>`,
-            iconSize: [32, 32],
-            iconAnchor: [16, 16]
-        });
-
-        if (pinnedMarker) map.removeLayer(pinnedMarker);
-
-        pinnedMarker = L.marker([pinnedContatore.lat, pinnedContatore.lon], { icon: pinIcon, zIndexOffset: 10000 })
-            .bindPopup(() => createContatorePopup(pinnedContatore, '📌', '#f5576c'))
-            .addTo(map);
-
-        allPoints.push([pinnedContatore.lat, pinnedContatore.lon]);
-    }
+    // Aggiungi marker pinned se presenti
+    renderPinnedMarkers(allPoints);
 
     // Ripristina la vista salvata o centra sui punti
     if (savedCenter && savedZoom) {
@@ -5122,9 +5206,9 @@ function createContatorePopup(c, num, colore, prevPoint) {
     }
 
     // Aggiungi pulsante pin
-    const isPinned = pinnedContatore && pinnedContatore.eneltel === c.eneltel;
+    const isPinned = pinnedContatori && pinnedContatori.has(c.eneltel);
     if (isPinned) {
-        html += `<button class="btn-unpin-popup" onclick="unpinContatore()" style="margin-top: 10px; width: 100%; padding: 8px; background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13px;">❌ Rimuovi pin</button>`;
+        html += `<button class="btn-unpin-popup" onclick="unpinContatore('${c.eneltel}')" style="margin-top: 10px; width: 100%; padding: 8px; background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13px;">❌ Rimuovi pin</button>`;
     } else {
         html += `<button class="btn-pin-popup" onclick="pinContatoreFromPopup('${c.eneltel}')" style="margin-top: 10px; width: 100%; padding: 8px; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13px;">📌 Fissa questo</button>`;
     }

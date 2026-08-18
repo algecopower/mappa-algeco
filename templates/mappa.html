@@ -245,6 +245,18 @@
 
         <div id="map"></div>
 
+        <!-- Floating Pinned Toolbar (visibile quando ci sono contatori pinnati) -->
+        <div id="pinnedFloatingToolbar" class="pinned-floating-toolbar" style="display: none;">
+            <div class="pinned-toolbar-content">
+                <span class="pinned-toolbar-count">📌 <strong id="pinnedCountText">0</strong> <span id="pinnedLabelText">fissati</span></span>
+                <div class="pinned-toolbar-actions">
+                    <button class="btn-pinned-action" onclick="centraMappaSuPinnati()" title="Centra la mappa su tutti i contatori fissati"><i data-lucide="crosshair"></i> Centra</button>
+                    <button class="btn-pinned-action" onclick="toggleAdvancedSearchModal()" title="Cerca e gestisci contatori"><i data-lucide="search"></i> Cerca</button>
+                    <button class="btn-pinned-action btn-pinned-clear" onclick="unpinAllContatori()" title="Rimuovi tutti i pin"><i data-lucide="trash-2"></i> Rimuovi tutti</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Zoom Slider -->
         <div class="zoom-slider-container" id="zoomSliderContainer">
             <span class="zoom-label" id="zoomOut" title="Zoom out">−</span>
@@ -464,7 +476,7 @@
 
     <!-- Advanced Search Modal -->
     <div class="ui-modal" id="advancedSearchModal">
-        <div class="ui-modal-content" style="max-width: 600px;">
+        <div class="ui-modal-content" style="max-width: 680px;">
             <div class="ui-modal-header">
                 <h2 class="ui-modal-title"><i data-lucide="search"></i> Ricerca Utente</h2>
                 <button class="ui-modal-close" type="button">×</button>
@@ -502,6 +514,10 @@
                     <button class="btn-apply-advanced" onclick="applyModalAdvancedSearch()"><i data-lucide="search"></i> Cerca</button>
                 </div>
 
+                <!-- Barra di stato pin globali / azioni multiple -->
+                <div id="modalPinnedStatusBar" class="modal-pinned-status-bar" style="display: none;"></div>
+
+                <!-- Risultati ricerca con header azioni multiple -->
                 <div class="pin-search-results" id="modalSearchResults"></div>
             </div>
         </div>

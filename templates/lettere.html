@@ -4,10 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2">
-    <title>Archivio Lettere - Algeco</title>
+    <title>Gestione Lettere - Algeco</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="/static/theme.css">
-    <link rel="stylesheet" href="/static/lettere.css?v=8">
+    <link rel="stylesheet" href="/static/bulk-email-preview.css?v=1">
+    <link rel="stylesheet" href="/static/lettere.css?v=12">
     <script src="/static/theme-init.js"></script>
     <script src="/static/csrf.js"></script>
 </head>
@@ -15,7 +16,7 @@
     <div class="lettere-shell">
         <header class="lettere-header">
             <div>
-                <h1><i class="fas fa-box-archive"></i> Archivio Lettere</h1>
+                <h1><i class="fas fa-box-archive"></i> Gestione Lettere</h1>
                 <p>Generazioni Excel, aziende rilevate, recapiti e feedback.</p>
             </div>
             <div class="lettere-actions">
@@ -92,21 +93,34 @@
     </div>
 
     <div class="modal-backdrop" id="bulkModal">
-        <div class="modal">
+        <div class="modal bulk-modal">
             <div class="modal-header">
                 <h2><i class="fas fa-paper-plane"></i> Invio mail/PEC in bulk</h2>
                 <button class="icon-btn" onclick="closeBulkModal()"><i class="fas fa-times"></i></button>
             </div>
             <div class="modal-body">
-                <label>Template email</label>
-                <select id="templateSelect"></select>
+                <div class="bulk-setup-section" id="bulkSetupSection">
+                    <label for="templateSelect">Template email</label>
+                    <select id="templateSelect" onchange="onTemplateChange()"></select>
 
-                <div class="bulk-hint">
-                    Gli indirizzi mail e PEC vengono letti dallo stesso campo <strong>Email / PEC</strong>.
-                    Le PEC sono solo evidenziate con badge dedicato.
+                    <div class="bulk-hint">
+                        Gli indirizzi mail e PEC vengono letti dallo stesso campo <strong>Email / PEC</strong>.
+                        Le PEC sono solo evidenziate con badge dedicato.
+                    </div>
+
+                    <div class="bulk-list" id="bulkList"></div>
                 </div>
 
-                <div class="bulk-list" id="bulkList"></div>
+                <!-- Preview Section (stile Gestione Distinte) -->
+                <div class="bulk-preview-section" id="bulkPreviewSection" style="display:none;">
+                    <div class="bulk-preview-header">
+                        <span><i class="fas fa-eye"></i> Anteprima email (<span id="previewCount">0</span>)</span>
+                        <button class="btn-soft" onclick="chiudiAnteprima()" style="font-size:0.82em;padding:4px 10px;">
+                            <i class="fas fa-arrow-left"></i> Torna alla selezione
+                        </button>
+                    </div>
+                    <div class="bulk-preview-cards" id="bulkPreviewCards"></div>
+                </div>
 
                 <div class="bulk-progress" id="bulkProgress" style="display:none;">
                     <div class="progress-bar"><div id="progressFill"></div></div>
@@ -116,7 +130,10 @@
             </div>
             <div class="modal-footer">
                 <button class="btn-soft" onclick="closeBulkModal()">Chiudi</button>
-                <button class="btn-primary" id="bulkSendBtn" onclick="sendBulk()">
+                <button class="btn-preview" id="bulkPreviewBtn" onclick="generaAnteprima()">
+                    <i class="fas fa-eye"></i> Anteprima
+                </button>
+                <button class="btn-primary" id="bulkSendBtn" onclick="sendBulk()" style="display:none;">
                     <i class="fas fa-paper-plane"></i> Invia selezionate
                 </button>
             </div>
@@ -137,8 +154,11 @@
             <div class="modal-body research-body">
                 <div class="research-top">
                     <div class="research-company">
-                        <div class="research-company-name" id="researchCompanyName"></div>
-                        <div class="mini" id="researchCompanyMeta"></div>
+                        <div class="research-company-info">
+                            <div class="research-company-name" id="researchCompanyName"></div>
+                            <div class="mini" id="researchCompanyMeta"></div>
+                        </div>
+                        <div class="research-company-actions" id="researchCompanyActions"></div>
                     </div>
 
                     <div class="research-hint">
@@ -185,6 +205,7 @@
     </div>
 
     <div class="toast" id="toast"></div>
-    <script src="/static/lettere.js?v=10"></script>
+    <script src="/static/bulk-email-preview.js?v=1"></script>
+    <script src="/static/lettere.js?v=14"></script>
 </body>
 </html>

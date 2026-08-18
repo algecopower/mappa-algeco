@@ -143,6 +143,7 @@ def api_lettere_update_contatti_by_name():
             return jsonify({'error': 'nominativo mancante'}), 400
         result = lettere_store.update_contatti_by_nominativo(
             nominativo,
+            comune=data.get('comune'),
             telefono=data.get('telefono') if 'telefono' in data else None,
             email=data.get('email') if 'email' in data else None,
             user=_get_username(),

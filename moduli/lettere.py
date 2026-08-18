@@ -401,21 +401,49 @@ def get_generazione(generazione_id, provincia=None):
     return out
 
 
+def _get_lettere_blacklist(provincia=None):
+    """Restituisce la lista di parole chiave blacklistate per la provincia (es. COMUNE, PROVINCIA, CONDOMINIO)."""
+    prov = (provincia or _provincia_attiva()).upper()
+    keywords = ['CONDOMINIO', 'COND.', 'COND ']
+    try:
+        settings_file = os.path.join('data', prov.lower(), 'settings.json')
+        if os.path.exists(settings_file):
+            with open(settings_file, 'r', encoding='utf-8') as f:
+                user_settings = json.load(f)
+                lettere_cfg = user_settings.get('lettere_excel', {})
+                cfg_kw = lettere_cfg.get('parole_chiave', {}).get('lettera_no', [])
+                if cfg_kw:
+                    keywords.extend(cfg_kw)
+        if len(keywords) == 3:
+            from config import LETTERE_EXCEL_CONFIG
+            cfg_kw = LETTERE_EXCEL_CONFIG.get('parole_chiave', {}).get('lettera_no', [])
+            if cfg_kw:
+                keywords.extend(cfg_kw)
+    except Exception:
+        keywords.extend(['COMUNE', 'PROVINCIA'])
+
+    seen = set()
+    out = []
+    for k in keywords:
+        k_clean = str(k).strip().upper()
+        if k_clean and k_clean not in seen:
+            seen.add(k_clean)
+            out.append(k_clean)
+    return out
+
+
 def list_aziende(generazione_id=None, search='', limit=500, provincia=None):
     provincia = (provincia or _provincia_attiva()).upper()
     conn = db.get_conn()
     where = ['ag.provincia=?']
     params = [provincia]
-    # Escludi condomini (coerente con classifica_tipo_contatto)
-    where.append(
-        '''
-        NOT (
-            UPPER(COALESCE(ag.nominativo, '')) LIKE '%CONDOMINIO%'
-            OR UPPER(COALESCE(ag.nominativo, '')) LIKE '%COND.%'
-            OR UPPER(COALESCE(ag.nominativo, '')) LIKE '%COND %'
-        )
-        '''
-    )
+
+    # Escludi Comuni, Enti e parole chiave blacklistate per la provincia
+    blacklist = _get_lettere_blacklist(provincia)
+    for kw in blacklist:
+        where.append("UPPER(COALESCE(ag.nominativo, '')) NOT LIKE ?")
+        params.append(f'%{kw}%')
+
     if generazione_id:
         where.append('ag.generazione_id=?')
         params.append(int(generazione_id))
@@ -482,14 +510,16 @@ def list_aziende(generazione_id=None, search='', limit=500, provincia=None):
             g.file_name,
             g.periodo_da,
             g.periodo_a,
-            COALESCE(NULLIF(c.telefono, ''), NULLIF(lr.telefono, ''), f.telefono) AS telefono,
-            COALESCE(NULLIF(c.email, ''), NULLIF(lr.email, ''), f.email) AS email,
-            lr.via,
-            lr.civico,
+            COALESCE(NULLIF(c.telefono, ''), NULLIF(c_same.telefono, ''), NULLIF(lr.telefono, ''), f.telefono, fe.telefono, f_same.telefono) AS telefono,
+            COALESCE(NULLIF(c.email, ''), NULLIF(c_same.email, ''), NULLIF(lr.email, ''), f.email, fe.email, f_same.email) AS email,
+            COALESCE(NULLIF(lr.via, ''), NULLIF(f.indirizzo, ''), NULLIF(fe.indirizzo, '')) AS via,
+            COALESCE(NULLIF(lr.civico, ''), NULLIF(f.civico, ''), NULLIF(fe.civico, '')) AS civico,
             lr.cap,
             lr.eneltel,
             lr.lcl,
             lr.posizione_mis,
+            COALESCE(f.latitudine, fe.latitudine) AS latitudine,
+            COALESCE(f.longitudine, fe.longitudine) AS longitudine,
             COALESCE(ic.invii_ok, ia.invii_ok, 0) AS invii_ok,
             COALESCE(ia.invii_ok, 0) AS invii_generazione,
             COALESCE(ic.last_sent_ts, ia.last_sent_ts) AS last_sent_ts
@@ -499,13 +529,41 @@ def list_aziende(generazione_id=None, search='', limit=500, provincia=None):
           ON c.provincia=ag.provincia AND c.contact_key=ag.contact_key
         LEFT JOIN (
             SELECT
+                provincia,
+                UPPER(TRIM(COALESCE(nominativo, ''))) AS nom_norm,
+                UPPER(TRIM(COALESCE(comune, ''))) AS com_norm,
+                MAX(NULLIF(telefono, '')) AS telefono,
+                MAX(NULLIF(email, '')) AS email
+            FROM lettere_contatti
+            WHERE TRIM(COALESCE(nominativo, ''))!=''
+            GROUP BY provincia, UPPER(TRIM(COALESCE(nominativo, ''))), UPPER(TRIM(COALESCE(comune, '')))
+        ) c_same ON c_same.provincia=ag.provincia
+                AND c_same.nom_norm=UPPER(TRIM(COALESCE(ag.nominativo, '')))
+                AND (c_same.com_norm=UPPER(TRIM(COALESCE(ag.comune, ''))) OR c_same.com_norm='' OR TRIM(COALESCE(ag.comune, ''))='')
+        LEFT JOIN (
+            SELECT
                 UPPER(TRIM(COALESCE(pod, ''))) AS pod,
                 MAX(telefono) AS telefono,
-                MAX(email) AS email
+                MAX(email) AS email,
+                MAX(latitudine) AS latitudine,
+                MAX(longitudine) AS longitudine,
+                MAX(indirizzo) AS indirizzo,
+                MAX(civico) AS civico
             FROM filone
             WHERE TRIM(COALESCE(pod, ''))!=''
             GROUP BY 1
         ) f ON f.pod=UPPER(TRIM(COALESCE(ag.pod, '')))
+        LEFT JOIN (
+            SELECT
+                UPPER(TRIM(COALESCE(nominativo, ''))) AS nom_norm,
+                UPPER(TRIM(COALESCE(comune, ''))) AS com_norm,
+                MAX(NULLIF(telefono, '')) AS telefono,
+                MAX(NULLIF(email, '')) AS email
+            FROM filone
+            WHERE TRIM(COALESCE(nominativo, ''))!=''
+            GROUP BY 1, 2
+        ) f_same ON f_same.nom_norm=UPPER(TRIM(COALESCE(ag.nominativo, '')))
+                AND (f_same.com_norm=UPPER(TRIM(COALESCE(ag.comune, ''))) OR f_same.com_norm='' OR TRIM(COALESCE(ag.comune, ''))='')
         LEFT JOIN righe_pod rp
           ON rp.generazione_id=ag.generazione_id
          AND rp.pod_norm=UPPER(TRIM(COALESCE(ag.pod, '')))
@@ -515,6 +573,19 @@ def list_aziende(generazione_id=None, search='', limit=500, provincia=None):
          AND rn.nominativo_norm=UPPER(TRIM(COALESCE(ag.nominativo, '')))
          AND rn.comune_norm=UPPER(TRIM(COALESCE(ag.comune, '')))
         LEFT JOIN lettere_righe lr ON lr.id=COALESCE(rp.row_id, rn.row_id)
+        LEFT JOIN (
+            SELECT
+                eneltel_key,
+                MAX(telefono) AS telefono,
+                MAX(email) AS email,
+                MAX(latitudine) AS latitudine,
+                MAX(longitudine) AS longitudine,
+                MAX(indirizzo) AS indirizzo,
+                MAX(civico) AS civico
+            FROM filone
+            WHERE TRIM(COALESCE(eneltel_key, ''))!=''
+            GROUP BY 1
+        ) fe ON fe.eneltel_key=LTRIM(COALESCE(lr.eneltel, ''), '0') AND COALESCE(lr.eneltel, '')!=''
         LEFT JOIN invii_per_azienda ia ON ia.azienda_generazione_id=ag.id
         LEFT JOIN invii_per_contatto ic
           ON ic.provincia=ag.provincia AND ic.contact_key=ag.contact_key
@@ -646,11 +717,51 @@ def update_contatto(contact_key_value, *, telefono=None, email=None, user=None, 
             ''',
             params,
         )
+
+        # Propaga anche agli altri contatori della stessa azienda nello stesso comune
+        nom = _clean(row['nominativo']).upper()
+        com = _clean(row['comune']).upper()
+        if nom:
+            p_prop = [now, user]
+            u_prop = ['updated_ts=?', 'updated_by=?']
+            if telefono is not None:
+                u_prop.append('telefono=?')
+                p_prop.append(_clean(telefono))
+            if email is not None:
+                u_prop.append('email=?')
+                p_prop.append(_clean(email))
+            p_prop.extend([provincia, nom])
+            where_extra = 'AND UPPER(TRIM(COALESCE(comune, ""))) = ?' if com else ''
+            if com:
+                p_prop.append(com)
+            conn.execute(
+                f'''
+                UPDATE lettere_contatti
+                SET {', '.join(u_prop)}
+                WHERE provincia=? AND UPPER(TRIM(COALESCE(nominativo, '')))=? {where_extra}
+                ''',
+                p_prop,
+            )
+
         pod = row['pod'] or ''
 
     sync = {'synced': False, 'reason': 'no_pod'}
     if pod:
         sync = _sync_contatto_su_filone(pod, telefono=telefono, email=email, user=user)
+
+    # Sincronizza anche gli altri POD della stessa azienda/comune
+    if nom:
+        altri = conn.execute(
+            '''
+            SELECT pod FROM lettere_contatti
+            WHERE provincia=? AND UPPER(TRIM(COALESCE(nominativo, '')))=? AND pod!=?
+            ''',
+            (provincia, nom, pod),
+        ).fetchall()
+        for a_row in altri:
+            p_pod = a_row['pod'] or ''
+            if p_pod:
+                _sync_contatto_su_filone(p_pod, telefono=telefono, email=email, user=user)
 
     updated = conn.execute(
         '''
@@ -665,8 +776,8 @@ def update_contatto(contact_key_value, *, telefono=None, email=None, user=None, 
     return out
 
 
-def update_contatti_by_nominativo(nominativo, *, telefono=None, email=None, user=None, provincia=None):
-    """Aggiorna telefono/email per TUTTI i contatti con lo stesso nominativo.
+def update_contatti_by_nominativo(nominativo, comune=None, *, telefono=None, email=None, user=None, provincia=None):
+    """Aggiorna telefono/email per TUTTI i contatti con lo stesso nominativo (e comune se specificato).
 
     Utile quando la stessa azienda compare con più contatori ma i recapiti
     sono identici. Evita di dover reinserire i dati per ogni entry.
@@ -677,13 +788,21 @@ def update_contatti_by_nominativo(nominativo, *, telefono=None, email=None, user
         raise ValueError('nominativo mancante')
 
     conn = db.get_conn()
+    where = ['provincia=?', 'UPPER(TRIM(COALESCE(nominativo, "")))=?']
+    params = [provincia, nom]
+    if comune:
+        com = _clean(comune).upper()
+        if com:
+            where.append('UPPER(TRIM(COALESCE(comune, "")))=?')
+            params.append(com)
+
     rows = conn.execute(
-        '''
+        f'''
         SELECT contact_key, pod
         FROM lettere_contatti
-        WHERE provincia=? AND UPPER(TRIM(COALESCE(nominativo, '')))=?
+        WHERE {' AND '.join(where)}
         ''',
-        (provincia, nom),
+        params,
     ).fetchall()
 
     if not rows:
@@ -697,21 +816,21 @@ def update_contatti_by_nominativo(nominativo, *, telefono=None, email=None, user
         for row in rows:
             ck = row['contact_key']
             updates = ['updated_ts=?', 'updated_by=?']
-            params = [now, user]
+            p_update = [now, user]
             if telefono is not None:
                 updates.append('telefono=?')
-                params.append(_clean(telefono))
+                p_update.append(_clean(telefono))
             if email is not None:
                 updates.append('email=?')
-                params.append(_clean(email))
-            params.extend([provincia, ck])
+                p_update.append(_clean(email))
+            p_update.extend([provincia, ck])
             conn.execute(
                 f'''
                 UPDATE lettere_contatti
                 SET {', '.join(updates)}
                 WHERE provincia=? AND contact_key=?
                 ''',
-                params,
+                p_update,
             )
             updated_keys.append(ck)
 

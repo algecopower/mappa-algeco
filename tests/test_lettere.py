@@ -286,3 +286,117 @@ def test_sincronizza_recapiti_vuoti_dal_filone_senza_sovrascrivere(
     assert result['email_compilate'] == 0
     assert azienda['telefono'] == '0111111111'
     assert azienda['email'] == 'manuale@azienda.it'
+
+
+def test_list_aziende_include_indirizzo_e_coordinate(
+    tmp_path, db_isolato, monkeypatch,
+):
+    import config
+    from moduli import lettere
+
+    monkeypatch.setattr(config, 'PROVINCIA_ATTIVA', 'TORINO', raising=False)
+    conn = db_isolato.get_conn()
+    with conn:
+        db_isolato.upsert_filone_row(
+            conn,
+            eneltel_key='1001',
+            sheets_row=2,
+            typed_values={
+                'pod': 'IT001E00000001',
+                'indirizzo': 'VIA ROMA',
+                'civico': '10',
+                'latitudine': 45.0703,
+                'longitudine': 7.6869,
+            },
+            extra_values={},
+            row_hash='r1',
+            source='bootstrap',
+        )
+
+    path = tmp_path / 'lettere_coord.xlsx'
+    path.write_bytes(b'coord-test')
+    info = lettere.registra_generazione(
+        str(path),
+        '2026-06-15',
+        '2026-06-15',
+        [_riga_azienda(via='VIA ROMA', civico='10')],
+        provincia='TORINO',
+    )
+
+    aziende = lettere.list_aziende(generazione_id=info['generazione_id'])
+    assert len(aziende) == 1
+    assert aziende[0]['via'] == 'VIA ROMA'
+    assert aziende[0]['civico'] == '10'
+    assert aziende[0]['latitudine'] == 45.0703
+    assert aziende[0]['longitudine'] == 7.6869
+
+
+def test_list_aziende_filtra_blacklist_parole_chiave(tmp_path, db_isolato, monkeypatch):
+    import config
+    from moduli import lettere
+
+    monkeypatch.setattr(config, 'PROVINCIA_ATTIVA', 'TORINO', raising=False)
+    path = tmp_path / 'lettere_blacklist.xlsx'
+    path.write_bytes(b'blacklist-test')
+
+    righe = [
+        _riga_azienda(nominativo='ACME SRL', pod='IT001E00000001'),
+        _riga_azienda(nominativo='COMUNE DI MONCALIERI', pod='IT001E00000002'),
+        _riga_azienda(nominativo='PROVINCIA DI TORINO', pod='IT001E00000003'),
+        _riga_azienda(nominativo='CONDOMINIO CORSO FRANCIA 10', pod='IT001E00000004'),
+        _riga_azienda(nominativo='FIBERCOP SPA', pod='IT001E00000005'),
+    ]
+    info = lettere.registra_generazione(
+        str(path),
+        '2026-06-15',
+        '2026-06-15',
+        righe,
+        provincia='TORINO',
+    )
+
+    aziende = lettere.list_aziende(generazione_id=info['generazione_id'])
+    nomi = [a['nominativo'] for a in aziende]
+    assert nomi == ['ACME SRL']
+
+
+def test_propagazione_contatti_stessa_azienda_comune(tmp_path, db_isolato, monkeypatch):
+    import config
+    from moduli import lettere
+
+    monkeypatch.setattr(config, 'PROVINCIA_ATTIVA', 'TORINO', raising=False)
+    path = tmp_path / 'lettere_multi.xlsx'
+    path.write_bytes(b'multi-test')
+
+    righe = [
+        _riga_azienda(nominativo='BETA LOGISTICA SRL', comune='TORINO', pod='IT001E00000011', telefono='', email=''),
+        _riga_azienda(nominativo='BETA LOGISTICA SRL', comune='TORINO', pod='IT001E00000012', telefono='', email=''),
+    ]
+    info = lettere.registra_generazione(
+        str(path),
+        '2026-06-15',
+        '2026-06-15',
+        righe,
+        provincia='TORINO',
+    )
+
+    aziende = lettere.list_aziende(generazione_id=info['generazione_id'])
+    assert len(aziende) == 2
+    assert not aziende[0]['email']
+    assert not aziende[1]['email']
+
+    # Compila il primo contatore
+    lettere.update_contatto(
+        aziende[0]['contact_key'],
+        telefono='011999999',
+        email='info@betalogistica.it',
+        user='test',
+    )
+
+    # Entrambi i contatori ora hanno i recapiti propagati
+    aziende_dopo = lettere.list_aziende(generazione_id=info['generazione_id'])
+    assert aziende_dopo[0]['telefono'] == '011999999'
+    assert aziende_dopo[0]['email'] == 'info@betalogistica.it'
+    assert aziende_dopo[1]['telefono'] == '011999999'
+    assert aziende_dopo[1]['email'] == 'info@betalogistica.it'
+
+

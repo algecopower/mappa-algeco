@@ -2,9 +2,12 @@
 let generazioni = [];
 let aziende = [];
 let selectedGenerazione = '';
-let templates = {};
+let TEMPLATES = {};
+let FIELD_DEFS = {};
+let templateSettings = {};
 let allegatiInfo = {};
 let bulkItems = [];
+let bulkPreviews = [];
 let bulkAbort = false;
 let aziendeController = null;
 let researchContactKey = '';
@@ -68,6 +71,21 @@ function splitEmails(campo) {
     return out;
 }
 
+function propagateContactLocally(nominativo, comune, telefono, email, updatedKeys) {
+    const currentNom = (nominativo || '').trim().toUpperCase();
+    const currentCom = (comune || '').trim().toUpperCase();
+    const keysSet = new Set(updatedKeys || []);
+    for (const item of aziende) {
+        const itemNom = (item.nominativo || '').trim().toUpperCase();
+        const itemCom = (item.comune || '').trim().toUpperCase();
+        if (keysSet.has(item.contact_key) ||
+            (itemNom === currentNom && (!currentCom || !itemCom || itemCom === currentCom))) {
+            if (telefono !== null && telefono !== undefined) item.telefono = telefono;
+            if (email !== null && email !== undefined) item.email = email;
+        }
+    }
+}
+
 async function loadAll() {
     await Promise.all([loadGenerazioni(), loadTemplates(), loadAllegati(), loadStats()]);
     await loadAziende();
@@ -82,17 +100,25 @@ async function loadGenerazioni() {
 }
 
 async function loadTemplates() {
-    const res = await fetch('/api/distinte/templates');
-    const data = await res.json();
-    templates = data.templates || {};
+    const data = await BulkEmailPreview.loadCentralizedTemplates('/api/distinte/templates');
+    templateSettings = data.settings || {};
+    FIELD_DEFS = data.fieldDefs || {};
+    TEMPLATES = data.templates || {};
+
     const select = document.getElementById('templateSelect');
     select.innerHTML = '';
-    for (const [id, tmpl] of Object.entries(templates)) {
+    for (const [id, tmpl] of Object.entries(TEMPLATES)) {
         if (tmpl.type !== 'email') continue;
         const opt = document.createElement('option');
         opt.value = id;
         opt.textContent = tmpl.label || id;
         select.appendChild(opt);
+    }
+}
+
+function onTemplateChange() {
+    if (document.getElementById('bulkPreviewSection') && document.getElementById('bulkPreviewSection').style.display === 'block') {
+        generaAnteprima();
     }
 }
 
@@ -207,6 +233,16 @@ function googleSearchUrl(query) {
     return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
 }
 
+function getValidCoords(a) {
+    if (!a) return null;
+    const lat = Number(a.latitudine);
+    const lon = Number(a.longitudine);
+    if (!isNaN(lat) && !isNaN(lon) && lat >= 35 && lat <= 48 && lon >= 6 && lon <= 20 && (lat !== 0 || lon !== 0)) {
+        return { lat, lon };
+    }
+    return null;
+}
+
 function buildSearchTerms(a) {
     const nome = (a.nominativo || '').trim();
     const comune = (a.comune || '').trim();
@@ -222,6 +258,34 @@ function buildSearchTerms(a) {
 
 function buildResearchGroups(a) {
     const { nome, comune, loose, looseBreve, focused } = buildSearchTerms(a);
+    const coords = getValidCoords(a);
+    const indirizzo = [a.via, a.civico].filter(Boolean).join(' ').trim();
+    const queryIndirizzo = [indirizzo, comune].filter(Boolean).join(' ');
+
+    const mapLinks = [];
+    if (coords) {
+        mapLinks.push({
+            label: 'Posizione contatore (Maps)',
+            icon: 'fa-location-dot',
+            url: `https://www.google.com/maps?q=${coords.lat},${coords.lon}`
+        });
+    } else if (queryIndirizzo) {
+        mapLinks.push({
+            label: 'Google Maps (Indirizzo)',
+            icon: 'fa-map-pin',
+            url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(queryIndirizzo)}`
+        });
+    }
+
+    mapLinks.push({
+        label: 'Google Maps (Azienda)',
+        icon: 'fa-map-location-dot',
+        url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(loose)}`
+    });
+    mapLinks.push({ label: 'LinkedIn', icon: 'fa-linkedin', brand: true, url: googleSearchUrl(`site:linkedin.com ${looseBreve}`) });
+    mapLinks.push({ label: 'Facebook', icon: 'fa-facebook', brand: true, url: googleSearchUrl(`site:facebook.com ${looseBreve}`) });
+    mapLinks.push({ label: 'Instagram', icon: 'fa-instagram', brand: true, url: googleSearchUrl(`site:instagram.com ${looseBreve}`) });
+
     return [
         {
             title: 'Google',
@@ -236,16 +300,7 @@ function buildResearchGroups(a) {
         },
         {
             title: 'Mappe e social',
-            links: [
-                {
-                    label: 'Google Maps',
-                    icon: 'fa-map-location-dot',
-                    url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(loose)}`
-                },
-                { label: 'LinkedIn', icon: 'fa-linkedin', brand: true, url: googleSearchUrl(`site:linkedin.com ${looseBreve}`) },
-                { label: 'Facebook', icon: 'fa-facebook', brand: true, url: googleSearchUrl(`site:facebook.com ${looseBreve}`) },
-                { label: 'Instagram', icon: 'fa-instagram', brand: true, url: googleSearchUrl(`site:instagram.com ${looseBreve}`) },
-            ]
+            links: mapLinks
         },
         {
             title: 'Fonti ufficiali e elenchi',
@@ -302,11 +357,46 @@ function renderContactResearch() {
         splitEmails(row.email).length === 0 ? 'email/PEC' : ''
     ].filter(Boolean);
 
+    const indirizzo = [row.via, row.civico].filter(Boolean).join(' ').trim();
+    const coords = getValidCoords(row);
+
     document.getElementById('researchCompanyName').textContent = row.nominativo || 'Azienda';
-    document.getElementById('researchCompanyMeta').textContent =
-        [row.comune, row.pod, missing.length ? `Manca: ${missing.join(', ')}` : 'Recapiti completi']
-            .filter(Boolean)
-            .join(' · ');
+    
+    const metaParts = [];
+    if (row.comune) metaParts.push(row.comune);
+    if (indirizzo) metaParts.push(indirizzo);
+    if (row.pod) metaParts.push(row.pod);
+    metaParts.push(missing.length ? `Manca: ${missing.join(', ')}` : 'Recapiti completi');
+    document.getElementById('researchCompanyMeta').textContent = metaParts.join(' · ');
+
+    const actionsEl = document.getElementById('researchCompanyActions');
+    if (actionsEl) {
+        if (coords) {
+            const mapsUrl = `https://www.google.com/maps?q=${coords.lat},${coords.lon}`;
+            actionsEl.innerHTML = `
+                <a class="btn-maps-coord" href="${esc(mapsUrl)}" target="_blank" rel="noopener noreferrer"
+                   title="Vedi coordinate contatore (${coords.lat.toFixed(6)}, ${coords.lon.toFixed(6)}) su Google Maps">
+                    <i class="fas fa-location-dot"></i>
+                    <span>Posizione contatore</span>
+                    <i class="fas fa-arrow-up-right-from-square mini-icon"></i>
+                </a>
+            `;
+        } else {
+            const queryIndirizzo = [indirizzo, row.comune].filter(Boolean).join(', ');
+            const fallbackUrl = queryIndirizzo
+                ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(queryIndirizzo)}`
+                : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((row.nominativo || '') + ' ' + (row.comune || ''))}`;
+            actionsEl.innerHTML = `
+                <a class="btn-maps-coord no-coord" href="${esc(fallbackUrl)}" target="_blank" rel="noopener noreferrer"
+                   title="Coordinate contatore non note — Cerca indirizzo su Google Maps">
+                    <i class="fas fa-map-location-dot"></i>
+                    <span>Cerca su Maps</span>
+                    <i class="fas fa-arrow-up-right-from-square mini-icon"></i>
+                </a>
+            `;
+        }
+    }
+
     document.getElementById('researchProgress').textContent = queue.length
         ? `${queueIndex >= 0 ? queueIndex + 1 : '-'} di ${queue.length} contatti incompleti nella lista corrente`
         : 'Nessun altro contatto incompleto nella lista corrente';
@@ -393,16 +483,18 @@ function navigateResearch(delta) {
 async function saveResearchContact(openNext) {
     const row = currentResearchContact();
     if (!row) return;
-    const queue = researchQueue();
     const currentNom = (row.nominativo || '').trim().toUpperCase();
-    const currentIndex = queue.findIndex(a => (a.nominativo || '').trim().toUpperCase() === currentNom);
-    const nextEntry = currentIndex >= 0 && queue.length > 1
-        ? queue[(currentIndex + 1) % queue.length]
-        : null;
-    const nextNom = nextEntry ? (nextEntry.nominativo || '').trim().toUpperCase() : '';
-    const nextRow = nextEntry && nextNom !== currentNom ? nextEntry : null;
+    const currentCom = (row.comune || '').trim().toUpperCase();
     const telefono = document.getElementById('researchPhone').value.trim();
     const email = document.getElementById('researchEmail').value.trim();
+
+    // Aggiorna subito lo stato locale prima di cercare il prossimo contatto incompleto
+    row.telefono = telefono;
+    row.email = email;
+    propagateContactLocally(row.nominativo, row.comune, telefono, email);
+
+    const queue = researchQueue();
+    const nextRow = queue.length > 0 ? queue[0] : null;
 
     // Apri subito le ricerche del prossimo contatto, mentre il click utente
     // è ancora valido per i popup del browser.
@@ -411,30 +503,22 @@ async function saveResearchContact(openNext) {
     }
 
     try {
-        // Salva per nominativo: aggiorna tutti i contact_key con lo stesso nome
+        // Salva per nominativo (e comune se presente)
         const res = await fetch('/api/lettere/contatti-by-name', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ nominativo: row.nominativo, telefono, email })
+            body: JSON.stringify({ nominativo: row.nominativo, comune: row.comune, telefono, email })
         });
         const data = await res.json();
         if (!data.success) throw new Error(data.error || 'Errore salvataggio');
 
-        // Aggiorna localmente tutte le entry con lo stesso nominativo
-        const updatedKeys = new Set(data.updated_keys || []);
-        for (const item of aziende) {
-            if (updatedKeys.has(item.contact_key) ||
-                (item.nominativo || '').trim().toUpperCase() === currentNom) {
-                item.telefono = telefono;
-                item.email = email;
-            }
-        }
+        propagateContactLocally(row.nominativo, row.comune, telefono, email, data.updated_keys);
         renderAziende();
         updateBulkButton();
         loadStats();
         const count = data.updated_count || 1;
         const msg = count > 1
-            ? `Salvato per ${count} contatti con lo stesso nominativo`
+            ? `Salvato per ${count} contatori con lo stesso nominativo`
             : (data.synced_filone ? 'Salvato anche sul filone' : 'Contatto salvato');
         showToast(msg);
 
@@ -469,7 +553,6 @@ let collapsedDates = new Set();
 
 function parseDateToISO(dateStr) {
     if (!dateStr) return '';
-    // Gestisce sia DD/MM/YYYY che YYYY-MM-DD
     if (dateStr.includes('/')) {
         const [d, m, y] = dateStr.split('/');
         return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
@@ -519,14 +602,12 @@ function renderAziende() {
         return;
     }
 
-    // Raggruppa per data_pianificazione, ordina per data (più vicina prima) poi alfabetico
     const groups = new Map();
     for (const a of visible) {
         const dk = a.data_pianificazione || '';
         if (!groups.has(dk)) groups.set(dk, []);
         groups.get(dk).push(a);
     }
-    // Ordina i gruppi per data crescente (più vicina prima)
     const sortedKeys = [...groups.keys()].sort((a, b) => {
         if (!a && !b) return 0;
         if (!a) return 1;
@@ -535,7 +616,6 @@ function renderAziende() {
         const isoB = parseDateToISO(b);
         return isoA < isoB ? -1 : isoA > isoB ? 1 : 0;
     });
-    // Ordina le aziende all'interno di ogni gruppo per nominativo
     for (const key of sortedKeys) {
         groups.get(key).sort((a, b) =>
             (a.nominativo || '').localeCompare(b.nominativo || '', 'it', { sensitivity: 'base' })
@@ -645,8 +725,7 @@ async function saveContact(contactKey, telInput, emailInput) {
         });
         const data = await res.json();
         if (!data.success) throw new Error(data.error || 'Errore salvataggio');
-        if ('telefono' in payload) row.telefono = payload.telefono;
-        if ('email' in payload) row.email = payload.email;
+        propagateContactLocally(row.nominativo, row.comune, payload.telefono, payload.email);
         showToast(data.contatto?.sync_filone?.synced ? 'Salvato anche sul filone' : 'Contatto salvato');
         renderAziende();
         updateBulkButton();
@@ -725,8 +804,9 @@ function openBulkModal() {
         return;
     }
     renderBulkList();
+    chiudiAnteprima();
     document.getElementById('bulkProgress').style.display = 'none';
-    document.getElementById('bulkSendBtn').disabled = false;
+    document.getElementById('bulkPreviewBtn').disabled = false;
     document.getElementById('bulkModal').classList.add('active');
 }
 
@@ -748,20 +828,252 @@ function renderBulkList() {
     `).join('');
 }
 
-async function sendBulk() {
+function contattoDaAzienda(a, emailDest) {
+    const matricola = [a.codice_ante, a.matricola_ante].filter(Boolean).join(' / ');
+    return {
+        pod: a.pod || '',
+        email: emailDest || a.email || '',
+        nome: a.nominativo || '',
+        indirizzo: a.via || '',
+        civico: a.civico || '',
+        comune: a.comune || '',
+        data_intervento: a.data_pianificazione || '',
+        pod_filone: a.pod || '',
+        eneltel_filone: a.eneltel || '',
+        matricola_filone: matricola,
+        tipologia_contatore: a.tipo_misuratore || '',
+        nome_societa: a.nominativo || '',
+        nome_referente: '',
+    };
+}
+
+function buildMessageHtml(bodyText) {
+    const prov = (generazioni[0]?.provincia || '').toLowerCase();
+    const provKey = 'email_' + prov;
+    const emailTecnico = templateSettings[provKey] || templateSettings.email_tecnico ||
+        (prov === 'pavia' ? templateSettings.email_pavia : templateSettings.email_torino) || '';
+    return BulkEmailPreview.buildMessageHtml(bodyText, templateSettings.firma_html || '', emailTecnico);
+}
+
+function generaAnteprima() {
     const templateId = document.getElementById('templateSelect').value;
-    const items = [...document.querySelectorAll('.bulk-check:checked')]
-        .map(cb => bulkItems[Number(cb.dataset.idx)])
-        .filter(Boolean);
     if (!templateId) {
         showToast('Seleziona un template', true);
         return;
     }
-    if (!items.length) {
-        showToast('Nessun indirizzo selezionato', true);
+    const tmpl = TEMPLATES[templateId];
+    if (!tmpl) {
+        showToast('Template non trovato', true);
         return;
     }
-    if (!confirm(`Inviare ${items.length} email/PEC?\nPausa di ${PAUSA_TRA_EMAIL_SEC}s tra un invio e il successivo.`)) {
+    const checkboxes = document.querySelectorAll('.bulk-check:checked');
+    if (checkboxes.length === 0) {
+        showToast('Nessun contatto selezionato', true);
+        return;
+    }
+    const prov = (generazioni[0]?.provincia || '').toLowerCase();
+    const provKey = 'email_' + prov;
+    const emailTecnico = templateSettings[provKey] || templateSettings.email_tecnico ||
+        (prov === 'pavia' ? templateSettings.email_pavia : templateSettings.email_torino) || '';
+
+    bulkPreviews = [];
+    checkboxes.forEach(cb => {
+        const idx = Number(cb.dataset.idx);
+        const b = bulkItems[idx];
+        if (!b) return;
+        const a = aziende.find(item => Number(item.id) === Number(b.azienda_id)) || {};
+        const c = contattoDaAzienda(a, b.email);
+        const fields = {};
+        if (tmpl.fields) {
+            for (const fId of tmpl.fields) {
+                const fd = FIELD_DEFS[fId];
+                if (fd && fd.autoFill) {
+                    fields[fId] = fd.autoFill(c);
+                }
+            }
+        }
+        const bodyText = tmpl.generate(c, fields, emailTecnico);
+        const subject = tmpl.generateSubject(c, fields, emailTecnico);
+
+        bulkPreviews.push({
+            azienda_id: b.azienda_id,
+            pod: b.pod || a.pod || '',
+            email: b.email,
+            pec: b.pec,
+            nome: b.nome || a.nominativo || 'Azienda',
+            subject: subject,
+            bodyHtml: bodyText,
+            contatto: c,
+            allegati: [...(b.allegati || [])],
+            edited: false,
+        });
+    });
+
+    if (bulkPreviews.length === 0) {
+        showToast('Nessuna anteprima generata', true);
+        return;
+    }
+
+    renderPreviewCards();
+    document.getElementById('bulkSetupSection').style.display = 'none';
+    document.getElementById('bulkPreviewSection').style.display = 'block';
+    document.getElementById('previewCount').textContent = bulkPreviews.length;
+    document.getElementById('bulkPreviewBtn').style.display = 'none';
+    document.getElementById('bulkSendBtn').style.display = '';
+}
+
+function chiudiAnteprima() {
+    document.getElementById('bulkPreviewSection').style.display = 'none';
+    document.getElementById('bulkSetupSection').style.display = 'block';
+    document.getElementById('bulkPreviewBtn').style.display = '';
+    document.getElementById('bulkSendBtn').style.display = 'none';
+}
+
+function renderPreviewCards() {
+    const container = document.getElementById('bulkPreviewCards');
+    const tuttiAllegati = allegatiInfo.allegati_disponibili || [];
+    container.innerHTML = bulkPreviews.map((p, i) => {
+        const renderedHtml = buildMessageHtml(p.bodyHtml);
+        const allegatiHtml = BulkEmailPreview.renderAllegatiList(p.allegati || [], i, tuttiAllegati, 'rimuoviAllegato', 'aggiungiAllegato');
+        return `
+            <div class="preview-card ${i === 0 ? 'expanded' : ''}" id="previewCard${i}">
+                <div class="preview-card-header" onclick="togglePreviewCard(${i})">
+                    <i class="fas fa-chevron-right preview-toggle"></i>
+                    <span class="preview-dest">
+                        <span class="preview-dest-text">${esc(p.nome)} — ${esc(p.email)}</span>
+                        ${p.pec ? '<span class="badge pec">PEC</span>' : '<span class="badge">MAIL</span>'}
+                    </span>
+                    <span class="preview-pod">${esc(p.pod || '')}</span>
+                    ${(p.allegati || []).length > 0 ? `<span class="preview-allegati-badge"><i class="fas fa-paperclip"></i> ${p.allegati.length}</span>` : ''}
+                    <span class="preview-card-badge edited" id="previewBadge${i}" style="${p.edited ? '' : 'display:none;'}">modificata</span>
+                </div>
+                <div class="preview-card-body">
+                    <div class="preview-field-label">Oggetto:</div>
+                    <input type="text" class="preview-subject-input" id="previewSubject${i}"
+                           value="${esc(p.subject)}"
+                           oninput="onPreviewSubjectEdit(${i})">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;">
+                        <div class="preview-field-label" style="margin:0;">Anteprima testo:</div>
+                        <button type="button" class="preview-edit-toggle" id="previewEditBtn${i}" onclick="toggleEditMode(${i}, event)">
+                            <i class="fas fa-pen"></i> Modifica testo
+                        </button>
+                    </div>
+                    <div class="preview-body-rendered" id="previewRendered${i}">${renderedHtml}</div>
+                    <div class="rte-container preview-body-editor" id="previewBodyContainer${i}" style="display:none; margin-top: 8px;">
+                        ${BulkEmailPreview.buildRteToolbar()}
+                        <div class="rte-editor" id="previewBody${i}" contenteditable="true" oninput="onPreviewBodyEdit(${i})">${p.bodyHtml}</div>
+                    </div>
+                    <div class="preview-allegati-section" id="previewAllegati${i}">
+                        <div class="preview-field-label" style="margin-top:10px;">
+                            <i class="fas fa-paperclip"></i> Allegati:
+                        </div>
+                        ${allegatiHtml}
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function togglePreviewCard(idx) {
+    const card = document.getElementById(`previewCard${idx}`);
+    if (card) card.classList.toggle('expanded');
+}
+
+function toggleEditMode(idx, event) {
+    event.stopPropagation();
+    const rendered = document.getElementById(`previewRendered${idx}`);
+    const editorContainer = document.getElementById(`previewBodyContainer${idx}`);
+    const editor = document.getElementById(`previewBody${idx}`);
+    const btn = document.getElementById(`previewEditBtn${idx}`);
+    const isEditing = editorContainer.style.display === 'block';
+    if (isEditing) {
+        bulkPreviews[idx].bodyHtml = editor.innerHTML;
+        bulkPreviews[idx].edited = true;
+        rendered.innerHTML = buildMessageHtml(editor.innerHTML);
+        rendered.style.display = '';
+        editorContainer.style.display = 'none';
+        btn.innerHTML = '<i class="fas fa-pen"></i> Modifica testo';
+        document.getElementById(`previewBadge${idx}`).style.display = '';
+    } else {
+        rendered.style.display = 'none';
+        editorContainer.style.display = 'block';
+        editor.focus();
+        btn.innerHTML = '<i class="fas fa-eye"></i> Vedi anteprima';
+    }
+}
+
+function onPreviewSubjectEdit(idx) {
+    const inp = document.getElementById(`previewSubject${idx}`);
+    if (inp) {
+        bulkPreviews[idx].subject = inp.value;
+        bulkPreviews[idx].edited = true;
+        document.getElementById(`previewBadge${idx}`).style.display = '';
+    }
+}
+
+function onPreviewBodyEdit(idx) {
+    const editor = document.getElementById(`previewBody${idx}`);
+    if (editor) {
+        bulkPreviews[idx].bodyHtml = editor.innerHTML;
+        bulkPreviews[idx].edited = true;
+        document.getElementById(`previewBadge${idx}`).style.display = '';
+    }
+}
+
+function rimuoviAllegato(previewIdx, allegatoIdx) {
+    bulkPreviews[previewIdx].allegati.splice(allegatoIdx, 1);
+    bulkPreviews[previewIdx].edited = true;
+    document.getElementById(`previewBadge${previewIdx}`).style.display = '';
+    const section = document.getElementById(`previewAllegati${previewIdx}`);
+    const tuttiAllegati = allegatiInfo.allegati_disponibili || [];
+    section.innerHTML = `
+        <div class="preview-field-label" style="margin-top:10px;">
+            <i class="fas fa-paperclip"></i> Allegati:
+        </div>
+    ` + BulkEmailPreview.renderAllegatiList(bulkPreviews[previewIdx].allegati, previewIdx, tuttiAllegati, 'rimuoviAllegato', 'aggiungiAllegato');
+    aggiornaAllegatiBadge(previewIdx);
+}
+
+function aggiungiAllegato(previewIdx) {
+    const select = document.getElementById(`addAllegatoSelect${previewIdx}`);
+    const nome = select ? select.value : '';
+    if (!nome) return;
+    if (!bulkPreviews[previewIdx].allegati.includes(nome)) {
+        bulkPreviews[previewIdx].allegati.push(nome);
+        bulkPreviews[previewIdx].edited = true;
+        document.getElementById(`previewBadge${previewIdx}`).style.display = '';
+    }
+    const section = document.getElementById(`previewAllegati${previewIdx}`);
+    const tuttiAllegati = allegatiInfo.allegati_disponibili || [];
+    section.innerHTML = `
+        <div class="preview-field-label" style="margin-top:10px;">
+            <i class="fas fa-paperclip"></i> Allegati:
+        </div>
+    ` + BulkEmailPreview.renderAllegatiList(bulkPreviews[previewIdx].allegati, previewIdx, tuttiAllegati, 'rimuoviAllegato', 'aggiungiAllegato');
+    aggiornaAllegatiBadge(previewIdx);
+}
+
+function aggiornaAllegatiBadge(previewIdx) {
+    const headerBadge = document.querySelector(`#previewCard${previewIdx} .preview-allegati-badge`);
+    const count = (bulkPreviews[previewIdx].allegati || []).length;
+    if (headerBadge) {
+        headerBadge.innerHTML = `<i class="fas fa-paperclip"></i> ${count}`;
+        headerBadge.style.display = count > 0 ? '' : 'none';
+    }
+}
+
+async function sendBulk() {
+    const templateId = document.getElementById('templateSelect').value;
+    if (!templateId) {
+        showToast('Seleziona un template', true);
+        return;
+    }
+    if (!bulkPreviews || !bulkPreviews.length) {
+        showToast('Nessuna email da inviare', true);
+        return;
+    }
+    if (!confirm(`Inviare ${bulkPreviews.length} email/PEC?\nPausa di ${PAUSA_TRA_EMAIL_SEC}s tra un invio e il successivo.`)) {
         return;
     }
 
@@ -779,14 +1091,22 @@ async function sendBulk() {
 
     let ok = 0;
     let ko = 0;
-    for (let i = 0; i < items.length; i++) {
+    for (let i = 0; i < bulkPreviews.length; i++) {
         if (bulkAbort) {
             log.innerHTML += `<div class="log-err">Invio interrotto dopo ${ok} invii riusciti</div>`;
             break;
         }
-        const item = items[i];
-        text.textContent = `${i + 1} / ${items.length}`;
-        fill.style.width = `${Math.round(((i + 1) / items.length) * 100)}%`;
+        const item = bulkPreviews[i];
+        text.textContent = `${i + 1} / ${bulkPreviews.length}`;
+        fill.style.width = `${Math.round(((i + 1) / bulkPreviews.length) * 100)}%`;
+
+        const subjInput = document.getElementById(`previewSubject${i}`);
+        const currentSubject = subjInput ? subjInput.value : item.subject;
+        const editorEl = document.getElementById(`previewBody${i}`);
+        const currentBody = (editorEl && document.getElementById(`previewBodyContainer${i}`)?.style.display === 'block')
+            ? editorEl.innerHTML
+            : item.bodyHtml;
+
         try {
             const res = await fetch('/api/lettere/invia-email', {
                 method: 'POST',
@@ -795,7 +1115,9 @@ async function sendBulk() {
                     azienda_id: item.azienda_id,
                     email: item.email,
                     template_id: templateId,
-                    allegati: item.allegati
+                    subject_override: item.edited ? currentSubject : undefined,
+                    body_override: item.edited ? currentBody : undefined,
+                    allegati: item.allegati,
                 })
             });
             const data = await res.json();
@@ -811,7 +1133,7 @@ async function sendBulk() {
             log.innerHTML += `<div class="log-err">Errore ${esc(item.email)}: rete</div>`;
         }
         log.scrollTop = log.scrollHeight;
-        if (i < items.length - 1 && !bulkAbort) {
+        if (i < bulkPreviews.length - 1 && !bulkAbort) {
             await new Promise(r => setTimeout(r, PAUSA_TRA_EMAIL_SEC * 1000));
         }
     }

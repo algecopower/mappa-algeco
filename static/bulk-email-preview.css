@@ -1,0 +1,367 @@
+/* ==========================================================================
+   BULK EMAIL PREVIEW & RICH TEXT EDITOR - SHARED COMPONENT
+   Condiviso tra Gestione Distinte, Gestione Lettere e Gestione Comuni
+   ========================================================================== */
+
+.bulk-modal {
+    max-width: 840px;
+    width: 100%;
+}
+
+.btn-preview {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 15px;
+    border-radius: 8px;
+    border: 1px solid rgba(var(--accent-rgb, 52, 152, 219), 0.4);
+    background: rgba(var(--accent-rgb, 52, 152, 219), 0.15);
+    color: var(--text, #fff);
+    font-weight: 700;
+    font-size: 0.88rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-preview:hover {
+    background: rgba(var(--accent-rgb, 52, 152, 219), 0.3);
+    border-color: var(--primary, #3498db);
+    color: #fff;
+}
+
+.bulk-preview-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.bulk-preview-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+    font-weight: 700;
+    color: var(--text, #fff);
+}
+
+.bulk-preview-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 60vh;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+/* Card Accordion */
+.preview-card {
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+    border-radius: 10px;
+    background: var(--bg-card, #1a2234);
+    transition: border-color 0.2s, box-shadow 0.2s;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.preview-card.expanded {
+    border-color: var(--primary, #3498db);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.preview-card-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    cursor: pointer;
+    user-select: none;
+    font-size: 0.88rem;
+    min-height: 44px;
+    box-sizing: border-box;
+    background: rgba(255, 255, 255, 0.02);
+    transition: background 0.15s ease;
+    line-height: 1.4;
+}
+
+.preview-card-header:hover {
+    background: rgba(var(--accent-rgb, 52, 152, 219), 0.08);
+}
+
+.preview-card-header .preview-toggle {
+    transition: transform 0.2s;
+    font-size: 0.75rem;
+    color: var(--text-muted, #94a3b8);
+    flex-shrink: 0;
+}
+
+.preview-card.expanded .preview-toggle {
+    transform: rotate(90deg);
+}
+
+.preview-card-header .preview-dest {
+    flex: 1;
+    font-weight: 600;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    line-height: 1.4;
+}
+
+.preview-card-header .preview-dest-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.preview-card-header .preview-pod {
+    color: var(--text-muted, #94a3b8);
+    font-size: 0.78rem;
+    flex-shrink: 0;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 1.4;
+}
+
+.preview-card-header .preview-note {
+    color: var(--text-muted, #94a3b8);
+    font-size: 0.78rem;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex-shrink: 1;
+}
+
+.preview-card-header .preview-note i {
+    color: var(--warning, #f59e0b);
+    margin-right: 4px;
+}
+
+.preview-card-body {
+    display: none;
+    padding: 14px;
+    border-top: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+    background: var(--bg-surface, #141b2d);
+}
+
+.preview-card.expanded .preview-card-body {
+    display: block;
+}
+
+/* Card Fields */
+.preview-field-label {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--text-muted, #94a3b8);
+    margin-top: 10px;
+    margin-bottom: 5px;
+}
+
+.preview-card-body > .preview-field-label:first-child {
+    margin-top: 0;
+}
+
+.preview-subject-input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.15));
+    border-radius: 7px;
+    background: var(--bg-card, #1a2234);
+    color: var(--text, #fff);
+    font-size: 0.88rem;
+    box-sizing: border-box;
+}
+
+.preview-subject-input:focus {
+    border-color: var(--primary, #3498db);
+    outline: none;
+}
+
+.preview-body-rendered {
+    padding: 12px 14px;
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.15));
+    border-radius: 7px;
+    background: #ffffff;
+    color: #222222;
+    font-size: 0.88rem;
+    line-height: 1.6;
+    font-family: Arial, Helvetica, sans-serif;
+    max-height: 280px;
+    overflow-y: auto;
+}
+
+.preview-body-rendered a {
+    color: #0284c7;
+}
+
+.preview-edit-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--primary, #3498db);
+    cursor: pointer;
+    padding: 4px 10px;
+    border: 1px solid rgba(var(--accent-rgb, 52, 152, 219), 0.3);
+    border-radius: 6px;
+    background: rgba(var(--accent-rgb, 52, 152, 219), 0.1);
+    transition: all 0.15s ease;
+}
+
+.preview-edit-toggle:hover {
+    background: rgba(var(--accent-rgb, 52, 152, 219), 0.2);
+    border-color: var(--primary, #3498db);
+}
+
+/* Badges */
+.preview-card-badge {
+    font-size: 0.7rem;
+    padding: 2px 7px;
+    border-radius: 5px;
+    font-weight: 700;
+    background: var(--info, #3b82f6);
+    color: white;
+}
+
+.preview-card-badge.edited {
+    background: var(--warning, #f59e0b);
+}
+
+.preview-allegati-badge {
+    font-size: 0.72rem;
+    padding: 2px 7px;
+    border-radius: 5px;
+    font-weight: 700;
+    background: #ef4444;
+    color: white;
+    margin-left: 4px;
+}
+
+/* Allegati */
+.preview-allegati-section {
+    border-top: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+    padding-top: 10px;
+    margin-top: 12px;
+}
+
+.allegati-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.allegato-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    background: var(--bg-card, #1a2234);
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+    border-radius: 7px;
+    font-size: 0.82rem;
+}
+
+.allegato-nome {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.allegato-remove {
+    background: none;
+    border: none;
+    color: #ef4444;
+    cursor: pointer;
+    padding: 2px 6px;
+    font-size: 0.85rem;
+    border-radius: 4px;
+    transition: background 0.15s ease;
+}
+
+.allegato-remove:hover {
+    background: rgba(239, 68, 68, 0.15);
+}
+
+.allegato-aggiungi {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+.allegato-select {
+    flex: 1;
+    padding: 6px 10px;
+    font-size: 0.82rem;
+    border-radius: 6px;
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.15));
+    background-color: var(--bg-card, #1a2234);
+    color: var(--text, #fff);
+}
+
+.allegato-add-btn {
+    background: var(--success, #10b981);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 0.82rem;
+    transition: opacity 0.15s ease;
+}
+
+.allegato-add-btn:hover {
+    opacity: 0.88;
+}
+
+/* Rich Text Editor Toolbar */
+.rte-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 6px;
+    background: var(--bg-card, #1a2234);
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.15));
+    border-bottom: none;
+    border-radius: 7px 7px 0 0;
+}
+
+.rte-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    padding: 4px 8px;
+    color: var(--text, #fff);
+    cursor: pointer;
+    font-size: 0.82rem;
+    transition: all 0.15s ease;
+}
+
+.rte-btn:hover {
+    background: rgba(var(--accent-rgb, 52, 152, 219), 0.15);
+    border-color: var(--border, rgba(255, 255, 255, 0.2));
+}
+
+.rte-editor {
+    min-height: 160px;
+    max-height: 320px;
+    overflow-y: auto;
+    padding: 12px;
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.15));
+    border-radius: 0 0 7px 7px;
+    background: var(--bg-card, #1a2234);
+    color: var(--text, #fff);
+    font-size: 0.88rem;
+    line-height: 1.6;
+    outline: none;
+}
+
+.rte-editor:focus {
+    border-color: var(--primary, #3498db);
+}

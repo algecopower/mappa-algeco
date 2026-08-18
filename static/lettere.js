@@ -876,35 +876,53 @@ function generaAnteprima() {
     const emailTecnico = templateSettings[provKey] || templateSettings.email_tecnico ||
         (prov === 'pavia' ? templateSettings.email_pavia : templateSettings.email_torino) || '';
 
-    bulkPreviews = [];
+    // Raccogli gli elementi selezionati
+    const selectedRaw = [];
     checkboxes.forEach(cb => {
         const idx = Number(cb.dataset.idx);
         const b = bulkItems[idx];
         if (!b) return;
         const a = aziende.find(item => Number(item.id) === Number(b.azienda_id)) || {};
-        const c = contattoDaAzienda(a, b.email);
-        const fields = {};
-        if (tmpl.fields) {
-            for (const fId of tmpl.fields) {
-                const fd = FIELD_DEFS[fId];
-                if (fd && fd.autoFill) {
-                    fields[fId] = fd.autoFill(c);
-                }
-            }
+        selectedRaw.push({
+            ...b,
+            azienda: a,
+            contatto: contattoDaAzienda(a, b.email),
+        });
+    });
+
+    // Raggruppa per azienda/destinatario
+    const grouped = BulkEmailPreview.groupContattiPerAzienda(selectedRaw, item => {
+        const nom = (item.nome || item.azienda.nominativo || '').trim().toUpperCase();
+        const email = (item.email || '').trim().toLowerCase();
+        const com = (item.azienda.comune || '').trim().toUpperCase();
+        return `${nom}__${com}__${email}`;
+    });
+
+    bulkPreviews = [];
+    grouped.forEach(group => {
+        const first = group[0];
+        const contatoriList = group.map(g => g.contatto);
+        const aziendaIds = group.map(g => g.azienda_id);
+
+        const content = BulkEmailPreview.buildPluralContent(tmpl, contatoriList, FIELD_DEFS, emailTecnico);
+
+        const allegatiSet = new Set(first.allegati || []);
+        if (content.excelFilename) {
+            allegatiSet.add(content.excelFilename);
         }
-        const bodyText = tmpl.generate(c, fields, emailTecnico);
-        const subject = tmpl.generateSubject(c, fields, emailTecnico);
 
         bulkPreviews.push({
-            azienda_id: b.azienda_id,
-            pod: b.pod || a.pod || '',
-            email: b.email,
-            pec: b.pec,
-            nome: b.nome || a.nominativo || 'Azienda',
-            subject: subject,
-            bodyHtml: bodyText,
-            contatto: c,
-            allegati: [...(b.allegati || [])],
+            azienda_id: first.azienda_id,
+            azienda_ids: aziendaIds,
+            contatori: contatoriList,
+            pod: contatoriList.length === 1 ? (contatoriList[0].pod || '') : `${contatoriList.length} POD`,
+            email: first.email,
+            pec: first.pec,
+            nome: first.nome || first.azienda.nominativo || 'Azienda',
+            subject: content.subject,
+            bodyHtml: content.bodyText,
+            contatto: first.contatto,
+            allegati: Array.from(allegatiSet),
             edited: false,
         });
     });
@@ -935,15 +953,22 @@ function renderPreviewCards() {
     container.innerHTML = bulkPreviews.map((p, i) => {
         const renderedHtml = buildMessageHtml(p.bodyHtml);
         const allegatiHtml = BulkEmailPreview.renderAllegatiList(p.allegati || [], i, tuttiAllegati, 'rimuoviAllegato', 'aggiungiAllegato');
+        const numContatori = (p.contatori && p.contatori.length) || 1;
+        const contatoriBadge = numContatori > 1 ? `<span class="badge" style="background:#6366f1;font-weight:700;">${numContatori} contatori</span>` : '';
+        const podText = numContatori === 2
+            ? `${p.contatori[0].pod || ''}, ${p.contatori[1].pod || ''}`
+            : (numContatori > 2 ? `${numContatori} contatori` : esc(p.pod || ''));
+
         return `
             <div class="preview-card ${i === 0 ? 'expanded' : ''}" id="previewCard${i}">
                 <div class="preview-card-header" onclick="togglePreviewCard(${i})">
                     <i class="fas fa-chevron-right preview-toggle"></i>
                     <span class="preview-dest">
                         <span class="preview-dest-text">${esc(p.nome)} — ${esc(p.email)}</span>
+                        ${contatoriBadge}
                         ${p.pec ? '<span class="badge pec">PEC</span>' : '<span class="badge">MAIL</span>'}
                     </span>
-                    <span class="preview-pod">${esc(p.pod || '')}</span>
+                    <span class="preview-pod">${podText}</span>
                     ${(p.allegati || []).length > 0 ? `<span class="preview-allegati-badge"><i class="fas fa-paperclip"></i> ${p.allegati.length}</span>` : ''}
                     <span class="preview-card-badge edited" id="previewBadge${i}" style="${p.edited ? '' : 'display:none;'}">modificata</span>
                 </div>
@@ -1069,13 +1094,11 @@ async function sendBulk() {
         showToast('Seleziona un template', true);
         return;
     }
-    if (!bulkPreviews || !bulkPreviews.length) {
-        showToast('Nessuna email da inviare', true);
+    if (bulkPreviews.length === 0) {
+        showToast('Nessuna email pronta', true);
         return;
     }
-    if (!confirm(`Inviare ${bulkPreviews.length} email/PEC?\nPausa di ${PAUSA_TRA_EMAIL_SEC}s tra un invio e il successivo.`)) {
-        return;
-    }
+    if (!confirm(`Confermi l'invio di ${bulkPreviews.length} comunicazioni email/PEC?`)) return;
 
     bulkAbort = false;
     const progress = document.getElementById('bulkProgress');
@@ -1113,17 +1136,20 @@ async function sendBulk() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     azienda_id: item.azienda_id,
+                    azienda_ids: item.azienda_ids || [item.azienda_id],
+                    contatori: item.contatori,
                     email: item.email,
                     template_id: templateId,
-                    subject_override: item.edited ? currentSubject : undefined,
-                    body_override: item.edited ? currentBody : undefined,
+                    subject_override: currentSubject,
+                    body_override: currentBody,
                     allegati: item.allegati,
                 })
             });
             const data = await res.json();
             if (data.ok) {
                 ok++;
-                log.innerHTML += `<div class="log-ok">OK ${esc(item.email)}</div>`;
+                const countText = item.contatori && item.contatori.length > 1 ? ` (${item.contatori.length} contatori)` : '';
+                log.innerHTML += `<div class="log-ok">OK ${esc(item.email)}${countText}</div>`;
             } else {
                 ko++;
                 log.innerHTML += `<div class="log-err">Errore ${esc(item.email)}: ${esc(data.errore || data.error || '')}</div>`;

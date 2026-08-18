@@ -12,6 +12,20 @@
 
     const BulkEmailPreview = {
         /**
+         * Pulisce una stringa per usarla come nome file sicuro.
+         */
+        sanitizeFilename: function (name) {
+            if (!name) return 'Azienda';
+            return String(name)
+                .normalize('NFKD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/[^\w\s-]/g, '')
+                .trim()
+                .replace(/[-\s]+/g, '_')
+                .slice(0, 50) || 'Azienda';
+        },
+
+        /**
          * Formatta una data (DD/MM/YYYY o YYYY-MM-DD) in formato esteso in maiuscolo (es. LUNEDÌ 15 GIUGNO).
          */
         formatDataEstesa: function (dateStr) {
@@ -31,6 +45,133 @@
             if (!d || isNaN(d.getTime())) return String(dateStr);
             const dayOfWeek = (d.getDay() + 6) % 7; // Lunedì = 0
             return `${GIORNI_IT[dayOfWeek]} ${d.getDate()} ${MESI_IT[d.getMonth()]}`;
+        },
+
+        /**
+         * Converte frasi dal singolare al plurale per comunicazioni relative a più contatori.
+         */
+        pluralizeText: function (text) {
+            if (!text) return text || '';
+            let t = text;
+            const reps = [
+                [/\bil vostro contatore\b/gi, 'i vostri contatori'],
+                [/\bdel vostro contatore\b/gi, 'dei vostri contatori'],
+                [/\bal vostro contatore\b/gi, 'ai vostri contatori'],
+                [/\bil contatore\b/gi, 'i contatori'],
+                [/\bdel contatore\b/gi, 'dei contatori'],
+                [/\bal contatore\b/gi, 'ai contatori'],
+                [/\bsul contatore\b/gi, 'sui contatori'],
+                [/\bdel dispositivo\b/gi, 'dei dispositivi'],
+                [/\bil dispositivo\b/gi, 'i dispositivi'],
+                [/\bassociato al POD in oggetto\b/gi, 'associati ai POD indicati'],
+                [/\bassociato al POD\b/gi, 'associati ai POD'],
+                [/\boggetto dell['’]intervento\b/gi, 'oggetto degli interventi'],
+                [/\bLa data prevista per l['’]intervento è\b/gi, 'Le date previste per gli interventi sono'],
+            ];
+            for (const [re, repl] of reps) {
+                t = t.replace(re, repl);
+            }
+            return t;
+        },
+
+        /**
+         * Raggruppa una lista di elementi (contatori) per azienda / email / comune.
+         */
+        groupContattiPerAzienda: function (items, getKeyFn) {
+            const groups = new Map();
+            items.forEach(item => {
+                let key;
+                if (getKeyFn) {
+                    key = getKeyFn(item);
+                } else {
+                    const nome = (item.nome_societa || item.nome || item.nominativo || '').trim().toUpperCase();
+                    const email = (item.email || '').trim().toLowerCase();
+                    const com = (item.comune || '').trim().toUpperCase();
+                    key = `${nome}__${com}__${email}`;
+                }
+                if (!groups.has(key)) {
+                    groups.set(key, []);
+                }
+                groups.get(key).push(item);
+            });
+            return Array.from(groups.values());
+        },
+
+        /**
+         * Costruisce oggetto, corpo ed allegati per un gruppo di contatori (N=1, N=2, N>2).
+         */
+        buildPluralContent: function (tmpl, contatoriList, fieldDefs, emailTecnico) {
+            const n = (contatoriList && contatoriList.length) || 1;
+            const first = contatoriList[0] || {};
+            const fields = {};
+            if (tmpl.fields && fieldDefs) {
+                for (const fId of tmpl.fields) {
+                    const fd = fieldDefs[fId];
+                    if (fd && fd.autoFill) {
+                        fields[fId] = fd.autoFill(first);
+                    }
+                }
+            }
+
+            const nomeAzienda = first.nome_societa || first.nome || first.nominativo || 'Azienda';
+
+            if (n <= 1) {
+                const bodyText = tmpl.generate ? tmpl.generate(first, fields, emailTecnico) : this.resolveTemplate(tmpl.body, fields, tmpl.conditionals, emailTecnico);
+                const subject = tmpl.generateSubject ? tmpl.generateSubject(first, fields, emailTecnico) : (tmpl.subject ? this.resolveTemplate(tmpl.subject, fields, null, emailTecnico) : `Sostituzione contatore - ${nomeAzienda}`);
+                return {
+                    subject: subject,
+                    bodyText: bodyText,
+                    excelFilename: null,
+                };
+            }
+
+            // N >= 2: Pluralizza il corpo base
+            let rawBody = this.resolveTemplate(tmpl.body, fields, tmpl.conditionals, emailTecnico);
+            let pluralBody = this.pluralizeText(rawBody);
+
+            if (n === 2) {
+                const c1 = contatoriList[0];
+                const c2 = contatoriList[1];
+                const pod1 = c1.pod || c1.pod_filone || '';
+                const pod2 = c2.pod || c2.pod_filone || '';
+
+                const subject = `${nomeAzienda}: SOSTITUZIONE CONTATORI E-DISTRIBUZIONE - POD ${pod1}, ${pod2}`;
+
+                const dettagliContatori = `\n\nRiepilogo contatori oggetto della sostituzione:\n` +
+                    `1) POD: ${pod1} — ${c1.indirizzo || c1.via || ''} ${c1.civico || ''} (${c1.comune || ''}) [Tipo: ${c1.tipologia_contatore || c1.tipo_misuratore || 'N/D'}${c1.matricola_filone || c1.matricola || c1.matricola_ante ? ', Matricola: ' + (c1.matricola_filone || c1.matricola || c1.matricola_ante) : ''}]\n` +
+                    `2) POD: ${pod2} — ${c2.indirizzo || c2.via || ''} ${c2.civico || ''} (${c2.comune || ''}) [Tipo: ${c2.tipologia_contatore || c2.tipo_misuratore || 'N/D'}${c2.matricola_filone || c2.matricola || c2.matricola_ante ? ', Matricola: ' + (c2.matricola_filone || c2.matricola || c2.matricola_ante) : ''}]`;
+
+                if (pluralBody.includes("POD (presente in fattura):")) {
+                    pluralBody = pluralBody.replace(/POD \(presente in fattura\):.*?(?=Precisiamo che|\n\nPrecisiamo|$)/s, dettagliContatori.trim() + "\n\n");
+                } else {
+                    pluralBody += dettagliContatori;
+                }
+
+                return {
+                    subject: subject,
+                    bodyText: pluralBody,
+                    excelFilename: null,
+                };
+            } else {
+                // N > 2: Plurale con conteggio e allegato Excel
+                const safeNome = this.sanitizeFilename(nomeAzienda);
+                const excelFilename = `Elenco_Contatori_${safeNome}.xlsx`;
+                const subject = `${nomeAzienda}: SOSTITUZIONE CONTATORI E-DISTRIBUZIONE (${n} contatori)`;
+
+                const notaExcel = `\n\nIn allegato alla presente trasmettiamo il file Excel riepilogativo (${excelFilename}) con l'elenco completo dei ${n} contatori oggetto dell’intervento (comprensivo di POD, tipologia misuratore, indirizzo e civico).`;
+
+                if (pluralBody.includes("POD (presente in fattura):")) {
+                    pluralBody = pluralBody.replace(/POD \(presente in fattura\):.*?(?=Precisiamo che|\n\nPrecisiamo|$)/s, notaExcel.trim() + "\n\n");
+                } else {
+                    pluralBody += notaExcel;
+                }
+
+                return {
+                    subject: subject,
+                    bodyText: pluralBody,
+                    excelFilename: excelFilename,
+                };
+            }
         },
 
         /**
@@ -91,17 +232,21 @@
         },
 
         /**
-         * Rendering della lista allegati con eliminazione e aggiunta interattiva.
+         * Rendering della lista allegati con supporto sia a PDF che Excel dinamici.
          */
         renderAllegatiList: function (allegati, previewIdx, tuttiAllegati, onRemoveFn, onAddFn) {
             const removeName = onRemoveFn || 'rimuoviAllegato';
             const addName = onAddFn || 'aggiungiAllegato';
             let html = '<div class="allegati-list">';
             (allegati || []).forEach((nome, j) => {
+                const isXlsx = String(nome).toLowerCase().endsWith('.xlsx');
+                const iconClass = isXlsx ? 'fas fa-file-excel' : 'fas fa-file-pdf';
+                const iconColor = isXlsx ? '#10b981' : '#ef4444';
+                const extraBadge = isXlsx ? '<span class="badge" style="background:#10b981;font-size:0.65rem;margin-left:6px;">Generato Auto</span>' : '';
                 html += `
                     <div class="allegato-item">
-                        <i class="fas fa-file-pdf" style="color:#ef4444;"></i>
-                        <span class="allegato-nome">${this.escapeHtml(nome)}</span>
+                        <i class="${iconClass}" style="color:${iconColor};"></i>
+                        <span class="allegato-nome">${this.escapeHtml(nome)}${extraBadge}</span>
                         <button type="button" class="allegato-remove" onclick="${removeName}(${previewIdx}, ${j})" title="Rimuovi">
                             <i class="fas fa-times"></i>
                         </button>

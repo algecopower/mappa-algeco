@@ -16,6 +16,7 @@ from moduli.auth import login_required
 from moduli.safe_json import json_read
 from moduli.shared import _get_username
 from moduli import lettere as lettere_store
+from moduli.bulk_contatori_email import generate_contatori_excel, sanitize_filename
 from config import PROVINCIA_ATTIVA
 
 from routes.distinte import (
@@ -218,6 +219,7 @@ def _build_email_message(
     subject_override=None,
     body_override=None,
     allegati_nomi=None,
+    dynamic_files=None,
 ):
     tmpl_data = json_read(_TEMPLATES_JSON, default=None)
     if tmpl_data is None:
@@ -273,7 +275,7 @@ def _build_email_message(
     if allegati_nomi:
         msg = MIMEMultipart('mixed')
         msg.attach(msg_alt)
-        _attach_files_to_msg(msg, allegati_nomi)
+        _attach_files_to_msg(msg, allegati_nomi, dynamic_files=dynamic_files)
     else:
         msg = msg_alt
 
@@ -318,26 +320,48 @@ def _contatto_da_azienda(azienda, email_dest):
 @bp.route('/api/lettere/invia-email', methods=['POST'])
 @login_required
 def api_lettere_invia_email():
-    """Invia una singola mail/PEC e registra l'esito. Il frontend cicla in bulk."""
+    """Invia una singola mail/PEC e registra l'esito su tutti i contatori associati."""
     data = request.get_json() or {}
     azienda_id = data.get('azienda_id')
+    azienda_ids = data.get('azienda_ids') or ([azienda_id] if azienda_id else [])
+    contatori_list = data.get('contatori') or []
     email_dest = (data.get('email') or '').strip()
     template_id = data.get('template_id') or ''
     allegati_nomi = data.get('allegati') or []
     username = _get_username()
 
-    if not azienda_id:
+    if not azienda_id and not azienda_ids:
         return jsonify({'error': 'azienda_id mancante'}), 400
     if not email_dest or '@' not in email_dest:
         return jsonify({'error': 'Email non valida'}), 400
     if not template_id:
         return jsonify({'error': 'Template non specificato'}), 400
 
-    azienda = lettere_store.get_azienda(azienda_id)
+    primary_id = azienda_ids[0] if azienda_ids else azienda_id
+    azienda = lettere_store.get_azienda(primary_id)
     if not azienda:
         return jsonify({'error': 'Azienda non trovata'}), 404
 
     contatto = _contatto_da_azienda(azienda, email_dest)
+    nome_azienda = azienda.get('nominativo') or contatto.get('nome') or 'Azienda'
+
+    # Genera allegati dinamici (es. Excel con elenco contatori se N > 2)
+    dynamic_files = {}
+    effective_contatori = contatori_list or [contatto]
+
+    for nom in (allegati_nomi or []):
+        if nom.lower().endswith('.xlsx'):
+            excel_bytes = generate_contatori_excel(effective_contatori, nome_azienda)
+            dynamic_files[nom] = excel_bytes
+
+    if not dynamic_files and len(effective_contatori) > 2:
+        safe_nome = sanitize_filename(nome_azienda)
+        auto_excel_name = f"Elenco_Contatori_{safe_nome}.xlsx"
+        excel_bytes = generate_contatori_excel(effective_contatori, nome_azienda)
+        dynamic_files[auto_excel_name] = excel_bytes
+        if auto_excel_name not in allegati_nomi:
+            allegati_nomi.append(auto_excel_name)
+
     subject = data.get('subject_override') or ''
 
     try:
@@ -348,6 +372,7 @@ def api_lettere_invia_email():
             subject_override=data.get('subject_override'),
             body_override=data.get('body_override'),
             allegati_nomi=allegati_nomi,
+            dynamic_files=dynamic_files,
         )
 
         server = connect_smtp(smtp_settings, timeout=15)
@@ -360,37 +385,47 @@ def api_lettere_invia_email():
                 pass
 
         save_to_sent(smtp_settings, msg)
-        lettere_store.registra_invio(
-            azienda_generazione_id=azienda['id'],
-            generazione_id=azienda['generazione_id'],
-            contact_key_value=azienda['contact_key'],
-            pod=azienda.get('pod') or '',
-            email_dest=email_dest,
-            template_id=template_id,
-            subject=subject,
-            status='sent',
-            user=username,
-            detail={'allegati': allegati_nomi},
-        )
-        return jsonify({'ok': True, 'azienda_id': azienda_id, 'email': email_dest})
+
+        # Registra l'invio su tutte le aziende/contatori coinvolti
+        for az_id in azienda_ids:
+            az_item = lettere_store.get_azienda(az_id)
+            if not az_item:
+                continue
+            lettere_store.registra_invio(
+                azienda_generazione_id=az_item['id'],
+                generazione_id=az_item['generazione_id'],
+                contact_key_value=az_item['contact_key'],
+                pod=az_item.get('pod') or '',
+                email_dest=email_dest,
+                template_id=template_id,
+                subject=subject,
+                status='sent',
+                user=username,
+                detail={'allegati': allegati_nomi, 'contatori_count': len(effective_contatori)},
+            )
+        return jsonify({'ok': True, 'azienda_id': primary_id, 'azienda_ids': azienda_ids, 'email': email_dest})
 
     except smtplib.SMTPAuthenticationError:
         err = 'Autenticazione SMTP fallita'
     except Exception as e:
         err = str(e)
 
-    lettere_store.registra_invio(
-        azienda_generazione_id=azienda['id'],
-        generazione_id=azienda['generazione_id'],
-        contact_key_value=azienda['contact_key'],
-        pod=azienda.get('pod') or '',
-        email_dest=email_dest,
-        template_id=template_id,
-        subject=subject,
-        status='failed',
-        error=err,
-        user=username,
-        detail={'allegati': allegati_nomi},
-    )
+    for az_id in azienda_ids:
+        az_item = lettere_store.get_azienda(az_id)
+        if not az_item:
+            continue
+        lettere_store.registra_invio(
+            azienda_generazione_id=az_item['id'],
+            generazione_id=az_item['generazione_id'],
+            contact_key_value=az_item['contact_key'],
+            pod=az_item.get('pod') or '',
+            email_dest=email_dest,
+            template_id=template_id,
+            subject=subject,
+            status='failed',
+            error=err,
+            user=username,
+            detail={'allegati': allegati_nomi, 'contatori_count': len(effective_contatori)},
+        )
     logger.error(f"[Lettere] Errore invio a {email_dest}: {err}")
-    return jsonify({'ok': False, 'azienda_id': azienda_id, 'email': email_dest, 'errore': err}), 500
+    return jsonify({'ok': False, 'azienda_id': primary_id, 'email': email_dest, 'errore': err}), 500

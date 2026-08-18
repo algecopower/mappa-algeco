@@ -10,6 +10,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
+from email.mime.application import MIMEApplication
 from email import encoders
 from email.utils import formataddr
 
@@ -17,6 +18,7 @@ from flask import Blueprint, request, jsonify, send_file
 
 from moduli.auth import login_required
 from moduli.safe_json import json_read, json_write
+from moduli.bulk_contatori_email import generate_contatori_excel, sanitize_filename
 from moduli.shared import (
     get_worksheet, get_header_map, find_row_by_pod,
     build_pod_row_map, safe_batch_update_by_name, _imposta_appuntamento_su_filone, _rimuovi_appuntamento_da_filone,
@@ -203,10 +205,22 @@ def _get_available_allegati():
                   if os.path.isfile(os.path.join(_ALLEGATI_DIR, f)) and not f.startswith('.'))
 
 
-def _attach_files_to_msg(msg_mixed, allegati_nomi):
-    """Allega i PDF specificati al messaggio MIME. Ritorna lista di nomi effettivamente allegati."""
+def _attach_files_to_msg(msg_mixed, allegati_nomi, dynamic_files=None):
+    """Allega i PDF/file specificati al messaggio MIME, inclusi file generati dinamicamente (es. Excel)."""
+    dynamic_files = dynamic_files or {}
     allegati_ok = []
     for nome in allegati_nomi:
+        if nome in dynamic_files:
+            try:
+                data = dynamic_files[nome]
+                part = MIMEApplication(data, _subtype='vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+                part.add_header('Content-Disposition', 'attachment', filename=nome)
+                msg_mixed.attach(part)
+                allegati_ok.append(nome)
+                continue
+            except Exception as e:
+                logger.warning(f"[ALLEGATI] Errore allegato dinamico {nome}: {e}")
+                continue
         filepath = os.path.join(_ALLEGATI_DIR, os.path.basename(nome))  # sanitize
         if not os.path.isfile(filepath):
             logger.warning(f"[ALLEGATI] File non trovato: {filepath}")
@@ -473,11 +487,28 @@ def invia_singola_email():
         msg_alt.attach(MIMEText(body_plain, 'plain', 'utf-8'))
         msg_alt.attach(MIMEText(body_html_formatted, 'html', 'utf-8'))
 
-        # Se ci sono allegati, usa mixed > alternative + attachments
+        # Se ci sono allegati, genera eventuali allegati dinamici (es. Excel riepilogo contatori multipli)
+        dynamic_files = {}
+        contatori_list = data.get('contatori') or contatto.get('contatori') or ([contatto] if contatto else [])
+        nome_azienda = contatto.get('nome') or contatto.get('nome_societa') or ''
+        
+        for nom in (allegati_nomi or []):
+            if nom.lower().endswith('.xlsx'):
+                excel_bytes = generate_contatori_excel(contatori_list, nome_azienda)
+                dynamic_files[nom] = excel_bytes
+
+        if not dynamic_files and len(contatori_list) > 2:
+            safe_nome = sanitize_filename(nome_azienda)
+            auto_excel_name = f"Elenco_Contatori_{safe_nome}.xlsx"
+            excel_bytes = generate_contatori_excel(contatori_list, nome_azienda)
+            dynamic_files[auto_excel_name] = excel_bytes
+            if auto_excel_name not in allegati_nomi:
+                allegati_nomi.append(auto_excel_name)
+
         if allegati_nomi:
             msg = MIMEMultipart('mixed')
             msg.attach(msg_alt)
-            allegati_effettivi = _attach_files_to_msg(msg, allegati_nomi)
+            allegati_effettivi = _attach_files_to_msg(msg, allegati_nomi, dynamic_files=dynamic_files)
             logger.info(f"[EMAIL] Allegati per {pod}: {allegati_effettivi}")
         else:
             msg = msg_alt
@@ -502,31 +533,30 @@ def invia_singola_email():
         # Salva in cartella Inviati
         save_to_sent(smtp_settings, msg)
 
-        # Rende visibile l'invio anche nell'Archivio Lettere.
-        # Il vecchio flusso PDF non ha necessariamente una generazione associata,
-        # quindi lo storico viene legato al contatto stabile (POD).
+        # Rende visibile l'invio anche nell'Archivio Lettere per tutti i contatori coinvolti
         try:
             from moduli import lettere as lettere_store
-
-            lettere_store.registra_invio(
-                contact_key_value=lettere_store.contact_key(
-                    pod=pod,
-                    nominativo=contatto.get('nome') or contatto.get('nome_societa') or '',
-                    comune=contatto.get('comune') or '',
-                ),
-                pod=pod,
-                email_dest=email_dest,
-                template_id=template_id,
-                subject=subject,
-                status='sent',
-                user=_get_username(),
-                detail={'source': 'gestione_pdf', 'allegati': allegati_nomi},
-            )
+            pods_to_record = [c.get('pod') or c.get('pod_filone') for c in contatori_list if (c.get('pod') or c.get('pod_filone'))] or [pod]
+            for p_pod in pods_to_record:
+                lettere_store.registra_invio(
+                    contact_key_value=lettere_store.contact_key(
+                        pod=p_pod,
+                        nominativo=nome_azienda,
+                        comune=contatto.get('comune') or '',
+                    ),
+                    pod=p_pod,
+                    email_dest=email_dest,
+                    template_id=template_id,
+                    subject=subject,
+                    status='sent',
+                    user=_get_username(),
+                    detail={'source': 'gestione_pdf', 'allegati': allegati_nomi, 'contatori_count': len(contatori_list)},
+                )
         except Exception:
             logger.exception("[EMAIL] Invio riuscito ma registrazione storico fallita")
 
-        logger.info(f"[EMAIL] Inviata a {email_dest} (POD {pod})")
-        return jsonify({'ok': True, 'pod': pod, 'email': email_dest})
+        logger.info(f"[EMAIL] Inviata a {email_dest} (POD {pod}, {len(contatori_list)} contatori)")
+        return jsonify({'ok': True, 'pod': pod, 'email': email_dest, 'contatori_count': len(contatori_list)})
 
     except smtplib.SMTPAuthenticationError:
         return jsonify({'ok': False, 'pod': pod, 'errore': 'Autenticazione SMTP fallita'}), 401

@@ -2204,24 +2204,37 @@ function restoreAdvancedSearchData() {
 }
 
 function updateDateNavigation() {
-    // Cerca prima nelle zone
-    let zona = zone.find(z => z.nome === currentZona);
     const oggiStr = getOggiStr();
 
-    // Se non trovata, potrebbe essere un comune singolo
-    if (!zona) {
-        // Ottieni le date disponibili per questo comune
+    if (currentView === 'detail') {
+        // Cerca prima nelle zone
+        let zona = zone.find(z => z.nome === currentZona);
+
+        if (!zona) {
+            // Ottieni le date disponibili per questo comune
+            const dateSet = new Set();
+            contatori.forEach(c => {
+                if (c.comune.toUpperCase() === currentZona.toUpperCase() && c.data) {
+                    dateSet.add(c.data);
+                }
+            });
+            availableDates = Array.from(dateSet).sort().filter(d => d >= oggiStr);
+            currentDateIndex = availableDates.indexOf(currentData);
+        } else {
+            availableDates = zona.date.map(d => d.data).sort().filter(d => d >= oggiStr);
+            currentDateIndex = availableDates.indexOf(currentData);
+        }
+    } else if (currentView === 'tuttiOperatori' || currentView === 'operatore' || currentView === 'multiOperatori') {
+        // Tutte le date uniche del dataset
         const dateSet = new Set();
-        contatori.forEach(c => {
-            if (c.comune.toUpperCase() === currentZona.toUpperCase() && c.data) {
-                dateSet.add(c.data);
-            }
+        contatoriVisibili.forEach(c => {
+            if (c.data) dateSet.add(c.data);
         });
         availableDates = Array.from(dateSet).sort().filter(d => d >= oggiStr);
         currentDateIndex = availableDates.indexOf(currentData);
     } else {
-        availableDates = zona.date.map(d => d.data).sort().filter(d => d >= oggiStr);
-        currentDateIndex = availableDates.indexOf(currentData);
+        availableDates = [];
+        currentDateIndex = -1;
     }
 
     const nav = document.getElementById('dateNavigation');
@@ -2231,7 +2244,9 @@ function updateDateNavigation() {
 
     const hasMultipleDates = availableDates.length > 1;
     const isNoDate = currentDateIndex === -1;
-    if (currentView === 'detail' && (hasMultipleDates || (isNoDate && availableDates.length > 0))) {
+    const isDateView = currentView === 'detail' || currentView === 'tuttiOperatori' || currentView === 'operatore' || currentView === 'multiOperatori';
+
+    if (isDateView && (hasMultipleDates || (isNoDate && availableDates.length > 0) || (currentData && availableDates.length > 0))) {
         nav.classList.add('visible');
         if (isNoDate) {
             // Utente schedulabile senza data: solo avanti
@@ -2250,30 +2265,51 @@ function updateDateNavigation() {
 function openDatePicker() {
     const modal = document.getElementById('datePickerModal');
     const dateList = document.getElementById('dateListPicker');
-
-    // Cerca prima nelle zone
-    const zona = zone.find(z => z.nome === currentZona);
-
+    const oggiStrPicker = getOggiStr();
     let html = '';
 
-    const oggiStrPicker = getOggiStr();
+    if (currentView === 'detail') {
+        const zona = zone.find(z => z.nome === currentZona);
+        if (zona) {
+            zona.date.filter(d => d.data >= oggiStrPicker).forEach(d => {
+                const isCurrent = d.data === currentData;
+                html += `
+                    <div class="date-item-picker ${isCurrent ? 'current' : ''}" onclick="selectDateFromPicker('${d.data}')">
+                        <div class="date-text">${formatDate(d.data)}</div>
+                        <div class="date-info">${d.contatori} cont.${d.appuntamenti > 0 ? ' | 📞 ' + d.appuntamenti : ''}</div>
+                    </div>
+                `;
+            });
+        } else {
+            // È un comune singolo - raggruppa per data
+            const dateMap = new Map();
+            contatori.forEach(c => {
+                if (c.comune.toUpperCase() === currentZona.toUpperCase()) {
+                    if (!dateMap.has(c.data)) {
+                        dateMap.set(c.data, { contatori: 0, appuntamenti: 0 });
+                    }
+                    const info = dateMap.get(c.data);
+                    info.contatori++;
+                    if (c.is_appuntamento) info.appuntamenti++;
+                }
+            });
 
-    if (zona) {
-        // È una zona
-        zona.date.filter(d => d.data >= oggiStrPicker).forEach(d => {
-            const isCurrent = d.data === currentData;
-            html += `
-                <div class="date-item-picker ${isCurrent ? 'current' : ''}" onclick="selectDateFromPicker('${d.data}')">
-                    <div class="date-text">${formatDate(d.data)}</div>
-                    <div class="date-info">${d.contatori} cont.${d.appuntamenti > 0 ? ' | 📞 ' + d.appuntamenti : ''}</div>
-                </div>
-            `;
-        });
+            Array.from(dateMap.keys()).sort().filter(d => d >= oggiStrPicker).forEach(data => {
+                const info = dateMap.get(data);
+                const isCurrent = data === currentData;
+                html += `
+                    <div class="date-item-picker ${isCurrent ? 'current' : ''}" onclick="selectDateFromPicker('${data}')">
+                        <div class="date-text">${formatDate(data)}</div>
+                        <div class="date-info">${info.contatori} cont.${info.appuntamenti > 0 ? ' | 📞 ' + info.appuntamenti : ''}</div>
+                    </div>
+                `;
+            });
+        }
     } else {
-        // È un comune singolo - raggruppa per data
+        // Vista tuttiOperatori / operatore / multiOperatori - tutte le date disponibili
         const dateMap = new Map();
-        contatori.forEach(c => {
-            if (c.comune.toUpperCase() === currentZona.toUpperCase()) {
+        contatoriVisibili.forEach(c => {
+            if (c.data) {
                 if (!dateMap.has(c.data)) {
                     dateMap.set(c.data, { contatori: 0, appuntamenti: 0 });
                 }
@@ -2307,13 +2343,26 @@ function selectDateFromPicker(data) {
     closeDatePicker();
     preserveMapView = true; // Preserva la vista quando selezioni dal picker
 
-    // Verifica se currentZona è una zona o un comune
-    const zona = zone.find(z => z.nome === currentZona);
-    if (zona) {
-        apriDettaglio(currentZona, data);
+    if (currentView === 'detail') {
+        const zona = zone.find(z => z.nome === currentZona);
+        if (zona) {
+            apriDettaglio(currentZona, data);
+        } else {
+            apriDettaglioComune(currentZona, data);
+        }
     } else {
-        // È un comune singolo
-        apriDettaglioComune(currentZona, data);
+        // Vista tuttiOperatori / operatore / multiOperatori
+        document.getElementById('dataFilter').value = data;
+        populateOperatoreFilter(data);
+        if (currentView === 'operatore' && currentOperatore) {
+            mostraPercorsoCompletoOperatore(currentOperatore, data);
+        } else if (currentView === 'multiOperatori') {
+            const selOps = getSelectedOperatori();
+            if (selOps.length > 0) mostraPercorsoMultiOperatori(selOps, data);
+            else mostraPercorsoTuttiOperatori(data);
+        } else {
+            mostraPercorsoTuttiOperatori(data);
+        }
     }
 }
 
@@ -2350,13 +2399,26 @@ function navigateDate(direction) {
 
     preserveMapView = true; // Preserva la vista quando navigo tra le date
 
-    // Verifica se currentZona è una zona o un comune
-    const zona = zone.find(z => z.nome === currentZona);
-    if (zona) {
-        apriDettaglio(currentZona, newData);
+    if (currentView === 'detail') {
+        const zona = zone.find(z => z.nome === currentZona);
+        if (zona) {
+            apriDettaglio(currentZona, newData);
+        } else {
+            apriDettaglioComune(currentZona, newData);
+        }
     } else {
-        // È un comune singolo
-        apriDettaglioComune(currentZona, newData);
+        // Vista tuttiOperatori / operatore / multiOperatori
+        document.getElementById('dataFilter').value = newData;
+        populateOperatoreFilter(newData);
+        if (currentView === 'operatore' && currentOperatore) {
+            mostraPercorsoCompletoOperatore(currentOperatore, newData);
+        } else if (currentView === 'multiOperatori') {
+            const selOps = getSelectedOperatori();
+            if (selOps.length > 0) mostraPercorsoMultiOperatori(selOps, newData);
+            else mostraPercorsoTuttiOperatori(newData);
+        } else {
+            mostraPercorsoTuttiOperatori(newData);
+        }
     }
 }
 
@@ -2474,7 +2536,6 @@ function applicaFiltri() {
 // ============================================================
 function onDataFilterChange() {
     const dataSelezionata = document.getElementById('dataFilter').value;
-    const operatoreContainer = document.getElementById('operatoreFilterContainer');
     
     // Salva gli operatori precedentemente selezionati
     const operatoriPrecedenti = (currentView === 'operatore' && currentOperatore) ? [currentOperatore] : 
@@ -2483,7 +2544,9 @@ function onDataFilterChange() {
     if (dataSelezionata) {
         // Popola il dropdown operatori per questa data
         populateOperatoreFilter(dataSelezionata);
-        operatoreContainer.classList.add('visible');
+        const opRow = document.getElementById('operatoreFilterRow');
+        if (opRow) opRow.style.display = 'flex';
+        document.getElementById('dataFilterRow').style.display = 'none';
         
         // Se eravamo in vista operatore, prova a mantenere lo stesso operatore
         if (currentView === 'operatore' && operatoriPrecedenti.length === 1) {
@@ -2510,7 +2573,9 @@ function onDataFilterChange() {
         return;
     } else {
         // Nascondi dropdown operatore e resetta
-        operatoreContainer.classList.remove('visible');
+        const opRow = document.getElementById('operatoreFilterRow');
+        if (opRow) opRow.style.display = 'none';
+        document.getElementById('dataFilterRow').style.display = 'flex';
         resetOperatoreFilter();
         
         // Se eravamo in vista operatore/tuttiOperatori/multiOperatori, torna alla vista zone
@@ -2643,12 +2708,18 @@ function mostraPercorsoTuttiOperatori(data) {
     currentData = data;
     currentOperatore = null;
     
-    // Mostra breadcrumb
+    // Mostra breadcrumb con pillola data
     document.getElementById('breadcrumb').classList.add('visible');
-    document.getElementById('breadcrumbText').innerHTML = `<strong>📅 ${formatDate(data)}</strong> → <span style="color: var(--accent)">👥 Tutti gli operatori</span> (percorsi unificati)`;
+    document.getElementById('breadcrumbText').innerHTML = `<strong>Tutti gli operatori</strong>`;
     
-    // Nascondi i filtri dettaglio
+    // Aggiorna navigazione date in breadcrumb (pillola + frecce)
+    updateDateNavigation();
+    
+    // Mostra filtro operatori e nascondi filtri dettaglio/date
+    document.getElementById('dataFilterRow').style.display = 'none';
     document.getElementById('detailFilters').style.display = 'none';
+    const opRow = document.getElementById('operatoreFilterRow');
+    if (opRow) opRow.style.display = 'flex';
     
     // Filtra tutti i contatori per questa data
     let contatoriData = contatori.filter(c => c.data === data);
@@ -2704,13 +2775,19 @@ function mostraPercorsoMultiOperatori(operatoriSelezionati, data) {
     currentData = data;
     currentOperatore = null;
     
-    // Mostra breadcrumb
+    // Mostra breadcrumb con pillola data
     const nomi = operatoriSelezionati.map(op => op === 'TUTTI' ? 'Senza Operatore' : getDisplayName(op));
     document.getElementById('breadcrumb').classList.add('visible');
-    document.getElementById('breadcrumbText').innerHTML = `<strong>📅 ${formatDate(data)}</strong> → <span style="color: var(--accent)">👤 ${nomi.join(', ')}</span> (percorsi)`;
+    document.getElementById('breadcrumbText').innerHTML = `<strong>👤 ${nomi.join(', ')}</strong>`;
     
-    // Nascondi i filtri dettaglio
+    // Aggiorna navigazione date in breadcrumb (pillola + frecce)
+    updateDateNavigation();
+    
+    // Mostra filtro operatori e nascondi filtri dettaglio/date
+    document.getElementById('dataFilterRow').style.display = 'none';
     document.getElementById('detailFilters').style.display = 'none';
+    const opRow = document.getElementById('operatoreFilterRow');
+    if (opRow) opRow.style.display = 'flex';
     
     // Filtra i contatori per questa data e per gli operatori selezionati
     let contatoriData = contatori.filter(c => 
@@ -2995,13 +3072,19 @@ function mostraPercorsoCompletoOperatore(operatore, data) {
     currentData = data;
     currentOperatore = operatore;  // Salva operatore per refresh
     
-    // Mostra breadcrumb
+    // Mostra breadcrumb con pillola data
     const nomeOp = operatore === 'TUTTI' ? 'Senza Operatore' : getDisplayName(operatore);
     document.getElementById('breadcrumb').classList.add('visible');
-    document.getElementById('breadcrumbText').innerHTML = `<strong>📅 ${formatDate(data)}</strong> → <span style="color: var(--accent)">👤 ${nomeOp}</span> (percorso completo)`;
+    document.getElementById('breadcrumbText').innerHTML = `<strong>👤 ${nomeOp}</strong>`;
     
-    // Nascondi i filtri dettaglio
+    // Aggiorna navigazione date in breadcrumb (pillola + frecce)
+    updateDateNavigation();
+    
+    // Mostra filtro operatori e nascondi filtri dettaglio/date
+    document.getElementById('dataFilterRow').style.display = 'none';
     document.getElementById('detailFilters').style.display = 'none';
+    const opRow = document.getElementById('operatoreFilterRow');
+    if (opRow) opRow.style.display = 'flex';
     
     // Filtra TUTTI i contatori dell'operatore per questa data (tutti i comuni)
     let contatoriOperatore = contatori.filter(c => 
@@ -3035,17 +3118,23 @@ function mostraPercorsoOperatoreConRicerca(operatore, data, searchQuery) {
     currentData = data;
     currentOperatore = operatore;
     
-    // Mostra breadcrumb
+    // Mostra breadcrumb con pillola data
     const nomeOp = operatore === 'TUTTI' ? 'Senza Operatore' : getDisplayName(operatore);
     document.getElementById('breadcrumb').classList.add('visible');
-    let breadcrumbText = `<strong>📅 ${formatDate(data)}</strong> → <span style="color: var(--accent)">👤 ${nomeOp}</span> (percorso completo)`;
+    let breadcrumbText = `<strong>👤 ${nomeOp}</strong>`;
     if (searchQuery) {
         breadcrumbText += ` → <span style="color: #ffc107;">🔍 "${searchQuery}"</span>`;
     }
     document.getElementById('breadcrumbText').innerHTML = breadcrumbText;
     
-    // Nascondi i filtri dettaglio
+    // Aggiorna navigazione date in breadcrumb (pillola + frecce)
+    updateDateNavigation();
+    
+    // Mostra filtro operatori e nascondi filtri dettaglio/date
+    document.getElementById('dataFilterRow').style.display = 'none';
     document.getElementById('detailFilters').style.display = 'none';
+    const opRow = document.getElementById('operatoreFilterRow');
+    if (opRow) opRow.style.display = 'flex';
     
     // Filtra TUTTI i contatori dell'operatore per questa data
     let contatoriOperatore = contatori.filter(c => 
@@ -3471,17 +3560,19 @@ function mostraVistaZone(searchQuery = '') {
     if (!isAutoRefresh) {
         document.getElementById('dataFilterRow').style.display = 'flex';
         document.getElementById('detailFilters').style.display = 'none';
+        const opRow = document.getElementById('operatoreFilterRow');
+        if (opRow) opRow.style.display = 'none';
         filterAppuntamentiOnly = false;
         mostraRotteAttivo = false;
         
         // Gestisci dropdown operatore in base alla data selezionata
         const dataSelezionata = document.getElementById('dataFilter').value;
         if (!dataSelezionata) {
-            document.getElementById('operatoreFilterContainer').classList.remove('visible');
             resetOperatoreFilter();
         }
 
         document.getElementById('breadcrumb').classList.remove('visible');
+        document.getElementById('dateNavigation').classList.remove('visible');
     }
 
     // Usa zoneVisibili per mostrare solo date da oggi a fine mese prossimo
@@ -3951,17 +4042,19 @@ function mostraVistaComuni(searchQuery = '') {
     if (!isAutoRefresh) {
         document.getElementById('dataFilterRow').style.display = 'flex';
         document.getElementById('detailFilters').style.display = 'none';
+        const opRow = document.getElementById('operatoreFilterRow');
+        if (opRow) opRow.style.display = 'none';
         filterAppuntamentiOnly = false;
         mostraRotteAttivo = false;
         
         // Gestisci dropdown operatore in base alla data selezionata
         const dataSelezionata = document.getElementById('dataFilter').value;
         if (!dataSelezionata) {
-            document.getElementById('operatoreFilterContainer').classList.remove('visible');
             resetOperatoreFilter();
         }
 
         document.getElementById('breadcrumb').classList.remove('visible');
+        document.getElementById('dateNavigation').classList.remove('visible');
     }
 
     // Filtra contatori per data se necessario
@@ -4331,10 +4424,12 @@ function apriDettaglioComune(comuneNome, data) {
 
     // Mostra toggle al posto del select in vista dettaglio
     document.getElementById('dataFilterRow').style.display = 'none';
+    const opRow = document.getElementById('operatoreFilterRow');
+    if (opRow) opRow.style.display = 'none';
     document.getElementById('detailFilters').style.display = 'flex';
 
     document.getElementById('breadcrumb').classList.add('visible');
-    document.getElementById('breadcrumbText').innerHTML = `<strong>${comuneNome}</strong> → ${data}`;
+    document.getElementById('breadcrumbText').innerHTML = `<strong>${comuneNome}</strong>`;
 
     let contatoriData = contatori.filter(c =>
         c.data === data &&
@@ -4406,10 +4501,12 @@ function apriDettaglio(zonaNome, data) {
 
     // Mostra toggle al posto del select in vista dettaglio
     document.getElementById('dataFilterRow').style.display = 'none';
+    const opRow = document.getElementById('operatoreFilterRow');
+    if (opRow) opRow.style.display = 'none';
     document.getElementById('detailFilters').style.display = 'flex';
 
     document.getElementById('breadcrumb').classList.add('visible');
-    document.getElementById('breadcrumbText').innerHTML = `<strong>${zonaNome}</strong> → ${data}`;
+    document.getElementById('breadcrumbText').innerHTML = `<strong>${zonaNome}</strong>`;
     
     const zonaInfo = zone.find(z => z.nome === zonaNome);
     const comuniZona = zonaInfo ? zonaInfo.comuni.map(c => c.toLowerCase()) : [];
@@ -5260,8 +5357,13 @@ function tornaAlleZone() {
     // Comportamento standard: resetta tutto (sia da tuttiOperatori che da altre viste)
     document.getElementById('dataFilter').value = '';
     resetOperatoreFilter();
-    document.getElementById('operatoreFilterContainer').classList.remove('visible');
+    const opRow = document.getElementById('operatoreFilterRow');
+    if (opRow) opRow.style.display = 'none';
+    document.getElementById('detailFilters').style.display = 'none';
+    document.getElementById('dataFilterRow').style.display = 'flex';
     currentDataFiltro = '';
+    currentData = null;
+    currentZona = null;
     currentOperatore = null;
 
     if (viewMode === 'zone') {
@@ -5666,36 +5768,33 @@ document.getElementById('searchInput').addEventListener('input', (e) => {
 
 // Event listener per frecce tastiera (navigazione date)
 document.addEventListener('keydown', (e) => {
-    // Solo se siamo in vista dettaglio e le date navigation sono visibili
-    if (currentView === 'detail' && availableDates.length > 1) {
-        const dateNav = document.getElementById('dateNavigation');
-        if (dateNav && dateNav.classList.contains('visible')) {
-            // Controlla che non siamo in un input, textarea o sulla mappa
-            const activeElement = document.activeElement;
-            const isInputActive = activeElement && (
-                activeElement.tagName === 'INPUT' ||
-                activeElement.tagName === 'TEXTAREA' ||
-                activeElement.isContentEditable
-            );
+    // Controlla che non siamo in un input, textarea o sulla mappa
+    const activeElement = document.activeElement;
+    const isInputActive = activeElement && (
+        activeElement.tagName === 'INPUT' ||
+        activeElement.tagName === 'TEXTAREA' ||
+        activeElement.isContentEditable
+    );
 
-            // Controlla se il mouse è sulla mappa
-            const mapContainer = document.getElementById('map');
-            const isMouseOverMap = mapContainer && mapContainer.matches(':hover');
+    const mapContainer = document.getElementById('map');
+    const isMouseOverMap = mapContainer && mapContainer.matches(':hover');
 
-            if (!isInputActive && !isMouseOverMap) {
-                if (e.key === 'ArrowLeft') {
-                    e.preventDefault();
-                    const btnPrev = document.getElementById('btnPrevDate');
-                    if (btnPrev && !btnPrev.disabled) {
-                        navigateDate(-1);
-                    }
-                } else if (e.key === 'ArrowRight') {
-                    e.preventDefault();
-                    const btnNext = document.getElementById('btnNextDate');
-                    if (btnNext && !btnNext.disabled) {
-                        navigateDate(1);
-                    }
-                }
+    if (isInputActive || isMouseOverMap) return;
+
+    // Navigazione date nel breadcrumb (vista dettaglio o vista percorso giornata)
+    const dateNav = document.getElementById('dateNavigation');
+    if (dateNav && dateNav.classList.contains('visible') && availableDates.length > 1) {
+        if (e.key === 'ArrowLeft') {
+            e.preventDefault();
+            const btnPrev = document.getElementById('btnPrevDate');
+            if (btnPrev && !btnPrev.disabled) {
+                navigateDate(-1);
+            }
+        } else if (e.key === 'ArrowRight') {
+            e.preventDefault();
+            const btnNext = document.getElementById('btnNextDate');
+            if (btnNext && !btnNext.disabled) {
+                navigateDate(1);
             }
         }
     }
@@ -8722,7 +8821,10 @@ function exitPlanningMode() {
     // che marker "fantasma" della data selezionata prima restino sulla mappa
     document.getElementById('dataFilter').value = '';
     currentDataFiltro = '';
-    document.getElementById('operatoreFilterContainer').classList.remove('visible');
+    const opRow = document.getElementById('operatoreFilterRow');
+    if (opRow) opRow.style.display = 'none';
+    document.getElementById('detailFilters').style.display = 'none';
+    document.getElementById('dataFilterRow').style.display = 'flex';
     resetOperatoreFilter();
     currentOperatore = null;
     currentView = 'zone';

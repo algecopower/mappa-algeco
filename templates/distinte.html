@@ -1093,7 +1093,8 @@
             max-width: 600px;
             width: 90%;
             max-height: 80vh;
-            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
             animation: modalSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
@@ -1112,6 +1113,7 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-shrink: 0;
         }
 
         .modal-header h3 {
@@ -1130,6 +1132,12 @@
 
         .modal-body {
             padding: 20px;
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+
+        .modal-footer {
+            flex-shrink: 0;
         }
 
         .message-preview {
@@ -1672,6 +1680,185 @@
             input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
             select, textarea { font-size: 16px; }
         }
+    
+        /* Template Editor Modal */
+        #templateEditorModal .modal-dialog {
+            max-width: 900px;
+            width: 90%;
+        }
+        .editor-layout {
+            display: flex;
+            gap: 20px;
+            margin-top: 15px;
+            height: 60vh;
+        }
+        .editor-sidebar {
+            width: 250px;
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .editor-sidebar-header {
+            padding: 10px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255,255,255,0.05);
+        }
+        .editor-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 5px;
+        }
+        .editor-list-item {
+            padding: 8px 10px;
+            margin-bottom: 5px;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--bg-card);
+            border: 1px solid transparent;
+        }
+        .editor-list-item:hover {
+            border-color: var(--border);
+        }
+        .editor-list-item.active {
+            background: rgba(var(--accent-rgb), 0.15);
+            border-color: var(--primary);
+        }
+        .editor-list-item .item-title {
+            font-size: 13px;
+            font-weight: bold;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .editor-list-actions {
+            display: flex;
+            gap: 4px;
+        }
+        .editor-list-actions button {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 2px 4px;
+        }
+        .editor-list-actions button:hover {
+            color: var(--text);
+        }
+        .editor-content {
+            flex: 1;
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 15px;
+            overflow-y: auto;
+        }
+        .editor-form-group {
+            margin-bottom: 15px;
+        }
+        .editor-form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            font-size: 13px;
+        }
+        .editor-input {
+            width: 100%;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 8px 10px;
+            border-radius: 6px;
+        }
+        .editor-checkboxes {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .editor-checkbox-item {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            cursor: pointer;
+        }
+        .editor-checkbox-item:hover {
+            background: rgba(255,255,255,0.05);
+        }
+
+    
+        /* Rich Text Editor */
+        .rte-container {
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            overflow: hidden;
+            background: var(--bg-card);
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 10px;
+        }
+        .rte-toolbar {
+            display: flex;
+            gap: 5px;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border-bottom: 1px solid var(--border);
+            flex-wrap: wrap;
+        }
+        .rte-btn {
+            background: transparent;
+            border: 1px solid transparent;
+            color: var(--text);
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .rte-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: var(--border);
+        }
+        .rte-editor {
+            min-height: 150px;
+            padding: 10px;
+            outline: none;
+            overflow-y: auto;
+            line-height: 1.5;
+            color: var(--text);
+            font-size: 14px;
+            white-space: pre-wrap;
+        }
+        .rte-editor:empty:before {
+            content: attr(data-placeholder);
+            color: var(--text-muted);
+            pointer-events: none;
+            display: block;
+        }
+        .var-badge {
+            background: rgba(42, 122, 181, 0.1);
+            color: var(--primary);
+            padding: 2px 6px;
+            border-radius: 4px;
+            cursor: grab;
+            user-select: none;
+            font-family: monospace;
+            border: 1px solid rgba(42, 122, 181, 0.2);
+            font-size: 13px;
+        }
+        .var-badge:active { cursor: grabbing; }
+
     </style>
     <script src="/static/csrf.js"></script>
 </head>
@@ -1688,11 +1875,18 @@
         </a>
 
         <header>
-            <h1>
-                <i class="fas fa-file-alt"></i>
-                Gestione PDF E-Distribuzione
-            </h1>
-            <span class="provincia-badge" id="provinciaBadge">TORINO</span>
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <h1>
+                    <i class="fas fa-file-alt"></i>
+                    Gestione PDF E-Distribuzione
+                </h1>
+                <span class="provincia-badge" id="provinciaBadge">TORINO</span>
+            </div>
+            <div>
+                <button class="btn" style="background: var(--bg-dark); border: 1px solid var(--border); color: var(--text);" onclick="openTemplateEditor()">
+                    <i class="fas fa-edit"></i> Gestione Template
+                </button>
+            </div>
         </header>
 
         <!-- Upload Section -->
@@ -1790,7 +1984,7 @@
 
                 <button class="bulk-email-btn" id="bulkEmailBtn" onclick="apriBulkEmailModal()" disabled>
                     <i class="fas fa-paper-plane"></i>
-                    Invio Email in Blocco
+                    Invio Multiplo (Mail/WA)
                 </button>
 
                 <button class="bulk-email-btn" id="aiSearchBtn" onclick="apriAiSearchModal()" disabled
@@ -1976,7 +2170,7 @@
             <div class="modal-header">
                 <h3>
                     <i class="fas fa-paper-plane" style="color: var(--info)"></i>
-                    <span>Invio Email in Blocco</span>
+                    <span>Invio Multiplo (Mail/WA)</span>
                 </h3>
                 <button class="modal-close" onclick="chiudiBulkEmailModal()">&times;</button>
             </div>
@@ -2306,11 +2500,15 @@
             document.getElementById('countCompleted').textContent = totalCompleted + '/' + contatti.length;
             document.getElementById('countAzienda').textContent = contatti.filter(c => c.is_azienda).length;
 
-            // Abilita/disabilita pulsante invio email in blocco
-            const conEmail = contatti.filter(c => (c.email_filone || '').trim());
+            // Abilita/disabilita pulsante invio multiplo (Mail/WA)
+            const conMailWa = contatti.filter(c => {
+                const hasEmail = (c.email_filone || '').trim() !== '';
+                const hasTel = (c.telefono || '').trim() !== '' || (c.numeri_alternativi && c.numeri_alternativi.length > 0);
+                return hasEmail || hasTel;
+            });
             const bulkBtn = document.getElementById('bulkEmailBtn');
-            bulkBtn.disabled = conEmail.length === 0;
-            bulkBtn.title = conEmail.length > 0 ? `${conEmail.length} contatti con email` : 'Nessun contatto con email';
+            bulkBtn.disabled = conMailWa.length === 0;
+            bulkBtn.title = conMailWa.length > 0 ? `${conMailWa.length} contatti validi (Mail o WA)` : 'Nessun contatto valido per l\'invio';
 
             // Abilita/disabilita pulsante AI search (solo società)
             const numSocieta = contatti.filter(c => c.is_azienda).length;
@@ -2766,11 +2964,19 @@
                         </select>
                     </div>`;
                 }
+                if (def.type === 'textarea') {
+                    return `<div class="template-field" style="width: 100%;">
+                        <label>${def.label}</label>
+                        <textarea class="template-field-input" data-field="${fieldId}" 
+                            placeholder="${def.placeholder || ''}" rows="4"
+                            oninput="updateTemplatePreview()">${escapeHtml(value || '')}</textarea>
+                    </div>`;
+                }
 
                 return `<div class="template-field">
                     <label>${def.label}</label>
                     <input type="text" class="template-field-input" data-field="${fieldId}" 
-                        value="${escapeHtml(value)}" placeholder="${def.placeholder}"
+                        value="${escapeHtml(value || '')}" placeholder="${def.placeholder || ''}"
                         oninput="updateTemplatePreview()">
                 </div>`;
             }).join('');
@@ -3878,71 +4084,140 @@
         }
 
         function apriBulkEmailModal() {
-            // Filtra contatti che hanno email
-            const conEmail = ordinaContattiPerNominativo(
-                contatti.filter(c => (c.email_filone || '').trim())
-            );
-            if (conEmail.length === 0) {
-                showToast('Nessun contatto ha un indirizzo email sul filone', 'error');
+            if (!contatti || contatti.length === 0) {
+                showToast('Nessun contatto disponibile', 'error');
                 return;
             }
 
-            // Popola template select (solo email)
+            // Filtra contatti che hanno email o telefono
+            const contattiValidi = ordinaContattiPerNominativo(
+                contatti.filter(c => {
+                    const hasEmail = (c.email_filone || '').trim() !== '';
+                    const hasTel = (c.telefono || '').trim() !== '' || (c.numeri_alternativi && c.numeri_alternativi.length > 0);
+                    return hasEmail || hasTel;
+                })
+            );
+
+            if (contattiValidi.length === 0) {
+                showToast('Nessun contatto valido per l\'invio (no email/telefono)', 'error');
+                return;
+            }
+
+            // Popola template select (email e whatsapp)
             const select = document.getElementById('bulkTemplateSelect');
             select.innerHTML = '';
             for (const [id, tmpl] of Object.entries(TEMPLATES)) {
-                if (tmpl.type === 'email') {
+                if (tmpl.type === 'email' || tmpl.type === 'whatsapp') {
                     const opt = document.createElement('option');
                     opt.value = id;
-                    opt.textContent = tmpl.label;
+                    opt.textContent = `[${tmpl.type.toUpperCase()}] ${tmpl.label}`;
                     select.appendChild(opt);
                 }
             }
 
-            // Costruisci lista con split indirizzi singoli
-            const righe = []; // {pod, email, pec, nome, nota, contatto}
-            for (const c of conEmail) {
-                const emails = splitEmails(c.email_filone);
-                for (const em of emails) {
-                    righe.push({
-                        pod: c.pod,
-                        email: em.email,
-                        pec: em.pec,
-                        nome: c.nome || 'N/D',
-                        nota: testoNotaContatto(c),
-                        contatto: c
-                    });
+            // Al cambio del template, ripopola i contatti compatibili
+            select.onchange = () => {
+                popolaBulkContactsList(contattiValidi);
+            };
+
+            // Popola la lista iniziale
+            popolaBulkContactsList(contattiValidi);
+
+            document.getElementById('bulkEmailModal').classList.add('active');
+        }
+
+        function popolaBulkContactsList(baseContacts) {
+            const templateId = document.getElementById('bulkTemplateSelect').value;
+            const template = TEMPLATES[templateId];
+            if (!template) return;
+            const isWhatsapp = template.type === 'whatsapp';
+
+            const righe = [];
+            for (const c of baseContacts) {
+                if (isWhatsapp) {
+                    let tel = c.telefono || '';
+                    if (!tel && c.numeri_alternativi && c.numeri_alternativi.length > 0) {
+                        const primoCell = c.numeri_alternativi.find(n => n.tipo === 'cellulare');
+                        if (primoCell) tel = primoCell.numero;
+                    }
+                    if (tel) {
+                        righe.push({
+                            pod: c.pod,
+                            email: tel, // Riusiamo il campo per visualizzazione/logica comune
+                            pec: false,
+                            nome: c.nome || 'N/D',
+                            nota: testoNotaContatto(c),
+                            contatto: c,
+                            tipo: 'wa'
+                        });
+                    }
+                } else {
+                    if (c.email_filone) {
+                        const emails = splitEmails(c.email_filone);
+                        for (const em of emails) {
+                            righe.push({
+                                pod: c.pod,
+                                email: em.email,
+                                pec: em.pec,
+                                nome: c.nome || 'N/D',
+                                nota: testoNotaContatto(c),
+                                contatto: c,
+                                tipo: 'email'
+                            });
+                        }
+                    }
                 }
             }
 
             const numPec = righe.filter(r => r.pec).length;
             const numNormali = righe.filter(r => !r.pec).length;
 
-            // Popola lista con ciascun indirizzo come riga separata
             const list = document.getElementById('bulkContactsList');
-            list.innerHTML = righe.map((r, i) => {
-                const notaHtml = r.nota ? `
-                    <div class="bulk-contact-note" title="${escapeHtml(r.nota)}">
-                        <i class="fas fa-sticky-note"></i>${escapeHtml(r.nota)}
+            if (righe.length === 0) {
+                list.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text-muted)">Nessun contatto valido per il template selezionato.</div>`;
+                document.getElementById('bulkEmailCount').textContent = '0 contatti';
+                document.getElementById('bulkPecCount').textContent = '';
+            } else {
+                list.innerHTML = righe.map((r, i) => {
+                    const notaHtml = r.nota ? `
+                        <div class="bulk-contact-note" title="${escapeHtml(r.nota)}">
+                            <i class="fas fa-sticky-note"></i>${escapeHtml(r.nota)}
+                        </div>
+                    ` : '';
+                    let destHtml = '';
+                    if (r.tipo === 'wa') {
+                        destHtml = `<div class="bulk-contact-email">${escapeHtml(r.email)} <span class="pec-badge" style="background:#25D366"><i class="fab fa-whatsapp"></i> WA</span></div>`;
+                    } else {
+                        destHtml = `<div class="bulk-contact-email">${escapeHtml(r.email)}${r.pec ? '<span class="pec-badge">PEC</span>' : '<span class="pec-badge" style="background:var(--info)">MAIL</span>'}</div>`;
+                    }
+                    return `
+                    <div class="bulk-contact-item ${r.pec ? 'is-pec' : ''}" data-is-pec="${r.pec}">
+                        <input type="checkbox" class="bulk-contact-check" data-pod="${r.pod}" data-email="${escapeHtml(r.email)}" data-pec="${r.pec}" data-tipo="${r.tipo}" data-idx="${i}" ${r.pec ? '' : 'checked'}>
+                        <div class="bulk-contact-main">
+                            <div class="bulk-contact-name">${escapeHtml(r.nome)}</div>
+                            ${notaHtml}
+                        </div>
+                        ${destHtml}
+                        <div class="bulk-contact-pod">${r.pod || ''}</div>
                     </div>
-                ` : '';
-                return `
-                <div class="bulk-contact-item ${r.pec ? 'is-pec' : ''}" data-is-pec="${r.pec}">
-                    <input type="checkbox" class="bulk-contact-check" data-pod="${r.pod}" data-email="${escapeHtml(r.email)}" data-pec="${r.pec}" data-idx="${i}" ${r.pec ? '' : 'checked'}>
-                    <div class="bulk-contact-main">
-                        <div class="bulk-contact-name">${escapeHtml(r.nome)}</div>
-                        ${notaHtml}
-                    </div>
-                    <div class="bulk-contact-email">${escapeHtml(r.email)}${r.pec ? '<span class="pec-badge">PEC</span>' : '<span class="pec-badge" style="background:var(--info)">MAIL</span>'}</div>
-                    <div class="bulk-contact-pod">${r.pod || ''}</div>
-                </div>
-                `;
-            }).join('');
+                    `;
+                }).join('');
 
-            document.getElementById('bulkEmailCount').textContent = `${numNormali} mail` + (numPec > 0 ? `, ${numPec} PEC` : '');
-            document.getElementById('bulkPecCount').textContent = numPec > 0 ? `${numPec} PEC escluse` : '';
-            document.getElementById('bulkSelectAll').checked = true;
-            document.getElementById('bulkExcludePec').checked = true;
+                if (isWhatsapp) {
+                    document.getElementById('bulkEmailCount').textContent = `${numNormali} numeri validi`;
+                    document.getElementById('bulkPecCount').textContent = '';
+                    document.getElementById('bulkExcludePec').parentElement.style.display = 'none';
+                } else {
+                    document.getElementById('bulkEmailCount').textContent = `${numNormali} mail` + (numPec > 0 ? `, ${numPec} PEC` : '');
+                    document.getElementById('bulkPecCount').textContent = numPec > 0 ? `${numPec} PEC escluse` : '';
+                    document.getElementById('bulkExcludePec').parentElement.style.display = '';
+                }
+            }
+
+            if (righe.length > 0) {
+                document.getElementById('bulkSelectAll').checked = true;
+                if (!isWhatsapp) document.getElementById('bulkExcludePec').checked = true;
+            }
 
             // Reset progress/results
             document.getElementById('bulkProgress').style.display = 'none';
@@ -3953,14 +4228,9 @@
             document.getElementById('bulkPreviewSection').style.display = 'none';
             document.getElementById('bulkContactsList').style.display = '';
             document.querySelector('.bulk-filter-row').style.display = '';
-            document.getElementById('bulkPreviewBtn').style.display = '';
+            document.getElementById('bulkPreviewBtn').style.display = righe.length > 0 ? '' : 'none';
             document.getElementById('bulkSendBtn').style.display = 'none';
             bulkPreviews = [];
-
-            // Carica SMTP settings
-            
-
-            document.getElementById('bulkEmailModal').classList.add('active');
         }
 
         function chiudiBulkEmailModal() {
@@ -4049,14 +4319,16 @@
             bulkPreviews = [];
             checkboxes.forEach(cb => {
                 const pod = cb.dataset.pod;
-                const emailAddr = cb.dataset.email;
+                // email contiene l'indirizzo email oppure il numero di telefono per WhatsApp
+                const destAddr = cb.dataset.email; 
+                const isWhatsapp = cb.dataset.tipo === 'wa';
                 const contatto = contatti.find(c => c.pod === pod);
-                if (!contatto || !emailAddr) return;
+                if (!contatto || !destAddr) return;
 
                 // Build contact data same as inviaEmailBulk
                 const contattoData = {
                     pod: contatto.pod || '',
-                    email: emailAddr,
+                    email: destAddr,
                     nome: contatto.nome || '',
                     indirizzo: contatto.indirizzo || '',
                     civico: contatto.civico || '',
@@ -4083,17 +4355,18 @@
 
                 // Resolve template
                 const bodyText = tmpl.generate(contatto, fields);
-                const subject = tmpl.subject ? tmpl.subject(contatto, fields) : `Sostituzione contatore - ${contatto.nome || ''}`;
+                const subject = (tmpl.subject && !isWhatsapp) ? tmpl.subject(contatto, fields) : `Sostituzione contatore - ${contatto.nome || ''}`;
 
                 bulkPreviews.push({
                     pod: pod,
-                    email: emailAddr,
+                    email: destAddr,
+                    isWhatsapp: isWhatsapp,
                     nome: contatto.nome || 'N/D',
                     subject: subject,
                     bodyHtml: bodyText,
                     contatto: contattoData,
                     note: testoNotaContatto(contatto),
-                    allegati: getAllegatiDefault(contatto.tipologia_contatore || ''),
+                    allegati: isWhatsapp ? [] : getAllegatiDefault(contatto.tipologia_contatore || ''),
                     edited: false
                 });
             });
@@ -4118,16 +4391,37 @@
             document.getElementById('bulkSendBtn').style.display = '';
         }
 
-        function buildEmailHtml(bodyText) {
+        function convertHtmlToWhatsApp(html) {
+            let txt = html;
+            // Convert line breaks and paragraphs
+            txt = txt.replace(/<br\s*[\/]?>/gi, '\n');
+            txt = txt.replace(/<\/div>\s*<div[^>]*>/gi, '\n');
+            txt = txt.replace(/<\/p>\s*<p[^>]*>/gi, '\n\n');
+            // Formatting
+            txt = txt.replace(/<b>(.*?)<\/b>/gi, '*$1*');
+            txt = txt.replace(/<strong>(.*?)<\/strong>/gi, '*$1*');
+            txt = txt.replace(/<i>(.*?)<\/i>/gi, '_$1_');
+            txt = txt.replace(/<em>(.*?)<\/em>/gi, '_$1_');
+            txt = txt.replace(/<s>(.*?)<\/s>/gi, '~$1~');
+            // Strip any remaining html tags
+            txt = txt.replace(/<[^>]+>/g, '');
+            // Convert entities
+            txt = txt.replace(/&nbsp;/g, ' ');
+            return encodeURIComponent(txt.trim());
+        }
+
+        function buildMessageHtml(bodyText, isWhatsapp) {
             // Convert \n to <br> and append firma, same as backend
             let html = bodyText.replace(/\n/g, '<br>');
-            let firma = (templateSettings.firma_html || '');
-            if (firma) {
-                const emailTecnico = provincia === 'PAVIA'
-                    ? templateSettings.email_pavia
-                    : templateSettings.email_torino;
-                firma = firma.replace(/\{email_tecnico\}/g, emailTecnico || '');
-                html += firma;
+            if (!isWhatsapp) {
+                let firma = (templateSettings.firma_html || '');
+                if (firma) {
+                    const emailTecnico = provincia === 'PAVIA'
+                        ? templateSettings.email_pavia
+                        : templateSettings.email_torino;
+                    firma = firma.replace(/\{email_tecnico\}/g, emailTecnico || '');
+                    html += firma;
+                }
             }
             return html;
         }
@@ -4135,43 +4429,53 @@
         function renderPreviewCards() {
             const container = document.getElementById('bulkPreviewCards');
             container.innerHTML = bulkPreviews.map((p, i) => {
-                const renderedHtml = buildEmailHtml(p.bodyHtml);
+                const renderedHtml = buildMessageHtml(p.bodyHtml, p.isWhatsapp);
                 const allegatiHtml = renderAllegatiPreview(p.allegati || [], i);
                 const notaHtml = p.note ? `
                     <span class="preview-note" title="${escapeHtml(p.note)}">
                         <i class="fas fa-sticky-note"></i>${escapeHtml(p.note)}
                     </span>
                 ` : '';
+                
+                const subjectRow = p.isWhatsapp ? '' : `
+                    <div class="preview-field-label">Oggetto:</div>
+                    <input type="text" class="preview-subject-input" id="previewSubject${i}"
+                           value="${escapeHtml(p.subject)}"
+                           oninput="segnaModificata(${i})">
+                `;
+                const allegatiRow = p.isWhatsapp ? '' : `
+                    <div class="preview-allegati-section" id="previewAllegati${i}">
+                        <div class="preview-field-label" style="margin-top:10px;">
+                            <i class="fas fa-paperclip"></i> Allegati:
+                        </div>
+                        ${allegatiHtml}
+                    </div>
+                `;
+
                 return `
                 <div class="preview-card ${i === 0 ? 'expanded' : ''}" id="previewCard${i}">
                     <div class="preview-card-header" onclick="togglePreviewCard(${i})">
                         <i class="fas fa-chevron-right preview-toggle"></i>
-                        <span class="preview-dest">${escapeHtml(p.nome)} — ${escapeHtml(p.email)}</span>
+                        <span class="preview-dest">${escapeHtml(p.nome)} — ${escapeHtml(p.email)} ${p.isWhatsapp ? '<i class="fab fa-whatsapp" style="color:#25D366;margin-left:5px;"></i>' : ''}</span>
                         ${notaHtml}
                         <span class="preview-pod">${escapeHtml(p.pod)}</span>
                         ${(p.allegati || []).length > 0 ? `<span class="preview-allegati-badge"><i class="fas fa-paperclip"></i> ${p.allegati.length}</span>` : ''}
                         <span class="preview-card-badge" id="previewBadge${i}" style="display:none;">modificata</span>
                     </div>
                     <div class="preview-card-body">
-                        <div class="preview-field-label">Oggetto:</div>
-                        <input type="text" class="preview-subject-input" id="previewSubject${i}"
-                               value="${escapeHtml(p.subject)}"
-                               oninput="segnaModificata(${i})">
+                        ${subjectRow}
                         <div style="display:flex;align-items:center;justify-content:space-between;">
-                            <div class="preview-field-label" style="margin-bottom:0;">Anteprima email:</div>
+                            <div class="preview-field-label" style="margin-bottom:0;">Anteprima testo:</div>
                             <button class="preview-edit-toggle" id="previewEditBtn${i}" onclick="toggleEditMode(${i}, event)">
                                 <i class="fas fa-pen"></i> Modifica testo
                             </button>
                         </div>
                         <div class="preview-body-rendered" id="previewRendered${i}">${renderedHtml}</div>
-                        <textarea class="preview-body-editor" id="previewBody${i}"
-                                  oninput="onPreviewBodyEdit(${i})">${escapeHtml(p.bodyHtml)}</textarea>
-                        <div class="preview-allegati-section" id="previewAllegati${i}">
-                            <div class="preview-field-label" style="margin-top:10px;">
-                                <i class="fas fa-paperclip"></i> Allegati:
-                            </div>
-                            ${allegatiHtml}
+                        <div class="rte-container preview-body-editor" id="previewBodyContainer${i}" style="display:none; margin-top: 10px;">
+                            ${buildRteToolbar()}
+                            <div class="rte-editor" id="previewBody${i}" contenteditable="true" oninput="onPreviewBodyEdit(${i})">${p.bodyHtml}</div>
                         </div>
+                        ${allegatiRow}
                     </div>
                 </div>`;
             }).join('');
@@ -4250,19 +4554,20 @@
         function toggleEditMode(idx, event) {
             event.stopPropagation();
             const rendered = document.getElementById(`previewRendered${idx}`);
+            const editorContainer = document.getElementById(`previewBodyContainer${idx}`);
             const editor = document.getElementById(`previewBody${idx}`);
             const btn = document.getElementById(`previewEditBtn${idx}`);
-            const isEditing = editor.style.display === 'block';
+            const isEditing = editorContainer.style.display === 'block';
             if (isEditing) {
                 // Switch back to rendered view — re-render with edits
-                rendered.innerHTML = buildEmailHtml(editor.value);
+                rendered.innerHTML = buildMessageHtml(editor.innerHTML, bulkPreviews[idx].isWhatsapp);
                 rendered.style.display = '';
-                editor.style.display = 'none';
+                editorContainer.style.display = 'none';
                 btn.innerHTML = '<i class="fas fa-pen"></i> Modifica testo';
             } else {
                 // Switch to edit mode
                 rendered.style.display = 'none';
-                editor.style.display = 'block';
+                editorContainer.style.display = 'block';
                 editor.focus();
                 btn.innerHTML = '<i class="fas fa-eye"></i> Vedi anteprima';
             }
@@ -4292,7 +4597,6 @@
             bulkPreviews = [];
         }
 
-        const PAUSA_TRA_EMAIL_SEC = 4; // secondi tra un invio e l'altro
         let bulkAbortato = false;
 
         async function inviaEmailBulk() {
@@ -4301,6 +4605,9 @@
                 showToast('Seleziona un template', 'error');
                 return;
             }
+            
+            const templateObj = TEMPLATES[templateId];
+            const isWhatsapp = templateObj && templateObj.type === 'whatsapp';
 
             // Read from preview data (including edits from textareas/inputs)
             if (bulkPreviews.length === 0) {
@@ -4312,16 +4619,22 @@
             const selezionati = bulkPreviews.map((p, i) => {
                 const subjectEl = document.getElementById(`previewSubject${i}`);
                 const bodyEl = document.getElementById(`previewBody${i}`);
+                const bodyHtml = bodyEl ? (bodyEl.value !== undefined ? bodyEl.value : bodyEl.innerHTML) : p.bodyHtml;
                 return {
                     ...p.contatto,
                     subject_override: subjectEl ? subjectEl.value : p.subject,
-                    body_override: bodyEl ? bodyEl.value : p.bodyHtml,
+                    body_override: bodyHtml,
                     allegati: p.allegati || [],
+                    custom_note: p.note
                 };
             });
 
-            const tempoStimato = Math.ceil(selezionati.length * PAUSA_TRA_EMAIL_SEC / 60);
-            if (!confirm(`Stai per inviare ${selezionati.length} email con il template "${document.getElementById('bulkTemplateSelect').selectedOptions[0].textContent}".\n\nPausa di ${PAUSA_TRA_EMAIL_SEC}s tra ogni invio per evitare spam.\nTempo stimato: ~${tempoStimato} min.\n\nConfermi l'invio?`)) {
+            // Random delay between 60 and 120 seconds
+            const avgPause = 90;
+            const tempoStimato = Math.ceil(selezionati.length * avgPause / 60);
+            
+            let actionName = isWhatsapp ? 'messaggi WhatsApp' : 'email';
+            if (!confirm(`Stai per inviare ${selezionati.length} ${actionName} con il template "${document.getElementById('bulkTemplateSelect').selectedOptions[0].textContent}".\n\nPausa random (1-2 minuti) tra ogni invio per evitare blocchi spam.\nTempo stimato: ~${tempoStimato} min.\n\nConfermi l'invio?`)) {
                 return;
             }
 
@@ -4350,50 +4663,75 @@
 
             for (let i = 0; i < selezionati.length; i++) {
                 if (bulkAbortato) {
-                    logEl.innerHTML += `<div style="color:var(--warning);"><i class="fas fa-hand-paper"></i> Invio interrotto dall'utente dopo ${inviati} email</div>`;
+                    logEl.innerHTML += `<div style="color:var(--warning);"><i class="fas fa-hand-paper"></i> Invio interrotto dall'utente dopo ${inviati} invii</div>`;
                     break;
                 }
 
                 const c = selezionati[i];
+                const identifierText = isWhatsapp ? 'WA' : 'Email';
 
-                // Aggiorna progress
+                // Aggiorna progress bar (senza il testo di attesa per ora)
                 document.getElementById('bulkProgressText').textContent =
-                    `${i + 1} / ${selezionati.length} — attendere ~${PAUSA_TRA_EMAIL_SEC}s...`;
+                    `${i + 1} / ${selezionati.length} — Invio ${identifierText} in corso...`;
                 document.getElementById('bulkProgressFill').style.width =
                     `${Math.round(((i + 1) / selezionati.length) * 100)}%`;
 
                 try {
-                    const resp = await fetch('/api/distinte/invia-singola-email', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            template_id: templateId,
-                            contatto: c,
-                            subject_override: c.subject_override || undefined,
-                            body_override: c.body_override || undefined,
-                            allegati: c.allegati || []
-                        })
-                    });
-                    const data = await resp.json();
-
-                    if (data.ok) {
+                    if (isWhatsapp) {
+                        // Logica WhatsApp: formattare url e aprire tab
+                        // Rimuoviamo il 39 o i caratteri speciali se necessario, ma assumiamo email contenga il numero
+                        const digits = c.email.replace(/[^\d]/g, '').replace(/^39/, '');
+                        const waNumero = '39' + digits;
+                        const finalTxt = convertHtmlToWhatsApp(c.body_override);
+                        const waUrl = `https://web.whatsapp.com/send?phone=${waNumero}&text=${finalTxt}`;
+                        
+                        window.open(waUrl, '_blank');
+                        
                         inviati++;
                         podsInviati.add(c.pod);
-                        logEl.innerHTML += `<div class="result-ok"><i class="fas fa-check"></i> ${c.pod} → ${c.email}</div>`;
+                        logEl.innerHTML += `<div class="result-ok"><i class="fab fa-whatsapp"></i> ${c.pod} → ${c.email} (Tab WhatsApp Aperto)</div>`;
                     } else {
-                        errori++;
-                        logEl.innerHTML += `<div class="result-err"><i class="fas fa-times"></i> ${c.pod} → ${c.email}: ${data.errore || 'Errore'}</div>`;
+                        // Logica Email: chiama API
+                        const resp = await fetch('/api/distinte/invia-singola-email', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                template_id: templateId,
+                                contatto: c,
+                                subject_override: c.subject_override || undefined,
+                                body_override: c.body_override || undefined,
+                                allegati: c.allegati || []
+                            })
+                        });
+                        const data = await resp.json();
+
+                        if (data.ok) {
+                            inviati++;
+                            podsInviati.add(c.pod);
+                            logEl.innerHTML += `<div class="result-ok"><i class="fas fa-check"></i> ${c.pod} → ${c.email}</div>`;
+                        } else {
+                            errori++;
+                            logEl.innerHTML += `<div class="result-err"><i class="fas fa-times"></i> ${c.pod} → ${c.email}: ${data.errore || 'Errore'}</div>`;
+                        }
                     }
                 } catch (e) {
                     errori++;
-                    logEl.innerHTML += `<div class="result-err"><i class="fas fa-times"></i> ${c.pod} → ${c.email}: Errore rete</div>`;
+                    logEl.innerHTML += `<div class="result-err"><i class="fas fa-times"></i> ${c.pod} → ${c.email}: Errore invio o popup bloccato</div>`;
                 }
 
                 logEl.scrollTop = logEl.scrollHeight;
 
                 // Pausa tra invii (tranne dopo l'ultimo)
                 if (i < selezionati.length - 1 && !bulkAbortato) {
-                    await new Promise(r => setTimeout(r, PAUSA_TRA_EMAIL_SEC * 1000));
+                    const randomPause = Math.floor(Math.random() * (120 - 60 + 1) + 60); // 60 a 120 sec
+                    let timeLeft = randomPause;
+                    
+                    while (timeLeft > 0 && !bulkAbortato) {
+                        document.getElementById('bulkProgressText').textContent =
+                            `${i + 1} / ${selezionati.length} — attendere ${timeLeft}s (anti-spam)...`;
+                        await new Promise(r => setTimeout(r, 1000));
+                        timeLeft--;
+                    }
                 }
             }
 
@@ -4401,19 +4739,20 @@
             progressEl.querySelector('div:first-child').innerHTML =
                 `<i class="fas fa-check-circle" style="color:var(--success)"></i> ${bulkAbortato ? 'Interrotto' : 'Completato'}`;
             document.getElementById('bulkProgressText').textContent =
-                `${inviati} inviate, ${errori} errori su ${selezionati.length}`;
+                `${inviati} invii, ${errori} errori su ${selezionati.length}`;
             document.getElementById('bulkProgressFill').style.width = '100%';
 
             // Ripristina pulsante
-            sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Invia Email';
+            sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Invia';
             sendBtn.onclick = inviaEmailBulk;
             sendBtn.style.background = 'linear-gradient(135deg, var(--accent-hover), var(--accent-deep))';
 
             if (inviati > 0) {
-                showToast(`${inviati} email inviate con successo!`);
-                // Aggiungi nota "mandata mail per il GG/MM" ai POD inviati
+                showToast(`${inviati} messaggi/email processati con successo!`);
+                // Aggiungi nota "mandata mail" / "mandato WA" ai POD
                 for (const pod of podsInviati) {
-                    await aggiungiNota(pod, 'mandata mail', true, {
+                    const notaTarget = isWhatsapp ? 'mandato msg wa' : 'mandata mail';
+                    await aggiungiNota(pod, notaTarget, true, {
                         includiDataPianificazione: true
                     });
                 }
@@ -4726,9 +5065,353 @@ Rispondi con un JSON array in questo formato esatto:
             renderContacts();
         }
 
+        
+        function execRteCmd(command, value = null) {
+            document.execCommand(command, false, value);
+        }
+
+        function buildRteToolbar() {
+            return `
+                <div class="rte-toolbar">
+                    <button type="button" class="rte-btn" onclick="execRteCmd('bold')" title="Grassetto"><i class="fas fa-bold"></i></button>
+                    <button type="button" class="rte-btn" onclick="execRteCmd('italic')" title="Corsivo"><i class="fas fa-italic"></i></button>
+                    <button type="button" class="rte-btn" onclick="execRteCmd('underline')" title="Sottolineato"><i class="fas fa-underline"></i></button>
+                    <button type="button" class="rte-btn" onclick="execRteCmd('insertUnorderedList')" title="Lista puntata"><i class="fas fa-list-ul"></i></button>
+                    <button type="button" class="rte-btn" onclick="execRteCmd('insertOrderedList')" title="Lista numerata"><i class="fas fa-list-ol"></i></button>
+                    <button type="button" class="rte-btn" onclick="const url=prompt('Inserisci URL (es. https://...):'); if(url) execRteCmd('createLink', url);" title="Link"><i class="fas fa-link"></i></button>
+                    <button type="button" class="rte-btn" onclick="execRteCmd('unlink')" title="Rimuovi Link"><i class="fas fa-unlink"></i></button>
+                    <button type="button" class="rte-btn" onclick="execRteCmd('removeFormat')" title="Rimuovi Formattazione"><i class="fas fa-eraser"></i></button>
+                </div>
+            `;
+        }
+
+        // --- Template Editor Logic ---
+        let editorTemplates = null;
+        let editorFields = null;
+        let editorSettings = null;
+        let editorCurrentKey = null;
+
+        async function openTemplateEditor() {
+            try {
+                const resp = await fetch('/api/distinte/templates');
+                const data = await resp.json();
+                if (data.error) throw new Error(data.error);
+
+                editorSettings = data.settings || {};
+                editorFields = data.fields || {};
+                
+                // Manteniamo l'ordine parseando direttamente
+                editorTemplates = JSON.parse(JSON.stringify(data.templates || {}));
+
+                document.getElementById('templateEditorModal').classList.add('active');
+                editorCurrentKey = null;
+                renderEditorList();
+                renderEditorForm();
+            } catch (err) {
+                showToast("Errore caricamento template: " + err.message);
+            }
+        }
+
+        function closeTemplateEditor() {
+            document.getElementById('templateEditorModal').classList.remove('active');
+        }
+
+        function renderEditorList() {
+            const listEl = document.getElementById('editorList');
+            listEl.innerHTML = '';
+            
+            const keys = Object.keys(editorTemplates);
+            keys.forEach((key, index) => {
+                const t = editorTemplates[key];
+                
+                const div = document.createElement('div');
+                div.className = 'editor-list-item' + (key === editorCurrentKey ? ' active' : '');
+                
+                const titleSpan = document.createElement('span');
+                titleSpan.className = 'item-title';
+                titleSpan.innerHTML = `<i class="${t.icon || 'fas fa-comment'}"></i> ${escapeHtml(t.label || key)}`;
+                titleSpan.onclick = () => {
+                    editorCurrentKey = key;
+                    renderEditorList();
+                    renderEditorForm();
+                };
+                
+                const actionsDiv = document.createElement('div');
+                actionsDiv.className = 'editor-list-actions';
+                
+                const btnUp = document.createElement('button');
+                btnUp.innerHTML = '<i class="fas fa-chevron-up"></i>';
+                btnUp.disabled = index === 0;
+                btnUp.onclick = (e) => { e.stopPropagation(); moveEditorTemplate(key, -1); };
+                
+                const btnDown = document.createElement('button');
+                btnDown.innerHTML = '<i class="fas fa-chevron-down"></i>';
+                btnDown.disabled = index === keys.length - 1;
+                btnDown.onclick = (e) => { e.stopPropagation(); moveEditorTemplate(key, 1); };
+                
+                const btnDel = document.createElement('button');
+                btnDel.innerHTML = '<i class="fas fa-trash" style="color:var(--danger)"></i>';
+                btnDel.onclick = (e) => { e.stopPropagation(); deleteEditorTemplate(key); };
+                
+                actionsDiv.appendChild(btnUp);
+                actionsDiv.appendChild(btnDown);
+                actionsDiv.appendChild(btnDel);
+                
+                div.appendChild(titleSpan);
+                div.appendChild(actionsDiv);
+                
+                listEl.appendChild(div);
+            });
+        }
+
+        function moveEditorTemplate(key, direction) {
+            const keys = Object.keys(editorTemplates);
+            const index = keys.indexOf(key);
+            if (index < 0) return;
+            const newIndex = index + direction;
+            if (newIndex < 0 || newIndex >= keys.length) return;
+            
+            const temp = keys[index];
+            keys[index] = keys[newIndex];
+            keys[newIndex] = temp;
+            
+            const newObj = {};
+            keys.forEach(k => { newObj[k] = editorTemplates[k]; });
+            editorTemplates = newObj;
+            
+            renderEditorList();
+        }
+
+        function deleteEditorTemplate(key) {
+            if (confirm("Eliminare il template '" + key + "'?")) {
+                delete editorTemplates[key];
+                if (editorCurrentKey === key) editorCurrentKey = null;
+                renderEditorList();
+                renderEditorForm();
+            }
+        }
+
+        function editorAddNewTemplate() {
+            const baseKey = prompt("Inserisci ID univoco per il template (es. wa_nuovo):");
+            if (!baseKey) return;
+            let key = baseKey.replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase();
+            if (editorTemplates[key]) {
+                alert("ID già esistente");
+                return;
+            }
+            
+            editorTemplates[key] = {
+                label: "Nuovo Template",
+                icon: "fas fa-comment",
+                type: "whatsapp",
+                fields: [],
+                body: "Scrivi il tuo messaggio qui..."
+            };
+            editorCurrentKey = key;
+            renderEditorList();
+            renderEditorForm();
+        }
+
+        function renderEditorForm() {
+            const container = document.getElementById('editorContent');
+            if (!editorCurrentKey || !editorTemplates[editorCurrentKey]) {
+                container.innerHTML = '<div style="text-align: center; margin-top: 50px; color: var(--text-muted);">Seleziona un template dalla lista o creane uno nuovo.</div>';
+                return;
+            }
+            
+            const t = editorTemplates[editorCurrentKey];
+            
+            let html = `
+                <h3>Modifica: ${escapeHtml(editorCurrentKey)}</h3>
+                
+                <div class="editor-form-group" style="margin-top: 15px;">
+                    <label>Etichetta (Nome)</label>
+                    <input type="text" class="editor-input" id="ed_label" value="${escapeHtml(t.label || '')}" oninput="updateEditorData()">
+                </div>
+                
+                <div style="display:flex; gap:15px;">
+                    <div class="editor-form-group" style="flex:1;">
+                        <label>Tipo</label>
+                        <select class="editor-input" id="ed_type" onchange="updateEditorData(); renderEditorForm();">
+                            <option value="whatsapp" ${t.type === 'whatsapp' ? 'selected' : ''}>WhatsApp</option>
+                            <option value="email" ${t.type === 'email' ? 'selected' : ''}>Email</option>
+                            <option value="sms" ${t.type === 'sms' ? 'selected' : ''}>SMS / Testo</option>
+                        </select>
+                    </div>
+                    <div class="editor-form-group" style="flex:1;">
+                        <label>Icona (Classi FontAwesome)</label>
+                        <input type="text" class="editor-input" id="ed_icon" value="${escapeHtml(t.icon || '')}" oninput="updateEditorData()">
+                    </div>
+                </div>
+            `;
+            
+            if (t.type === 'email') {
+                html += `
+                <div class="editor-form-group">
+                    <label>Oggetto Email (puoi usare variabili)</label>
+                    <input type="text" class="editor-input" id="ed_subject" value="${escapeHtml(t.subject || '')}" oninput="updateEditorData()">
+                </div>
+                `;
+            }
+            
+            html += `
+                <div class="editor-form-group">
+                    <label>Variabili supportate (le variabili usabili in questo template)</label>
+                    <div class="editor-checkboxes">
+            `;
+            
+            const availableFields = Object.keys(editorFields);
+            const currentFields = t.fields || [];
+            
+            // Includi anche le variabili condizionali del template (es. distacco_text_semplice)
+            let availableConditionals = [];
+            if (t.conditionals) {
+                availableConditionals = Object.keys(t.conditionals);
+            }
+            let allAvailable = [...new Set([...availableFields, ...availableConditionals])];
+            
+            // Nascondiamo {distacco} perché l'utente userà {frase_distacco}
+            const hideFields = ['distacco'];
+            allAvailable = allAvailable.filter(f => !hideFields.includes(f));
+            
+            allAvailable.forEach(f => {
+                const isConditional = availableConditionals.includes(f);
+                const checked = currentFields.includes(f) || isConditional ? 'checked' : '';
+                const titleStr = isConditional ? 'Variabile condizionale' : 'Variabile standard';
+                html += `
+                    <label class="editor-checkbox-item" title="${titleStr}">
+                        <input type="checkbox" value="${escapeHtml(f)}" ${checked} onchange="updateEditorData()">
+                        <span class="var-badge" draggable="true" ondragstart="event.dataTransfer.setData('text/plain', '{${escapeHtml(f)}}')">{${escapeHtml(f)}}</span>
+                    </label>
+                `;
+            });
+            
+            html += `
+                    </div>
+                </div>
+                <div class="editor-form-group">
+                    <label>Corpo del Messaggio</label>
+                    <div class="rte-container">
+                        ${buildRteToolbar()}
+                        <div class="rte-editor" id="ed_body" contenteditable="true" data-placeholder="Scrivi qui il messaggio..." oninput="updateEditorData()">${(t.body || '').replace(/\n/g, '<br>')}</div>
+                    </div>
+                    <small style="color:var(--text-muted)">Puoi inserire le variabili abilitate trascinandole (Drag & Drop) direttamente nel testo, oppure scrivendole tra parentesi graffe, es: {nome}</small>
+                </div>
+            `;
+            
+            container.innerHTML = html;
+        }
+
+        function updateEditorData() {
+            if (!editorCurrentKey || !editorTemplates[editorCurrentKey]) return;
+            const t = editorTemplates[editorCurrentKey];
+            
+            t.label = document.getElementById('ed_label').value;
+            t.type = document.getElementById('ed_type').value;
+            t.icon = document.getElementById('ed_icon').value;
+            
+            if (t.type === 'email') {
+                const subj = document.getElementById('ed_subject');
+                if (subj) t.subject = subj.value;
+            } else {
+                delete t.subject;
+            }
+            
+            t.body = document.getElementById('ed_body').innerHTML;
+            
+            const checkboxes = document.querySelectorAll('#editorContent .editor-checkbox-item input[type="checkbox"]');
+            const selectedFields = [];
+            checkboxes.forEach(cb => {
+                if (cb.checked) selectedFields.push(cb.value);
+            });
+            t.fields = selectedFields;
+            
+            renderEditorList(); // solo per aggiornare la testata nella lista se cambia l'icona o l'etichetta
+        }
+
+        async function saveTemplatesToBackend() {
+            try {
+                const btn = document.querySelector('#templateEditorModal .modal-footer .btn-primary');
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvataggio...';
+                
+                const finalData = {
+                    settings: editorSettings,
+                    fields: editorFields,
+                    templates: editorTemplates
+                };
+                
+                const resp = await fetch('/api/distinte/templates', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(finalData)
+                });
+                
+                const data = await resp.json();
+                if (data.error) throw new Error(data.error);
+                
+                showToast("Template salvati con successo!");
+                closeTemplateEditor();
+                
+                // Ricarica templates lato client
+                await caricaTemplates();
+                // Ridisegna preview se un contatto e' aperto
+                if (typeof currentTemplatePod !== "undefined" && currentTemplatePod) {
+                   showMessage(currentTemplatePod);
+                }
+                
+            } catch (err) {
+                alert("Errore salvataggio: " + err.message);
+            } finally {
+                const btn = document.querySelector('#templateEditorModal .modal-footer .btn-primary');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-save"></i> Salva Modifiche';
+            }
+        }
+
         // Init
         loadConfig();
     </script>
+
+
+    <!-- Modal Gestione Template -->
+    <div class="modal-overlay" id="templateEditorModal">
+        <div class="modal modal-wide" style="max-width: 1000px; width: 95%;">
+            <div class="modal-header">
+                <h3>
+                    <i class="fas fa-edit" style="color: var(--primary)"></i>
+                    <span>Gestione Template</span>
+                </h3>
+                <button class="modal-close" onclick="closeTemplateEditor()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="editor-layout">
+                    <div class="editor-sidebar">
+                        <div class="editor-sidebar-header">
+                            <strong>Elenco</strong>
+                            <button class="btn btn-primary" style="padding: 4px 8px; font-size: 12px;" onclick="editorAddNewTemplate()">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
+                        <div class="editor-list" id="editorList">
+                            <!-- Popolato via JS -->
+                        </div>
+                    </div>
+                    <div class="editor-content" id="editorContent">
+                        <div style="text-align: center; margin-top: 50px; color: var(--text-muted);">
+                            Seleziona un template dalla lista o creane uno nuovo.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer" style="padding: 15px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px;">
+                <button class="btn btn-secondary" onclick="closeTemplateEditor()">Annulla</button>
+                <button class="btn btn-primary" onclick="saveTemplatesToBackend()">
+                    <i class="fas fa-save"></i> Salva Modifiche
+                </button>
+            </div>
+        </div>
+    </div>
 
 </body>
 </html>

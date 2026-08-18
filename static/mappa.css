@@ -839,13 +839,8 @@ body {
 
 /* Dropdown operatore multi-select per percorso giornata */
 .operatore-filter-container {
-    display: none;
-    min-width: 170px;
+    width: 100%;
     position: relative;
-}
-
-.operatore-filter-container.visible {
-    display: block;
 }
 
 .operatore-multi-trigger {

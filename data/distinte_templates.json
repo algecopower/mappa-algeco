@@ -5,146 +5,133 @@
         "firma_html": "<br><br><table cellpadding=\"0\" cellspacing=\"0\" style=\"font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#333;\"><tr><td style=\"padding-right:15px;border-right:2px solid #2a7ab5;vertical-align:middle;\"><img src=\"https://www.algecopower.it/wp-content/uploads/2024/06/cropped-LOGO-NEW-1.png\" alt=\"Algeco Power\" width=\"120\" style=\"display:block;\"></td><td style=\"padding-left:15px;vertical-align:middle;\"><strong style=\"font-size:14px;color:#2a7ab5;\">Ufficio Tecnico</strong><br>Telefono: <a href=\"tel:+390110252702\" style=\"color:#333;text-decoration:none;\">011 025 2702</a><br>Mail: <a href=\"mailto:{email_tecnico}\" style=\"color:#2a7ab5;text-decoration:none;\">{email_tecnico}</a><br><a href=\"https://www.algecopower.it\" style=\"color:#2a7ab5;text-decoration:none;\">www.algecopower.it</a></td></tr></table>"
     },
     "fields": {
-        "nome": {
-            "label": "Nome",
-            "placeholder": "Nome cliente",
-            "autoFillFrom": "nome"
+        "comune": {
+            "autoFillFrom": "comune",
+            "label": "Comune",
+            "placeholder": "Comune"
+        },
+        "data": {
+            "autoFillFrom": "data_intervento",
+            "label": "Data Intervento",
+            "placeholder": "__/__/____"
+        },
+        "distacco": {
+            "autoFillRule": {
+                "contains": "semidiretto",
+                "else": "si",
+                "field": "tipologia_contatore",
+                "then": "no"
+            },
+            "label": "Distacco fornitura?",
+            "options": [
+                {
+                    "l": "No - Senza distacco",
+                    "v": "no"
+                },
+                {
+                    "l": "Sì - Con breve distacco",
+                    "v": "si"
+                }
+            ],
+            "placeholder": "",
+            "type": "select"
+        },
+        "eneltel": {
+            "autoFillFrom": "eneltel_filone",
+            "label": "Eneltel",
+            "placeholder": "000000000"
         },
         "indirizzo": {
-            "label": "Indirizzo",
-            "placeholder": "Via ... N.",
             "autoFillFrom": [
                 "indirizzo",
                 "civico"
-            ]
+            ],
+            "label": "Indirizzo",
+            "placeholder": "Via ... N."
         },
-        "comune": {
-            "label": "Comune",
-            "placeholder": "Comune",
-            "autoFillFrom": "comune"
-        },
-        "data": {
-            "label": "Data Intervento",
-            "placeholder": "__/__/____",
-            "autoFillFrom": "data_intervento"
-        },
-        "nuova_data": {
-            "label": "Nuova Data Proposta",
-            "placeholder": "__/__/____",
-            "autoFillFrom": null
-        },
-        "pod": {
-            "label": "POD",
-            "placeholder": "IT001E...",
-            "autoFillFrom": "pod_filone"
-        },
-        "eneltel": {
-            "label": "Eneltel",
-            "placeholder": "000000000",
-            "autoFillFrom": "eneltel_filone"
+        "lista_date": {
+            "autoFillFrom": null,
+            "label": "Lista Date Proposte",
+            "placeholder": "Data 1\nData 2\n...",
+            "type": "textarea"
         },
         "matricola": {
+            "autoFillFrom": "matricola_filone",
             "label": "Matricola",
-            "placeholder": "Codice / Matricola",
-            "autoFillFrom": "matricola_filone"
+            "placeholder": "Codice / Matricola"
         },
-        "nome_societa": {
-            "label": "Nome Società",
-            "placeholder": "Nome società/condominio",
-            "autoFillFrom": "nome"
+        "nome": {
+            "autoFillFrom": "nome",
+            "label": "Nome",
+            "placeholder": "Nome cliente"
+        },
+        "nome_operatore": {
+            "autoFillFrom": null,
+            "label": "Nome Operatore",
+            "placeholder": "Es. Mario Rossi"
         },
         "nome_referente": {
+            "autoFillFrom": null,
             "label": "Referente",
-            "placeholder": "Nome referente telefonico",
-            "autoFillFrom": null
+            "placeholder": "Nome referente telefonico"
         },
-        "distacco": {
-            "label": "Distacco fornitura?",
-            "placeholder": "",
-            "type": "select",
-            "options": [
-                {
-                    "v": "no",
-                    "l": "No - Senza distacco"
-                },
-                {
-                    "v": "si",
-                    "l": "Sì - Con breve distacco"
-                }
-            ],
-            "autoFillRule": {
-                "field": "tipologia_contatore",
-                "contains": "semidiretto",
-                "then": "no",
-                "else": "si"
-            }
+        "nome_societa": {
+            "autoFillFrom": "nome",
+            "label": "Nome Società",
+            "placeholder": "Nome società/condominio"
+        },
+        "nuova_data": {
+            "autoFillFrom": null,
+            "label": "Nuova Data Proposta",
+            "placeholder": "__/__/____"
+        },
+        "pod": {
+            "autoFillFrom": "pod_filone",
+            "label": "POD",
+            "placeholder": "IT001E..."
+        },
+        "telefono_operatore": {
+            "autoFillFrom": null,
+            "label": "Telefono Operatore",
+            "placeholder": "Es. 333 1234567"
         }
     },
     "templates": {
-        "wa_conferma": {
-            "label": "WA Conferma",
-            "icon": "fab fa-whatsapp",
-            "type": "whatsapp",
+        "email_semplificata": {
+            "body": "Buongiorno,\nvi contattiamo da <a href=\"https://www.algecopower.it\" style=\"color:#0066cc;text-decoration:underline;\">Algeco Power Srl</a> per informarvi che, come da comunicazioni inviate a mezzo posta nelle scorse settimane,&nbsp;la nostra società è stata incaricata da <a href=\"https://www.e-distribuzione.it/open-meter.html\" style=\"color:#0066cc;text-decoration:underline;\">E-Distribuzione</a> ad effettuare la sostituzione del vostro contatore di energia elettrica nel Comune di {comune} associato al POD in oggetto. La data prevista per l'intervento è:\n\n<strong>{data}</strong>\n\nLa sostituzione è gratuita e obbligatoria. Essa avviene in attuazione a provvedimenti normativi che stabiliscono l'uso di sistemi di misurazione che soddisfino i requisiti richiesti dal D.Lgs. 102/2014, di recepimento della direttiva europea 2012/27/UE sull'efficienza energetica.\n\n{frase_distacco}\n\n<p style=\"color:red; font-weight:bold; background-color:yellow; padding:4px;\">CHIEDIAMO CORTESEMENTE DI RISPONDERE A QUESTA EMAIL PER CONFERMARE LA VOSTRA PRESENZA NELLA DATA INDICATA PRECISANDO I VOSTRI ORARI DI APERTURA</p>\nAlleghiamo l'aggiudicazione del bando di gara che attesta il nostro incarico e restiamo a disposizione per chiarimenti.\n\nCordiali saluti.",
+            "conditionals": {
+                "frase_distacco": {
+                    "field": "distacco",
+                    "values": {
+                        "no": "Precisiamo inoltre che durante l’intervento NON è previsto il distacco della fornitura elettrica (in allegato la specifica tecnica di riferimento).",
+                        "si": "Facciamo presente che durante l’intervento è previsto un breve distacco della fornitura elettrica."
+                    }
+                }
+            },
             "fields": [
+                "comune",
+                "data",
+                "distacco",
                 "nome",
-                "indirizzo",
-                "comune",
-                "data"
+                "pod"
             ],
-            "body": "Gentile {nome},\nvi contattiamo per confermare la sostituzione del vostro contatore di energia elettrica presso Via {indirizzo} ({comune}), come da precedente comunicazione inviata a mezzo posta, prevista per il giorno:\n\n*{data}*\n\nLa manutenzione, richiesta da E-Distribuzione, è GRATUITA e OBBLIGATORIA ed è svolta in attuazione di provvedimenti normativi che prevedono l’utilizzo di sistemi di misurazione conformi ai requisiti stabiliti dal D.Lgs. 102/2014, di recepimento della direttiva europea 2012/27/UE sull’efficienza energetica.\nIl vostro contratto di fornitura NON subirà alcuna variazione: verrà sostituito esclusivamente il dispositivo di misura.\nPer maggiori informazioni potete consultare il seguente link:\nhttps://www.e-distribuzione.it/open-meter.html\n\nVi chiediamo gentilmente di rispondere a questo messaggio per confermare la presa visione.\nPer eventuali chiarimenti o assistenza, potete contattarci a questo numero o scriverci all’indirizzo {email_tecnico}.\n\nCordiali saluti,\nAlgeco Power"
-        },
-        "wa_sollecito": {
-            "label": "WA Sollecito",
-            "icon": "fab fa-whatsapp",
-            "type": "whatsapp",
-            "fields": [
-                "nome",
-                "indirizzo",
-                "comune",
-                "data"
-            ],
-            "body": "Gentile {nome},\ncome da precedente comunicazione inviata a mezzo posta, vi informiamo che in data *{data}* un tecnico incaricato da E-Distribuzione ha effettuato un tentativo di sostituzione del contatore di energia elettrica presso Via {indirizzo} ({comune}).\n\nPoiché per l’accesso al contatore è necessaria la vostra presenza, vi chiediamo cortesemente di contattarci a questo numero o tramite e-mail all’indirizzo {email_tecnico} al fine di concordare un nuovo appuntamento.\n\nRestiamo a disposizione per eventuali chiarimenti o necessità.\n\nCordiali saluti,\nUfficio Tecnico"
-        },
-        "wa_spiegone": {
-            "label": "Spiegone",
-            "icon": "fas fa-info-circle",
-            "type": "whatsapp",
-            "fields": [
-                "pod",
-                "eneltel",
-                "matricola"
-            ],
-            "info": "Template informativo dettagliato per spiegare la sostituzione. Puoi scegliere la chiusura: con invio documentazione oppure solo dati contatore.",
-            "body": "Siamo stati incaricati di effettuare, nel vostro comune, la sostituzione dei contatori di vecchia generazione con nuovi contatori, in attuazione di adeguamenti tecnici in vigore dal 2018, finalizzati a garantire una maggiore efficienza e una maggiore precisione delle misure.\nPrecisiamo che tale intervento non è dovuto ad alcun malfunzionamento del vostro contatore.\n\nVi informiamo inoltre che il contatore è di proprietà di E-Distribuzione, l’ente che gestisce esclusivamente la rete elettrica e i dispositivi di misura. Pertanto, il vostro contratto di fornitura con il venditore di energia rimarrà invariato e non è in alcun modo collegato a questo intervento.\nL’attività è completamente gratuita, non comporta costi aggiuntivi in bolletta e avrà una durata indicativa di 15–20 minuti. L’eventuale interruzione della corrente sarà limitata a pochi istanti.\n\nÈ possibile effettuare le opportune verifiche contattando E-Distribuzione al numero 803 500 oppure presso l’ufficio tecnico del vostro Comune, dove è stata depositata la documentazione relativa alla nostra attività.\n\nDi seguito riportiamo i dati del contatore oggetto dell’intervento:\n\nPOD (presente in bolletta): {pod}\nEneltel (visualizzabile sul display del contatore): {eneltel}\nMatricola (stampata sul contatore): {matricola}\n\nRestiamo a disposizione per qualsiasi ulteriore chiarimento.\n\nCordiali saluti,\nUfficio Tecnico Algeco Power"
-        },
-        "wa_appuntamento1": {
-            "label": "Appuntamento 1",
-            "icon": "fas fa-calendar-check",
-            "type": "whatsapp",
-            "fields": [
-                "indirizzo",
-                "comune",
-                "data"
-            ],
-            "info": "Richiesta appuntamento - primo contatto.",
-            "body": "Salve,\n\nabbiamo provato a contattarla in merito a una manutenzione sul contatore di energia elettrica sito in Via {indirizzo} ({comune}), richiesta da E-Distribuzione e per la quale è già stata inviata una comunicazione a mezzo posta.\n\nChiediamo gentilmente se nella giornata di *{data}* è possibile trovare qualcuno che ci consenta l'accesso al contatore. \n\nRestiamo in attesa di un suo riscontro e la invitiamo a contattarci a questo numero o all’indirizzo {email_tecnico} per qualsiasi informazione o chiarimento.\nPer maggiori informazioni riguardo l'intervento, può visitare il seguente link: https://www.e-distribuzione.it/open-meter.html\n\nCordiali saluti,\nUfficio Tecnico Algeco Power"
-        },
-        "wa_appuntamento2": {
-            "label": "Appuntamento 2",
-            "icon": "fas fa-calendar-plus",
-            "type": "whatsapp",
-            "fields": [
-                "indirizzo",
-                "comune",
-                "data"
-            ],
-            "info": "Richiesta appuntamento - secondo tentativo.",
-            "body": "Salve,\n\nla contattiamo nuovamente in merito alla sostituzione del contatore di energia elettrica sito in Via {indirizzo} ({comune}), richiesta da E-Distribuzione e già comunicata a mezzo posta.\n\nPoiché un precedente tentativo di intervento non ha avuto esito positivo, le chiediamo cortesemente se fosse possibile fissare un appuntamento per la giornata di *{data}*.\n\nRimaniamo in attesa di un suo riscontro ed eventuali indicazioni per l’accesso al contatore. Per qualsiasi informazione può contattarci a questo numero o scrivere all’indirizzo {email_tecnico}.\nPer maggiori informazioni riguardo l'intervento, può visitare il seguente link: https://www.e-distribuzione.it/open-meter.html\n\nCordiali saluti,\nUfficio Tecnico Algeco Power"
+            "icon": "fas fa-envelope-open-text",
+            "info": "Email semplificata con allegato aggiudicazione. Il distacco si auto-compila in base alla tipologia contatore.",
+            "label": "Email Semplificata",
+            "subject": "{nome}: SOSTITUZIONE CONTATORE E-DISTRIBUZIONE POD {pod}",
+            "type": "email"
         },
         "email_societa": {
-            "label": "Email Società",
-            "icon": "fas fa-envelope",
-            "type": "email",
+            "body": "Buongiorno,\n\nvi contattiamo da <a href=\"https://algecopower.it\" style=\"color:#0066cc;text-decoration:underline;\">Algeco Power</a> per informarvi che in data {data} un tecnico incaricato da E-Distribuzione effettuerà un intervento di manutenzione sul contatore di energia elettrica sito presso VIA {indirizzo} ({comune}).\nNello specifico, è prevista la sostituzione del dispositivo con uno di nuova generazione.\n\nIn allegato trasmettiamo la lettera di aggiudicazione della gara che attesta il nostro incarico per conto di E-Distribuzione, unitamente ai dati del contatore oggetto dell’intervento:\n\nPOD (presente in fattura): {pod}\nEneltel (visualizzabile sul display del contatore): {eneltel}\nMatricola (stampata sul contatore): {matricola}\n\nPrecisiamo che l’attività è completamente gratuita e non comporta alcuna modifica al vostro contratto di fornitura. L’intervento è eseguito in attuazione di provvedimenti normativi che prevedono l’utilizzo di sistemi di misurazione conformi ai requisiti stabiliti dal D.Lgs. 102/2014, di recepimento della direttiva europea 2012/27/UE sull’efficienza energetica.\nPer maggiori informazioni: <a href=\"https://www.e-distribuzione.it/open-meter.html\" style=\"color:#0066cc;text-decoration:underline;\">E-Distribuzione Open Meter</a>\n\n{distacco_text}\n\nChiediamo gentilmente di darci un riscontro per confermare la data sovraindicata ed eventuali indicazioni per l’accesso al contatore.\n\nA disposizione per qualsiasi chiarimento, porgiamo cordiali saluti.",
+            "conditionals": {
+                "distacco_text": {
+                    "field": "distacco",
+                    "values": {
+                        "no": "Precisiamo inoltre che durante l’intervento NON è previsto il distacco della fornitura elettrica (in allegato la specifica tecnica di riferimento).",
+                        "si": "Facciamo presente che durante l’intervento è previsto un breve distacco della fornitura elettrica."
+                    }
+                }
+            },
             "fields": [
                 "nome_societa",
                 "indirizzo",
@@ -155,42 +142,61 @@
                 "data",
                 "distacco"
             ],
+            "icon": "fas fa-envelope",
             "info": "Email per società/condomini. Compila i campi e scegli se prevede distacco o meno.",
+            "label": "Email Società",
             "subject": "{nome_societa}: SOSTITUZIONE CONTATORE E-DISTRIBUZIONE",
-            "conditionals": {
-                "distacco_text": {
-                    "field": "distacco",
-                    "values": {
-                        "no": "Precisiamo inoltre che durante l’intervento NON è previsto il distacco della fornitura elettrica (in allegato la specifica tecnica di riferimento).",
-                        "si": "Facciamo presente che durante l’intervento è previsto un breve distacco della fornitura elettrica."
-                    }
-                }
-            },
-            "body": "Buongiorno,\n\nvi contattiamo da <a href=\"https://algecopower.it\" style=\"color:#0066cc;text-decoration:underline;\">Algeco Power</a> per informarvi che in data {data} un tecnico incaricato da E-Distribuzione effettuerà un intervento di manutenzione sul contatore di energia elettrica sito presso VIA {indirizzo} ({comune}).\nNello specifico, è prevista la sostituzione del dispositivo con uno di nuova generazione.\n\nIn allegato trasmettiamo la lettera di aggiudicazione della gara che attesta il nostro incarico per conto di E-Distribuzione, unitamente ai dati del contatore oggetto dell’intervento:\n\nPOD (presente in fattura): {pod}\nEneltel (visualizzabile sul display del contatore): {eneltel}\nMatricola (stampata sul contatore): {matricola}\n\nPrecisiamo che l’attività è completamente gratuita e non comporta alcuna modifica al vostro contratto di fornitura. L’intervento è eseguito in attuazione di provvedimenti normativi che prevedono l’utilizzo di sistemi di misurazione conformi ai requisiti stabiliti dal D.Lgs. 102/2014, di recepimento della direttiva europea 2012/27/UE sull’efficienza energetica.\nPer maggiori informazioni: <a href=\"https://www.e-distribuzione.it/open-meter.html\" style=\"color:#0066cc;text-decoration:underline;\">E-Distribuzione Open Meter</a>\n\n{distacco_text}\n\nChiediamo gentilmente di darci un riscontro per confermare la data sovraindicata ed eventuali indicazioni per l’accesso al contatore.\n\nA disposizione per qualsiasi chiarimento, porgiamo cordiali saluti."
+            "type": "email"
         },
-        "email_semplificata": {
-            "label": "Email Semplificata",
-            "icon": "fas fa-envelope-open-text",
-            "type": "email",
+        "wa_appuntamento1": {
+            "body": "Buongiorno,\nNon avendo ricevuto conferma al messaggio automatico inviato in precedenza, abbiamo provato a chiamarla per sapere se nella giornata di domani fosse possibile il passaggio di un tecnico per la sostituzione del contatore.\n\nAttendiamo un suo gentile riscontro. Grazie.",
+            "fields": [],
+            "icon": "fab fa-whatsapp",
+            "label": "Richiesta Conferma",
+            "type": "whatsapp"
+        },
+        "wa_appuntamento2": {
+            "body": "Buongiorno,\nvi contattiamo per indicare i riferimenti del nostro tecnico che domani effettuerà la sostituzione del vostro contatore E-Distribuzione:\n\n{nome_operatore} {telefono_operatore}\n\nInformiamo che l'operatore avrà visibilità della vostra pratica solo a partire dalle ore 08:00 della giornata dell'intervento, e pertanto invitiamo a NON contattarlo prima in quanto non potrà prendere in carico nessuna richiesta o comunicazione.\n\nGrazie per la collaborazione,\nUFFICIO TECNICO ALGECO POWER",
+            "fields": [
+                "nome_operatore",
+                "telefono_operatore"
+            ],
+            "icon": "fab fa-whatsapp",
+            "label": "Promemoria Appuntamento",
+            "type": "whatsapp"
+        },
+        "wa_conferma": {
+            "body": "Gentile {nome},\ncome da precedente comunicazione inviata a mezzo posta, un incaricato E-Distribuzione sostituirà il vostro contatore il giorno *{data}* nel comune di {comune}.\n\nLa sostituzione, OBBLIGATORIA e GRATUITA, è richiesta da E-Distribuzione per adeguamento tecnologico e NON modificherà il vostro contratto di fornitura che resterà invariato.\n\nSI PREGA DI RISPONDERE CONFERMANDO LA VOSTRA DISPONIBILITÀ PER LA DATA INDICATA.\n\nPer eventuali chiarimenti o verifiche, potete contattarci a questo numero o scriverci all’indirizzo {email_tecnico}.\n\nCordiali saluti,\nAlgeco Power Srl - incaricati ufficiali E-Distribuzione",
             "fields": [
                 "nome",
-                "pod",
                 "data",
-                "distacco"
+                "comune"
             ],
-            "info": "Email semplificata con allegato aggiudicazione. Il distacco si auto-compila in base alla tipologia contatore.",
-            "subject": "{nome}: SOSTITUZIONE CONTATORE E-DISTRIBUZIONE POD {pod}",
-            "conditionals": {
-                "distacco_text_semplice": {
-                    "field": "distacco",
-                    "values": {
-                        "si": "Facciamo presente che durante l’intervento è previsto un breve distacco della fornitura elettrica.",
-                        "no": "Precisiamo inoltre che durante l’intervento NON è previsto il distacco della fornitura elettrica (in allegato la specifica tecnica di riferimento)."
-                    }
-                }
-            },
-
-"body": "Buongiorno,\nvi contattiamo da <a href=\"https://www.algecopower.it\" style=\"color:#0066cc;text-decoration:underline;\">Algeco Power Srl</a> per informarvi che la nostra società è stata incaricata da <a href=\"https://www.e-distribuzione.it/open-meter.html\" style=\"color:#0066cc;text-decoration:underline;\">E-Distribuzione</a> ad effettuare la sostituzione del vostro contatore di energia elettrica associato al POD in oggetto, come da comunicazioni inviate a mezzo posta nelle scorse settimane, per il giorno:\n\n<strong>{data}</strong>\n\nLa sostituzione è obbligatoria, e avviene in attuazione a provvedimenti normativi che stabiliscono l'uso di sistemi di misurazione che soddisfino i requisiti richiesti dal D.Lgs. 102/2014, di recepimento della direttiva europea 2012/27/UE sull'efficienza energetica.\n\n{distacco_text_semplice}\n\n<p style=\"color:red; font-weight:bold; background-color:yellow; padding:4px;\">CHIEDIAMO CORTESEMENTE DI RISPONDERE A QUESTA EMAIL PER CONFERMARE LA VOSTRA PRESENZA NELLA DATA INDICATA PRECISANDO I VOSTRI ORARI DI APERTURA</p>\nAlleghiamo l'aggiudicazione del bando di gara che attesta il nostro incarico e restiamo a disposizione per chiarimenti.\n\nCordiali saluti."
+            "icon": "fab fa-whatsapp",
+            "label": "Messaggio Preavviso",
+            "type": "whatsapp"
+        },
+        "wa_sollecito": {
+            "body": "Buongiorno,\nstiamo provando a metterci in contatto con lei già da alcuni mesi in quanto, tramite posta cartacea, dovrebbero essere arrivate delle comunicazioni relative a una manutenzione su un contatore di energia elettrica intestato a {nome} nel Comune di {comune}.\n\nNON riguarda il contratto di fornitura o il gestore, ma unicamente il dispositivo di misura: siamo stati incaricati direttamente da E-Distribuzione (il ramo di Enel che si occupa SOLO di infrastruttura) di sostituire contatori di vecchia generazione (installati più di 4-5 anni fa) con contatori di nuova generazione più performanti e precisi nella lettura e trasmissione dei dati.\n\nFacciamo presente che la sostituzione è gratuita ma obbligatoria: chiediamo dunque il supporto di qualcuno che possa autorizzarci e farci accedere al contatore.\n\nA seguito dei precedenti tentativi ad esito negativo, un tecnico ritornerà in zona:\n{lista_date}\nSarebbe possibile?\nRimaniamo in attesa di un riscontro e restiamo a disposizione per ulteriori chiarimenti o verifiche.\n\nCordialmente,\nUFFICIO TECNICO ALGECO POWER",
+            "fields": [
+                "comune",
+                "lista_date",
+                "nome"
+            ],
+            "icon": "fab fa-whatsapp",
+            "label": "Proposta Date + Spiegone",
+            "type": "whatsapp"
+        },
+        "wa_spiegone": {
+            "body": "Buongiorno,\nabbiamo provato a contattarla per la sostituzione del contatore di energia elettrica intestato a {nome} nel Comune di {comune} per la quale ci eravamo già sentiti diverso tempo fa.\nDesideriamo informare che un tecnico tornerà nuovamente in zona:\n{lista_date}\nSarebbe possibile?\nAttendiamo un suo gentile riscontro. Cordialmente,\nUFFICIO TECNICO ALGECO POWER",
+            "fields": [
+                "nome",
+                "comune",
+                "lista_date"
+            ],
+            "icon": "fab fa-whatsapp",
+            "label": "Proposta Date Breve",
+            "type": "whatsapp"
         }
     }
 }

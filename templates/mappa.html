@@ -163,21 +163,26 @@
                         </select>
                     </div>
                 </div>
+                <!-- Filtro operatore per vista dettaglio (Zone/Comuni) -->
                 <div class="detail-filters" id="detailFilters" style="display: none;">
                     <div class="detail-operatore-container">
                         <div class="detail-operatore-trigger" id="detailOperatoreTrigger" onclick="toggleDetailOperatoreDropdown()">👥 Tutti gli operatori</div>
                         <div class="detail-operatore-dropdown" id="detailOperatoreDropdown"></div>
                     </div>
                 </div>
+                <!-- Filtro operatore per vista percorso giornata (Tutti gli operatori / Operatore singolo) -->
+                <div class="detail-filters" id="operatoreFilterRow" style="display: none;">
+                    <div class="operatore-filter-container" id="operatoreFilterContainer" style="width: 100%;">
+                        <div class="operatore-multi-trigger" id="operatoreMultiTrigger" onclick="toggleOperatoreDropdown()">👥 Tutti gli operatori</div>
+                        <div class="operatore-multi-dropdown" id="operatoreMultiDropdown"></div>
+                    </div>
+                </div>
+                <!-- Filtro date dropdown per vista principale (Zone / Comuni) -->
                 <div class="search-row" id="dataFilterRow" style="margin-top: 10px;">
                     <div class="search-box">
                         <select id="dataFilter" onchange="onDataFilterChange()">
                             <option value="">Tutte le date</option>
                         </select>
-                    </div>
-                    <div class="operatore-filter-container" id="operatoreFilterContainer">
-                        <div class="operatore-multi-trigger" id="operatoreMultiTrigger" onclick="toggleOperatoreDropdown()">👥 Tutti gli operatori</div>
-                        <div class="operatore-multi-dropdown" id="operatoreMultiDropdown"></div>
                     </div>
                 </div>
                 <!-- schedulabili panel rimosso: si accede dalla pianificazione -->

@@ -96,6 +96,7 @@ USA_LOCALITA_COME_COMUNE = _provincia.get('usa_localita_come_comune', False)
 # Campi modificabili (centralizzati - colonne unificate tra province)
 _CAMPI_MODIFICABILI_COMUNI = {
     'data_pian': 'DATA PIAN',
+    'ora_pianificazione': 'Ora pianificazione',
     'note_app': 'NOTE APP',
     'nominativo': 'NOMINATIVO',
     'indirizzo': 'Indirizzo',

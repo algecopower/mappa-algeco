@@ -4057,7 +4057,7 @@ body {
     overscroll-behavior: contain;
     scroll-behavior: smooth;
     background: var(--bg-primary);
-    contain: layout paint;
+    contain: paint;
 }
 
 .ui-modal--fullscreen .ui-modal-content {

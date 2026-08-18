@@ -5213,9 +5213,11 @@ function createContatorePopup(c, num, colore, prevPoint) {
         html += `<button class="btn-pin-popup" onclick="pinContatoreFromPopup('${c.eneltel}')" style="margin-top: 10px; width: 100%; padding: 8px; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13px;">📌 Fissa questo</button>`;
     }
     
-    // Pulsante rimuovi appuntamento (se c'è un appuntamento)
+    // Pulsante appuntamento (aggiungi o rimuovi)
     if (c.is_appuntamento) {
         html += `<button onclick="rimuoviAppuntamento('${c.eneltel}')" style="margin-top: 6px; width: 100%; padding: 8px; background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13px;">🗑️ Rimuovi appuntamento</button>`;
+    } else {
+        html += `<button onclick="apriModalAppuntamento('${c.eneltel}')" style="margin-top: 6px; width: 100%; padding: 8px; background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13px;">📞 Fissa appuntamento</button>`;
     }
     
     // Pulsante per aprire nella vista modifica

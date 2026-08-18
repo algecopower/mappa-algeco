@@ -1599,6 +1599,7 @@ def genera_js_gestionale():
         // Mappa labels amichevoli per i campi
         const campiLabels = {{
             'data_pian': 'DATA_PIAN',
+            'ora_pianificazione': 'ORA_PIAN',
             'note_app': 'NOTE',
             'nominativo': 'NOMINATIVO',
             'indirizzo': 'INDIRIZZO',
@@ -1696,12 +1697,6 @@ def genera_js_gestionale():
             
             // Mostra modal
             UiModal.open('fullscreenEditModal');
-            
-            // Mostra/nascondi pulsante rimuovi appuntamento
-            const btnRimuoviApp = document.getElementById('btnRimuoviAppuntamento');
-            if (btnRimuoviApp) {{
-                btnRimuoviApp.style.display = contatore.is_appuntamento ? 'inline-flex' : 'none';
-            }}
 
             // Inizializza mini-mappa Access Point UPS-style
             try {{
@@ -1774,6 +1769,14 @@ def genera_js_gestionale():
                         <div class="fullscreen-field">
                             <label class="fullscreen-field-label">${{label}}</label>
                             <input type="date" class="fullscreen-field-input fullscreen-edit-input-field" data-campo="${{campoKey}}" data-colonna="${{colonnaSheet}}" value="${{dataFormatted}}" autocomplete="off">
+                        </div>
+                    `;
+                }} else if (campoKey === 'ora_pianificazione') {{
+                    // Input time per ora pianificazione
+                    html += `
+                        <div class="fullscreen-field">
+                            <label class="fullscreen-field-label">${{label}}</label>
+                            <input type="text" class="fullscreen-field-input fullscreen-edit-input-field" data-campo="${{campoKey}}" data-colonna="${{colonnaSheet}}" value="${{escapeHtml(valoreCurrent || '')}}" placeholder="es. 09:00-12:00" autocomplete="off">
                         </div>
                     `;
                 }} else if (campoKey === 'nominativo') {{
@@ -2209,128 +2212,10 @@ def genera_js_gestionale():
         function chiudiVistaModifica() {{
             UiModal.close('fullscreenEditModal');
             currentFullscreenEneltel = null;
-            // Reset appuntamento inline
-            document.getElementById('fullscreenAppOrarioInizio').value = '09:00';
-            document.getElementById('fullscreenAppOrarioFine').value = '';
-            const appStatus = document.getElementById('appuntamentoInlineStatus');
-            appStatus.className = 'appuntamento-status';
-            appStatus.textContent = '';
             // Cleanup mini-mappa access point
             try {{ distruggiAccessPointMap(); }} catch (e) {{}}
         }}
         
-        async function fissaAppuntamentoInline() {{
-            if (!currentFullscreenEneltel) return;
-            
-            const oraInizio = document.getElementById('fullscreenAppOrarioInizio').value;
-            const oraFine = document.getElementById('fullscreenAppOrarioFine').value;
-            const btn = document.getElementById('btnFissaAppuntamento');
-            const statusDiv = document.getElementById('appuntamentoInlineStatus');
-            
-            if (!oraInizio) {{
-                statusDiv.className = 'appuntamento-status visible error';
-                statusDiv.textContent = '⚠️ Inserisci almeno l\\'orario di inizio';
-                return;
-            }}
-            
-            let orario = oraInizio;
-            if (oraFine) {{
-                orario += '-' + oraFine;
-            }}
-            
-            // Disabilita bottone
-            btn.disabled = true;
-            btn.textContent = '⏳ Salvataggio...';
-            statusDiv.className = 'appuntamento-status';
-
-            // Pre-verifica conflitti
-            const contatore = contatori.find(c => c.eneltel === currentFullscreenEneltel);
-            if (contatore && contatore.data && orario) {{
-                try {{
-                    const vResp = await fetch(`${{API_BASE}}/api/appuntamenti/verifica`, {{
-                        method: 'POST',
-                        headers: {{ 'Content-Type': 'application/json' }},
-                        body: JSON.stringify({{
-                            pod: contatore.pod || '',
-                            data: contatore.data,
-                            orario: orario,
-                            operatore: contatore.tecnico || ''
-                        }})
-                    }});
-                    const vData = await vResp.json();
-                    if (vData.success && vData.errori && vData.errori.length) {{
-                        const msg = '⚠️ Conflitti rilevati:\\n\\n' + vData.errori.join('\\n') +
-                                    (vData.warnings && vData.warnings.length ? '\\n\\nAvvisi:\\n' + vData.warnings.join('\\n') : '') +
-                                    '\\n\\nContinuare comunque?';
-                        if (!confirm(msg)) {{
-                            btn.disabled = false;
-                            btn.textContent = '✅ Fissa Appuntamento';
-                            return;
-                        }}
-                    }}
-                }} catch(e) {{ /* verifica non bloccante */ }}
-            }}
-            
-            try {{
-                // Includi il contenuto corrente delle note per non perdere modifiche non salvate
-                const noteTextareaCorrente = document.querySelector('.fullscreen-edit-input-field[data-campo="note_app"]');
-                const payload = {{ orario }};
-                if (noteTextareaCorrente) {{
-                    payload.nota_corrente = noteTextareaCorrente.value;
-                }}
-                // LCL della riga (per disambiguare duplicate_eneltel)
-                try {{
-                    const _c = contatori.find(cc => cc.eneltel === currentFullscreenEneltel);
-                    if (_c && _c.lcl !== undefined) payload._anchor_lcl = String(_c.lcl || '');
-                }} catch (e) {{ /* ignora */ }}
-                const response = await fetch(`${{API_BASE}}/api/contatore/${{currentFullscreenEneltel}}/appuntamento`, {{
-                    method: 'POST',
-                    headers: {{ 'Content-Type': 'application/json' }},
-                    body: JSON.stringify(payload)
-                }});
-                
-                const result = await response.json();
-                
-                if (response.ok && result.success) {{
-                    statusDiv.className = 'appuntamento-status visible success';
-                    statusDiv.textContent = '✅ Appuntamento impostato: APP ' + orario;
-                    
-                    // Aggiorna il contatore locale
-                    const idx = contatori.findIndex(c => c.eneltel === currentFullscreenEneltel);
-                    if (idx >= 0) {{
-                        contatori[idx].is_appuntamento = true;
-                        contatori[idx].ora_appuntamento = orario;
-                        contatori[idx].note_app = result.nota;
-                    }}
-                    
-                    // Aggiorna anche la textarea delle note se visibile
-                    const noteTextarea = document.querySelector('.fullscreen-edit-input-field[data-campo="note_app"]');
-                    if (noteTextarea && result.nota) {{
-                        noteTextarea.value = result.nota;
-                    }}
-                    
-                    // Mostra il pulsante rimuovi appuntamento
-                    const btnRimuoviApp = document.getElementById('btnRimuoviAppuntamento');
-                    if (btnRimuoviApp) {{
-                        btnRimuoviApp.style.display = 'inline-flex';
-                    }}
-                    
-                    // Refresh istantaneo della mappa
-                    if (typeof updateContatoriVisibili === 'function') updateContatoriVisibili();
-                    if (typeof refreshCurrentView === 'function') refreshCurrentView();
-                    
-                }} else {{
-                    statusDiv.className = 'appuntamento-status visible error';
-                    statusDiv.textContent = '❌ ' + (result.error || 'Errore sconosciuto');
-                }}
-            }} catch (err) {{
-                statusDiv.className = 'appuntamento-status visible error';
-                statusDiv.textContent = '❌ Errore di connessione: ' + err.message;
-            }} finally {{
-                btn.disabled = false;
-                btn.textContent = '✅ Fissa Appuntamento';
-            }}
-        }}
         
         async function salvaModificheFullscreen() {{
             if (!currentFullscreenEneltel) return;
@@ -2396,6 +2281,7 @@ def genera_js_gestionale():
                                 if (c === col) {{
                                     const mapping = {{
                                         'data_pian': 'data',
+                                        'ora_pianificazione': 'ora_pianificazione',
                                         'note_app': 'note_app',
                                         'nominativo': 'cliente',
                                         'indirizzo': 'via',
@@ -2407,7 +2293,13 @@ def genera_js_gestionale():
                                         'smart_test': 'smart_test'
                                     }};
                                     if (mapping[k]) {{
-                                        contatori[idx][mapping[k]] = val;
+                                        let mappedVal = val;
+                                        // Riconverti data DD/MM/YYYY → YYYY-MM-DD per uso frontend
+                                        if (k === 'data_pian' && /^\\d{{2}}\\/\\d{{2}}\\/\\d{{4}}$/.test(val)) {{
+                                            const p = val.split('/');
+                                            mappedVal = `${{p[2]}}-${{p[1]}}-${{p[0]}}`;
+                                        }}
+                                        contatori[idx][mapping[k]] = mappedVal;
                                     }}
                                     break;
                                 }}
@@ -2708,6 +2600,7 @@ def genera_js_gestionale():
             // Mappa i campi del contatore ai nomi usati nel popup
             const mapping = {{
                 'data_pian': 'data',
+                'ora_pianificazione': 'ora_pianificazione',
                 'note_app': 'note_app',
                 'nominativo': 'cliente',
                 'indirizzo': 'via',
@@ -2794,6 +2687,7 @@ def genera_js_gestionale():
                                 if (c === col) {{
                                     const mapping = {{
                                         'data_pian': 'data',
+                                        'ora_pianificazione': 'ora_pianificazione',
                                         'note_app': 'note_app',
                                         'nominativo': 'cliente',
                                         'indirizzo': 'via',
@@ -2805,7 +2699,13 @@ def genera_js_gestionale():
                                         'smart_test': 'smart_test'
                                     }};
                                     if (mapping[k]) {{
-                                        contatori[idx][mapping[k]] = val;
+                                        let mappedVal = val;
+                                        // Riconverti data DD/MM/YYYY → YYYY-MM-DD per uso frontend
+                                        if (k === 'data_pian' && /^\\d{{2}}\\/\\d{{2}}\\/\\d{{4}}$/.test(val)) {{
+                                            const p = val.split('/');
+                                            mappedVal = `${{p[2]}}-${{p[1]}}-${{p[0]}}`;
+                                        }}
+                                        contatori[idx][mapping[k]] = mappedVal;
                                         if (k === 'posizione_mis') {{
                                             contatori[idx].posizione_mis = val;
                                         }}
@@ -2984,16 +2884,24 @@ def genera_js_gestionale():
                 
                 if (response.ok && result.success) {{
                     alert('✅ Appuntamento impostato: ' + orario);
+                    const savedEneltel = currentAppuntamentoEneltel;
                     chiudiModalAppuntamento();
                     map.closePopup();
                     
                     // Aggiorna il contatore locale
-                    const idx = contatori.findIndex(c => c.eneltel === currentAppuntamentoEneltel);
+                    const idx = contatori.findIndex(c => c.eneltel === savedEneltel);
                     if (idx >= 0) {{
                         contatori[idx].is_appuntamento = true;
                         contatori[idx].ora_appuntamento = orario;
                         contatori[idx].note_app = result.nota;
+                        if (typeof aggiornaUIDopoModifica === 'function') {{
+                            aggiornaUIDopoModifica(savedEneltel, contatori[idx]);
+                        }}
                     }}
+
+                    // Refresh istantaneo della mappa e delle viste
+                    if (typeof updateContatoriVisibili === 'function') updateContatoriVisibili();
+                    if (typeof refreshCurrentView === 'function') refreshCurrentView();
                 }} else {{
                     alert('❌ Errore: ' + (result.error || 'Errore sconosciuto'));
                 }}
@@ -3043,17 +2951,6 @@ def genera_js_gestionale():
                         const noteTextarea = document.querySelector('.fullscreen-edit-input-field[data-campo="note_app"]');
                         if (noteTextarea) {{
                             noteTextarea.value = result.nota || '';
-                        }}
-                        // Nascondi pulsante rimuovi appuntamento
-                        const btnRimuoviApp = document.getElementById('btnRimuoviAppuntamento');
-                        if (btnRimuoviApp) {{
-                            btnRimuoviApp.style.display = 'none';
-                        }}
-                        // Aggiorna status inline
-                        const appStatus = document.getElementById('appuntamentoInlineStatus');
-                        if (appStatus) {{
-                            appStatus.className = 'appuntamento-status visible success';
-                            appStatus.textContent = '✅ Appuntamento rimosso';
                         }}
                     }}
                     
@@ -4110,27 +4007,7 @@ def genera_html_gestionale():
                     <div id="fullscreenEditFields" class="fullscreen-edit-grid"></div>
                 </div>
                 
-                <!-- Sezione Appuntamento inline -->
-                <div class="fullscreen-appuntamento-section">
-                    <div class="fullscreen-section-title">📞 Fissa Appuntamento</div>
-                    <p style="color: var(--text-secondary); margin-bottom: 15px; font-size: 0.9em;">
-                        Imposta un orario per l'appuntamento. Verrà aggiunto alle note esistenti.
-                    </p>
-                    <div class="appuntamento-inline-row">
-                        <div class="appuntamento-time-group">
-                            <input type="time" id="fullscreenAppOrarioInizio" class="appuntamento-time-input" value="09:00">
-                            <span class="appuntamento-time-sep">-</span>
-                            <input type="time" id="fullscreenAppOrarioFine" class="appuntamento-time-input" placeholder="fine">
-                        </div>
-                        <button class="btn-fissa-appuntamento" id="btnFissaAppuntamento" onclick="fissaAppuntamentoInline()">
-                            ✅ Fissa Appuntamento
-                        </button>
-                        <button class="btn-fissa-appuntamento" id="btnRimuoviAppuntamento" onclick="rimuoviAppuntamentoGestionale(currentFullscreenEneltel)" style="background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%); display: none;">
-                            🗑️ Rimuovi
-                        </button>
-                    </div>
-                    <div id="appuntamentoInlineStatus" class="appuntamento-status"></div>
-                </div>
+
 
                 <!-- Sezione Access Point (UPS-style) -->
                 <div class="fullscreen-edit-section access-point-section" id="accessPointSection">

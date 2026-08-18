@@ -3392,10 +3392,13 @@
             
             // "chiamare" e "numero errato" non hanno prefisso data
             let testoNota = (tipo === 'chiamare') ? tipo : `${prefisso} ${tipo}`;
-            if (tipo === 'mandata mail' && opzioni.includiDataPianificazione) {
+            if ((tipo === 'mandata mail' || tipo === 'mandato msg wa' || tipo === 'mandato WA') && opzioni.includiDataPianificazione) {
                 const dataPian = opzioni.dataPianificazione || dataPianificazioneNota(pod);
+                const azione = (tipo === 'mandato msg wa' || tipo === 'mandato WA') ? 'mandato WA' : 'mandata mail';
                 if (dataPian) {
-                    testoNota = `${prefisso} mandata mail per il ${dataPian}`;
+                    testoNota = `${prefisso} ${azione} per ${dataPian}`;
+                } else {
+                    testoNota = `${prefisso} ${azione}`;
                 }
             }
             

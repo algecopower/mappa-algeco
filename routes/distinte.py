@@ -18,7 +18,12 @@ from flask import Blueprint, request, jsonify, send_file
 
 from moduli.auth import login_required
 from moduli.safe_json import json_read, json_write
-from moduli.bulk_contatori_email import generate_contatori_excel, sanitize_filename
+from moduli.bulk_contatori_email import (
+    generate_contatori_excel,
+    sanitize_filename,
+    build_nota_invio,
+    registra_nota_su_db,
+)
 from moduli.shared import (
     get_worksheet, get_header_map, find_row_by_pod,
     build_pod_row_map, safe_batch_update_by_name, _imposta_appuntamento_su_filone, _rimuovi_appuntamento_da_filone,
@@ -534,6 +539,7 @@ def invia_singola_email():
         save_to_sent(smtp_settings, msg)
 
         # Rende visibile l'invio anche nell'Archivio Lettere per tutti i contatori coinvolti
+        username = _get_username()
         try:
             from moduli import lettere as lettere_store
             pods_to_record = [c.get('pod') or c.get('pod_filone') for c in contatori_list if (c.get('pod') or c.get('pod_filone'))] or [pod]
@@ -549,11 +555,19 @@ def invia_singola_email():
                     template_id=template_id,
                     subject=subject,
                     status='sent',
-                    user=_get_username(),
+                    user=username,
                     detail={'source': 'gestione_pdf', 'allegati': allegati_nomi, 'contatori_count': len(contatori_list)},
                 )
         except Exception:
             logger.exception("[EMAIL] Invio riuscito ma registrazione storico fallita")
+
+        # Scrivi nota sul DB locale per ciascun contatore (es. "18/08 mandata mail per 25/08")
+        for c_item in contatori_list:
+            c_pod = c_item.get('pod') or c_item.get('pod_filone') or pod
+            c_data = c_item.get('data_intervento') or c_item.get('data_pian_filone') or contatto.get('data_intervento')
+            if c_pod:
+                nota_invio = build_nota_invio('mail', data_intervento=c_data)
+                registra_nota_su_db(c_pod, nota_invio, user=username, origin='distinte_invia_email')
 
         logger.info(f"[EMAIL] Inviata a {email_dest} (POD {pod}, {len(contatori_list)} contatori)")
         return jsonify({'ok': True, 'pod': pod, 'email': email_dest, 'contatori_count': len(contatori_list)})

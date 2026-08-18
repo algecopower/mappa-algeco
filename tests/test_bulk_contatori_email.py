@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-tests/test_bulk_contatori_email.py — Test per modulo bulk_contatori_email (Excel e pluralizzazione).
+tests/test_bulk_contatori_email.py — Test per modulo bulk_contatori_email (Excel, pluralizzazione e note DB).
 """
 
+import datetime
 import io
 from openpyxl import load_workbook
 
@@ -11,6 +12,9 @@ from moduli.bulk_contatori_email import (
     pluralize_template_text,
     build_plural_email,
     sanitize_filename,
+    format_data_breve,
+    build_nota_invio,
+    registra_nota_su_db,
 )
 
 
@@ -18,6 +22,62 @@ def test_sanitize_filename():
     assert sanitize_filename("Azienda S.p.A. - Test!") == "Azienda_SpA_Test"
     assert sanitize_filename("") == "Azienda"
     assert sanitize_filename("Società & Co.") == "Societa_Co"
+
+
+def test_format_data_breve():
+    assert format_data_breve("25/08/2026") == "25/08"
+    assert format_data_breve("5/8/2026") == "05/08"
+    assert format_data_breve("2026-08-25") == "25/08"
+    assert format_data_breve("") == ""
+    assert format_data_breve(None) == ""
+
+
+def test_build_nota_invio():
+    d_oggi = datetime.date(2026, 8, 18)
+    
+    # Mail con data intervento
+    nota_mail = build_nota_invio('mail', data_intervento='25/08/2026', data_oggi=d_oggi)
+    assert nota_mail == "18/08 mandata mail per 25/08"
+
+    # Mail senza data intervento
+    nota_mail_no_data = build_nota_invio('mail', data_intervento='', data_oggi=d_oggi)
+    assert nota_mail_no_data == "18/08 mandata mail"
+
+    # WhatsApp con data intervento
+    nota_wa = build_nota_invio('wa', data_intervento='2026-08-25', data_oggi=d_oggi)
+    assert nota_wa == "18/08 mandato WA per 25/08"
+
+
+def test_registra_nota_su_db(db_isolato):
+    db = db_isolato
+
+    # Inseriamo un record finto in filone
+    pod = 'IT001E99988877'
+    eneltel = '999888777'
+    conn = db.get_conn()
+    with conn:
+        db.upsert_filone_row(
+            conn,
+            eneltel_key=eneltel,
+            sheets_row=10,
+            typed_values={'pod': pod, 'note_appuntamento': 'cliente non risponde'},
+            extra_values={},
+            row_hash='abc',
+            source='bootstrap',
+        )
+
+    ok = registra_nota_su_db(pod, "18/08 mandata mail per 25/08", user='tecnico')
+    assert ok is True
+
+    # Verifica sul DB
+    row = db.get_filone_row(eneltel)
+    assert "cliente non risponde // 18/08 mandata mail per 25/08" in row['note_appuntamento']
+
+    # Se richiamata con la stessa nota non duplica
+    ok2 = registra_nota_su_db(pod, "18/08 mandata mail per 25/08", user='tecnico')
+    assert ok2 is True
+    row2 = db.get_filone_row(eneltel)
+    assert row2['note_appuntamento'] == row['note_appuntamento']
 
 
 def test_generate_contatori_excel():

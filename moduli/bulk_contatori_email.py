@@ -1,15 +1,20 @@
 # -*- coding: utf-8 -*-
 """
 moduli/bulk_contatori_email.py — Modulo per raggruppamento contatori multipli,
-pluralizzazione testi email e generazione dinamica dell'elenco contatori in Excel.
+pluralizzazione testi email, generazione dinamica dell'elenco contatori in Excel
+e registrazione automatica delle note di invio sul DB.
 """
 
+import datetime
 import io
+import logging
 import re
 import unicodedata
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
+
+logger = logging.getLogger('mappa_algeco')
 
 
 def sanitize_filename(name: str) -> str:
@@ -20,6 +25,71 @@ def sanitize_filename(name: str) -> str:
     name = re.sub(r'[^\w\s-]', '', name).strip()
     name = re.sub(r'[-\s]+', '_', name)
     return name[:50] or 'Azienda'
+
+
+def format_data_breve(date_str: str | None) -> str:
+    """Formatta una data in GG/MM (es. 25/08/2026 -> 25/08, 2026-08-25 -> 25/08)."""
+    if not date_str:
+        return ''
+    val = str(date_str).strip()
+    m = re.search(r'(\d{1,2})/(\d{1,2})(?:/\d{2,4})?', val)
+    if m:
+        return f"{int(m.group(1)):02d}/{int(m.group(2)):02d}"
+    m = re.search(r'(\d{4})-(\d{2})-(\d{2})', val)
+    if m:
+        return f"{int(m.group(3)):02d}/{int(m.group(2)):02d}"
+    return val[:5] if len(val) >= 5 else val
+
+
+def build_nota_invio(tipo: str, data_intervento: str | None = None, data_oggi: datetime.date | None = None) -> str:
+    """
+    Costruisce la nota standard da scrivere sul DB.
+    Es:
+    - tipo='mail' o 'email': "18/08 mandata mail per 25/08" (o "18/08 mandata mail")
+    - tipo='wa' o 'whatsapp': "18/08 mandato WA per 25/08" (o "18/08 mandato WA")
+    """
+    if data_oggi is None:
+        data_oggi = datetime.date.today()
+    oggi_str = f"{data_oggi.day:02d}/{data_oggi.month:02d}"
+    
+    azione = "mandato WA" if str(tipo).lower() in ('wa', 'whatsapp', 'msg wa', 'mandato msg wa') else "mandata mail"
+    data_breve = format_data_breve(data_intervento)
+    
+    if data_breve:
+        return f"{oggi_str} {azione} per {data_breve}"
+    return f"{oggi_str} {azione}"
+
+
+def registra_nota_su_db(pod: str, nota: str, user: str = '', origin: str = 'bulk_send') -> bool:
+    """
+    Scrive/accoda la nota nel campo note_appuntamento del filone sul DB locale.
+    Se la nota non è già presente, la concatena con ' // '.
+    """
+    if not pod or not nota:
+        return False
+    try:
+        from moduli import db as _db
+        from moduli.shared import _get_colonna_note
+        ek = _db.find_eneltel_by_pod(pod)
+        if not ek:
+            return False
+        local = _db.get_filone_row(ek) or {}
+        nota_attuale = (local.get('note_appuntamento') or '').strip()
+        if nota in nota_attuale:
+            return True  # già presente
+        
+        nuova_nota = f"{nota_attuale} // {nota}" if nota_attuale else nota
+        col_note = _get_colonna_note()
+        _db.record_local_change(
+            ek, {col_note: nuova_nota},
+            origin=origin,
+            user=user,
+            initial_state='pending',
+        )
+        return True
+    except Exception as e:
+        logger.warning(f"[NOTA_DB] Errore salvataggio nota per {pod}: {e}")
+        return False
 
 
 def generate_contatori_excel(contatori: list[dict], nome_azienda: str = '') -> bytes:

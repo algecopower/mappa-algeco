@@ -16,7 +16,12 @@ from moduli.auth import login_required
 from moduli.safe_json import json_read
 from moduli.shared import _get_username
 from moduli import lettere as lettere_store
-from moduli.bulk_contatori_email import generate_contatori_excel, sanitize_filename
+from moduli.bulk_contatori_email import (
+    generate_contatori_excel,
+    sanitize_filename,
+    build_nota_invio,
+    registra_nota_su_db,
+)
 from config import PROVINCIA_ATTIVA
 
 from routes.distinte import (
@@ -386,16 +391,19 @@ def api_lettere_invia_email():
 
         save_to_sent(smtp_settings, msg)
 
-        # Registra l'invio su tutte le aziende/contatori coinvolti
+        # Registra l'invio su tutte le aziende/contatori coinvolti e scrivi la nota sul DB
         for az_id in azienda_ids:
             az_item = lettere_store.get_azienda(az_id)
             if not az_item:
                 continue
+            pod_val = (az_item.get('pod') or '').strip()
+            data_prevista = az_item.get('data_pianificazione') or contatto.get('data_intervento') or ''
+            
             lettere_store.registra_invio(
                 azienda_generazione_id=az_item['id'],
                 generazione_id=az_item['generazione_id'],
                 contact_key_value=az_item['contact_key'],
-                pod=az_item.get('pod') or '',
+                pod=pod_val,
                 email_dest=email_dest,
                 template_id=template_id,
                 subject=subject,
@@ -403,6 +411,12 @@ def api_lettere_invia_email():
                 user=username,
                 detail={'allegati': allegati_nomi, 'contatori_count': len(effective_contatori)},
             )
+
+            # Scrivi nota sul DB locale (es. "18/08 mandata mail per 25/08")
+            if pod_val:
+                nota_invio = build_nota_invio('mail', data_intervento=data_prevista)
+                registra_nota_su_db(pod_val, nota_invio, user=username, origin='lettere_invia_email')
+
         return jsonify({'ok': True, 'azienda_id': primary_id, 'azienda_ids': azienda_ids, 'email': email_dest})
 
     except smtplib.SMTPAuthenticationError:

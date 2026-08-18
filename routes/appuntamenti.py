@@ -177,10 +177,9 @@ def _carica_appuntamenti() -> list[dict]:
         data_raw = rec.get('data_pianificata') or ''
         data_parsed = _parse_data(data_raw)
 
-        # Estrai orario dalle note (con fallback su colonna orari_lettere)
-        orario = estrai_orario(note) or ''
-        if not orario:
-            orario = (rec.get('orari_lettere') or '').strip()
+        # Estrai orario SOLO da colonna orari_lettere (Orari)
+        orari_val = (rec.get('orari_lettere') or '').strip()
+        orario = estrai_orario(orari_val) or orari_val
 
         # Nome operatore leggibile
         operatore = (rec.get('operatore') or '').strip()

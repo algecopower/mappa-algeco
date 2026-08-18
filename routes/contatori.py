@@ -77,17 +77,9 @@ def _format_row_to_contatore(data):
     eneltel_raw = _find_value_in_row(data, 'eneltel')
     note_app_raw = _find_value_in_row(data, 'note_appuntamento')
 
-    is_app_note = rileva_appuntamento(note_app_raw)
+    is_appuntamento = rileva_appuntamento(note_app_raw)
     orari_raw = _find_value_in_row(data, 'orari_lettere')
-    
-    ora_app_note = estrai_orario(note_app_raw) if is_app_note else None
-    ora_app_orari = estrai_orario(orari_raw) if orari_raw else None
-    
-    is_appuntamento = is_app_note
-    if not is_appuntamento:
-        ora_appuntamento = None
-    else:
-        ora_appuntamento = ora_app_note if ora_app_note else ora_app_orari
+    ora_appuntamento = estrai_orario(orari_raw) if (is_appuntamento and orari_raw) else None
 
     return {
         'eneltel': eneltel_raw,

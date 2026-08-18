@@ -626,11 +626,9 @@ def _ordina_con_appuntamenti(
 
     for p in punti:
         if p.get('IS_APPUNTAMENTO'):
-            # Fallback chain per l'orario: NOTE APP -> ORA_APPUNTAMENTO ->
-            # ORARI_LETTERE (la fascia della colonna "Orari" usata per le lettere).
+            # L'orario viene reperito SOLO dalla colonna Orari (ORA_APPUNTAMENTO / ORARI_LETTERE)
             orario = (
-                _estrai_orario(p.get('NOTE_APP_RAW', ''))
-                or _estrai_orario(p.get('ORA_APPUNTAMENTO', ''))
+                _estrai_orario(p.get('ORA_APPUNTAMENTO', ''))
                 or _estrai_orario(p.get('ORARI_LETTERE', ''))
             )
             if orario:

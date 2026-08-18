@@ -947,9 +947,11 @@ Output: lista punti ordinata
 
 ### Rilevamento appuntamenti
 
-`IS_APPUNTAMENTO=True` se la nota contiene `\bapp\b` come token e NON matcha pattern di esclusione (`no app`, `app annullata`, `app da fissare`, ecc.). Vedi `rileva_appuntamento` in `percorso.py`.
+`IS_APPUNTAMENTO=True` se la nota inizia con la parola `APP` (case-insensitive, token `^\W*app\b`). Non ci sono parole in blacklist (parole come "chiamare", "da rifissare", ecc. non escludono l'appuntamento se la nota inizia con "APP"). Vedi `rileva_appuntamento` in `moduli/appuntamenti_core.py`.
 
 ### Parsing orario
+
+L'orario dell'appuntamento viene ricavato **SOLO dalla colonna "Orari"** (e non più dalle note, per evitare falsi positivi o orari obsoleti presenti nelle note libere).
 
 `estrai_orario_e_fascia` riconosce:
 
@@ -959,8 +961,6 @@ Output: lista punti ordinata
 - `10/12`, `10-12` → `(10:00, 12:00)`
 - `10:30` → `(10:30, 10:30)`
 - `alle 14`, `ore 14` → `(14:00, 14:00)`
-
-Se NOTE APP non contiene un orario parsabile, fallback su `ORARI_LETTERE` (la fascia delle lettere già spedite ai clienti).
 
 ### Perché le autostrade
 

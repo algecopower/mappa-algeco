@@ -73,14 +73,25 @@ def prepara_dataframe(backup):
     df['Lat'] = df['Latitudine'].apply(_lat_lon_float)
     df['Lon'] = df['Longitudine'].apply(_lat_lon_float)
 
-    # Note appuntamento + flag IS_APPUNTAMENTO (stessa logica del data_loader,
-    # con whitelist + blacklist per gestire falsi positivi tipo "no app",
-    # "app annullata", "app??", ecc.).
-    from moduli.percorso import rileva_appuntamento
+    # Note appuntamento + flag IS_APPUNTAMENTO (nota inizia con 'APP')
+    from moduli.percorso import rileva_appuntamento, estrai_orario
     note_raw = df['NOTE APP'].fillna('').astype(str).str.strip() if 'NOTE APP' in df.columns else pd.Series([''] * len(df))
     df['NOTE_APP_RAW'] = note_raw
     df['IS_APPUNTAMENTO'] = note_raw.apply(rileva_appuntamento)
-    df['ORA_APPUNTAMENTO'] = None  # popolato dall'algoritmo
+
+    # Orari appuntamento ricavati unicamente dalla colonna Orari
+    col_orari = None
+    for c in ('Orari', 'ORARI', 'orari', 'Orari lettere', 'ORARI LETTERE'):
+        if c in df.columns:
+            col_orari = c
+            break
+    if col_orari:
+        orari_s = df[col_orari].fillna('').astype(str).str.strip()
+        df['ORARI_LETTERE'] = orari_s
+        df['ORA_APPUNTAMENTO'] = orari_s.apply(lambda v: estrai_orario(v) if v else None)
+    else:
+        df['ORARI_LETTERE'] = ''
+        df['ORA_APPUNTAMENTO'] = None
 
     # Dati identificativi minimi
     for col in ('LCL', 'Eneltel', 'Operatore', 'Comune', 'Indirizzo', 'Num', 'DATA PIAN', 'POD', 'NOMINATIVO'):
@@ -124,6 +135,7 @@ def raggruppa_tecnici(df, min_punti=3, solo_da_oggi=False):
                 'NOTE_APP_RAW': row['NOTE_APP_RAW'],
                 'IS_APPUNTAMENTO': bool(row['IS_APPUNTAMENTO']),
                 'ORA_APPUNTAMENTO': row.get('ORA_APPUNTAMENTO'),
+                'ORARI_LETTERE': row.get('ORARI_LETTERE', ''),
                 'Eneltel': str(row.get('Eneltel', '')).strip(),
                 'Comune': str(row.get('Comune', '')).strip(),
                 'Indirizzo': str(row.get('Indirizzo', '')).strip(),

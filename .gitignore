@@ -42,9 +42,18 @@ data/*/shadow_reports/
 data/*/span_reports/
 
 # File temporanei o di output operativo
+data/*.xlsx
+data/*/*.xlsx
+data/*.json.migrated
 data/boxbeat_*.xlsx
 data/boxbeat_excel.json
 data/calendario.json
+data/*/calendario.json
+data/*/boxbeat_excel.json
+data/*/postit.json
+data/*/user_workflows.json
+data/*/promemoria_settings.json
+data/*/distinte_templates.json
 output/
 
 # Settings di Claude Code locali
@@ -66,5 +75,7 @@ Desktop.ini
 .idea/
 *.swp
 *.swo
+*.bak
 data/appuntamenti_*.xlsx
 data/user_workflows.json
+data/postit.json

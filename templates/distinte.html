@@ -2760,9 +2760,9 @@
                 }
             }
             // Risolvi {email_tecnico}
-            const emailTecnico = provincia === 'PAVIA'
-                ? templateSettings.email_pavia
-                : templateSettings.email_torino;
+            const provKey = 'email_' + (provincia || '').toLowerCase();
+            const emailTecnico = templateSettings[provKey] || templateSettings.email_tecnico ||
+                (provincia === 'PAVIA' ? templateSettings.email_pavia : templateSettings.email_torino) || '';
             result = result.replace(/\{email_tecnico\}/g, emailTecnico || '');
             // Risolvi tutti i {campo} — formatta date in formato esteso
             const dateFields = ['data', 'nuova_data'];
@@ -4416,9 +4416,9 @@
             if (!isWhatsapp) {
                 let firma = (templateSettings.firma_html || '');
                 if (firma) {
-                    const emailTecnico = provincia === 'PAVIA'
-                        ? templateSettings.email_pavia
-                        : templateSettings.email_torino;
+                    const provKey = 'email_' + (provincia || '').toLowerCase();
+                    const emailTecnico = templateSettings[provKey] || templateSettings.email_tecnico ||
+                        (provincia === 'PAVIA' ? templateSettings.email_pavia : templateSettings.email_torino) || '';
                     firma = firma.replace(/\{email_tecnico\}/g, emailTecnico || '');
                     html += firma;
                 }

@@ -1551,17 +1551,9 @@
             </button>
             <span class="filter-separator"></span>
 
-            <button class="filter-btn prov-filter active" data-prov="tutte" onclick="filtraProvincia('tutte')">
-                <i class="fas fa-globe"></i> Tutte
-            </button>
-            {% for p_id, p_data in province.items() %}
-            <button class="filter-btn prov-filter" data-prov="{{ p_id }}" onclick="filtraProvincia('{{ p_id }}')">
-                <i class="fas fa-map-marker-alt"></i> {{ p_data.nome }}
-            </button>
-            {% endfor %}
-            <button class="filter-btn prov-filter" data-prov="nessuna" onclick="filtraProvincia('nessuna')">
-                <i class="fas fa-minus-circle"></i> Senza prov.
-            </button>
+            <div class="provincia-active-tag" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 8px; font-size: 0.85rem; font-weight: 600; background: rgba(var(--accent-rgb, 59, 130, 246), 0.12); color: var(--primary); border: 1px solid rgba(var(--accent-rgb, 59, 130, 246), 0.25);">
+                <i class="fas fa-map-marker-alt"></i> {{ provincia_attiva }}
+            </div>
 
             <!-- Allineamento completate come bottone -->
             <label class="filter-btn" style="margin-left: auto; display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;">
@@ -1624,15 +1616,7 @@
                     <label>Ora fine</label>
                     <input type="time" class="form-input" id="inputOraFine">
                 </div>
-                <div class="form-group">
-                    <label>Provincia</label>
-                    <select class="form-input" id="inputProvincia">
-                        <option value="">-- Nessuna --</option>
-                        {% for p_id, p_data in province.items() %}
-                        <option value="{{ p_id }}">{{ p_data.nome }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
+                <input type="hidden" id="inputProvincia" value="{{ provincia_attiva }}">
             </div>
 
             <div class="form-group">
@@ -1913,8 +1897,6 @@
         // Imposta colore iniziale filtro "Tutte"
         const btnTutte = document.querySelector('.filter-btn[data-cat="tutte"]');
         if (btnTutte) btnTutte.style.setProperty('--filter-active-bg', FILTER_COLORS['tutte']);
-        const btnProvTutte = document.querySelector('.prov-filter[data-prov="tutte"]');
-        if (btnProvTutte) btnProvTutte.style.setProperty('--filter-active-bg', PROV_COLORS['tutte']);
 
         // Carica tutto in parallelo per velocizzare il caricamento iniziale
         await Promise.all([
@@ -2195,13 +2177,6 @@
         if (categoriaFiltro !== 'tutte') {
             list = list.filter(a => a.categoria === categoriaFiltro);
         }
-        if (provinciaFiltro !== 'tutte') {
-            if (provinciaFiltro === 'nessuna') {
-                list = list.filter(a => !a.provincia);
-            } else {
-                list = list.filter(a => a.provincia === provinciaFiltro);
-            }
-        }
         return list;
     }
 
@@ -2447,34 +2422,17 @@
         boxbeat: '#e91e63'
     };
 
-    const PROV_COLORS = {
-        tutte: 'var(--primary)',
-        TORINO: '#e67e22',
-        PAVIA: '#27ae60',
-        nessuna: '#7f8c8d'
-    };
-
-    function filtraProvincia(prov) {
-        provinciaFiltro = prov;
-        document.querySelectorAll('.prov-filter').forEach(b => {
-            b.classList.remove('active');
-            b.style.removeProperty('--filter-active-bg');
-        });
-        const btn = document.querySelector(`.prov-filter[data-prov="${prov}"]`);
-        btn.classList.add('active');
-        btn.style.setProperty('--filter-active-bg', PROV_COLORS[prov] || 'var(--primary)');
-        renderVista();
-    }
-
     function filtraCategoria(cat) {
         categoriaFiltro = cat;
-        document.querySelectorAll('.filter-btn:not(.prov-filter)').forEach(b => {
+        document.querySelectorAll('.filter-btn').forEach(b => {
             b.classList.remove('active');
             b.style.removeProperty('--filter-active-bg');
         });
         const btn = document.querySelector(`.filter-btn[data-cat="${cat}"]`);
-        btn.classList.add('active');
-        btn.style.setProperty('--filter-active-bg', FILTER_COLORS[cat] || 'var(--primary)');
+        if (btn) {
+            btn.classList.add('active');
+            btn.style.setProperty('--filter-active-bg', FILTER_COLORS[cat] || 'var(--primary)');
+        }
         renderVista();
     }
 

@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
 Modulo Post-it — Promemoria persistenti sempre visibili.
-Gestisce note/promemoria che restano fissati sulle pagine principali
-(mappa, filone) come reminder costanti per gli operatori.
+Gestisce note/promemoria isolati rigorosamente per provincia:
+  data/{provincia}/postit.json
 """
 import os
 import uuid
@@ -10,9 +10,9 @@ import threading
 from datetime import datetime
 
 from .safe_json import json_read, json_write
+from config import PROVINCIA_ATTIVA
 
 SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-POSTIT_FILE = os.path.join(SCRIPT_DIR, 'data', 'postit.json')
 
 _lock = threading.Lock()
 
@@ -38,42 +38,75 @@ CATEGORIE_POSTIT = {
 }
 
 
-def _load_data() -> dict:
-    data = json_read(POSTIT_FILE, default=_POSTIT_DEFAULT)
-    if "notes" not in data:
-        data["notes"] = []
+def _resolve_prov(provincia=None) -> str:
+    if provincia and str(provincia).strip():
+        return str(provincia).strip().upper()
+    return PROVINCIA_ATTIVA.upper()
+
+
+def _get_postit_file(provincia=None) -> str:
+    prov = _resolve_prov(provincia).lower()
+    return os.path.join(SCRIPT_DIR, 'data', prov, 'postit.json')
+
+
+def _migra_dati_storici_postit():
+    old_postit = os.path.join(SCRIPT_DIR, 'data', 'postit.json')
+    if os.path.exists(old_postit):
+        try:
+            data = json_read(old_postit, default=None)
+            if data and isinstance(data, dict) and data.get('notes'):
+                notes = data.get('notes', [])
+                per_prov = {}
+                for n in notes:
+                    p = (n.get('provincia') or 'TORINO').strip().upper()
+                    per_prov.setdefault(p, []).append(n)
+                for p, items in per_prov.items():
+                    target = _get_postit_file(p)
+                    if not os.path.exists(target):
+                        os.makedirs(os.path.dirname(target), exist_ok=True)
+                        json_write(target, {"notes": items}, indent=2)
+            os.rename(old_postit, old_postit + '.migrated')
+        except Exception as e:
+            print(f"[PostIt Migration] ⚠️ Errore migrazione post-it: {e}")
+
+
+_migra_dati_storici_postit()
+
+
+def _load_data(provincia=None) -> dict:
+    path = _get_postit_file(provincia)
+    data = json_read(path, default=None)
+    if not data or not isinstance(data, dict) or "notes" not in data:
+        return {"notes": []}
     return data
 
 
-def _save_data(data: dict) -> bool:
-    return json_write(POSTIT_FILE, data, indent=2)
+def _save_data(data: dict, provincia=None) -> bool:
+    path = _get_postit_file(provincia)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    return json_write(path, data, indent=2)
 
 
 def get_postit(provincia: str = None) -> list:
-    """Restituisce tutti i post-it attivi, ordinati per priorità e data."""
+    """Restituisce tutti i post-it attivi della provincia, ordinati per priorità e data."""
+    prov = _resolve_prov(provincia)
     with _lock:
-        data = _load_data()
+        data = _load_data(prov)
 
-    notes = data["notes"]
-
-    # Filtra per provincia (o globali senza provincia)
-    if provincia:
-        prov_upper = provincia.upper()
-        notes = [n for n in notes if not n.get("provincia") or n["provincia"] == prov_upper]
-
-    # Ordina: priorità alta prima, poi per data creazione (recenti prima)
+    notes = list(data.get("notes", []))
     priorita_ord = {'alta': 0, 'media': 1, 'bassa': 2}
     notes.sort(key=lambda n: (priorita_ord.get(n.get('priorita', 'media'), 1), n.get('creato_il', '')))
-
     return notes
 
 
 def crea_postit(testo: str, categoria: str = 'generico', colore: str = 'giallo',
                 priorita: str = 'media', provincia: str = None,
                 scadenza: str = None, creato_da: str = 'sistema') -> dict:
-    """Crea un nuovo post-it."""
+    """Crea un nuovo post-it nella provincia attiva."""
     if not testo or not testo.strip():
         return None
+
+    prov_resolved = _resolve_prov(provincia)
 
     if categoria not in CATEGORIE_POSTIT:
         categoria = 'generico'
@@ -88,7 +121,7 @@ def crea_postit(testo: str, categoria: str = 'generico', colore: str = 'giallo',
         'categoria': categoria,
         'colore': colore,
         'priorita': priorita,
-        'provincia': provincia.upper() if provincia else None,
+        'provincia': prov_resolved,
         'scadenza': scadenza,
         'creato_da': creato_da,
         'creato_il': datetime.now().isoformat(),
@@ -96,21 +129,22 @@ def crea_postit(testo: str, categoria: str = 'generico', colore: str = 'giallo',
     }
 
     with _lock:
-        data = _load_data()
+        data = _load_data(prov_resolved)
         data["notes"].append(nota)
-        if not _save_data(data):
+        if not _save_data(data, prov_resolved):
             return None
 
     return nota
 
 
-def modifica_postit(note_id: str, **kwargs) -> dict:
-    """Modifica un post-it esistente."""
+def modifica_postit(note_id: str, provincia: str = None, **kwargs) -> dict:
+    """Modifica un post-it esistente nella provincia attiva."""
     campi_ammessi = {'testo', 'categoria', 'colore', 'priorita', 'provincia', 'scadenza'}
+    prov_resolved = _resolve_prov(provincia)
 
     with _lock:
-        data = _load_data()
-        for nota in data["notes"]:
+        data = _load_data(prov_resolved)
+        for nota in data.get("notes", []):
             if nota["id"] == note_id:
                 for k, v in kwargs.items():
                     if k in campi_ammessi:
@@ -118,32 +152,33 @@ def modifica_postit(note_id: str, **kwargs) -> dict:
                             v = v.upper()
                         nota[k] = v
                 nota['modificato_il'] = datetime.now().isoformat()
-                _save_data(data)
+                _save_data(data, prov_resolved)
                 return nota
     return None
 
 
-def elimina_postit(note_id: str) -> bool:
-    """Elimina un post-it."""
+def elimina_postit(note_id: str, provincia: str = None) -> bool:
+    """Elimina un post-it per la provincia attiva."""
+    prov_resolved = _resolve_prov(provincia)
     with _lock:
-        data = _load_data()
-        prima = len(data["notes"])
-        data["notes"] = [n for n in data["notes"] if n["id"] != note_id]
+        data = _load_data(prov_resolved)
+        prima = len(data.get("notes", []))
+        data["notes"] = [n for n in data.get("notes", []) if n["id"] != note_id]
         if len(data["notes"]) < prima:
-            return _save_data(data)
+            return _save_data(data, prov_resolved)
     return False
 
 
-def get_conteggio() -> int:
-    """Restituisce il numero di post-it attivi."""
+def get_conteggio(provincia: str = None) -> int:
+    """Restituisce il numero di post-it attivi per la provincia."""
+    prov_resolved = _resolve_prov(provincia)
     with _lock:
-        data = _load_data()
-    return len(data["notes"])
+        data = _load_data(prov_resolved)
+    return len(data.get("notes", []))
 
 
-def crea_postit_da_attivita(attivita: dict, creato_da: str = 'sistema') -> dict:
+def crea_postit_da_attivita(attivita: dict, creato_da: str = 'sistema', provincia: str = None) -> dict:
     """Crea un post-it a partire da un'attività del calendario."""
-    # Mappa categoria calendario → categoria post-it
     cat_map = {
         'appuntamento': 'attivita',
         'promemoria': 'generico',
@@ -166,22 +201,23 @@ def crea_postit_da_attivita(attivita: dict, creato_da: str = 'sistema') -> dict:
     if desc:
         testo += '\n' + desc
 
+    prov_resolved = _resolve_prov(provincia or attivita.get('provincia'))
+
     return crea_postit(
         testo=testo,
         categoria=cat,
         colore=colore,
         priorita='alta' if attivita.get('categoria') == 'scadenza' else 'media',
-        provincia=attivita.get('provincia'),
+        provincia=prov_resolved,
         scadenza=attivita.get('data'),
         creato_da=creato_da,
     )
 
 
-def sync_postit_a_calendario(nota: dict) -> dict:
+def sync_postit_a_calendario(nota: dict, provincia: str = None) -> dict:
     """Crea un'attività calendario a partire da un post-it. Restituisce l'attività creata."""
     from moduli.calendario import crea_attivita
 
-    # Mappa categoria post-it → categoria calendario
     cat_map = {
         'assenza': 'promemoria',
         'scadenza': 'scadenza',
@@ -191,6 +227,7 @@ def sync_postit_a_calendario(nota: dict) -> dict:
     }
     cat_cal = cat_map.get(nota.get('categoria', ''), 'altro')
     data = nota.get('scadenza') or datetime.now().strftime('%Y-%m-%d')
+    prov_resolved = _resolve_prov(provincia or nota.get('provincia'))
 
     return crea_attivita(
         titolo=nota['testo'][:100],
@@ -198,5 +235,5 @@ def sync_postit_a_calendario(nota: dict) -> dict:
         descrizione=f"[Da post-it {nota['id']}] {nota['testo']}",
         categoria=cat_cal,
         creato_da=nota.get('creato_da', 'sistema'),
-        provincia=nota.get('provincia', ''),
+        provincia=prov_resolved,
     )

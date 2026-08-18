@@ -7,6 +7,7 @@ import os
 import re
 
 import logging
+import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
@@ -16,7 +17,6 @@ from email.utils import formataddr
 from config import PROVINCIA_ATTIVA
 from moduli import db as _db
 from moduli.smtp import load_smtp_settings, connect_smtp, save_to_sent
-from moduli.safe_json import json_read
 
 logger = logging.getLogger('mappa_algeco')
 

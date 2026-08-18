@@ -113,7 +113,7 @@ def api_crea_attivita():
             descrizione=dati.get('descrizione', ''),
             categoria=dati.get('categoria', 'promemoria'),
             creato_da=session.get('user', {}).get('username', 'sconosciuto') if isinstance(session.get('user'), dict) else session.get('user', 'sconosciuto'),
-            provincia=dati.get('provincia', '')
+            provincia=PROVINCIA_ATTIVA
         )
         # Notifica tutti i client SSE
         _callbacks['sse_notify_all']('calendario_update', {'azione': 'creata', 'id': attivita['id']})
@@ -134,7 +134,8 @@ def api_modifica_attivita(attivita_id):
         attivita = modifica_attivita(
             attivita_id=attivita_id,
             aggiornamenti=dati,
-            modificato_da=session.get('user', {}).get('username', 'sconosciuto') if isinstance(session.get('user'), dict) else session.get('user', 'sconosciuto')
+            modificato_da=session.get('user', {}).get('username', 'sconosciuto') if isinstance(session.get('user'), dict) else session.get('user', 'sconosciuto'),
+            provincia=PROVINCIA_ATTIVA
         )
         _callbacks['sse_notify_all']('calendario_update', {'azione': 'modificata', 'id': attivita_id})
         return jsonify({'success': True, 'attivita': attivita})
@@ -149,7 +150,8 @@ def api_completa_attivita(attivita_id):
     try:
         attivita = completa_attivita(
             attivita_id=attivita_id,
-            completata_da=session.get('user', {}).get('username', 'sconosciuto') if isinstance(session.get('user'), dict) else session.get('user', 'sconosciuto')
+            completata_da=session.get('user', {}).get('username', 'sconosciuto') if isinstance(session.get('user'), dict) else session.get('user', 'sconosciuto'),
+            provincia=PROVINCIA_ATTIVA
         )
         _callbacks['sse_notify_all']('calendario_update', {'azione': 'completata', 'id': attivita_id})
         return jsonify({'success': True, 'attivita': attivita})
@@ -166,7 +168,7 @@ def api_completa_multipli():
     if not ids or not isinstance(ids, list):
         return jsonify({'error': 'Nessun ID fornito'}), 400
     username = session.get('user', {}).get('username', 'sconosciuto') if isinstance(session.get('user'), dict) else session.get('user', 'sconosciuto')
-    completati = completa_multipli(ids, completata_da=username)
+    completati = completa_multipli(ids, completata_da=username, provincia=PROVINCIA_ATTIVA)
     if completati > 0:
         _callbacks['sse_notify_all']('calendario_update', {'azione': 'bulk_complete', 'count': completati})
     return jsonify({'success': True, 'completati': completati})
@@ -176,7 +178,7 @@ def api_completa_multipli():
 @login_required
 def api_elimina_attivita(attivita_id):
     """Elimina un'attività."""
-    if elimina_attivita(attivita_id):
+    if elimina_attivita(attivita_id, provincia=PROVINCIA_ATTIVA):
         _callbacks['sse_notify_all']('calendario_update', {'azione': 'eliminata', 'id': attivita_id})
         return jsonify({'success': True})
     return jsonify({'error': 'Attività non trovata'}), 404
@@ -190,7 +192,7 @@ def api_elimina_multipli():
     ids = dati.get('ids', []) if dati else []
     if not ids or not isinstance(ids, list):
         return jsonify({'error': 'Nessun ID fornito'}), 400
-    eliminati = elimina_multipli(ids)
+    eliminati = elimina_multipli(ids, provincia=PROVINCIA_ATTIVA)
     if eliminati > 0:
         _callbacks['sse_notify_all']('calendario_update', {'azione': 'bulk_delete', 'count': eliminati})
     return jsonify({'success': True, 'eliminati': eliminati})
@@ -257,7 +259,7 @@ def api_crea_boxbeat():
             civico=dati.get('civico', ''),
             comune=dati.get('comune', ''),
             note=dati.get('note', ''),
-            provincia=dati.get('provincia', PROVINCIA_ATTIVA),
+            provincia=PROVINCIA_ATTIVA,
             creato_da=username,
             origine=dati.get('origine', 'manuale'),
             data_pianificata=dati.get('data_pianificata', '')
@@ -290,8 +292,8 @@ def api_modifica_boxbeat(attivita_id):
     try:
         from moduli.calendario import _load_data, _save_data, _lock
         with _lock:
-            data = _load_data()
-            for att in data["attivita"]:
+            data = _load_data(PROVINCIA_ATTIVA)
+            for att in data.get("attivita", []):
                 if att["id"] == attivita_id:
                     if att.get("categoria") != "boxbeat":
                         return jsonify({'error': 'Attività non è di tipo BoxBeat'}), 400
@@ -304,7 +306,7 @@ def api_modifica_boxbeat(attivita_id):
                     username = session.get('user', {}).get('username', 'sconosciuto') if isinstance(session.get('user'), dict) else session.get('user', 'sconosciuto')
                     att["modificato_da"] = username
                     att["modificato_il"] = datetime.now().isoformat()
-                    _save_data(data)
+                    _save_data(data, PROVINCIA_ATTIVA)
                     _callbacks['sse_notify_all']('calendario_update', {'azione': 'boxbeat_modificato', 'id': attivita_id})
                     return jsonify({'success': True, 'attivita': att})
             return jsonify({'error': 'Attività non trovata'}), 404
@@ -331,7 +333,7 @@ def api_download_boxbeat_excel(data_str):
         response = send_file(
             filepath,
             as_attachment=True,
-            download_name=f'appuntamenti_{data_str}.xlsx',
+            download_name=f'appuntamenti_{PROVINCIA_ATTIVA.lower()}_{data_str}.xlsx',
             mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
         response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'

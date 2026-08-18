@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 Modulo per generare il JavaScript del gestionale nella mappa.
 Contiene le funzioni per editing popup e upload BOXBEAT.
@@ -3936,7 +3936,7 @@ def genera_js_gestionale():
                             <div class="backup-item-info">
                                 <div class="backup-item-date">📅 ${{dataFormatted}}</div>
                                 <div class="backup-item-meta">
-                                    ${{b.totale_righe}} righe · ${{b.dimensione_mb}} MB · ${{tsFormatted}}
+                                    ${{b.totale_righe}} righe · ${{b.dimensione_mb}} MB (archivio JSON) · ${{tsFormatted}}
                                 </div>
                             </div>
                             <div class="backup-item-actions">

@@ -6,7 +6,7 @@ import os
 import re
 import tempfile
 import logging
-import time
+import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
@@ -56,14 +56,35 @@ def serve_whatsapp_redirect():
     return send_file(os.path.join(_ROOT_DIR, 'templates', 'distinte.html'))
 
 
-# Percorso del file JSON dei template messaggi
+# Percorso del file JSON dei template messaggi (default globale + override per-provincia)
 _TEMPLATES_JSON = os.path.join(_ROOT_DIR, 'data', 'distinte_templates.json')
+_TEMPLATES_JSON_DEFAULT = _TEMPLATES_JSON
 _ALLEGATI_DIR = os.path.join(_ROOT_DIR, 'data', 'allegati')
+
+
+def _load_templates_data():
+    """Carica i template: prima cerca data/{provincia}/distinte_templates.json, fallback su default."""
+    prov_file = os.path.join(_ROOT_DIR, 'data', PROVINCIA_ATTIVA.lower(), 'distinte_templates.json')
+    if os.path.exists(prov_file):
+        d = json_read(prov_file, default=None)
+        if d:
+            return d
+    default_file = os.path.join(_ROOT_DIR, 'data', 'distinte_templates.json')
+    return json_read(default_file, default=None)
+
+
+def _save_templates_data(data):
+    """Salva i template modificati nella cartella della provincia attiva."""
+    prov_file = os.path.join(_ROOT_DIR, 'data', PROVINCIA_ATTIVA.lower(), 'distinte_templates.json')
+    os.makedirs(os.path.dirname(prov_file), exist_ok=True)
+    return json_write(prov_file, data, indent=4)
+
 
 # Mappa allegati di default per provincia
 _ALLEGATI_DEFAULT = {
     'TORINO': ['attestazione_piemonte.pdf'],
     'PAVIA': ['attestazione_lombardia.pdf'],
+    'LECCO': ['attestazione_lombardia.pdf'],
 }
 # Allegato aggiuntivo per contatori semidiretti
 _ALLEGATO_SEMIDIRETTA = 'informativa_semidiretta.pdf'
@@ -132,9 +153,9 @@ def _build_fields_for_contact(contatto, template_def, field_defs):
 @bp.route('/api/distinte/templates', methods=['GET'])
 @login_required
 def get_distinte_templates():
-    """Restituisce i template messaggi dal file JSON centralizzato."""
+    """Restituisce i template messaggi dal file JSON (per provincia o default)."""
     try:
-        data = json_read(_TEMPLATES_JSON, default=None)
+        data = _load_templates_data()
         if data is None:
             return jsonify({'error': 'File template non trovato'}), 404
         return jsonify(data)
@@ -145,12 +166,12 @@ def get_distinte_templates():
 @bp.route('/api/distinte/templates', methods=['PUT'])
 @login_required
 def save_distinte_templates():
-    """Salva i template messaggi aggiornati nel file JSON."""
+    """Salva i template messaggi aggiornati nel file JSON della provincia attiva."""
     try:
         data = request.get_json()
         if not data:
             return jsonify({'error': 'Nessun dato ricevuto'}), 400
-        json_write(_TEMPLATES_JSON, data, indent=4)
+        _save_templates_data(data)
         return jsonify({'ok': True})
     except Exception as e:
         logger.error(f"Errore salvataggio template: {e}")
@@ -252,7 +273,7 @@ def invia_email_prova():
 
         # Carica template
         try:
-            tmpl_data = json_read(_TEMPLATES_JSON, default=None)
+            tmpl_data = _load_templates_data()
             if tmpl_data is None:
                 raise FileNotFoundError
         except Exception:
@@ -264,7 +285,7 @@ def invia_email_prova():
 
         field_defs = tmpl_data.get('fields', {})
         tmpl_settings = tmpl_data.get('settings', {})
-        email_tecnico = tmpl_settings.get(f'email_{PROVINCIA_ATTIVA.lower()}', '')
+        email_tecnico = tmpl_settings.get(f'email_{PROVINCIA_ATTIVA.lower()}', tmpl_settings.get('email_tecnico', ''))
 
         # Dati fittizi di prova
         contatto_test = {
@@ -388,7 +409,7 @@ def invia_singola_email():
 
         # Carica template
         try:
-            tmpl_data = json_read(_TEMPLATES_JSON, default=None)
+            tmpl_data = _load_templates_data()
             if tmpl_data is None:
                 raise FileNotFoundError
         except Exception:
@@ -400,7 +421,7 @@ def invia_singola_email():
 
         field_defs = tmpl_data.get('fields', {})
         tmpl_settings = tmpl_data.get('settings', {})
-        email_tecnico = tmpl_settings.get(f'email_{PROVINCIA_ATTIVA.lower()}', '')
+        email_tecnico = tmpl_settings.get(f'email_{PROVINCIA_ATTIVA.lower()}', tmpl_settings.get('email_tecnico', ''))
 
         # Carica SMTP settings
         smtp_settings = load_smtp_settings()

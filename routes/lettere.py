@@ -5,6 +5,7 @@ Blueprint Archivio Lettere — generazioni Excel, contatti aziendali e invii bul
 import logging
 import os
 import re
+import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr

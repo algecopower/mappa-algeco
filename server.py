@@ -582,6 +582,7 @@ def verifica_osrm_flask():
 
 from config import (
     PROVINCIA_ATTIVA,
+    PROVINCE,
     CAMPI_MODIFICABILI,
     MATRICOLE_VIP,
 )
@@ -2460,21 +2461,46 @@ def api_admin_db_dump_anomalies():
 
 
 # File statici dalla cartella data/
-@app.route('/data/<path:filename>')
-@login_required
-def serve_data_files(filename):
-    """Serve file JSON dalla cartella data/ senza cache (richiede autenticazione)."""
-    # Blocca path traversal
-    import posixpath
-    normalized = posixpath.normpath(filename)
-    if normalized.startswith('..') or normalized.startswith('/'):
-        return jsonify({'error': 'Accesso negato'}), 403
-    
-    response = make_response(send_from_directory('data', filename))
+def _send_data_response(directory, filename):
+    response = make_response(send_from_directory(directory, filename))
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     response.headers['Pragma'] = 'no-cache'
     response.headers['Expires'] = '0'
     return response
+
+
+@app.route('/data/<path:filename>')
+@login_required
+def serve_data_files(filename):
+    """Serve file JSON dalla cartella data/ senza cache (richiede autenticazione, isolato per provincia)."""
+    import posixpath
+    normalized = posixpath.normpath(filename)
+    if normalized.startswith('..') or normalized.startswith('/'):
+        return jsonify({'error': 'Accesso negato'}), 403
+
+    # Proteggi file di database o sensibili
+    ext = os.path.splitext(normalized)[1].lower()
+    if ext in ('.db', '.db-wal', '.db-shm', '.py', '.key', '.env'):
+        return jsonify({'error': 'Accesso negato'}), 403
+
+    parts = normalized.split('/')
+    prov_attiva = PROVINCIA_ATTIVA.lower()
+
+    # Se la richiesta specifica un prefisso provincia (es. pavia/mappa_data.json), deve essere la provincia attiva
+    if len(parts) > 1 and parts[0] in [p.lower() for p in PROVINCE]:
+        if parts[0] != prov_attiva:
+            return jsonify({'error': f'Accesso negato: provincia non attiva ({parts[0]} != {prov_attiva})'}), 403
+        subpath = '/'.join(parts[1:])
+        target_dir = os.path.join('data', prov_attiva)
+        return _send_data_response(target_dir, subpath)
+
+    # Se è un file dentro la cartella della provincia attiva
+    target_dir = os.path.join('data', prov_attiva)
+    if os.path.exists(os.path.join(target_dir, normalized)):
+        return _send_data_response(target_dir, normalized)
+
+    # Fallback per file root di sola lettura (es. provinces.json)
+    return _send_data_response('data', normalized)
 
 
 @app.route('/filone')

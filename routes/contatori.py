@@ -96,7 +96,8 @@ def _format_row_to_contatore(data):
         'posizione_mis': _find_value_in_row(data, 'posizione_misuratore'),
         'note_app': note_app_raw,
         'tipo_ce': _find_value_in_row(data, 'tipo_misuratore'),
-        'orari_lettere': _find_value_in_row(data, 'orari_lettere'),
+        'orari_lettere': orari_raw,
+        'ora_pianificazione': orari_raw,
         'lcl': _find_value_in_row(data, 'lcl'),
         'is_appuntamento': is_appuntamento,
         'ora_appuntamento': ora_appuntamento,
@@ -194,6 +195,9 @@ def update_contatore(eneltel):
                 fields_validi[campi_ammessi[key]] = value
             elif key in col_names:
                 fields_validi[key] = value
+            elif key in ('ora_pianificazione', 'orari_lettere', 'Ora pianificazione', 'ORARI', 'Orari'):
+                target_col = campi_ammessi.get('ora_pianificazione', 'Orari')
+                fields_validi[target_col] = value
 
         logger.info(f"✅ Campi validi da scrivere: {fields_validi}")
 

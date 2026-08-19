@@ -103,6 +103,7 @@ DB_TO_JSON_FIELD = {
 # in 'posizione_mis'. Patcho entrambi.
 DB_FIELD_DUPLICATES = {
     'posizione_misuratore': ('note', 'posizione_mis'),
+    'orari_lettere': ('orari_lettere', 'ora_pianificazione'),
 }
 
 

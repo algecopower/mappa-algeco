@@ -1025,20 +1025,24 @@ def genera_css_gestionale():
         }
         
         .fullscreen-field-label {
-            font-size: 0.75em;
+            font-size: 0.82em;
+            font-weight: 600;
             color: var(--text-secondary);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.3px;
             margin-bottom: 6px;
         }
         
         .fullscreen-field-input {
-            padding: 12px 14px;
+            width: 100%;
+            height: 46px;
+            box-sizing: border-box;
+            padding: 0 14px;
             border: 1px solid var(--border);
             border-radius: 8px;
             background: var(--bg-tertiary);
             color: var(--text-primary);
             font-size: 0.95em;
+            font-family: inherit;
             transition: all 0.2s;
         }
         
@@ -1067,13 +1071,131 @@ def genera_css_gestionale():
         }
         
         .fullscreen-field-select {
-            padding: 12px 34px 12px 14px;
+            width: 100%;
+            height: 46px;
+            box-sizing: border-box;
+            padding: 0 34px 0 14px;
             border: 1px solid var(--border);
             border-radius: 8px;
             background-color: var(--bg-tertiary);
             color: var(--text-primary);
             font-size: 0.95em;
             cursor: pointer;
+        }
+
+        /* Input orari dedicati (dalle HH:MM alle HH:MM) */
+        .orari-inputs-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            height: 46px;
+            box-sizing: border-box;
+            padding: 4px 10px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .orari-inputs-wrapper:focus-within {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(233, 69, 96, 0.2);
+        }
+
+        .orari-label-prefix {
+            font-size: 0.9em;
+            font-weight: 600;
+            color: var(--text-secondary);
+            user-select: none;
+            flex-shrink: 0;
+        }
+
+        .fullscreen-time-input {
+            flex: 1;
+            min-width: 0;
+            height: 36px;
+            padding: 0 6px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            font-size: 0.95em;
+            font-family: inherit;
+            text-align: center;
+            box-sizing: border-box;
+            transition: all 0.2s;
+        }
+
+        .fullscreen-time-input:focus {
+            outline: none;
+            border-color: var(--accent);
+            background: var(--bg-primary);
+        }
+
+        .btn-clear-orari {
+            flex-shrink: 0;
+            width: 28px;
+            height: 28px;
+            padding: 0;
+            background: transparent;
+            border: none;
+            border-radius: 6px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.95em;
+            font-weight: bold;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-clear-orari:hover {
+            color: #e74c3c;
+            background: rgba(231, 76, 60, 0.15);
+        }
+
+        /* Popup orari */
+        .popup-orari-inputs-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            width: 100%;
+            height: 36px;
+            box-sizing: border-box;
+            padding: 3px 8px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+        .popup-orari-inputs-wrapper:focus-within {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(233, 69, 96, 0.2);
+        }
+
+        .popup-time-input {
+            flex: 1;
+            min-width: 0;
+            height: 28px;
+            padding: 0 4px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            font-size: 0.85em;
+            font-family: inherit;
+            text-align: center;
+            box-sizing: border-box;
+            transition: all 0.2s;
+        }
+
+        .popup-time-input:focus {
+            outline: none;
+            border-color: var(--accent);
+            background: var(--bg-primary);
         }
         
         /* Nominativo protetto */
@@ -1293,20 +1415,21 @@ def genera_css_gestionale():
         }
 
 
-        /* Status toast - fisso in alto a destra */
+        /* Status toast - sempre fisso in alto a destra sullo schermo */
         .fullscreen-status {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 100001;
+            position: fixed !important;
+            top: 24px !important;
+            right: 24px !important;
+            z-index: 99999999 !important;
             padding: 14px 24px;
             border-radius: 10px;
             font-size: 1em;
             font-weight: 600;
             display: none;
-            box-shadow: 0 6px 25px rgba(0, 0, 0, 0.35);
-            animation: toastSlideIn 0.4s ease;
-            max-width: 350px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
+            animation: toastSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            max-width: 380px;
+            pointer-events: none;
         }
         
         @keyframes toastSlideIn {
@@ -1315,7 +1438,7 @@ def genera_css_gestionale():
         }
         
         .fullscreen-status.visible {
-            display: block;
+            display: block !important;
         }
         
         .fullscreen-status.success {
@@ -1598,17 +1721,17 @@ def genera_js_gestionale():
         
         // Mappa labels amichevoli per i campi
         const campiLabels = {{
-            'data_pian': 'DATA_PIAN',
-            'ora_pianificazione': 'ORA_PIAN',
-            'note_app': 'NOTE',
-            'nominativo': 'NOMINATIVO',
-            'indirizzo': 'INDIRIZZO',
-            'civico': 'N. CIVICO',
-            'telefono': 'TELEFONO',
-            'email': 'EMAIL',
-            'posizione_mis': 'POSIZIONE',
-            'operatore': 'OPERATORE',
-            'smart_test': 'SMART TEST'
+            'data_pian': 'Data pianificata',
+            'ora_pianificazione': 'Orari',
+            'note_app': 'Note',
+            'nominativo': 'Nominativo',
+            'indirizzo': 'Indirizzo',
+            'civico': 'N. Civico',
+            'telefono': 'Telefono',
+            'email': 'Email',
+            'posizione_mis': 'Posizione',
+            'operatore': 'Operatore',
+            'smart_test': 'Smart Test'
         }};
         
         // Opzioni per posizione misuratore
@@ -1621,6 +1744,74 @@ def genera_js_gestionale():
         
         // Variabile per tracciare l'eneltel corrente in modifica fullscreen
         let currentFullscreenEneltel = null;
+
+        // ========================================
+        // HELPER ORARI / FASCE ORARIE
+        // ========================================
+        function parseFasciaOraria(str) {{
+            if (!str || typeof str !== 'string') return {{ da: '', a: '' }};
+            const s = str.trim();
+            if (!s) return {{ da: '', a: '' }};
+
+            const pad = (n) => String(n).padStart(2, '0');
+
+            // 1. "dalle HH[:MM] alle HH[:MM]" o "dalle HH alle HH"
+            const mDalle = s.match(/dalle?\\s*(\\d{{1,2}})(?:[:.,](\\d{{2}}))?\\s*alle?\\s*(\\d{{1,2}})(?:[:.,](\\d{{2}}))?/i);
+            if (mDalle) {{
+                const daH = pad(mDalle[1]);
+                const daM = mDalle[2] ? pad(mDalle[2]) : '00';
+                const aH = pad(mDalle[3]);
+                const aM = mDalle[4] ? pad(mDalle[4]) : '00';
+                return {{ da: `${{daH}}:${{daM}}`, a: `${{aH}}:${{aM}}` }};
+            }}
+
+            // 2. "HH[:MM] - HH[:MM]" o "HH[:MM] / HH[:MM]" o "HH-HH" o "HH/HH" o "HH,MM HH,MM"
+            const mRange = s.match(/(\\d{{1,2}})(?:[:.,](\\d{{2}}))?\\s*(?:[-/]|(?:\\s+))\\s*(\\d{{1,2}})(?:[:.,](\\d{{2}}))?/);
+            if (mRange) {{
+                const daH = pad(mRange[1]);
+                const daM = mRange[2] ? pad(mRange[2]) : '00';
+                const aH = pad(mRange[3]);
+                const aM = mRange[4] ? pad(mRange[4]) : '00';
+                return {{ da: `${{daH}}:${{daM}}`, a: `${{aH}}:${{aM}}` }};
+            }}
+
+            // 3. Singolo orario "HH:MM" o "alle HH"
+            const mSingle = s.match(/(?:alle?\\s*|ore?\\s*)?(\\d{{1,2}})(?:[:.,](\\d{{2}}))/i);
+            if (mSingle) {{
+                const daH = pad(mSingle[1]);
+                const daM = mSingle[2] ? pad(mSingle[2]) : '00';
+                return {{ da: `${{daH}}:${{daM}}`, a: '' }};
+            }}
+
+            return {{ da: '', a: '' }};
+        }}
+
+        function resetOrariField(btn) {{
+            const wrapper = btn.closest('.orari-inputs-wrapper, .popup-orari-inputs-wrapper');
+            if (!wrapper) return;
+            wrapper.querySelectorAll('input[type="time"]').forEach(input => {{
+                input.value = '';
+            }});
+            const hidden = wrapper.querySelector('.orari-hidden-val');
+            if (hidden) hidden.value = '';
+        }}
+
+        function syncOrariHidden(el) {{
+            const wrapper = el.closest ? (el.closest('.orari-inputs-wrapper, .popup-orari-inputs-wrapper') || el) : el;
+            if (!wrapper) return;
+            const da = wrapper.querySelector('.orari-input-da')?.value?.trim() || '';
+            const a = wrapper.querySelector('.orari-input-a')?.value?.trim() || '';
+            const hidden = wrapper.querySelector('.orari-hidden-val');
+            let orariVal = '';
+            if (da && a) {{
+                orariVal = `dalle ${{da}} alle ${{a}}`;
+            }} else if (da) {{
+                orariVal = `dalle ${{da}}`;
+            }} else if (a) {{
+                orariVal = `alle ${{a}}`;
+            }}
+            if (hidden) hidden.value = orariVal;
+        }}
         
         // ========================================
         // VISTA FULLSCREEN MODIFICA
@@ -1772,11 +1963,21 @@ def genera_js_gestionale():
                         </div>
                     `;
                 }} else if (campoKey === 'ora_pianificazione') {{
-                    // Input time per ora pianificazione
+                    // Input dedicati orario: dalle [HH:MM] alle [HH:MM]
+                    const fascia = parseFasciaOraria(valoreCurrent);
+                    const da = fascia.da;
+                    const a = fascia.a;
                     html += `
                         <div class="fullscreen-field">
                             <label class="fullscreen-field-label">${{label}}</label>
-                            <input type="text" class="fullscreen-field-input fullscreen-edit-input-field" data-campo="${{campoKey}}" data-colonna="${{colonnaSheet}}" value="${{escapeHtml(valoreCurrent || '')}}" placeholder="es. 09:00-12:00" autocomplete="off">
+                            <div class="orari-inputs-wrapper">
+                                <span class="orari-label-prefix">dalle</span>
+                                <input type="time" class="fullscreen-time-input orari-input-da" data-campo="ora_da" value="${{da}}" autocomplete="off" onchange="syncOrariHidden(this)">
+                                <span class="orari-label-prefix">alle</span>
+                                <input type="time" class="fullscreen-time-input orari-input-a" data-campo="ora_a" value="${{a}}" autocomplete="off" onchange="syncOrariHidden(this)">
+                                <button type="button" class="btn-clear-orari" onclick="resetOrariField(this)" title="Cancella orari">✕</button>
+                                <input type="hidden" class="fullscreen-edit-input-field orari-hidden-val" data-campo="${{campoKey}}" data-colonna="${{colonnaSheet}}" value="${{escapeHtml(valoreCurrent || '')}}">
+                            </div>
                         </div>
                     `;
                 }} else if (campoKey === 'nominativo') {{
@@ -2224,13 +2425,20 @@ def genera_js_gestionale():
             statusDiv.className = 'fullscreen-status visible loading';
             statusDiv.textContent = '⏳ Salvataggio in corso...';
             
+            // Sincronizza orari prima di raccogliere i campi
+            const orariWrapper = document.querySelector('.orari-inputs-wrapper');
+            if (orariWrapper) {{
+                syncOrariHidden(orariWrapper);
+            }}
+
             // Raccogli valori dal form fullscreen
             const fields = {{}};
             document.querySelectorAll('.fullscreen-edit-input-field').forEach(el => {{
                 const colonna = el.dataset.colonna;
+                if (!colonna) return;
                 let value = el.value;
                 
-                // Se è un campo data in formato YYYY-MM-DD, converti a DD/MM/YYYY per Google Sheets
+                // Se è un campo data in formato YYYY-MM-DD, converti a DD/MM/YYYY per Google Sheets / DB
                 if (el.type === 'date' && value && /^\\d{{4}}-\\d{{2}}-\\d{{2}}$/.test(value)) {{
                     const parts = value.split('-');
                     value = `${{parts[2]}}/${{parts[1]}}/${{parts[0]}}`;
@@ -2271,6 +2479,11 @@ def genera_js_gestionale():
                 if (response.ok && result.success) {{
                     statusDiv.className = 'fullscreen-status visible success';
                     statusDiv.textContent = '✅ Salvato con successo!';
+                    if (window._fsStatusTimeout) clearTimeout(window._fsStatusTimeout);
+                    window._fsStatusTimeout = setTimeout(() => {{
+                        statusDiv.className = 'fullscreen-status';
+                        statusDiv.textContent = '';
+                    }}, 4000);
 
                     // Aggiorna dati locali
                     const idx = contatori.findIndex(c => c.eneltel === currentFullscreenEneltel);
@@ -2281,7 +2494,7 @@ def genera_js_gestionale():
                                 if (c === col) {{
                                     const mapping = {{
                                         'data_pian': 'data',
-                                        'ora_pianificazione': 'ora_pianificazione',
+                                        'ora_pianificazione': 'orari_lettere',
                                         'note_app': 'note_app',
                                         'nominativo': 'cliente',
                                         'indirizzo': 'via',
@@ -2300,6 +2513,13 @@ def genera_js_gestionale():
                                             mappedVal = `${{p[2]}}-${{p[1]}}-${{p[0]}}`;
                                         }}
                                         contatori[idx][mapping[k]] = mappedVal;
+                                        if (k === 'ora_pianificazione') {{
+                                            contatori[idx]['ora_pianificazione'] = mappedVal;
+                                            contatori[idx]['orari_lettere'] = mappedVal;
+                                        }}
+                                        if (k === 'posizione_mis') {{
+                                            contatori[idx].posizione_mis = val;
+                                        }}
                                     }}
                                     break;
                                 }}
@@ -2338,10 +2558,20 @@ def genera_js_gestionale():
                 }} else {{
                     statusDiv.className = 'fullscreen-status visible error';
                     statusDiv.textContent = '❌ ' + (result.error || 'Errore sconosciuto');
+                    if (window._fsStatusTimeout) clearTimeout(window._fsStatusTimeout);
+                    window._fsStatusTimeout = setTimeout(() => {{
+                        statusDiv.className = 'fullscreen-status';
+                        statusDiv.textContent = '';
+                    }}, 6000);
                 }}
             }} catch (err) {{
                 statusDiv.className = 'fullscreen-status visible error';
                 statusDiv.textContent = '❌ Errore di connessione: ' + err.message;
+                if (window._fsStatusTimeout) clearTimeout(window._fsStatusTimeout);
+                window._fsStatusTimeout = setTimeout(() => {{
+                    statusDiv.className = 'fullscreen-status';
+                    statusDiv.textContent = '';
+                }}, 6000);
             }}
         }}
         
@@ -2531,6 +2761,24 @@ def genera_js_gestionale():
                             <input type="date" class="popup-edit-input" data-campo="${{campoKey}}" data-colonna="${{colonnaSheet}}" value="${{dataFormatted}}" autocomplete="off">
                         </div>
                     `;
+                }} else if (campoKey === 'ora_pianificazione') {{
+                    // Input dedicati orario per popup: dalle [HH:MM] alle [HH:MM]
+                    const fascia = parseFasciaOraria(valoreCurrent);
+                    const da = fascia.da;
+                    const a = fascia.a;
+                    html += `
+                        <div class="popup-edit-field">
+                            <label class="popup-edit-label">${{label}}</label>
+                            <div class="popup-orari-inputs-wrapper">
+                                <span class="orari-label-prefix">dalle</span>
+                                <input type="time" class="popup-time-input orari-input-da" data-campo="ora_da" value="${{da}}" autocomplete="off" onchange="syncOrariHidden(this)">
+                                <span class="orari-label-prefix">alle</span>
+                                <input type="time" class="popup-time-input orari-input-a" data-campo="ora_a" value="${{a}}" autocomplete="off" onchange="syncOrariHidden(this)">
+                                <button type="button" class="btn-clear-orari" onclick="resetOrariField(this)" title="Cancella orari">✕</button>
+                                <input type="hidden" class="popup-edit-input orari-hidden-val" data-campo="${{campoKey}}" data-colonna="${{colonnaSheet}}" value="${{escapeHtml(valoreCurrent || '')}}">
+                            </div>
+                        </div>
+                    `;
                 }} else if (campoKey === 'nominativo') {{
                     // Campo nominativo protetto: valore originale readonly + input per aggiungere appunti
                     const valOrig = escapeHtml(valoreCurrent || '');
@@ -2596,11 +2844,14 @@ def genera_js_gestionale():
             if (campoKey === 'posizione_mis') {{
                 return contatore.posizione_mis || contatore.note || '';
             }}
+            if (campoKey === 'ora_pianificazione' || campoKey === 'orari') {{
+                return contatore.ora_pianificazione || contatore.orari_lettere || '';
+            }}
 
             // Mappa i campi del contatore ai nomi usati nel popup
             const mapping = {{
                 'data_pian': 'data',
-                'ora_pianificazione': 'ora_pianificazione',
+                'ora_pianificazione': 'orari_lettere',
                 'note_app': 'note_app',
                 'nominativo': 'cliente',
                 'indirizzo': 'via',
@@ -2627,16 +2878,23 @@ def genera_js_gestionale():
             statusDiv.className = 'edit-status loading';
             statusDiv.textContent = '⏳ Salvataggio in corso...';
             
+            // Sincronizza orari prima di raccogliere i campi
+            const popupOrariWrapper = document.querySelector(`#editForm-${{eneltel}} .popup-orari-inputs-wrapper`);
+            if (popupOrariWrapper) {{
+                syncOrariHidden(popupOrariWrapper);
+            }}
+
             // Raccogli valori dal form
             const fields = {{}};
-            document.querySelectorAll('[data-colonna]').forEach(el => {{
+            document.querySelectorAll(`[data-colonna]`).forEach(el => {{
                 // Ignora i campi nominativo protetti (gestiti dopo)
                 if (el.classList.contains('popup-nominativo-append-input') || el.classList.contains('nominativo-append-input')) return;
                 
                 const colonna = el.dataset.colonna;
+                if (!colonna) return;
                 let value = el.value;
                 
-                // Se è un campo data in formato YYYY-MM-DD, converti a DD/MM/YYYY per Google Sheets
+                // Se è un campo data in formato YYYY-MM-DD, converti a DD/MM/YYYY per Google Sheets / DB
                 if (el.type === 'date' && value && /^\\d{{4}}-\\d{{2}}-\\d{{2}}$/.test(value)) {{
                     const parts = value.split('-');
                     value = `${{parts[2]}}/${{parts[1]}}/${{parts[0]}}`;
@@ -2687,7 +2945,7 @@ def genera_js_gestionale():
                                 if (c === col) {{
                                     const mapping = {{
                                         'data_pian': 'data',
-                                        'ora_pianificazione': 'ora_pianificazione',
+                                        'ora_pianificazione': 'orari_lettere',
                                         'note_app': 'note_app',
                                         'nominativo': 'cliente',
                                         'indirizzo': 'via',
@@ -2706,6 +2964,10 @@ def genera_js_gestionale():
                                             mappedVal = `${{p[2]}}-${{p[1]}}-${{p[0]}}`;
                                         }}
                                         contatori[idx][mapping[k]] = mappedVal;
+                                        if (k === 'ora_pianificazione') {{
+                                            contatori[idx]['ora_pianificazione'] = mappedVal;
+                                            contatori[idx]['orari_lettere'] = mappedVal;
+                                        }}
                                         if (k === 'posizione_mis') {{
                                             contatori[idx].posizione_mis = val;
                                         }}
@@ -2792,6 +3054,25 @@ def genera_js_gestionale():
                     appBadge.remove();
                     card.classList.remove('appuntamento');
                     console.log('✅ Badge appuntamento rimosso');
+                }}
+
+                // Aggiorna badge orari lettere
+                let orariDiv = card.querySelector('.tappa-orari-lettere');
+                const orariVal = contatoreAggiornato.orari_lettere || contatoreAggiornato.ora_pianificazione || '';
+                if (orariVal && !hasApp) {{
+                    if (orariDiv) {{
+                        orariDiv.textContent = '✉️ ' + orariVal;
+                    }} else {{
+                        const dettagli = card.querySelector('.tappa-dettagli');
+                        if (dettagli) {{
+                            const newOrari = document.createElement('div');
+                            newOrari.className = 'tappa-orari-lettere';
+                            newOrari.textContent = '✉️ ' + orariVal;
+                            card.insertBefore(newOrari, dettagli.nextSibling);
+                        }}
+                    }}
+                }} else if (orariDiv) {{
+                    orariDiv.remove();
                 }}
             }} else {{
                 console.log('⚠️ Card non trovata per eneltel:', eneltel);
@@ -3973,6 +4254,9 @@ def genera_html_gestionale():
     """Genera l'HTML per i modali e componenti del gestionale."""
     
     return '''
+        <!-- Status messaggi fullscreen (sempre fisso in alto a destra sul viewport) -->
+        <div id="fullscreenStatus" class="fullscreen-status"></div>
+
         <!-- MODAL FULLSCREEN MODIFICA -->
         <div id="fullscreenEditModal" class="ui-modal ui-modal--fullscreen" data-no-backdrop-close data-no-escape-close>
             <div class="fullscreen-edit-container">
@@ -3997,9 +4281,6 @@ def genera_html_gestionale():
                     </div>
                     <div id="fullscreenInfoRows"></div>
                 </div>
-                
-                <!-- Status messaggi -->
-                <div id="fullscreenStatus" class="fullscreen-status"></div>
 
                 <!-- Form modifica -->
                 <div class="fullscreen-edit-section">

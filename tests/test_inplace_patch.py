@@ -256,3 +256,28 @@ def test_patch_done_pending_ignored(db_isolato, tmp_path, monkeypatch):
 
     from moduli import mappa_data_patcher
     assert mappa_data_patcher.try_patch_inplace() is False
+
+
+def test_patch_soft_edit_orari(db_isolato, tmp_path, monkeypatch):
+    """Modifica di orari_lettere ('Orari') patcha sia orari_lettere che ora_pianificazione."""
+    db = db_isolato
+    json_path = _setup_filone_e_mappa(db, tmp_path)
+
+    import config
+    monkeypatch.setattr(config, 'PROVINCIA_ATTIVA', 'TORINO')
+    monkeypatch.chdir(tmp_path)
+
+    db.record_local_change(
+        '42', {'Orari': 'dalle 10:00 alle 12:00'},
+        origin='unit_test', initial_state='pending',
+    )
+
+    from moduli import mappa_data_patcher
+    assert mappa_data_patcher.try_patch_inplace() is True
+
+    with open(json_path) as f:
+        patched = json.load(f)
+    c = patched['contatori'][0]
+    assert c['orari_lettere'] == 'dalle 10:00 alle 12:00'
+    assert c['ora_pianificazione'] == 'dalle 10:00 alle 12:00'
+

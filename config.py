@@ -96,7 +96,7 @@ USA_LOCALITA_COME_COMUNE = _provincia.get('usa_localita_come_comune', False)
 # Campi modificabili (centralizzati - colonne unificate tra province)
 _CAMPI_MODIFICABILI_COMUNI = {
     'data_pian': 'DATA PIAN',
-    'ora_pianificazione': 'Ora pianificazione',
+    'ora_pianificazione': 'Orari',
     'note_app': 'NOTE APP',
     'nominativo': 'NOMINATIVO',
     'indirizzo': 'Indirizzo',
@@ -228,7 +228,7 @@ MAPPATURA_COLONNE_DEFAULT = {
     'orari_lettere': {
         'label': 'Orari Lettere',
         'descrizione': 'Fasce orarie delle lettere',
-        'nomi_default': ['Orari', 'ORARI', 'orari', 'Orari lettere', 'ORARI LETTERE'],
+        'nomi_default': ['Orari', 'ORARI', 'orari', 'Orari lettere', 'ORARI LETTERE', 'Ora pianificazione', 'ORA PIANIFICAZIONE', 'Ora Pianificazione'],
     },
     'esito': {
         'label': 'Esito',

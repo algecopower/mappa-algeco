@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 Generazione mappa HTML interattiva.
 Funzionalità:
@@ -282,6 +282,7 @@ def prepara_dati_contatori(df, report):
             'posizione_mis': str(row.get('POSIZIONE_MIS', '')),
 
             'orari_lettere': str(row.get('ORARI_LETTERE', '')) if row.get('ORARI_LETTERE') else '',
+            'ora_pianificazione': str(row.get('ORARI_LETTERE', '')) if row.get('ORARI_LETTERE') else '',
             'data': data_str,
             'tecnico': str(row.get('TEC_K', 'TUTTI')),
             'lat': float(lat),

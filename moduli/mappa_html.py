@@ -39,6 +39,11 @@ from config import (
     ORA_INIZIO_GIORNATA,
     ORA_FINE_GIORNATA
 )
+try:
+    from config import OPERATORI_DISABILITATI, LCL_DISABILITATI
+except ImportError:
+    OPERATORI_DISABILITATI = []
+    LCL_DISABILITATI = []
 
 from .percorso import ordina_percorso
 from .verifica_indirizzi_ui import (
@@ -498,15 +503,26 @@ def salva_config_statica():
 
     os.makedirs(data_dir, exist_ok=True)
 
+    disabled_ops = {str(x).strip().upper() for x in (OPERATORI_DISABILITATI or []) if str(x).strip()}
+    matricole_attive = [m for m in MATRICOLE_VIP if str(m).strip().upper() not in disabled_ops]
+    operatori_dict_attivi = {
+        nome: matr for nome, matr in OPERATORI_DICT.items()
+        if str(matr).strip().upper() not in disabled_ops and str(nome).strip().upper() not in disabled_ops
+    }
+    colori_tecnici_attivi = {
+        matr: col for matr, col in COLORI_TECNICI.items()
+        if str(matr).strip().upper() not in disabled_ops
+    }
+
     config = {
         'deposito': {
             'nome': DEPOSITO['Nome'],
             'lat': DEPOSITO['Lat'],
             'lon': DEPOSITO['Lon']
         },
-        'coloriTecnici': COLORI_TECNICI,
-        'matricoleVip': MATRICOLE_VIP,
-        'operatoriDict': OPERATORI_DICT,
+        'coloriTecnici': colori_tecnici_attivi,
+        'matricoleVip': matricole_attive,
+        'operatoriDict': operatori_dict_attivi,
         'provincia': PROVINCIA_ATTIVA,
         'refreshInterval': INTERVALLO_SYNC_SECONDI * 1000 + 5000
     }
@@ -531,8 +547,21 @@ def genera_html_completo(lcl_list, timestamp=None):
         'lat': DEPOSITO['Lat'],
         'lon': DEPOSITO['Lon'],
     }, ensure_ascii=False)
+    disabled_ops = {str(x).strip().upper() for x in (OPERATORI_DISABILITATI or []) if str(x).strip()}
+    disabled_lcls = {str(x).strip().upper() for x in (LCL_DISABILITATI or []) if str(x).strip()}
+    lcl_list_attivi = [l for l in lcl_list if str(l).strip().upper() not in disabled_lcls]
+    matricole_attive = [m for m in MATRICOLE_VIP if str(m).strip().upper() not in disabled_ops]
+    operatori_dict_attivi = {
+        nome: matr for nome, matr in OPERATORI_DICT.items()
+        if str(matr).strip().upper() not in disabled_ops and str(nome).strip().upper() not in disabled_ops
+    }
+    colori_tecnici_attivi = {
+        matr: col for matr, col in COLORI_TECNICI.items()
+        if str(matr).strip().upper() not in disabled_ops
+    }
+
     lcl_options_html = ''.join(
-        f'<option value="{lcl}">{lcl}</option>' for lcl in lcl_list
+        f'<option value="{lcl}">{lcl}</option>' for lcl in lcl_list_attivi
     )
 
     template = _jinja_env.get_template('mappa.html')
@@ -548,11 +577,11 @@ def genera_html_completo(lcl_list, timestamp=None):
         zone_json='[]',
         contatori_json='[]',
         rotte_json='{}',
-        lcl_json=json.dumps(lcl_list, ensure_ascii=False),
+        lcl_json=json.dumps(lcl_list_attivi, ensure_ascii=False),
         deposito_json=deposito_json,
-        colori_tecnici_json=json.dumps(COLORI_TECNICI, ensure_ascii=False),
-        matricole_vip_json=json.dumps(MATRICOLE_VIP, ensure_ascii=False),
-        operatori_dict_json=json.dumps(OPERATORI_DICT, ensure_ascii=False),
+        colori_tecnici_json=json.dumps(colori_tecnici_attivi, ensure_ascii=False),
+        matricole_vip_json=json.dumps(matricole_attive, ensure_ascii=False),
+        operatori_dict_json=json.dumps(operatori_dict_attivi, ensure_ascii=False),
         lcl_options_html=lcl_options_html,
         css_gestionale=genera_css_gestionale(),
         css_verifica_indirizzi=genera_css_verifica_indirizzi(),

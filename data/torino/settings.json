@@ -86,5 +86,12 @@
       "unisci_trifase_diretti_in_monofase": true,
       "crea_fogli_dettaglio": true
     }
-  }
+  },
+  "lcl_disabilitati": [
+    "6600101316",
+    "6600101286"
+  ],
+  "operatori_disabilitati": [
+    "AG63397"
+  ]
 }

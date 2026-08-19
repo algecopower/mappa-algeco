@@ -82,28 +82,36 @@ def _normalize_string(s):
 
 def get_comuni_list():
     conn = _db.get_conn()
+    import config
+    disabled_lcls = [str(x).strip().upper() for x in getattr(config, 'LCL_DISABILITATI', []) if str(x).strip()]
+    where_extra = ""
+    params_stats = []
+    if disabled_lcls:
+        placeholders = ','.join('?' for _ in disabled_lcls)
+        where_extra = f" AND UPPER(TRIM(f.lcl)) NOT IN ({placeholders})"
+        params_stats = list(disabled_lcls)
     
     # Pre-calcola le statistiche dai contatori (filone)
-    stats = conn.execute('''
-        SELECT UPPER(comune) as comune,
-               GROUP_CONCAT(DISTINCT lcl) as lcls,
+    stats = conn.execute(f'''
+        SELECT UPPER(f.comune) as comune,
+               GROUP_CONCAT(DISTINCT f.lcl) as lcls,
                COUNT(*) as num_contatori
-        FROM filone
-        WHERE is_orphan = 0 AND comune IS NOT NULL AND comune != ''
-        GROUP BY UPPER(comune)
-    ''').fetchall()
+        FROM filone f
+        WHERE f.is_orphan = 0 AND f.comune IS NOT NULL AND f.comune != ''{where_extra}
+        GROUP BY UPPER(f.comune)
+    ''', params_stats).fetchall()
     stats_map = {r['comune']: {'lcl': r['lcls'], 'num': r['num_contatori']} for r in stats}
     
     # Recupera ztl da filone_extra per ciascun comune
-    ztl_extras = conn.execute('''
+    ztl_extras = conn.execute(f'''
         SELECT UPPER(f.comune) as comune, MAX(fe.value) as ztl_extra
         FROM filone_extra fe
         JOIN filone f ON f.eneltel_key = fe.eneltel_key 
              AND COALESCE(f.lcl,'') = COALESCE(fe.lcl,'')
         WHERE fe.column_name = 'ztl' AND fe.value != ''
-              AND f.is_orphan = 0 AND f.comune IS NOT NULL AND f.comune != ''
+              AND f.is_orphan = 0 AND f.comune IS NOT NULL AND f.comune != ''{where_extra}
         GROUP BY UPPER(f.comune)
-    ''').fetchall()
+    ''', params_stats).fetchall()
     ztl_map = {r['comune']: r['ztl_extra'] for r in ztl_extras}
     
     rows = conn.execute(

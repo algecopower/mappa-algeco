@@ -1135,10 +1135,26 @@ def get_settings():
     
     logger.info(f"📋 API settings - colonne_filone: {len(colonne_filone)} colonne")
     
+    tutti_lcl = []
+    try:
+        from moduli import db as _db
+        conn = _db.get_conn()
+        cur = conn.execute(
+            "SELECT lcl, COUNT(*) as count FROM filone "
+            "WHERE is_orphan=0 AND lcl IS NOT NULL AND TRIM(lcl) != '' "
+            "GROUP BY lcl ORDER BY count DESC, lcl ASC"
+        )
+        tutti_lcl = [{'lcl': r['lcl'], 'count': r['count']} for r in cur.fetchall()]
+    except Exception as e_lcl:
+        logger.warning(f"⚠️ Errore recupero LCL per settings: {e_lcl}")
+
     return jsonify({
         'operatori_vip': config.MATRICOLE_VIP,
         'colori_operatori': config.COLORI_TECNICI,
         'operatori_dict': config.OPERATORI_DICT,
+        'operatori_disabilitati': getattr(config, 'OPERATORI_DISABILITATI', []),
+        'lcl_disabilitati': getattr(config, 'LCL_DISABILITATI', []),
+        'tutti_lcl': tutti_lcl,
         'deposito': config.DEPOSITO,
         'ora_inizio_giornata': config.ORA_INIZIO_GIORNATA,
         'ora_fine_giornata': config.ORA_FINE_GIORNATA,
@@ -1167,6 +1183,7 @@ def update_settings():
     try:
         configurazione_operatori_cambiata = (
             'operatori_vip' in data or 'operatori_dict' in data
+            or 'operatori_disabilitati' in data or 'lcl_disabilitati' in data
         )
 
         # Salva su file persistente
@@ -1197,6 +1214,17 @@ def update_settings():
                 (mappa_html, 'OPERATORI_DICT'),
                 (gestionale, 'OPERATORI_DICT'),
                 (data_loader, 'OPERATORI_DICT'),
+            ],
+            'operatori_disabilitati': [
+                (config, 'OPERATORI_DISABILITATI'),
+                (mappa_html, 'OPERATORI_DISABILITATI'),
+                (data_loader, 'OPERATORI_DISABILITATI'),
+                (gestionale, 'OPERATORI_DISABILITATI'),
+            ],
+            'lcl_disabilitati': [
+                (config, 'LCL_DISABILITATI'),
+                (mappa_html, 'LCL_DISABILITATI'),
+                (data_loader, 'LCL_DISABILITATI'),
             ],
             'deposito': [
                 (config, 'DEPOSITO'),
@@ -1261,6 +1289,10 @@ def update_settings():
             config.PROVINCE[PROVINCIA_ATTIVA]['colori_operatori'] = data['colori_operatori']
         if 'operatori_dict' in data:
             config.PROVINCE[PROVINCIA_ATTIVA]['operatori_dict'] = data['operatori_dict']
+        if 'operatori_disabilitati' in data:
+            config.PROVINCE[PROVINCIA_ATTIVA]['operatori_disabilitati'] = data['operatori_disabilitati']
+        if 'lcl_disabilitati' in data:
+            config.PROVINCE[PROVINCIA_ATTIVA]['lcl_disabilitati'] = data['lcl_disabilitati']
         if 'deposito' in data:
             config.PROVINCE[PROVINCIA_ATTIVA]['deposito'] = data['deposito']
         if 'ora_inizio_giornata' in data:
@@ -1312,6 +1344,76 @@ def update_settings():
         return jsonify({'success': True, 'message': msg})
     except Exception as e:
         return _api_error(e, 'salvataggio impostazioni')
+
+
+@app.route('/api/admin/lcls', methods=['GET'])
+@login_required
+def get_admin_lcls():
+    """Ritorna tutte le LCL della provincia con contatori e flag disabilitato."""
+    try:
+        import config
+        from moduli import db as _db
+        conn = _db.get_conn()
+        cur = conn.execute(
+            "SELECT lcl, COUNT(*) as count FROM filone "
+            "WHERE is_orphan=0 AND lcl IS NOT NULL AND TRIM(lcl) != '' "
+            "GROUP BY lcl ORDER BY count DESC, lcl ASC"
+        )
+        disabilitati_set = {str(x).strip().upper() for x in getattr(config, 'LCL_DISABILITATI', []) if str(x).strip()}
+        lcls = [
+            {
+                'lcl': r['lcl'],
+                'count': r['count'],
+                'disabilitato': str(r['lcl']).strip().upper() in disabilitati_set,
+            }
+            for r in cur.fetchall()
+        ]
+        return jsonify({
+            'lcls': lcls,
+            'lcl_disabilitati': getattr(config, 'LCL_DISABILITATI', []),
+        })
+    except Exception as e:
+        return _api_error(e, 'lettura LCL')
+
+
+@app.route('/api/admin/lcls', methods=['PUT'])
+@login_required
+def update_admin_lcls():
+    """Aggiorna la lista di LCL disabilitate per la provincia attiva."""
+    try:
+        import config
+        from moduli import data_loader, mappa_html
+        from moduli.safe_json import json_write as _jw, json_read as _jr
+        data = request.get_json() or {}
+        lcl_disabilitati = data.get('lcl_disabilitati', [])
+        if not isinstance(lcl_disabilitati, list):
+            return jsonify({'error': 'lcl_disabilitati deve essere una lista'}), 400
+
+        settings_dir = os.path.join('data', PROVINCIA_ATTIVA.lower())
+        settings_file = os.path.join(settings_dir, 'settings.json')
+        settings = {}
+        if os.path.exists(settings_file):
+            settings = _jr(settings_file, default={})
+        settings['lcl_disabilitati'] = lcl_disabilitati
+        _jw(settings_file, settings, indent=2)
+
+        config.LCL_DISABILITATI = lcl_disabilitati
+        config.PROVINCE[PROVINCIA_ATTIVA]['lcl_disabilitati'] = lcl_disabilitati
+        data_loader.LCL_DISABILITATI = lcl_disabilitati
+        mappa_html.LCL_DISABILITATI = lcl_disabilitati
+        data_loader.invalidate_data_cache()
+
+        try:
+            from moduli.mappa_html import salva_config_statica
+            salva_config_statica()
+        except Exception:
+            pass
+
+        sse_notify_all('sync_complete', {'source': 'lcl_settings_change'})
+        threading.Thread(target=sincronizza_dati, daemon=True).start()
+        return jsonify({'success': True, 'lcl_disabilitati': lcl_disabilitati})
+    except Exception as e:
+        return _api_error(e, 'aggiornamento LCL')
 
 
 # ============================================================================

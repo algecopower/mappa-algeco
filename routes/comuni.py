@@ -188,6 +188,7 @@ def api_download_comune_excel(comune):
         return jsonify({'error': str(e)}), 500
 
 @bp.route('/api/comuni/export-excel', methods=['GET'])
+@bp.route('/api/admin/export-comuni-excel', methods=['GET'])
 @login_required
 def api_export_comuni():
     """Esporta i dati dei comuni in Excel (simile al filone)"""

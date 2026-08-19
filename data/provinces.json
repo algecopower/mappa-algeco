@@ -39,7 +39,10 @@
     "ora_inizio_giornata": 540,
     "ora_fine_giornata": 1020,
     "sottodominio": "torino.mappa-algeco.com",
-    "porta": 5001
+    "porta": 5001,
+    "operatori_disabilitati": [
+      "AG63397"
+    ]
   },
   "PAVIA": {
     "nome": "Pavia",

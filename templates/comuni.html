@@ -23,7 +23,7 @@
             <div class="lettere-actions">
                 <a href="/" class="btn-soft"><i class="fas fa-map"></i> Mappa</a>
                 <a href="/dashboard" class="btn-soft"><i class="fas fa-chart-line"></i> Dashboard</a>
-                <a href="/api/admin/export-comuni-excel" class="btn-soft" title="Scarica dati in Excel"><i class="fas fa-file-excel"></i> Export</a>
+                <a href="/api/comuni/export-excel" class="btn-soft" title="Scarica dati dei comuni in Excel"><i class="fas fa-file-excel"></i> Scarica Comuni</a>
                 <button class="btn-primary" id="bulkOpenBtn" onclick="openBulkModal()" disabled>
                     <i class="fas fa-paper-plane"></i> Invio bulk
                 </button>
@@ -63,7 +63,7 @@
                             </button>
                             <div class="dropdown-content">
                                 <a href="/api/comuni/export-excel" target="_blank">
-                                    <i class="fas fa-download"></i> Scarica Template / Esporta
+                                    <i class="fas fa-download"></i> Scarica Comuni (Excel)
                                 </a>
                                 <a href="#" onclick="document.getElementById('importComuniFile').click(); return false;">
                                     <i class="fas fa-upload"></i> Importa Template

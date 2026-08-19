@@ -18,6 +18,10 @@ from moduli.auth import login_required
 from moduli.safe_json import json_read
 from moduli import verifica_indirizzi as vi
 from config import PROVINCIA_ATTIVA
+try:
+    from config import LCL_DISABILITATI
+except ImportError:
+    LCL_DISABILITATI = []
 
 logger = logging.getLogger('mappa_algeco')
 
@@ -65,19 +69,20 @@ def stato_db():
     lcl_list: list[str] = []
     comuni_list: list[str] = []
     lcl_to_comuni: dict[str, list[str]] = {}
+    disabled_lcls = {str(x).strip().upper() for x in (LCL_DISABILITATI or []) if str(x).strip()}
     if backup:
         headers = backup.get('headers', [])
         righe = backup.get('righe', [])
         i_lcl = _col_idx(headers, ['LCL'])
         i_comune = _col_idx(headers, ['Comune', 'COMUNE'])
         if i_comune is not None:
-            comuni_list = sorted({_val(r, i_comune) for r in righe} - {''})
+            comuni_list = sorted({_val(r, i_comune) for r in righe if not (_val(r, i_lcl) and str(_val(r, i_lcl)).strip().upper() in disabled_lcls)} - {''})
         if i_lcl is not None and i_comune is not None:
             mapping: dict[str, set[str]] = {}
             for r in righe:
                 lcl = _val(r, i_lcl)
                 com = _val(r, i_comune)
-                if not lcl:
+                if not lcl or str(lcl).strip().upper() in disabled_lcls:
                     continue
                 mapping.setdefault(lcl, set())
                 if com:
@@ -85,7 +90,7 @@ def stato_db():
             lcl_list = sorted(mapping.keys())
             lcl_to_comuni = {k: sorted(v) for k, v in mapping.items()}
         elif i_lcl is not None:
-            lcl_list = sorted({_val(r, i_lcl) for r in righe} - {''})
+            lcl_list = sorted({_val(r, i_lcl) for r in righe if _val(r, i_lcl) and str(_val(r, i_lcl)).strip().upper() not in disabled_lcls} - {''})
 
     return jsonify({
         'db': info,
@@ -134,9 +139,13 @@ def verifica():
         return jsonify({'error': "Colonne 'Indirizzo' o 'Comune' non trovate nel backup"}), 500
 
     # Applica filtri
+    disabled_lcls = {str(x).strip().upper() for x in (LCL_DISABILITATI or []) if str(x).strip()}
     selezionati = []
     for r in righe:
-        if f_lcl and _val(r, i_lcl) != f_lcl:
+        lcl_r = _val(r, i_lcl)
+        if lcl_r and str(lcl_r).strip().upper() in disabled_lcls:
+            continue
+        if f_lcl and lcl_r != f_lcl:
             continue
         if f_comune and _val(r, i_comune) != f_comune:
             continue

@@ -99,6 +99,8 @@ _SETTINGS_OVERRIDE_FIELDS = {
     'operatori_vip',
     'colori_operatori',
     'operatori_dict',
+    'operatori_disabilitati',
+    'lcl_disabilitati',
     'deposito',
     'ora_inizio_giornata',
     'ora_fine_giornata',
@@ -716,12 +718,12 @@ def _admin_dispatch(path):
         return _admin_check() or _admin_list_provinces()
     if p == 'api/provinces' and method == 'POST':
         return _admin_check() or _admin_create_province()
-    m = re.match(r'^api/provinces/([A-Z0-9_]+)$', p)
+    m = re.match(r'^api/provinces/([a-zA-Z0-9_]+)$', p)
     if m and method == 'DELETE':
         return _admin_check() or _admin_delete_province(m.group(1))
     if m and method == 'PUT':
         return _admin_check() or _admin_update_province(m.group(1))
-    m = re.match(r'^api/provinces/([A-Z0-9_]+)/(start|stop|restart)$', p)
+    m = re.match(r'^api/provinces/([a-zA-Z0-9_]+)/(start|stop|restart)$', p)
     if m and method == 'POST':
         return _admin_check() or _admin_lifecycle(m.group(1), m.group(2))
     if p == 'api/status' and method == 'GET':
@@ -733,48 +735,48 @@ def _admin_dispatch(path):
         return _admin_check() or _admin_logs()
     if p == 'api/health-overview' and method == 'GET':
         return _admin_check() or _admin_health_overview()
-    m = re.match(r'^api/provinces/([A-Z0-9_]+)/db-action$', p)
+    m = re.match(r'^api/provinces/([a-zA-Z0-9_]+)/db-action$', p)
     if m and method == 'POST':
         return _admin_check() or _admin_db_action(m.group(1))
-    m = re.match(r'^api/provinces/([A-Z0-9_]+)/dump-eneltel/(.+)$', p)
+    m = re.match(r'^api/provinces/([a-zA-Z0-9_]+)/dump-eneltel/(.+)$', p)
     if m and method == 'GET':
         return _admin_check() or _admin_dump_eneltel(m.group(1), m.group(2))
 
     
-    m = re.match(r'^api/provinces/([A-Z0-9_]+)/smtp-settings$', p)
+    m = re.match(r'^api/provinces/([a-zA-Z0-9_]+)/smtp-settings$', p)
     if m and method == 'GET':
         return _admin_check() or _admin_proxy_simple(m.group(1), '/api/admin/smtp-settings', 'GET')
     if m and method == 'PUT':
         return _admin_check() or _admin_proxy_simple(m.group(1), '/api/admin/smtp-settings', 'PUT')
 
-    m = re.match(r'^api/provinces/([A-Z0-9_]+)/import-excel$', p)
+    m = re.match(r'^api/provinces/([a-zA-Z0-9_]+)/import-excel$', p)
     if m and method == 'POST':
         return _admin_check() or _admin_import_excel(m.group(1))
 
-    m = re.match(r'^api/provinces/([A-Z0-9_]+)/outbox$', p)
+    m = re.match(r'^api/provinces/([a-zA-Z0-9_]+)/outbox$', p)
     if m and method == 'GET':
         return _admin_check() or _admin_outbox_stats(m.group(1))
-    m = re.match(r'^api/provinces/([A-Z0-9_]+)/outbox/excel$', p)
+    m = re.match(r'^api/provinces/([a-zA-Z0-9_]+)/outbox/excel$', p)
     if m and method == 'GET':
         return _admin_check() or _admin_outbox_excel(m.group(1))
-    m = re.match(r'^api/provinces/([A-Z0-9_]+)/outbox/mark-delivered$', p)
+    m = re.match(r'^api/provinces/([a-zA-Z0-9_]+)/outbox/mark-delivered$', p)
     if m and method == 'POST':
         return _admin_check() or _admin_outbox_mark_delivered(m.group(1))
-    m = re.match(r'^api/provinces/([A-Z0-9_]+)/export-full-excel$', p)
+    m = re.match(r'^api/provinces/([a-zA-Z0-9_]+)/export-full-excel$', p)
     if m and method == 'GET':
         return _admin_check() or _admin_export_full_excel(m.group(1))
 
-    m = re.match(r'^api/provinces/([A-Z0-9_]+)/export-comuni-excel$', p)
+    m = re.match(r'^api/provinces/([a-zA-Z0-9_]+)/export-comuni-excel$', p)
     if m and method == 'GET':
         return _admin_check() or _admin_export_comuni_excel(m.group(1))
 
-    m = re.match(r'^api/provinces/([A-Z0-9_]+)/column-mapping$', p)
+    m = re.match(r'^api/provinces/([a-zA-Z0-9_]+)/column-mapping$', p)
     if m and method == 'GET':
         return _admin_check() or _admin_proxy_simple(m.group(1), '/api/admin/column-mapping', 'GET')
     if m and method == 'PUT':
         return _admin_check() or _admin_proxy_simple(m.group(1), '/api/admin/column-mapping', 'PUT')
 
-    m = re.match(r'^api/provinces/([A-Z0-9_]+)/lettere-excel-config$', p)
+    m = re.match(r'^api/provinces/([a-zA-Z0-9_]+)/lettere-excel-config$', p)
     if m and method == 'GET':
         return _admin_check() or _admin_proxy_simple(
             m.group(1), '/api/admin/lettere-excel-config', 'GET'
@@ -784,24 +786,30 @@ def _admin_dispatch(path):
             m.group(1), '/api/admin/lettere-excel-config', 'PUT'
         )
 
-    m = re.match(r'^api/provinces/([A-Z0-9_]+)/columns$', p)
+    m = re.match(r'^api/provinces/([a-zA-Z0-9_]+)/lcls$', p)
+    if m and method == 'GET':
+        return _admin_check() or _admin_proxy_simple(m.group(1), '/api/admin/lcls', 'GET')
+    if m and method == 'PUT':
+        return _admin_check() or _admin_proxy_simple(m.group(1), '/api/admin/lcls', 'PUT')
+
+    m = re.match(r'^api/provinces/([a-zA-Z0-9_]+)/columns$', p)
     if m and method == 'GET':
         return _admin_check() or _admin_proxy_simple(m.group(1), '/api/admin/columns', 'GET')
     if m and method == 'POST':
         return _admin_check() or _admin_proxy_simple(m.group(1), '/api/admin/columns', 'POST')
 
-    m = re.match(r'^api/provinces/([A-Z0-9_]+)/columns/bootstrap-standard$', p)
+    m = re.match(r'^api/provinces/([a-zA-Z0-9_]+)/columns/bootstrap-standard$', p)
     if m and method == 'POST':
         return _admin_check() or _admin_proxy_simple(
             m.group(1), '/api/admin/columns/bootstrap-standard', 'POST'
         )
 
-    m = re.match(r'^api/provinces/([A-Z0-9_]+)/columns/(.+)/rename$', p)
+    m = re.match(r'^api/provinces/([a-zA-Z0-9_]+)/columns/(.+)/rename$', p)
     if m and method == 'PUT':
         return _admin_check() or _admin_proxy_simple(
             m.group(1), f'/api/admin/columns/{m.group(2)}/rename', 'PUT'
         )
-    m = re.match(r'^api/provinces/([A-Z0-9_]+)/columns/(.+)$', p)
+    m = re.match(r'^api/provinces/([a-zA-Z0-9_]+)/columns/(.+)$', p)
     if m and method == 'DELETE':
         return _admin_check() or _admin_proxy_simple(
             m.group(1), f'/api/admin/columns/{m.group(2)}', 'DELETE'
@@ -1358,7 +1366,7 @@ def _admin_update_province(slug):
                 except (ValueError, TypeError):
                     return jsonify({'error': f"deposito.{k} deve essere numerico"}), 400
         aggiornato['deposito'] = dep
-    for k in ('operatori_vip', 'colori_operatori', 'operatori_dict'):
+    for k in ('operatori_vip', 'colori_operatori', 'operatori_dict', 'operatori_disabilitati', 'lcl_disabilitati'):
         if k in body:
             aggiornato[k] = body[k]
 
@@ -1381,6 +1389,7 @@ def _admin_update_province(slug):
                    'velocita_media_kmh', 'tempo_intervento_min',
                    'data_inizio', 'data_fine',
                    'operatori_vip', 'operatori_dict', 'colori_operatori',
+                   'operatori_disabilitati', 'lcl_disabilitati',
                    'usa_localita_come_comune'}
     cambi = [k for k in STRUTTURALI if aggiornato.get(k) != current.get(k)]
 

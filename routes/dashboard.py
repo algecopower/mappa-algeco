@@ -18,6 +18,11 @@ from moduli.auth import login_required
 from moduli.safe_json import json_read
 from moduli.calendario import get_attivita
 from config import PROVINCIA_ATTIVA, MATRICOLE_VIP, COLORI_TECNICI, OPERATORI_DICT
+try:
+    from config import OPERATORI_DISABILITATI, LCL_DISABILITATI
+except ImportError:
+    OPERATORI_DISABILITATI = []
+    LCL_DISABILITATI = []
 
 logger = logging.getLogger('mappa_algeco')
 
@@ -343,6 +348,9 @@ def _calcola_statistiche_filone(backup: dict) -> dict:
     # Comuni per operatore domani
     comuni_op_domani = defaultdict(Counter)
 
+    disabled_lcls = {str(x).strip().upper() for x in (LCL_DISABILITATI or []) if str(x).strip()}
+    disabled_ops = {str(x).strip().upper() for x in (OPERATORI_DISABILITATI or []) if str(x).strip()}
+
     from moduli.appuntamenti_core import rileva_appuntamento
 
     for row in righe:
@@ -353,6 +361,10 @@ def _calcola_statistiche_filone(backup: dict) -> dict:
         comune = _cell(row, i_comune)
         data_inst_raw = _cell(row, i_data_inst)
         lcl_val = _cell(row, i_lcl)
+
+        # Salta LCL disabilitate (archivio storico)
+        if lcl_val and str(lcl_val).strip().upper() in disabled_lcls:
+            continue
 
         data_pian = _parse_data(data_raw)
 
@@ -472,7 +484,8 @@ def _calcola_statistiche_filone(backup: dict) -> dict:
         return round(km_tot, 1), round(min_tot)
 
     operatori_stats = []
-    for matricola in MATRICOLE_VIP:
+    active_vip = [m for m in MATRICOLE_VIP if m and str(m).strip().upper() not in disabled_ops]
+    for matricola in active_vip:
         stats = per_operatore[matricola]
         # Comuni domani per questo operatore (top 5)
         top_comuni_dom = [{'comune': c, 'count': n}
@@ -565,9 +578,10 @@ def _calcola_andamento_lcl(backup: dict) -> dict:
     per_lcl = {}
     monthly_totale = Counter()
 
+    disabled_lcls = {str(x).strip().upper() for x in (LCL_DISABILITATI or []) if str(x).strip()}
     for row in righe:
         lcl = _cell(row, i_lcl)
-        if not lcl:
+        if not lcl or str(lcl).strip().upper() in disabled_lcls:
             continue
         if lcl not in per_lcl:
             per_lcl[lcl] = {

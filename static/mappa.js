@@ -8093,11 +8093,16 @@ function popolaFormImpostazioni(s) {
         });
     }
     
+    const disabledOps = new Set((s.operatori_disabilitati || []).map(x => String(x).trim().toUpperCase()));
     (s.operatori_vip || []).forEach(matricola => {
         const colore = (s.colori_operatori || {})[matricola] || '#3498db';
         const nome = reverseDict[matricola] || '';
-        aggiungiRigaOperatore(matricola, nome, colore);
+        const attivo = !disabledOps.has(String(matricola).trim().toUpperCase());
+        aggiungiRigaOperatore(matricola, nome, colore, attivo);
     });
+
+    // LCL e Zone
+    popolaLclImpostazioni(s.tutti_lcl || [], s.lcl_disabilitati || []);
     
     // Deposito
     if (s.deposito) {
@@ -8146,13 +8151,16 @@ function toggleDataFineIllimitata(checked) {
     if (checked) input.value = '';
 }
 
-function aggiungiRigaOperatore(matricola, nome, colore) {
+function aggiungiRigaOperatore(matricola, nome, colore, attivo = true) {
     const tbody = document.getElementById('settingsOperatorsBody');
     const tr = document.createElement('tr');
     tr.innerHTML = `
         <td><input type="text" value="${matricola || ''}" placeholder="Es: AE101392" class="op-matricola"></td>
         <td><input type="text" value="${nome || ''}" placeholder="Es: Nome Operatore" class="op-nome"></td>
         <td><input type="color" value="${colore || '#3498db'}" class="op-colore"></td>
+        <td style="text-align: center;">
+            <input type="checkbox" class="op-attivo" ${attivo ? 'checked' : ''} title="Se disattivato, l'operatore non appare nei filtri né sulla mappa">
+        </td>
         <td><button class="settings-btn-remove" onclick="this.closest('tr').remove()" title="Rimuovi">✖</button></td>
     `;
     tbody.appendChild(tr);
@@ -8164,18 +8172,98 @@ function aggiungiOperatore() {
     const usati = new Set();
     document.querySelectorAll('#settingsOperatorsBody .op-colore').forEach(el => usati.add(el.value));
     const disponibile = colori.find(c => !usati.has(c)) || colori[Math.floor(Math.random() * colori.length)];
-    aggiungiRigaOperatore('', '', disponibile);
+    aggiungiRigaOperatore('', '', disponibile, true);
+}
+
+function popolaLclImpostazioni(tuttiLcl, lclDisabilitati) {
+    const tbody = document.getElementById('settingsLclBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    const disabledSet = new Set((lclDisabilitati || []).map(x => String(x).trim().toUpperCase()));
+    const renderati = new Set();
+
+    (tuttiLcl || []).forEach(item => {
+        const lcl = String(item.lcl || '').trim();
+        if (!lcl) return;
+        renderati.add(lcl.toUpperCase());
+        const count = item.count || 0;
+        const attivo = !disabledSet.has(lcl.toUpperCase());
+        aggiungiRigaLcl(lcl, count, attivo, false);
+    });
+
+    // Se ci sono LCL nei disabled non presenti nel DB attuale
+    (lclDisabilitati || []).forEach(lclCode => {
+        const lcl = String(lclCode || '').trim();
+        if (lcl && !renderati.has(lcl.toUpperCase())) {
+            aggiungiRigaLcl(lcl, 0, false, true);
+        }
+    });
+}
+
+function aggiungiRigaLcl(lcl, count, attivo, isCustom = false) {
+    const tbody = document.getElementById('settingsLclBody');
+    if (!tbody) return;
+    const tr = document.createElement('tr');
+    tr.className = 'lcl-row';
+    tr.dataset.lcl = lcl;
+    tr.innerHTML = `
+        <td style="font-family: monospace; font-weight: 600;">${lcl}</td>
+        <td style="color: var(--text-secondary);">${count > 0 ? count + ' contatori' : '—'}</td>
+        <td style="text-align: center;">
+            <label style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px;">
+                <input type="checkbox" class="lcl-attivo" ${attivo ? 'checked' : ''} onchange="aggiornaBadgeLcl(this)">
+                <span class="lcl-badge" style="padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; background: ${attivo ? 'rgba(46,204,113,0.15); color:#2ecc71;' : 'rgba(231,76,60,0.15); color:#e74c3c;'}">
+                    ${attivo ? 'ATTIVA' : 'DISABILITATA'}
+                </span>
+            </label>
+        </td>
+        <td style="text-align: center;">
+            ${isCustom ? '<button class="settings-btn-remove" onclick="this.closest(\'tr\').remove()" title="Rimuovi">✖</button>' : ''}
+        </td>
+    `;
+    tbody.appendChild(tr);
+}
+
+function aggiornaBadgeLcl(checkbox) {
+    const badge = checkbox.closest('label').querySelector('.lcl-badge');
+    if (checkbox.checked) {
+        badge.textContent = 'ATTIVA';
+        badge.style.background = 'rgba(46,204,113,0.15)';
+        badge.style.color = '#2ecc71';
+    } else {
+        badge.textContent = 'DISABILITATA';
+        badge.style.background = 'rgba(231,76,60,0.15)';
+        badge.style.color = '#e74c3c';
+    }
+}
+
+function aggiungiLclManuale() {
+    const inp = document.getElementById('nuovaLclInput');
+    const val = inp.value.trim();
+    if (!val) return;
+    const existing = Array.from(document.querySelectorAll('#settingsLclBody tr')).some(
+        tr => (tr.dataset.lcl || '').toUpperCase() === val.toUpperCase()
+    );
+    if (existing) {
+        alert('Questa LCL è già presente nella lista.');
+        return;
+    }
+    aggiungiRigaLcl(val, 0, false, true);
+    inp.value = '';
 }
 
 function raccogliDatiImpostazioni() {
     const operatori_vip = [];
     const colori_operatori = {};
     const operatori_dict = {};
+    const operatori_disabilitati = [];
     
     document.querySelectorAll('#settingsOperatorsBody tr').forEach(tr => {
         const matricola = tr.querySelector('.op-matricola').value.trim().toUpperCase();
         const nome = tr.querySelector('.op-nome').value.trim();
         const colore = tr.querySelector('.op-colore').value;
+        const attivo = tr.querySelector('.op-attivo') ? tr.querySelector('.op-attivo').checked : true;
         
         if (matricola) {
             operatori_vip.push(matricola);
@@ -8183,6 +8271,18 @@ function raccogliDatiImpostazioni() {
             if (nome) {
                 operatori_dict[nome] = matricola;
             }
+            if (!attivo) {
+                operatori_disabilitati.push(matricola);
+            }
+        }
+    });
+
+    const lcl_disabilitati = [];
+    document.querySelectorAll('#settingsLclBody tr.lcl-row').forEach(tr => {
+        const lcl = tr.dataset.lcl;
+        const chk = tr.querySelector('.lcl-attivo');
+        if (lcl && chk && !chk.checked) {
+            lcl_disabilitati.push(lcl);
         }
     });
     
@@ -8212,6 +8312,8 @@ function raccogliDatiImpostazioni() {
         operatori_vip,
         colori_operatori,
         operatori_dict,
+        operatori_disabilitati,
+        lcl_disabilitati,
         deposito: {
             Nome: document.getElementById('settings_deposito_nome').value.trim(),
             Lat: parseFloat(document.getElementById('settings_deposito_lat').value) || 0,
@@ -8227,6 +8329,7 @@ function raccogliDatiImpostazioni() {
         mappatura_colonne: raccogliMappaturaColonne(),
     };
 }
+
 
 async function salvaImpostazioni() {
     const btn = document.getElementById('settingsBtnSave');

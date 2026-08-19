@@ -560,6 +560,7 @@
             </div>
             <div class="settings-tabs">
                 <button class="settings-tab active" data-tab="operatori" onclick="switchSettingsTab('operatori')">👥 Operatori</button>
+                <button class="settings-tab" data-tab="lcls" onclick="switchSettingsTab('lcls')">🏷️ LCL e Zone</button>
                 <button class="settings-tab" data-tab="date" onclick="switchSettingsTab('date')">📅 Date</button>
                 <button class="settings-tab settings-tab-admin" data-tab="utenti" onclick="switchSettingsTab('utenti')" id="tabUtentiBtn" style="display:none">🔑 Utenti</button>
             </div>
@@ -573,13 +574,17 @@
                 <!-- Tab: Operatori -->
                 <div class="settings-section active" id="settingsTab_operatori">
                     <h3>Gestione Operatori</h3>
+                    <p style="font-size: 12px; color: var(--text-secondary); margin-top: -4px; margin-bottom: 10px;">
+                        Gli operatori disabilitati vengono esclusi dai filtri, dalla mappa e dai report di produttività (i dati storici restano nel DB).
+                    </p>
                     <table class="settings-operators-table" id="settingsOperatorsTable">
                         <thead>
                             <tr>
-                                <th>Matricola</th>
-                                <th>Nome Display</th>
-                                <th>Colore</th>
-                                <th></th>
+                                <th style="width: 25%;">Matricola</th>
+                                <th style="width: 35%;">Nome Display</th>
+                                <th style="width: 15%;">Colore</th>
+                                <th style="width: 15%; text-align: center;">Attivo</th>
+                                <th style="width: 10%;"></th>
                             </tr>
                         </thead>
                         <tbody id="settingsOperatorsBody"></tbody>
@@ -587,6 +592,29 @@
                     <button class="settings-btn-add" onclick="aggiungiOperatore()">
                         ➕ Aggiungi operatore
                     </button>
+                </div>
+
+                <!-- Tab: LCL e Zone -->
+                <div class="settings-section" id="settingsTab_lcls">
+                    <h3>Gestione LCL e Zone</h3>
+                    <p style="font-size: 12px; color: var(--text-secondary); margin-top: -4px; margin-bottom: 10px;">
+                        Le LCL disabilitate e le relative zone associate vengono escluse da tutti i filtri, dalla mappa e dalle statistiche (fungono da archivio storico).
+                    </p>
+                    <table class="settings-operators-table" id="settingsLclTable">
+                        <thead>
+                            <tr>
+                                <th style="width: 35%;">Codice LCL</th>
+                                <th style="width: 25%;">Contatori DB</th>
+                                <th style="width: 25%; text-align: center;">Stato</th>
+                                <th style="width: 15%; text-align: center;"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="settingsLclBody"></tbody>
+                    </table>
+                    <div style="margin-top: 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                        <input type="text" id="nuovaLclInput" placeholder="Aggiungi codice LCL..." style="max-width: 180px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary); font-size: 13px;">
+                        <button class="settings-btn-add" style="margin: 0;" onclick="aggiungiLclManuale()">➕ Aggiungi LCL</button>
+                    </div>
                 </div>
 
                 <!-- Tab: Date -->

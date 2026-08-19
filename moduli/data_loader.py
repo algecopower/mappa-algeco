@@ -56,6 +56,11 @@ _COLONNE_STRUTTURALI = [
 ]
 
 from config import MATRICOLE_VIP, OPERATORI_DICT
+try:
+    from config import OPERATORI_DISABILITATI, LCL_DISABILITATI
+except ImportError:
+    OPERATORI_DISABILITATI = []
+    LCL_DISABILITATI = []
 
 # Mappatura colonne personalizzata
 try:
@@ -652,6 +657,15 @@ def carica_dati_db_locale(force=False):
         df['LCL'] = ''
         logger.warning("   ⚠️  Colonna LCL non trovata nel FILONE")
 
+    # Escludi LCL disabilitate (archivio storico)
+    disabled_lcls = {str(x).strip().upper() for x in (LCL_DISABILITATI or []) if str(x).strip()}
+    if disabled_lcls:
+        righe_prima_lcl = len(df)
+        df = df[~df['LCL'].astype(str).str.strip().str.upper().isin(disabled_lcls)]
+        esclusi_lcl = righe_prima_lcl - len(df)
+        if esclusi_lcl > 0:
+            logger.info(f"   🏷️  Esclusi {esclusi_lcl} contatori di LCL disabilitate: {', '.join(sorted(disabled_lcls))}")
+
     # ================================================================
     # RIEPILOGO COORDINATE (dal FILONE)
     # ================================================================
@@ -732,14 +746,18 @@ def carica_dati_db_locale(force=False):
     tecnici_unici = df['TEC_K'].unique().tolist()
     modalita_generica = tecnici_unici == ['TUTTI']
     
-    # Filtra per tecnici VIP + mantieni 'TUTTI' (senza operatore)
-    if not modalita_generica and MATRICOLE_VIP:
+    # Filtra per tecnici VIP (escludendo quelli disabilitati) + mantieni 'TUTTI' (senza operatore)
+    disabled_ops = {str(x).strip().upper() for x in (OPERATORI_DISABILITATI or []) if str(x).strip()}
+    active_vip = [m for m in MATRICOLE_VIP if m and str(m).strip().upper() not in disabled_ops]
+    if not modalita_generica and active_vip:
         righe_prima = len(df)
-        # Mantieni: matricole VIP + righe senza operatore ('TUTTI')
-        df = df[df['TEC_K'].isin(MATRICOLE_VIP) | (df['TEC_K'] == 'TUTTI')]
+        # Mantieni: matricole VIP attive + righe senza operatore ('TUTTI')
+        df = df[df['TEC_K'].isin(active_vip) | (df['TEC_K'] == 'TUTTI')]
         righe_dopo = len(df)
         if righe_prima != righe_dopo:
-            logger.info(f"   👤 Filtro tecnici VIP: {righe_prima} → {righe_dopo} righe")
+            logger.info(f"   👤 Filtro tecnici VIP attivi: {righe_prima} → {righe_dopo} righe")
+    elif not modalita_generica and disabled_ops:
+        df = df[~df['TEC_K'].astype(str).str.strip().str.upper().isin(disabled_ops)]
     
     # Rimuovi righe senza coordinate
     righe_prima = len(df)

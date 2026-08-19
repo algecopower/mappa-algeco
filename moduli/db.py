@@ -225,6 +225,29 @@ def _bootstrap_schema(conn):
             sheets_row INTEGER,
             detail TEXT
         );
+
+        CREATE TABLE IF NOT EXISTS comuni_info (
+            provincia TEXT NOT NULL,
+            comune TEXT NOT NULL,
+            numero_ce TEXT,
+            ztl TEXT,
+            indicazioni_ztl TEXT,
+            tipologie_zone TEXT,
+            polizia TEXT,
+            uff_tecnico TEXT,
+            protocollo TEXT,
+            fb TEXT,
+            email_comune TEXT,
+            email_polizia TEXT,
+            email_uff_tecnico TEXT,
+            telefono_comune TEXT,
+            telefono_polizia TEXT,
+            telefono_uff_tecnico TEXT,
+            pec_comune TEXT,
+            note TEXT,
+            last_updated_ts INTEGER NOT NULL,
+            PRIMARY KEY (provincia, comune)
+        );
     ''')
 
     _create_lettere_tables(conn)
@@ -702,9 +725,10 @@ def _migrate_v4_to_v5(conn):
 def _migrate_v5_to_v6(conn):
     """Schema v6: aggiunta indicazioni_ztl per differenziare la colonna Excel dal toggle."""
     logger.info("[DB-migration] v5→v6: add indicazioni_ztl")
-    conn.executescript('''
-        ALTER TABLE comuni_info ADD COLUMN indicazioni_ztl TEXT;
-    ''')
+    cur = conn.execute("PRAGMA table_info(comuni_info)")
+    cols = {r[1] for r in cur.fetchall()}
+    if 'indicazioni_ztl' not in cols:
+        conn.execute('ALTER TABLE comuni_info ADD COLUMN indicazioni_ztl TEXT')
     logger.info("[DB-migration] v6 applicato.")
 
 # ============================================================================

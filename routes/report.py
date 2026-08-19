@@ -15,6 +15,11 @@ from moduli.auth import login_required
 from moduli.safe_json import json_read
 from moduli.data_loader import parse_data_flessibile
 from config import PROVINCIA_ATTIVA, MATRICOLE_VIP, COLORI_TECNICI, OPERATORI_DICT
+try:
+    from config import OPERATORI_DISABILITATI, LCL_DISABILITATI
+except ImportError:
+    OPERATORI_DISABILITATI = []
+    LCL_DISABILITATI = []
 
 logger = logging.getLogger('mappa_algeco')
 
@@ -129,6 +134,9 @@ def _calcola_report(backup, data_da, data_a):
     da_str = data_da.isoformat()
     a_str = data_a.isoformat()
 
+    disabled_lcls = {str(x).strip().upper() for x in (LCL_DISABILITATI or []) if str(x).strip()}
+    disabled_ops = {str(x).strip().upper() for x in (OPERATORI_DISABILITATI or []) if str(x).strip()}
+
     for row in righe:
         data_raw = _cell(row, i_data)
         operatore = _cell(row, i_operatore)
@@ -138,6 +146,10 @@ def _calcola_report(backup, data_da, data_a):
         data_inst_raw = _cell(row, i_data_inst)
         lcl_val = _cell(row, i_lcl)
         tipo_mis = _cell(row, i_tipo_mis)
+
+        # Salta LCL disabilitate (archivio storico)
+        if lcl_val and str(lcl_val).strip().upper() in disabled_lcls:
+            continue
 
         if data_raw and 'annullat' in data_raw.lower():
             continue
@@ -207,7 +219,8 @@ def _calcola_report(backup, data_da, data_a):
     # ── Costruisci operatori output ──
     date_range = _date_range(data_da, data_a)
     operatori_out = []
-    for matricola in MATRICOLE_VIP:
+    active_vip = [m for m in MATRICOLE_VIP if m and str(m).strip().upper() not in disabled_ops]
+    for matricola in active_vip:
         stats = per_operatore[matricola]
         dist = distanze_op.get(matricola, {})
         giorni_lavorati = len([d for d in date_range if stats['per_giorno'].get(d, 0) > 0])

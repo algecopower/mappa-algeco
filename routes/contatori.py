@@ -1273,7 +1273,9 @@ def genera_orari_lettere():
             if df_data.empty:
                 continue
 
-            tecnici_data = [t for t in MATRICOLE_VIP if t in df_data['TEC_K'].unique()]
+            import config
+            disabled_ops = {str(x).strip().upper() for x in getattr(config, 'OPERATORI_DISABILITATI', []) if str(x).strip()}
+            tecnici_data = [t for t in MATRICOLE_VIP if t in df_data['TEC_K'].unique() and str(t).strip().upper() not in disabled_ops]
             if 'TUTTI' in df_data['TEC_K'].unique():
                 tecnici_data.append('TUTTI')
 

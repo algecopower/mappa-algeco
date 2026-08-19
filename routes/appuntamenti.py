@@ -20,6 +20,11 @@ from moduli import db as _db
 from config import (
     PROVINCIA_ATTIVA, MATRICOLE_VIP, COLORI_TECNICI, OPERATORI_DICT,
 )
+try:
+    from config import OPERATORI_DISABILITATI, LCL_DISABILITATI
+except ImportError:
+    OPERATORI_DISABILITATI = []
+    LCL_DISABILITATI = []
 from moduli.appuntamenti_core import rileva_appuntamento
 
 logger = logging.getLogger('mappa_algeco')
@@ -154,11 +159,17 @@ def _carica_appuntamenti() -> list[dict]:
         'Orari': 'orari_lettere',
     }
 
+    disabled_lcls = {str(x).strip().upper() for x in (LCL_DISABILITATI or []) if str(x).strip()}
+
     risultati = []
     for fr in rows:
         rec = dict(fr)
         ek = rec['eneltel_key']
         lcl_val = rec.get('lcl') or ''
+
+        # Salta LCL disabilitate (archivio storico)
+        if lcl_val and str(lcl_val).strip().upper() in disabled_lcls:
+            continue
 
         # Applica pending overlay
         pend = pending_by_key.get((ek, lcl_val))
@@ -369,13 +380,17 @@ def api_appuntamenti():
             if dp:
                 per_data[dp] += 1
 
-        # Ordina operatori: prima quelli in MATRICOLE_VIP, poi alfabetico
-        vip_set = set(MATRICOLE_VIP)
-        operatori_list = sorted(
-            per_operatore.values(),
-            key=lambda o: (0 if o['matricola'] in vip_set else 1,
-                           o['matricola']),
-        )
+        # Ordina operatori: prima quelli in MATRICOLE_VIP, poi alfabetico (esclusi i disabilitati)
+        disabled_ops = {str(x).strip().upper() for x in (OPERATORI_DISABILITATI or []) if str(x).strip()}
+        vip_set = {m for m in MATRICOLE_VIP if m and str(m).strip().upper() not in disabled_ops}
+        operatori_list = [
+            o for o in sorted(
+                per_operatore.values(),
+                key=lambda o: (0 if o['matricola'] in vip_set else 1,
+                               o['matricola']),
+            )
+            if o['matricola'].upper() not in disabled_ops
+        ]
 
         # Top comuni
         top_comuni = [{'comune': c, 'count': n}

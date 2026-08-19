@@ -88,6 +88,8 @@ DEPOSITO = _provincia['deposito']
 MATRICOLE_VIP = _provincia['operatori_vip']
 COLORI_TECNICI = _provincia['colori_operatori']
 OPERATORI_DICT = _provincia.get('operatori_dict', {})  # Per dropdown gestionale
+OPERATORI_DISABILITATI = _provincia.get('operatori_disabilitati', [])  # Matricole disabilitate (archivio storico)
+LCL_DISABILITATI = _provincia.get('lcl_disabilitati', [])  # Codici LCL disabilitati (archivio storico)
 FILE_MAPPA = _provincia['file_mappa']
 ORA_INIZIO_GIORNATA = _provincia.get('ora_inizio_giornata', 8 * 60)  # Default 8:00
 ORA_FINE_GIORNATA = _provincia.get('ora_fine_giornata', 17 * 60)  # Default 17:00
@@ -423,6 +425,12 @@ if os.path.exists(_settings_file):
         if 'operatori_dict' in _user_settings:
             OPERATORI_DICT = _user_settings['operatori_dict']
             PROVINCE[PROVINCIA_ATTIVA]['operatori_dict'] = OPERATORI_DICT
+        if 'operatori_disabilitati' in _user_settings:
+            OPERATORI_DISABILITATI = _user_settings['operatori_disabilitati']
+            PROVINCE[PROVINCIA_ATTIVA]['operatori_disabilitati'] = OPERATORI_DISABILITATI
+        if 'lcl_disabilitati' in _user_settings:
+            LCL_DISABILITATI = _user_settings['lcl_disabilitati']
+            PROVINCE[PROVINCIA_ATTIVA]['lcl_disabilitati'] = LCL_DISABILITATI
         if 'deposito' in _user_settings:
             DEPOSITO = _user_settings['deposito']
             PROVINCE[PROVINCIA_ATTIVA]['deposito'] = DEPOSITO

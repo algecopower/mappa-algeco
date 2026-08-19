@@ -59,10 +59,20 @@
                         <p id="resultInfo">Caricamento...</p>
                     </div>
                     <div class="toolbar-controls">
-                        <label class="toolbar-filter">
-                            <input type="checkbox" id="filterIncomplete" onchange="toggleIncompleteFilter(this.checked)">
-                            Solo incompleti
-                        </label>
+                        <select id="filterRecapito" class="btn-soft" onchange="setFilterRecapito(this.value)" style="font-size:0.84rem;padding:7px 10px;font-weight:600;">
+                            <option value="tutti">Tutti i contatti</option>
+                            <option value="con_email">Con Email o PEC</option>
+                            <option value="solo_mail">Solo MAIL</option>
+                            <option value="solo_pec">Solo PEC</option>
+                            <option value="monofase">Monofase</option>
+                            <option value="trifase">Trifase</option>
+                            <option value="semidiretta">Semidiretta</option>
+                            <option value="con_note">Con Note</option>
+                            <option value="senza_note">Senza Note</option>
+                            <option value="senza_email">Senza Email / PEC</option>
+                            <option value="incompleti">Solo incompleti</option>
+                            <option value="non_inviati">Non ancora inviati</option>
+                        </select>
                         <button class="btn-soft" id="researchQueueBtn" onclick="startContactResearchQueue()" title="Apre il primo contatto senza telefono o email">
                             <i class="fas fa-magnifying-glass-location"></i> Coda ricerche
                         </button>
@@ -106,6 +116,24 @@
                     <div class="bulk-hint">
                         Gli indirizzi mail e PEC vengono letti dallo stesso campo <strong>Email / PEC</strong>.
                         Le PEC sono solo evidenziate con badge dedicato.
+                    </div>
+
+                    <div class="bulk-filter-bar">
+                        <label class="bulk-select-all" style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;font-size:0.86rem;">
+                            <input type="checkbox" id="bulkSelectAll" onchange="toggleBulkSelectAll(this.checked)" checked>
+                            <strong>Seleziona tutti</strong> (<span id="bulkSelectedCount">0</span>)
+                        </label>
+                        <div class="bulk-filter-presets">
+                            <span style="color:var(--text-muted);font-size:0.8rem;font-weight:600;">Filtri rapidi:</span>
+                            <button type="button" class="btn-preset active" id="presetBtn_tutti" onclick="applyBulkPreset('tutti')">Tutti</button>
+                            <button type="button" class="btn-preset" id="presetBtn_solo_mail" onclick="applyBulkPreset('solo_mail')">Solo MAIL</button>
+                            <button type="button" class="btn-preset" id="presetBtn_solo_pec" onclick="applyBulkPreset('solo_pec')">Solo PEC</button>
+                            <button type="button" class="btn-preset" id="presetBtn_monofase" onclick="applyBulkPreset('monofase')">Monofase</button>
+                            <button type="button" class="btn-preset" id="presetBtn_trifase" onclick="applyBulkPreset('trifase')">Trifase</button>
+                            <button type="button" class="btn-preset" id="presetBtn_semidiretta" onclick="applyBulkPreset('semidiretta')">Semidiretta</button>
+                            <button type="button" class="btn-preset" id="presetBtn_con_note" onclick="applyBulkPreset('con_note')"><i class="fas fa-sticky-note" style="color:#f59e0b;font-size:0.75rem;"></i> Con Note</button>
+                            <button type="button" class="btn-preset" id="presetBtn_senza_note" onclick="applyBulkPreset('senza_note')">Senza Note</button>
+                        </div>
                     </div>
 
                     <div class="bulk-list" id="bulkList"></div>
@@ -178,20 +206,36 @@
 
                 <div class="research-editor">
                     <div class="research-field">
-                        <label for="researchPhone">Telefono trovato</label>
-                        <input id="researchPhone" type="text" placeholder="Telefono">
+                        <div class="research-field-header">
+                            <label for="researchPhone">Telefono trovato</label>
+                            <button type="button" class="btn-quick-fill" onclick="setResearchField('researchPhone', 'non trovato')" title="Inserisci annotazione 'non trovato'">
+                                <i class="fas fa-ban"></i> Non trovato
+                            </button>
+                        </div>
+                        <input id="researchPhone" type="text" placeholder="Telefono o 'non trovato'">
                     </div>
                     <div class="research-field">
-                        <label for="researchEmail">Email / PEC trovata</label>
-                        <input id="researchEmail" type="text" placeholder="mail@dominio.it / pec@pec.it">
+                        <div class="research-field-header">
+                            <label for="researchEmail">Email / PEC trovata</label>
+                            <button type="button" class="btn-quick-fill" onclick="setResearchField('researchEmail', 'non trovata')" title="Inserisci annotazione 'non trovata'">
+                                <i class="fas fa-ban"></i> Non trovata
+                            </button>
+                        </div>
+                        <input id="researchEmail" type="text" placeholder="mail@dominio.it / pec@pec.it o 'non trovata'">
                     </div>
                 </div>
             </div>
             <div class="modal-footer">
                 <button class="btn-soft" onclick="closeContactResearch()">Chiudi</button>
                 <div class="research-footer-actions">
+                    <button class="btn-soft" onclick="setBothNotFound()" title="Compila entrambi i campi come 'non trovato' / 'non trovata'">
+                        <i class="fas fa-ban"></i> Entrambi non trovati
+                    </button>
                     <button class="btn-soft" onclick="navigateResearch(-1)" title="Contatto precedente nella coda">
                         <i class="fas fa-arrow-left"></i> Precedente
+                    </button>
+                    <button class="btn-soft" onclick="navigateResearch(1)" title="Prossimo contatto nella coda senza salvare">
+                        Successivo <i class="fas fa-arrow-right"></i>
                     </button>
                     <button class="btn-soft" onclick="saveResearchContact(false)">
                         <i class="fas fa-floppy-disk"></i> Salva

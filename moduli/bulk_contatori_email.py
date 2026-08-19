@@ -62,8 +62,8 @@ def build_nota_invio(tipo: str, data_intervento: str | None = None, data_oggi: d
 
 def registra_nota_su_db(pod: str, nota: str, user: str = '', origin: str = 'bulk_send') -> bool:
     """
-    Scrive/accoda la nota nel campo note_appuntamento del filone sul DB locale.
-    Se la nota non è già presente, la concatena con ' // '.
+    Scrive/premette la nota nel campo note_appuntamento del filone sul DB locale.
+    Se la nota non è già presente, la concatena all'inizio con ' // '.
     """
     if not pod or not nota:
         return False
@@ -78,7 +78,7 @@ def registra_nota_su_db(pod: str, nota: str, user: str = '', origin: str = 'bulk
         if nota in nota_attuale:
             return True  # già presente
         
-        nuova_nota = f"{nota_attuale} // {nota}" if nota_attuale else nota
+        nuova_nota = f"{nota} // {nota_attuale}" if nota_attuale else nota
         col_note = _get_colonna_note()
         _db.record_local_change(
             ek, {col_note: nuova_nota},
@@ -156,7 +156,33 @@ def generate_contatori_excel(contatori: list[dict], nome_azienda: str = '') -> b
         indirizzo = str(c.get('indirizzo') or c.get('via') or '').strip()
         civico = str(c.get('civico') or '').strip()
         comune = str(c.get('comune') or '').strip()
-        matricola = str(c.get('matricola_filone') or c.get('matricola') or c.get('matricola_ante') or c.get('codice_ante') or '').strip()
+
+        # Recupero matricola e codice
+        matr_val = str(c.get('matricola_ante') or c.get('matricola') or c.get('matricola_filone') or c.get('matricola_installata') or '').strip()
+        cod_val = str(c.get('codice_ante') or c.get('codice') or c.get('codice_filone') or c.get('codice_installato') or '').strip()
+
+        # Se non trovati nei campi diretti, prova query DB su filone tramite POD
+        if (not matr_val and not cod_val) and pod:
+            try:
+                from moduli import db
+                conn = db.get_conn()
+                db_row = conn.execute(
+                    "SELECT codice_ante, matricola_ante FROM filone WHERE UPPER(TRIM(pod)) = UPPER(TRIM(?)) LIMIT 1",
+                    (pod,)
+                ).fetchone()
+                if db_row:
+                    cod_val = str(db_row['codice_ante'] or '').strip()
+                    matr_val = str(db_row['matricola_ante'] or '').strip()
+            except Exception:
+                pass
+
+        if c.get('matricola_filone') and ' / ' in str(c.get('matricola_filone')):
+            matricola = str(c.get('matricola_filone')).strip()
+        elif cod_val and matr_val and cod_val != matr_val:
+            matricola = f"{cod_val} / {matr_val}"
+        else:
+            matricola = matr_val or cod_val or ''
+
         data_int = str(c.get('data_intervento') or c.get('data_pianificazione') or c.get('data') or '').strip()
 
         row_data = [

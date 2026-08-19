@@ -102,11 +102,17 @@ def api_comuni_bulk_preview():
         comuni_ids = data.get('comuni_ids', [])
         template_name = data.get('template', 'comune')
         escludi_pec = data.get('escludi_pec', False)
+        filtro_tipo = data.get('filtro_tipo')
         
         if not comuni_ids:
             return jsonify({'success': False, 'error': 'Nessun comune specificato'}), 400
             
-        previews, errors = generate_email_previews(comuni_ids, template_name, escludi_pec)
+        previews, errors = generate_email_previews(
+            comuni_ids,
+            template_name,
+            escludi_pec=escludi_pec,
+            filtro_tipo=filtro_tipo,
+        )
         return jsonify({
             'success': True,
             'previews': previews,

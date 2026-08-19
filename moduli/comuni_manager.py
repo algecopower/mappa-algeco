@@ -16,7 +16,7 @@ from email.utils import formataddr
 
 from config import PROVINCIA_ATTIVA
 from moduli import db as _db
-from moduli.smtp import load_smtp_settings, connect_smtp, save_to_sent
+from moduli.smtp import load_smtp_settings, send_smtp_message
 
 logger = logging.getLogger('mappa_algeco')
 
@@ -424,10 +424,13 @@ def _is_pec(email_str):
     e = email_str.lower()
     return any(p in e for p in ['@pec.', '@legalmail', '@cert.', '@postacert.', '@arubapec', '@sicurezzapostale', '.pec.it', '@pec.it'])
 
-def generate_email_previews(comuni_ids, template_name, escludi_pec=False):
+def generate_email_previews(comuni_ids, template_name, escludi_pec=False, filtro_tipo=None):
     import os
     comuni = get_comuni_list()
     comuni_dict = {c['comune']: c for c in comuni}
+    
+    if filtro_tipo is None:
+        filtro_tipo = 'no_pec' if escludi_pec else 'tutti'
     
     subject_base = "SOSTITUZIONE CONTATORI E-DISTRIBUZIONE"
     pdf_attachment = f"attestazione_{PROVINCIA_ATTIVA.lower()}.pdf"
@@ -462,11 +465,17 @@ def generate_email_previews(comuni_ids, template_name, escludi_pec=False):
                 if emails_found:
                     dest_email = ', '.join(emails_found)
                     
-            if dest_email and escludi_pec:
+            if dest_email:
                 parts = [x.strip() for x in dest_email.replace(';', ',').split(',') if x.strip()]
-                filtered = [x for x in parts if not _is_pec(x)]
+                if filtro_tipo in ('solo_mail', 'no_pec'):
+                    filtered = [x for x in parts if not _is_pec(x)]
+                elif filtro_tipo in ('solo_pec', 'no_mail'):
+                    filtered = [x for x in parts if _is_pec(x)]
+                else:
+                    filtered = parts
+
                 if not filtered:
-                    errors.append(f"{comune_name}: Esclusa Polizia (solo indirizzi PEC)")
+                    errors.append(f"{comune_name}: Esclusa Polizia dal filtro ({filtro_tipo})")
                     continue
                 dest_email = ', '.join(filtered)
                 
@@ -504,11 +513,17 @@ def generate_email_previews(comuni_ids, template_name, escludi_pec=False):
                 if emails_found:
                     dest_email = ', '.join(emails_found)
                     
-            if dest_email and escludi_pec:
+            if dest_email:
                 parts = [x.strip() for x in dest_email.replace(';', ',').split(',') if x.strip()]
-                filtered = [x for x in parts if not _is_pec(x)]
+                if filtro_tipo in ('solo_mail', 'no_pec'):
+                    filtered = [x for x in parts if not _is_pec(x)]
+                elif filtro_tipo in ('solo_pec', 'no_mail'):
+                    filtered = [x for x in parts if _is_pec(x)]
+                else:
+                    filtered = parts
+
                 if not filtered:
-                    errors.append(f"{comune_name}: Escluso Comune/Uff.Tecnico (solo indirizzi PEC)")
+                    errors.append(f"{comune_name}: Escluso Comune dal filtro ({filtro_tipo})")
                     continue
                 dest_email = ', '.join(filtered)
                 
@@ -634,17 +649,11 @@ def send_single_email(email_data, current_user):
             comune_name, smtp_settings
         )
 
-        server = connect_smtp(smtp_settings, timeout=15)
-        try:
-            server.send_message(msg)
-        finally:
-            try:
-                server.quit()
-            except Exception:
-                pass
-
-        # Salva in cartella Inviati
-        save_to_sent(smtp_settings, msg)
+        ok_send, send_err = send_smtp_message(
+            smtp_settings, msg, max_retries=3, base_delay=6, save_sent=True
+        )
+        if not ok_send:
+            raise RuntimeError(send_err or 'Errore invio email')
 
         logger.info(f"[COMUNI-EMAIL] Inviata a {dest_email} per comune {comune_name} (user={current_user})")
         return {'ok': True, 'comune': comune_name, 'email': dest_email}

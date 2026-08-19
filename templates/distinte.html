@@ -2191,16 +2191,21 @@
 
                 <!-- Filters -->
                 <div class="bulk-filter-row">
-                    <label class="bulk-select-all" style="margin:0;">
+                    <label class="bulk-select-all" style="margin:0;display:flex;align-items:center;gap:6px;">
                         <input type="checkbox" id="bulkSelectAll" onchange="toggleBulkSelectAll(this.checked)" checked>
                         <strong>Seleziona tutti</strong> (<span id="bulkEmailCount">0</span>)
                     </label>
-                    <span style="width:1px;height:20px;background:var(--border);"></span>
-                    <label>
-                        <input type="checkbox" id="bulkExcludePec" checked onchange="applicaFiltroPec()">
-                        <i class="fas fa-shield-alt" style="color:#e67e22;"></i>
-                        Escludi PEC
-                    </label>
+                    <div class="bulk-filter-presets" id="distinteBulkPresets">
+                        <span style="color:var(--text-muted);font-size:0.8rem;font-weight:600;">Filtri rapidi:</span>
+                        <button type="button" class="btn-preset" id="distPreset_tutti" onclick="applyDistinteBulkPreset('tutti')">Tutti</button>
+                        <button type="button" class="btn-preset active" id="distPreset_solo_mail" onclick="applyDistinteBulkPreset('solo_mail')">Solo MAIL</button>
+                        <button type="button" class="btn-preset" id="distPreset_solo_pec" onclick="applyDistinteBulkPreset('solo_pec')">Solo PEC</button>
+                        <button type="button" class="btn-preset" id="distPreset_monofase" onclick="applyDistinteBulkPreset('monofase')">Monofase</button>
+                        <button type="button" class="btn-preset" id="distPreset_trifase" onclick="applyDistinteBulkPreset('trifase')">Trifase</button>
+                        <button type="button" class="btn-preset" id="distPreset_semidiretta" onclick="applyDistinteBulkPreset('semidiretta')">Semidiretta</button>
+                        <button type="button" class="btn-preset" id="distPreset_con_note" onclick="applyDistinteBulkPreset('con_note')"><i class="fas fa-sticky-note" style="color:#f59e0b;font-size:0.75rem;"></i> Con Note</button>
+                        <button type="button" class="btn-preset" id="distPreset_senza_note" onclick="applyDistinteBulkPreset('senza_note')">Senza Note</button>
+                    </div>
                     <span style="color:var(--text-muted);font-size:0.85em;" id="bulkPecCount"></span>
                 </div>
 
@@ -4184,9 +4189,23 @@
                 document.getElementById('bulkPecCount').textContent = '';
             } else {
                 list.innerHTML = righe.map((r, i) => {
+                    const c = r.contatto || {};
+                    const tipoCe = (c.tipologia_contatore || c.tipo_misuratore || '').trim();
+                    const tipoStr = tipoCe.toLowerCase();
+                    let tipoBadge = '';
+                    if (tipoStr.includes('semidirett')) {
+                        tipoBadge = `<span class="badge" style="background:#8b5cf6;font-size:0.65rem;">SEMIDIRETTA</span>`;
+                    } else if (tipoStr.includes('tri')) {
+                        tipoBadge = `<span class="badge" style="background:#3b82f6;font-size:0.65rem;">TRIFASE</span>`;
+                    } else if (tipoStr.includes('mono')) {
+                        tipoBadge = `<span class="badge" style="background:#10b981;font-size:0.65rem;">MONOFASE</span>`;
+                    } else if (tipoCe) {
+                        tipoBadge = `<span class="badge" style="background:#64748b;font-size:0.65rem;">${escapeHtml(tipoCe)}</span>`;
+                    }
+
                     const notaHtml = r.nota ? `
-                        <div class="bulk-contact-note" title="${escapeHtml(r.nota)}">
-                            <i class="fas fa-sticky-note"></i>${escapeHtml(r.nota)}
+                        <div class="bulk-contact-note" style="color:#f59e0b;font-size:0.8rem;display:flex;align-items:center;gap:5px;margin-top:3px;font-weight:600;" title="${escapeHtml(r.nota)}">
+                            <i class="fas fa-sticky-note"></i> <span>${escapeHtml(r.nota)}</span>
                         </div>
                     ` : '';
                     let destHtml = '';
@@ -4197,9 +4216,12 @@
                     }
                     return `
                     <div class="bulk-contact-item ${r.pec ? 'is-pec' : ''}" data-is-pec="${r.pec}">
-                        <input type="checkbox" class="bulk-contact-check" data-pod="${r.pod}" data-email="${escapeHtml(r.email)}" data-pec="${r.pec}" data-tipo="${r.tipo}" data-idx="${i}" ${r.pec ? '' : 'checked'}>
+                        <input type="checkbox" class="bulk-contact-check" data-pod="${r.pod}" data-email="${escapeHtml(r.email)}" data-pec="${r.pec}" data-tipo="${r.tipo}" data-tipoce="${escapeHtml(tipoCe)}" data-hasnote="${Boolean(r.nota)}" data-idx="${i}" ${r.pec ? '' : 'checked'}>
                         <div class="bulk-contact-main">
-                            <div class="bulk-contact-name">${escapeHtml(r.nome)}</div>
+                            <div class="bulk-contact-name" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                                <strong>${escapeHtml(r.nome)}</strong>
+                                ${tipoBadge}
+                            </div>
                             ${notaHtml}
                         </div>
                         ${destHtml}
@@ -4211,17 +4233,23 @@
                 if (isWhatsapp) {
                     document.getElementById('bulkEmailCount').textContent = `${numNormali} numeri validi`;
                     document.getElementById('bulkPecCount').textContent = '';
-                    document.getElementById('bulkExcludePec').parentElement.style.display = 'none';
+                    const bp = document.getElementById('distinteBulkPresets');
+                    if (bp) bp.style.display = 'none';
                 } else {
                     document.getElementById('bulkEmailCount').textContent = `${numNormali} mail` + (numPec > 0 ? `, ${numPec} PEC` : '');
-                    document.getElementById('bulkPecCount').textContent = numPec > 0 ? `${numPec} PEC escluse` : '';
-                    document.getElementById('bulkExcludePec').parentElement.style.display = '';
+                    document.getElementById('bulkPecCount').textContent = numPec > 0 ? `${numPec} PEC presenti` : '';
+                    const bp = document.getElementById('distinteBulkPresets');
+                    if (bp) bp.style.display = 'flex';
                 }
             }
 
             if (righe.length > 0) {
                 document.getElementById('bulkSelectAll').checked = true;
-                if (!isWhatsapp) document.getElementById('bulkExcludePec').checked = true;
+                if (!isWhatsapp) {
+                    applyDistinteBulkPreset('solo_mail');
+                } else {
+                    applyDistinteBulkPreset('tutti');
+                }
             }
 
             // Reset progress/results
@@ -4242,23 +4270,65 @@
             document.getElementById('bulkEmailModal').classList.remove('active');
         }
 
-        function toggleBulkSelectAll(checked) {
-            const excludePec = document.getElementById('bulkExcludePec').checked;
-            document.querySelectorAll('.bulk-contact-check').forEach(cb => {
-                if (excludePec && cb.dataset.pec === 'true') {
-                    cb.checked = false;
-                } else {
-                    cb.checked = checked;
+        function applyDistinteBulkPreset(preset) {
+            document.querySelectorAll('#distinteBulkPresets .btn-preset').forEach(b => b.classList.remove('active'));
+            const activeBtn = document.getElementById(`distPreset_${preset}`);
+            if (activeBtn) activeBtn.classList.add('active');
+
+            const checks = document.querySelectorAll('.bulk-contact-check');
+            checks.forEach(cb => {
+                const isPec = cb.dataset.pec === 'true';
+                const tipo = (cb.dataset.tipoce || '').toLowerCase();
+                const hasNote = cb.dataset.hasnote === 'true';
+
+                if (preset === 'tutti') {
+                    cb.checked = true;
+                } else if (preset === 'solo_mail') {
+                    cb.checked = !isPec;
+                } else if (preset === 'solo_pec') {
+                    cb.checked = isPec;
+                } else if (preset === 'monofase') {
+                    cb.checked = tipo.includes('mono');
+                } else if (preset === 'trifase') {
+                    cb.checked = tipo.includes('tri') && !tipo.includes('semidirett');
+                } else if (preset === 'semidiretta') {
+                    cb.checked = tipo.includes('semidirett');
+                } else if (preset === 'con_note') {
+                    cb.checked = hasNote;
+                } else if (preset === 'senza_note') {
+                    cb.checked = !hasNote;
                 }
+                const item = cb.closest('.bulk-contact-item');
+                if (item) item.style.opacity = cb.checked ? '' : '0.45';
             });
+            aggiornaDistinteBulkConteggi();
         }
 
-        function applicaFiltroPec() {
-            const excludePec = document.getElementById('bulkExcludePec').checked;
-            document.querySelectorAll('.bulk-contact-check[data-pec="true"]').forEach(cb => {
-                cb.checked = !excludePec;
-                cb.closest('.bulk-contact-item').style.opacity = excludePec ? '0.4' : '';
+        function toggleBulkSelectAll(checked) {
+            document.querySelectorAll('.bulk-contact-check').forEach(cb => {
+                cb.checked = checked;
+                const item = cb.closest('.bulk-contact-item');
+                if (item) item.style.opacity = checked ? '' : '0.45';
             });
+            document.querySelectorAll('#distinteBulkPresets .btn-preset').forEach(b => b.classList.remove('active'));
+            const btn = document.getElementById(checked ? 'distPreset_tutti' : '');
+            if (btn) btn.classList.add('active');
+            aggiornaDistinteBulkConteggi();
+        }
+
+        function aggiornaDistinteBulkConteggi() {
+            const checks = document.querySelectorAll('.bulk-contact-check');
+            const checked = document.querySelectorAll('.bulk-contact-check:checked');
+            const total = checks.length;
+            const checkedCount = checked.length;
+            const allCb = document.getElementById('bulkSelectAll');
+            if (allCb) allCb.checked = checkedCount === total && total > 0;
+            const pecSelected = Array.from(checked).filter(cb => cb.dataset.pec === 'true').length;
+            const mailSelected = checkedCount - pecSelected;
+            const pecCountEl = document.getElementById('bulkPecCount');
+            if (pecCountEl && total > 0) {
+                pecCountEl.textContent = `${mailSelected} mail, ${pecSelected} PEC selezionate`;
+            }
         }
 
         function aggiornaBulkPreview() {
@@ -4438,16 +4508,17 @@
         }
 
         function renderPreviewCards() {
+            window.bulkPreviews = bulkPreviews;
             const container = document.getElementById('bulkPreviewCards');
             const tuttiAllegati = allegatiDisponibili || [];
             container.innerHTML = bulkPreviews.map((p, i) => {
                 const renderedHtml = buildMessageHtml(p.bodyHtml, p.isWhatsapp);
                 const allegatiHtml = BulkEmailPreview.renderAllegatiList(p.allegati || [], i, tuttiAllegati, 'rimuoviAllegato', 'aggiungiAllegato');
                 const numContatori = (p.contatori && p.contatori.length) || 1;
-                const contatoriBadge = numContatori > 1 ? `<span class="badge" style="background:#6366f1;font-weight:700;margin-left:6px;">${numContatori} contatori</span>` : '';
-                const podText = numContatori === 2
-                    ? `${p.contatori[0].pod || ''}, ${p.contatori[1].pod || ''}`
-                    : (numContatori > 2 ? `${numContatori} contatori` : escapeHtml(p.pod || ''));
+                const contatoriBadge = numContatori > 1 ? `<span class="badge" style="background:#6366f1;font-weight:700;margin-left:6px;white-space:nowrap;flex-shrink:0;">${numContatori} contatori</span>` : '';
+                const podText = numContatori === 1
+                    ? escapeHtml(p.pod || '')
+                    : (numContatori === 2 ? `${p.contatori[0]?.pod || ''}, ${p.contatori[1]?.pod || ''}` : '');
 
                 const notaHtml = p.note ? `
                     <span class="preview-note" title="${escapeHtml(p.note)}">
@@ -4480,7 +4551,7 @@
                             ${p.isWhatsapp ? '<i class="fab fa-whatsapp" style="color:#25D366;margin-left:5px;"></i>' : ''}
                         </span>
                         ${notaHtml}
-                        <span class="preview-pod">${podText}</span>
+                        ${podText ? `<span class="preview-pod">${podText}</span>` : ''}
                         ${(p.allegati || []).length > 0 ? `<span class="preview-allegati-badge"><i class="fas fa-paperclip"></i> ${p.allegati.length}</span>` : ''}
                         <span class="preview-card-badge" id="previewBadge${i}" style="display:none;">modificata</span>
                     </div>
@@ -4505,62 +4576,46 @@
 
         function togglePreviewCard(idx) {
             const card = document.getElementById(`previewCard${idx}`);
-            card.classList.toggle('expanded');
+            if (card) card.classList.toggle('expanded');
         }
 
         function renderAllegatiPreview(allegati, idx) {
-            let html = '<div class="allegati-list">';
-            allegati.forEach((nome, j) => {
-                html += `<div class="allegato-item">
-                    <i class="fas fa-file-pdf" style="color:#e74c3c;"></i>
-                    <span class="allegato-nome">${escapeHtml(nome)}</span>
-                    <button class="allegato-remove" onclick="rimuoviAllegato(${idx}, ${j})" title="Rimuovi">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>`;
-            });
-            // Select per aggiungere altri allegati
-            const nonPresenti = allegatiDisponibili.filter(a => !allegati.includes(a));
-            if (nonPresenti.length > 0) {
-                html += `<div class="allegato-aggiungi">
-                    <select id="addAllegatoSelect${idx}" class="allegato-select">
-                        <option value="">+ Aggiungi allegato...</option>
-                        ${nonPresenti.map(a => `<option value="${escapeHtml(a)}">${escapeHtml(a)}</option>`).join('')}
-                    </select>
-                    <button class="allegato-add-btn" onclick="aggiungiAllegato(${idx})">
-                        <i class="fas fa-plus"></i>
-                    </button>
-                </div>`;
-            }
-            if (allegati.length === 0 && nonPresenti.length === 0) {
-                html += '<div style="color:var(--text-muted);font-size:0.85em;">Nessun allegato disponibile</div>';
-            }
-            html += '</div>';
-            return html;
+            const tuttiAllegati = allegatiDisponibili || [];
+            return BulkEmailPreview.renderAllegatiList(allegati, idx, tuttiAllegati, 'rimuoviAllegato', 'aggiungiAllegato');
         }
 
         function rimuoviAllegato(previewIdx, allegatoIdx) {
             bulkPreviews[previewIdx].allegati.splice(allegatoIdx, 1);
+            bulkPreviews[previewIdx].edited = true;
+            const badge = document.getElementById(`previewBadge${previewIdx}`);
+            if (badge) badge.style.display = '';
             // Re-render solo la sezione allegati di questa card
             const section = document.getElementById(`previewAllegati${previewIdx}`);
-            section.innerHTML = `<div class="preview-field-label" style="margin-top:10px;">
-                <i class="fas fa-paperclip"></i> Allegati:
-            </div>` + renderAllegatiPreview(bulkPreviews[previewIdx].allegati, previewIdx);
+            if (section) {
+                section.innerHTML = `<div class="preview-field-label" style="margin-top:10px;">
+                    <i class="fas fa-paperclip"></i> Allegati:
+                </div>` + renderAllegatiPreview(bulkPreviews[previewIdx].allegati, previewIdx);
+            }
             // Aggiorna badge header
             aggiornaAllegatiBadge(previewIdx);
         }
 
         function aggiungiAllegato(previewIdx) {
             const select = document.getElementById(`addAllegatoSelect${previewIdx}`);
-            const nome = select.value;
+            const nome = select ? select.value : '';
             if (!nome) return;
             if (!bulkPreviews[previewIdx].allegati.includes(nome)) {
                 bulkPreviews[previewIdx].allegati.push(nome);
+                bulkPreviews[previewIdx].edited = true;
+                const badge = document.getElementById(`previewBadge${previewIdx}`);
+                if (badge) badge.style.display = '';
             }
             const section = document.getElementById(`previewAllegati${previewIdx}`);
-            section.innerHTML = `<div class="preview-field-label" style="margin-top:10px;">
-                <i class="fas fa-paperclip"></i> Allegati:
-            </div>` + renderAllegatiPreview(bulkPreviews[previewIdx].allegati, previewIdx);
+            if (section) {
+                section.innerHTML = `<div class="preview-field-label" style="margin-top:10px;">
+                    <i class="fas fa-paperclip"></i> Allegati:
+                </div>` + renderAllegatiPreview(bulkPreviews[previewIdx].allegati, previewIdx);
+            }
             aggiornaAllegatiBadge(previewIdx);
         }
 

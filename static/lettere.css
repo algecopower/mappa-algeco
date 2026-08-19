@@ -577,8 +577,44 @@ select {
     padding-top: 8px;
     border-top: 1px solid var(--border);
 }
-.research-body .research-field > label {
+.research-field-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     margin-bottom: 4px;
+}
+.btn-quick-fill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 7px;
+    font-size: 0.70rem;
+    font-weight: 600;
+    border-radius: 4px;
+    border: 1px dashed var(--border, rgba(255, 255, 255, 0.2));
+    background: var(--surface-raised, rgba(255, 255, 255, 0.05));
+    color: var(--text-muted, #94a3b8);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.btn-quick-fill:hover {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.4);
+    color: #ef4444;
+}
+[data-theme="light"] .btn-quick-fill {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+    color: #64748b;
+}
+[data-theme="light"] .btn-quick-fill:hover {
+    background: #fee2e2;
+    border-color: #f87171;
+    color: #dc2626;
+}
+.research-body .research-field > label,
+.research-body .research-field-header > label {
+    margin-bottom: 0;
     font-size: .72rem;
 }
 .research-body .research-field input {
@@ -591,7 +627,9 @@ select {
 }
 .research-footer-actions {
     display: flex;
+    align-items: center;
     gap: 8px;
+    flex-wrap: wrap;
 }
 .bulk-hint {
     margin: 12px 0;

@@ -253,12 +253,12 @@ MAPPATURA_COLONNE_DEFAULT = {
     'codice_ante': {
         'label': 'Codice Misuratore Ante',
         'descrizione': 'Codice misuratore in opera (prima della sostituzione)',
-        'nomi_default': ['Codice_Ante_Sostituzione', 'Codice misuratore in opera', 'CODICE ANTE'],
+        'nomi_default': ['Codice_Ante_Sostituzione', 'Codice misuratore in opera', 'CODICE ANTE', 'Codice', 'CODICE', 'cod.', 'Cod. Misuratore'],
     },
     'matricola_ante': {
         'label': 'Matricola Misuratore Ante',
         'descrizione': 'Matricola misuratore in opera (prima della sostituzione)',
-        'nomi_default': ['Matricola_Ante_Sostituzione', 'Matricola misuratore in opera', 'MATRICOLA ANTE'],
+        'nomi_default': ['Matricola_Ante_Sostituzione', 'Matricola misuratore in opera', 'MATRICOLA ANTE', 'Numero Matricola', 'NUMERO MATRICOLA', 'Matricola', 'MATRICOLA', 'Matr.', 'Matricola CE'],
     },
     'matricola_installata': {
         'label': 'Matricola CE Installato',

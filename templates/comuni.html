@@ -119,10 +119,14 @@
 
                 <div class="bulk-list" id="bulkList"></div>
 
-                <label style="display:flex; align-items:center; gap:8px; margin-top:10px; margin-bottom:10px; font-size: 0.9em; cursor:pointer;">
-                    <input type="checkbox" id="bulkExcludePec" checked>
-                    <i class="fas fa-shield-alt" style="color:#e67e22;"></i> Escludi PEC
-                </label>
+                <div class="bulk-filter-bar" style="margin-top:10px; margin-bottom:10px;">
+                    <div class="bulk-filter-presets" id="comuniBulkPresets">
+                        <span style="color:var(--text-muted);font-size:0.8rem;font-weight:600;">Filtri rapidi:</span>
+                        <button type="button" class="btn-preset active" id="comuniPreset_tutti" onclick="applyComuniPreset('tutti')">Tutti</button>
+                        <button type="button" class="btn-preset" id="comuniPreset_solo_mail" onclick="applyComuniPreset('solo_mail')">Solo MAIL</button>
+                        <button type="button" class="btn-preset" id="comuniPreset_solo_pec" onclick="applyComuniPreset('solo_pec')">Solo PEC</button>
+                    </div>
+                </div>
 
                 <button class="btn-soft" id="bulkPreviewBtn" onclick="generateBulkPreview()" style="margin-top: 10px; width: 100%;">
                     <i class="fas fa-eye"></i> Genera Anteprima

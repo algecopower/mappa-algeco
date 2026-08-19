@@ -24,6 +24,7 @@ from moduli.bulk_contatori_email import (
 )
 from config import PROVINCIA_ATTIVA
 
+from moduli.smtp import send_smtp_message, load_smtp_settings
 from routes.distinte import (
     _ALLEGATI_DIR,
     _ALLEGATI_DEFAULT,
@@ -31,10 +32,7 @@ from routes.distinte import (
     _TEMPLATES_JSON,
     _attach_files_to_msg,
     _build_fields_for_contact,
-    connect_smtp,
-    load_smtp_settings,
     _resolve_template_server,
-    save_to_sent,
 )
 
 logger = logging.getLogger('mappa_algeco')
@@ -380,16 +378,11 @@ def api_lettere_invia_email():
             dynamic_files=dynamic_files,
         )
 
-        server = connect_smtp(smtp_settings, timeout=15)
-        try:
-            server.send_message(msg)
-        finally:
-            try:
-                server.quit()
-            except Exception:
-                pass
-
-        save_to_sent(smtp_settings, msg)
+        ok_send, send_err = send_smtp_message(
+            smtp_settings, msg, max_retries=3, base_delay=6, save_sent=True
+        )
+        if not ok_send:
+            raise RuntimeError(send_err or 'Errore invio email')
 
         # Registra l'invio su tutte le aziende/contatori coinvolti e scrivi la nota sul DB
         for az_id in azienda_ids:
@@ -398,7 +391,7 @@ def api_lettere_invia_email():
                 continue
             pod_val = (az_item.get('pod') or '').strip()
             data_prevista = az_item.get('data_pianificazione') or contatto.get('data_intervento') or ''
-            
+
             lettere_store.registra_invio(
                 azienda_generazione_id=az_item['id'],
                 generazione_id=az_item['generazione_id'],

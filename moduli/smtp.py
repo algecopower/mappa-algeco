@@ -83,6 +83,77 @@ def connect_smtp(smtp_settings, timeout=15):
     return server
 
 
+def send_smtp_message(smtp_settings, msg, max_retries=3, base_delay=6, save_sent=True):
+    """Invia un messaggio email gestendo la connessione SMTP, l'invio e il retry
+    in caso di errori temporanei (es. SMTP 452 / 421 / 450 rate limit / policy violation,
+    disconnessione o timeout).
+
+    Ritorna:
+        (ok: bool, error_message: str | None)
+    """
+    last_err = None
+    for attempt in range(1, max_retries + 1):
+        server = None
+        try:
+            server = connect_smtp(smtp_settings, timeout=20)
+            server.send_message(msg)
+            try:
+                server.quit()
+            except Exception:
+                pass
+
+            if save_sent:
+                save_to_sent(smtp_settings, msg)
+            return True, None
+        except smtplib.SMTPAuthenticationError as e:
+            logger.error(f"[SMTP] Autenticazione SMTP fallita: {e}")
+            return False, 'Autenticazione SMTP fallita'
+        except smtplib.SMTPResponseException as e:
+            last_err = e
+            # 4xx = errori transienti/temporanei (es. 452 Too many recipients / policy violation, 421, 450, 451)
+            is_transient = (400 <= e.smtp_code < 500)
+            logger.warning(
+                f"[SMTP] Tentativo {attempt}/{max_retries} fallito con codice {e.smtp_code}: {e.smtp_error} "
+                f"(transient={is_transient})"
+            )
+            if is_transient and attempt < max_retries:
+                delay = base_delay * attempt
+                logger.info(f"[SMTP] Attesa {delay}s prima del retry su errore temporaneo {e.smtp_code}...")
+                time.sleep(delay)
+                continue
+            break
+        except (smtplib.SMTPServerDisconnected, smtplib.SMTPConnectError, TimeoutError, OSError) as e:
+            last_err = e
+            logger.warning(f"[SMTP] Tentativo {attempt}/{max_retries} fallito per errore di connessione: {e}")
+            if attempt < max_retries:
+                delay = base_delay * attempt
+                time.sleep(delay)
+                continue
+            break
+        except Exception as e:
+            last_err = e
+            logger.error(f"[SMTP] Errore imprevisto durante invio: {e}")
+            break
+        finally:
+            if server:
+                try:
+                    server.close()
+                except Exception:
+                    pass
+
+    # Gestione del messaggio di errore finale
+    if isinstance(last_err, smtplib.SMTPResponseException):
+        err_code = last_err.smtp_code
+        raw_msg = last_err.smtp_error
+        err_msg = raw_msg.decode('utf-8', errors='replace') if isinstance(raw_msg, bytes) else str(raw_msg)
+        if err_code == 452 or 'policy violation' in err_msg.lower() or 'too many' in err_msg.lower():
+            return False, f"Limite invio provider superato ({err_code}: {err_msg}). Riprova tra qualche istante o aumenta la pausa tra gli invii."
+        return False, f"Errore SMTP {err_code}: {err_msg}"
+
+    return False, str(last_err) if last_err else 'Errore sconosciuto durante l\'invio'
+
+
+
 def save_to_sent(smtp_settings, msg):
     """Salva una copia del messaggio nella cartella Inviati via IMAP.
     Deriva l'host IMAP dall'host SMTP (es. smtps.aruba.it → imaps.aruba.it)."""

@@ -365,6 +365,7 @@ function openBulkModal() {
     document.getElementById('bulkModal').classList.add('active');
     bulkPreviews = [];
     isSending = false;
+    caricaAllegatiDisponibiliComuni();
 }
 
 function closeBulkModal() {
@@ -375,6 +376,19 @@ function closeBulkModal() {
         isSending = false;
     }
     document.getElementById('bulkModal').classList.remove('active');
+}
+
+let comuniPresetFiltro = 'tutti';
+
+function applyComuniPreset(preset) {
+    comuniPresetFiltro = preset || 'tutti';
+    document.querySelectorAll('#comuniBulkPresets .btn-preset').forEach(b => b.classList.remove('active'));
+    const btn = document.getElementById(`comuniPreset_${preset}`);
+    if (btn) btn.classList.add('active');
+    
+    if (bulkPreviews.length > 0) {
+        generateBulkPreview();
+    }
 }
 
 function generateBulkPreview() {
@@ -390,7 +404,12 @@ function generateBulkPreview() {
     fetch('/api/comuni/bulk-preview', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ comuni_ids: checked, template: template, escludi_pec: document.getElementById('bulkExcludePec').checked })
+        body: JSON.stringify({
+            comuni_ids: checked,
+            template: template,
+            filtro_tipo: comuniPresetFiltro,
+            escludi_pec: (comuniPresetFiltro === 'solo_mail' || comuniPresetFiltro === 'no_pec')
+        })
     }).then(r => r.json()).then(res => {
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-eye"></i> Ricarica Anteprima';
@@ -435,19 +454,72 @@ function buildEmailHtml(bodyText) {
     return bodyText;
 }
 
+let allegatiDisponibiliComuni = [];
+
+async function caricaAllegatiDisponibiliComuni() {
+    try {
+        const resp = await fetch('/api/distinte/allegati');
+        const data = await resp.json();
+        if (data.ok) {
+            allegatiDisponibiliComuni = data.disponibili || [];
+        }
+    } catch (e) {
+        console.error("Errore caricamento allegati comuni:", e);
+    }
+}
+
+function rimuoviAllegatoComune(previewIdx, allegatoIdx) {
+    bulkPreviews[previewIdx].allegati.splice(allegatoIdx, 1);
+    segnaModificata(previewIdx);
+    const section = document.getElementById(`previewAllegati${previewIdx}`);
+    if (section) {
+        section.innerHTML = `<div class="preview-field-label" style="margin-top:10px;"><i class="fas fa-paperclip"></i> Allegati:</div>` +
+            BulkEmailPreview.renderAllegatiList(bulkPreviews[previewIdx].allegati, previewIdx, allegatiDisponibiliComuni, 'rimuoviAllegatoComune', 'aggiungiAllegatoComune');
+    }
+    const badge = document.querySelector(`#previewCard${previewIdx} .preview-allegati-badge`);
+    const count = (bulkPreviews[previewIdx].allegati || []).length;
+    if (badge) {
+        badge.innerHTML = `<i class="fas fa-paperclip"></i> ${count}`;
+        badge.style.display = count > 0 ? '' : 'none';
+    }
+}
+
+function aggiungiAllegatoComune(previewIdx) {
+    const select = document.getElementById(`addAllegatoSelect${previewIdx}`);
+    const nome = select ? select.value : '';
+    if (!nome) return;
+    if (!bulkPreviews[previewIdx].allegati.includes(nome)) {
+        bulkPreviews[previewIdx].allegati.push(nome);
+        segnaModificata(previewIdx);
+    }
+    const section = document.getElementById(`previewAllegati${previewIdx}`);
+    if (section) {
+        section.innerHTML = `<div class="preview-field-label" style="margin-top:10px;"><i class="fas fa-paperclip"></i> Allegati:</div>` +
+            BulkEmailPreview.renderAllegatiList(bulkPreviews[previewIdx].allegati, previewIdx, allegatiDisponibiliComuni, 'rimuoviAllegatoComune', 'aggiungiAllegatoComune');
+    }
+    const badge = document.querySelector(`#previewCard${previewIdx} .preview-allegati-badge`);
+    const count = (bulkPreviews[previewIdx].allegati || []).length;
+    if (badge) {
+        badge.innerHTML = `<i class="fas fa-paperclip"></i> ${count}`;
+        badge.style.display = count > 0 ? '' : 'none';
+    }
+}
+
 function renderBulkPreviews() {
+    window.bulkPreviews = bulkPreviews;
     const section = document.getElementById('bulkPreviewSection');
     let html = `<div class="preview-header-bar">
         <span><i class="fas fa-envelope"></i> ${bulkPreviews.length} email pronte per l'invio</span>
     </div>`;
     
     bulkPreviews.forEach((p, i) => {
-        const allegatiHtml = p.allegati.map(a => {
-            if(a.endsWith('.xlsx')) {
-                return `<div class="allegato-badge clickable" style="cursor:pointer;" onclick="window.open('/api/comuni/download-excel/${encodeURIComponent(p.comune)}', '_blank')"><i class="fas fa-file-excel"></i> ${escapeHtml(a)}</div>`;
-            }
-            return `<div class="allegato-badge"><i class="fas fa-file-pdf"></i> ${escapeHtml(a)}</div>`;
-        }).join('');
+        const allegatiHtml = BulkEmailPreview.renderAllegatiList(
+            p.allegati || [],
+            i,
+            allegatiDisponibiliComuni,
+            'rimuoviAllegatoComune',
+            'aggiungiAllegatoComune'
+        );
         html += `
         <div class="preview-card ${i === 0 ? 'expanded' : ''}" id="previewCard${i}">
             <div class="preview-card-header" onclick="togglePreviewCard(${i})">
@@ -478,9 +550,7 @@ function renderBulkPreviews() {
                     <div class="preview-field-label" style="margin-top:10px;">
                         <i class="fas fa-paperclip"></i> Allegati:
                     </div>
-                    <div class="allegati-list" style="display:flex; gap:5px; flex-wrap:wrap; margin-top:5px;">
-                        ${allegatiHtml}
-                    </div>
+                    ${allegatiHtml}
                 </div>
             </div>
         </div>`;

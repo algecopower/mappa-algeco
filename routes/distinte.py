@@ -2,6 +2,7 @@
 """
 Blueprint per le API PDF E-Distribuzione — gestione distinte e moduli maxy.
 """
+import io
 import os
 import re
 import tempfile
@@ -30,7 +31,7 @@ from moduli.shared import (
     _api_error, _get_colonna_note, _trova_indice_multi, _resolve_anchor_col_name,
     _callbacks, _get_username,
 )
-from moduli.smtp import load_smtp_settings, connect_smtp, save_to_sent
+from moduli.smtp import load_smtp_settings, connect_smtp, save_to_sent, send_smtp_message
 from moduli.distinte_manager import (
     parse_pdf_auto,
     classifica_contatti,
@@ -253,6 +254,136 @@ def get_allegati_disponibili():
         'disponibili': disponibili,
         'default_provincia': _ALLEGATI_DEFAULT,
         'allegato_semidiretta': _ALLEGATO_SEMIDIRETTA,
+    })
+
+
+@bp.route('/api/allegati/file/<path:filename>', methods=['GET'])
+@bp.route('/api/distinte/allegato/<path:filename>', methods=['GET'])
+@bp.route('/api/lettere/allegato/<path:filename>', methods=['GET'])
+@login_required
+def download_allegato_file(filename):
+    """Serve un file statico dalla cartella data/allegati per anteprima e download, con fallback per Excel dinamici."""
+    safe_name = os.path.basename(filename)
+    filepath = os.path.join(_ALLEGATI_DIR, safe_name)
+    if not os.path.isfile(filepath):
+        # Fallback 1: File Excel Comuni (Contatori_<Comune>.xlsx)
+        if safe_name.startswith('Contatori_') and safe_name.lower().endswith('.xlsx'):
+            comune_name = safe_name[len('Contatori_'):-len('.xlsx')]
+            try:
+                from moduli.comuni_manager import generate_excel_contatori_comune
+                excel_bytes = generate_excel_contatori_comune(comune_name)
+                if excel_bytes:
+                    return send_file(
+                        io.BytesIO(excel_bytes),
+                        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                        as_attachment=True,
+                        download_name=safe_name,
+                    )
+            except Exception as e:
+                logger.warning(f"Errore generazione fallback Excel comune {comune_name}: {e}")
+
+        # Fallback 2: File Excel Elenco Contatori (Elenco_Contatori_<Nome>.xlsx)
+        if safe_name.startswith('Elenco_Contatori_') and safe_name.lower().endswith('.xlsx'):
+            nome_az = safe_name[len('Elenco_Contatori_'):-len('.xlsx')].replace('_', ' ')
+            excel_bytes = generate_contatori_excel([], nome_azienda=nome_az)
+            return send_file(
+                io.BytesIO(excel_bytes),
+                mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                as_attachment=True,
+                download_name=safe_name,
+            )
+
+        return jsonify({'error': 'File allegato non trovato'}), 404
+
+    mimetype = 'application/pdf' if safe_name.lower().endswith('.pdf') else None
+    return send_file(
+        filepath,
+        mimetype=mimetype,
+        as_attachment=False,
+        download_name=safe_name,
+    )
+
+
+@bp.route('/api/allegati/anteprima-excel-contatori', methods=['GET', 'POST'])
+@bp.route('/api/distinte/anteprima-excel-contatori', methods=['GET', 'POST'])
+@bp.route('/api/lettere/anteprima-excel-contatori', methods=['GET', 'POST'])
+@login_required
+def api_anteprima_excel_contatori():
+    """Genera al volo il file Excel con l'elenco contatori associato per l'anteprima/download."""
+    if request.method == 'GET':
+        data = request.args
+        contatori = []
+    else:
+        data = request.get_json() or {}
+        contatori = data.get('contatori') or []
+
+    nome_azienda = data.get('nome_azienda') or 'Azienda'
+    safe_nome = sanitize_filename(nome_azienda)
+    filename = data.get('filename') or f"Elenco_Contatori_{safe_nome}.xlsx"
+    if not filename.lower().endswith('.xlsx'):
+        filename += '.xlsx'
+
+    if not contatori:
+        contatori = [{
+            'pod': '',
+            'tipologia_contatore': '',
+            'indirizzo': '',
+            'civico': '',
+            'comune': '',
+            'matricola': '',
+            'data_intervento': '',
+        }]
+
+    excel_bytes = generate_contatori_excel(contatori, nome_azienda=nome_azienda)
+    return send_file(
+        io.BytesIO(excel_bytes),
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=filename,
+    )
+
+
+ALLOWED_UPLOAD_EXTENSIONS = {
+    '.pdf', '.xlsx', '.xls', '.docx', '.doc', '.png', '.jpg', '.jpeg', '.txt', '.zip'
+}
+
+
+@bp.route('/api/allegati/upload', methods=['POST'])
+@bp.route('/api/distinte/allegati/upload', methods=['POST'])
+@bp.route('/api/lettere/allegati/upload', methods=['POST'])
+@login_required
+def api_upload_allegato():
+    """Carica un nuovo file allegato nella cartella data/allegati per usarlo negli invii."""
+    if 'file' not in request.files:
+        return jsonify({'ok': False, 'error': 'Nessun file inviato'}), 400
+
+    file = request.files['file']
+    if not file or not file.filename:
+        return jsonify({'ok': False, 'error': 'Nome file non valido'}), 400
+
+    original_name = os.path.basename(file.filename)
+    base_name, ext = os.path.splitext(original_name)
+    clean_ext = ext.lower().strip()
+
+    if clean_ext not in ALLOWED_UPLOAD_EXTENSIONS:
+        return jsonify({
+            'ok': False,
+            'error': f'Estensione non consentita ({clean_ext}). Ammessi: PDF, Excel, Word, Immagini, ZIP.'
+        }), 400
+
+    safe_base = sanitize_filename(base_name)
+    safe_name = f"{safe_base}{clean_ext}"
+
+    os.makedirs(_ALLEGATI_DIR, exist_ok=True)
+    target_path = os.path.join(_ALLEGATI_DIR, safe_name)
+    file.save(target_path)
+
+    disponibili = _get_available_allegati()
+    return jsonify({
+        'ok': True,
+        'filename': safe_name,
+        'disponibili': disponibili,
+        'message': f'File "{safe_name}" caricato con successo'
     })
 
 
@@ -525,18 +656,12 @@ def invia_singola_email():
         msg['Message-ID'] = email_utils.make_msgid(domain=from_email.split('@')[-1] if '@' in from_email else 'algecopower.it')
         msg['Date'] = email_utils.formatdate(localtime=True)
 
-        # Connessione e invio (una connessione per email)
-        server = connect_smtp(smtp_settings, timeout=15)
-        try:
-            server.send_message(msg)
-        finally:
-            try:
-                server.quit()
-            except Exception:
-                pass
-
-        # Salva in cartella Inviati
-        save_to_sent(smtp_settings, msg)
+        # Connessione e invio con retry ed exponential backoff
+        ok_send, send_err = send_smtp_message(
+            smtp_settings, msg, max_retries=3, base_delay=6, save_sent=True
+        )
+        if not ok_send:
+            raise RuntimeError(send_err or 'Errore invio email')
 
         # Rende visibile l'invio anche nell'Archivio Lettere per tutti i contatori coinvolti
         username = _get_username()

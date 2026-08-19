@@ -13,7 +13,7 @@ let aziendeController = null;
 let researchContactKey = '';
 let filterIncompleteOnly = false;
 
-const PAUSA_TRA_EMAIL_SEC = 4;
+const PAUSA_TRA_EMAIL_SEC = 5;
 const RESEARCH_AUTO_OPEN_KEY = 'lettere_research_auto_open';
 
 function esc(v) {
@@ -197,15 +197,21 @@ async function loadAziende() {
 }
 
 function renderEmailBadges(emailField) {
-    const emails = splitEmails(emailField);
-    if (!emails.length) return '<div class="mini">Nessun indirizzo</div>';
+    const raw = (emailField || '').trim();
+    if (!raw) return '<div class="mini">Nessun indirizzo</div>';
+    const emails = splitEmails(raw);
+    if (!emails.length) {
+        return `<div class="mini" style="color:var(--text-muted);font-style:italic;">${esc(raw)}</div>`;
+    }
     return `<div class="badges">${emails.map(e =>
         `<span class="badge ${e.pec ? 'pec' : ''}">${e.pec ? 'PEC' : 'MAIL'}</span>`
     ).join('')}</div>`;
 }
 
 function hasMissingContact(a) {
-    return !(a.telefono || '').trim() || splitEmails(a.email).length === 0;
+    const hasTel = Boolean((a.telefono || '').trim());
+    const hasMail = Boolean((a.email || '').trim());
+    return !hasTel || !hasMail;
 }
 
 function researchQueue() {
@@ -354,7 +360,7 @@ function renderContactResearch() {
     const queueIndex = queue.findIndex(a => (a.nominativo || '').trim().toUpperCase() === currentNom);
     const missing = [
         !(row.telefono || '').trim() ? 'telefono' : '',
-        splitEmails(row.email).length === 0 ? 'email/PEC' : ''
+        !(row.email || '').trim() ? 'email/PEC' : ''
     ].filter(Boolean);
 
     const indirizzo = [row.via, row.civico].filter(Boolean).join(' ').trim();
@@ -418,6 +424,19 @@ function renderContactResearch() {
     `).join('');
 }
 
+function setResearchField(fieldId, val) {
+    const el = document.getElementById(fieldId);
+    if (el) {
+        el.value = val;
+        el.focus();
+    }
+}
+
+function setBothNotFound() {
+    setResearchField('researchPhone', 'non trovato');
+    setResearchField('researchEmail', 'non trovata');
+}
+
 function autoOpenResearchesEnabled() {
     const el = document.getElementById('researchAutoOpen');
     return !el || el.checked;
@@ -426,7 +445,7 @@ function autoOpenResearchesEnabled() {
 function getPrimaryResearchLinks(row) {
     const googleLinks = buildResearchGroups(row)[0].links;
     const missingPhone = !(row.telefono || '').trim();
-    const missingEmail = splitEmails(row.email).length === 0;
+    const missingEmail = !(row.email || '').trim();
     const links = [];
     if (missingPhone && missingEmail) {
         links.push(googleLinks[0]);
@@ -488,13 +507,39 @@ async function saveResearchContact(openNext) {
     const telefono = document.getElementById('researchPhone').value.trim();
     const email = document.getElementById('researchEmail').value.trim();
 
+    // Trova la posizione del contatto corrente nella coda degli incompleti PRIMA dell'aggiornamento
+    const queueBefore = researchQueue();
+    const currentIndex = queueBefore.findIndex(a => (a.nominativo || '').trim().toUpperCase() === currentNom);
+
     // Aggiorna subito lo stato locale prima di cercare il prossimo contatto incompleto
     row.telefono = telefono;
     row.email = email;
     propagateContactLocally(row.nominativo, row.comune, telefono, email);
 
-    const queue = researchQueue();
-    const nextRow = queue.length > 0 ? queue[0] : null;
+    // Calcola il prossimo contatto incompleto da mostrare
+    let nextRow = null;
+    if (openNext) {
+        const queueAfter = researchQueue();
+        const stillIncomplete = hasMissingContact(row);
+
+        if (stillIncomplete) {
+            // Il contatto è ancora incompleto (es. inserito solo telefono o solo email):
+            // avanziamo al contatto successivo nella coda per non rimanere bloccati sullo stesso
+            if (currentIndex >= 0 && currentIndex + 1 < queueBefore.length) {
+                nextRow = queueBefore[currentIndex + 1];
+            } else if (queueBefore.length > 1) {
+                // Se eravamo all'ultimo elemento, ripartiamo dal primo
+                nextRow = queueBefore[0];
+            }
+        } else {
+            // Il contatto è diventato completo (telefono ed email presenti):
+            // prendiamo il nuovo elemento che si trova alla posizione currentIndex nella coda aggiornata
+            if (queueAfter.length > 0) {
+                const targetIdx = (currentIndex >= 0 && currentIndex < queueAfter.length) ? currentIndex : 0;
+                nextRow = queueAfter[targetIdx];
+            }
+        }
+    }
 
     // Apri subito le ricerche del prossimo contatto, mentre il click utente
     // è ancora valido per i popup del browser.
@@ -536,13 +581,41 @@ async function saveResearchContact(openNext) {
     }
 }
 
+let filterRecapitoVal = 'tutti';
+
+function setFilterRecapito(val) {
+    filterRecapitoVal = val || 'tutti';
+    renderAziende();
+}
+
 function visibleAziende() {
-    if (!filterIncompleteOnly) return aziende;
-    return aziende.filter(hasMissingContact);
+    return aziende.filter(a => {
+        const emails = splitEmails(a.email);
+        const hasPec = emails.some(e => e.pec);
+        const hasMail = emails.some(e => !e.pec);
+        const tipo = (a.tipo_misuratore || '').toLowerCase();
+        const note = (a.note_appuntamento || a.note || '').trim();
+
+        if (filterRecapitoVal === 'incompleti' && !hasMissingContact(a)) return false;
+        if (filterRecapitoVal === 'solo_mail' && (!hasMail || hasPec)) return false;
+        if (filterRecapitoVal === 'solo_pec' && (!hasPec || hasMail)) return false;
+        if (filterRecapitoVal === 'monofase' && !tipo.includes('mono')) return false;
+        if (filterRecapitoVal === 'trifase' && !(tipo.includes('tri') && !tipo.includes('semidirett'))) return false;
+        if (filterRecapitoVal === 'semidiretta' && !tipo.includes('semidirett')) return false;
+        if (filterRecapitoVal === 'con_note' && !note) return false;
+        if (filterRecapitoVal === 'senza_note' && note) return false;
+        if (filterRecapitoVal === 'con_email' && emails.length === 0) return false;
+        if (filterRecapitoVal === 'senza_email' && emails.length > 0) return false;
+        if (filterRecapitoVal === 'non_inviati' && (a.invii_ok || 0) > 0) return false;
+
+        return true;
+    });
 }
 
 function toggleIncompleteFilter(checked) {
-    filterIncompleteOnly = Boolean(checked);
+    filterRecapitoVal = checked ? 'incompleti' : 'tutti';
+    const sel = document.getElementById('filterRecapito');
+    if (sel) sel.value = filterRecapitoVal;
     renderAziende();
 }
 
@@ -585,7 +658,7 @@ function renderAziende() {
     const visible = visibleAziende();
     const incompleteCount = aziende.filter(hasMissingContact).length;
     let info = `${visible.length} aziende`;
-    if (filterIncompleteOnly) {
+    if (filterRecapitoVal === 'incompleti') {
         info += ' senza recapiti completi';
     } else if (incompleteCount) {
         info += ` · ${incompleteCount} da completare`;
@@ -596,9 +669,7 @@ function renderAziende() {
     document.getElementById('resultInfo').textContent = info;
     const body = document.getElementById('aziendeBody');
     if (!visible.length) {
-        body.innerHTML = filterIncompleteOnly
-            ? '<tr><td colspan="6" class="empty">Nessuna azienda senza recapiti completi</td></tr>'
-            : '<tr><td colspan="6" class="empty">Nessuna azienda trovata</td></tr>';
+        body.innerHTML = '<tr><td colspan="6" class="empty">Nessuna azienda trovata per il filtro selezionato</td></tr>';
         return;
     }
 
@@ -646,90 +717,106 @@ function renderAziende() {
     body.innerHTML = html;
 }
 
-function renderAziendaRow(a) {
+let selectedAziendeIds = new Set();
+
+function renderSearchShortcuts(a) {
+    const missing = hasMissingContact(a);
     return `
-        <tr data-id="${a.id}">
-            <td class="select-cell" data-label="Seleziona"><input type="checkbox" class="row-check" data-id="${a.id}" onchange="updateBulkButton()"></td>
-            <td data-label="Azienda">
-                <div class="azienda-title">${esc(a.nominativo)}</div>
-                <div class="azienda-meta">${esc([a.via, a.civico].filter(Boolean).join(' ') || '')}${a.comune ? ' · ' + esc(a.comune) : ''} · ${esc(a.pod || 'POD mancante')}</div>
-                <div class="mini file-meta">${esc(a.file_name || '')}</div>
-                <button class="research-trigger ${hasMissingContact(a) ? 'needs-contact' : ''}"
-                        onclick="openContactResearch(${a.id})">
-                    <i class="fas fa-magnifying-glass-location"></i>
-                    ${hasMissingContact(a) ? 'Cerca recapiti' : 'Verifica recapiti'}
-                </button>
+        <button type="button" class="research-trigger ${missing ? 'needs-contact' : ''}"
+                onclick="openContactResearch(${a.id})" title="Cerca recapiti online (Google, INI-PEC, Registro Imprese)">
+            <i class="fas fa-magnifying-glass"></i> Cerca recapiti
+        </button>
+    `;
+}
+
+function renderAziendaRow(a) {
+    const checked = selectedAziendeIds.has(Number(a.id));
+    const emails = splitEmails(a.email);
+    const missing = hasMissingContact(a);
+    const rowClass = [
+        missing ? 'incomplete-row' : '',
+        checked ? 'selected' : '',
+        a.risposta ? 'row-risposta' : '',
+        a.invii_ok > 0 ? 'row-inviata' : ''
+    ].filter(Boolean).join(' ');
+
+    const inviiLabel = a.invii_ok > 0
+        ? `<span class="badge inviata" title="Inviata ${fmtTs(a.last_sent_ts)}"><i class="fas fa-check"></i> Inviata (${a.invii_ok})</span>`
+        : '<span class="badge non-inviata">Non inviata</span>';
+
+    return `
+        <tr class="${rowClass}" data-id="${a.id}">
+            <td class="checkbox-cell">
+                <input type="checkbox" class="row-check" data-id="${a.id}" ${checked ? 'checked' : ''} onchange="onRowCheckChange(this)">
             </td>
-            <td data-label="Intervento">
-                <strong>${esc(a.data_pianificazione || '-')}</strong>
-                <div class="mini">${esc(a.ora_pianificazione || '')}</div>
-                <div class="mini">${esc(a.operatore || '')}</div>
+            <td class="azienda-cell">
+                <div class="azienda-name">
+                    ${esc(a.nominativo || 'Senza nominativo')}
+                    ${missing ? '<span class="badge da-completare" title="Recapiti mancanti">Da completare</span>' : ''}
+                </div>
+                <div class="azienda-sub">
+                    <span>${esc(a.pod || '')}</span> ·
+                    <span>${esc(a.comune || '')}</span>
+                    ${a.via ? `· <span>${esc(a.via)} ${esc(a.civico || '')}</span>` : ''}
+                </div>
+                ${renderSearchShortcuts(a)}
             </td>
-            <td data-label="Telefono">
-                <input class="edit-input" value="${esc(a.telefono || '')}"
-                       placeholder="Telefono"
-                       onkeydown="saveOnEnter(event)"
-                       onblur="saveContact('${esc(a.contact_key)}', this, null)">
+            <td class="intervento-cell">
+                <div>${esc(a.data_pianificazione || '-')}</div>
+                <div class="mini">${esc(a.ora_pianificazione || '')} ${a.operatore ? '· ' + esc(a.operatore) : ''}</div>
+            </td>
+            <td class="tel-cell" data-label="Telefono">
+                <input class="tel-input edit-input" value="${esc(a.telefono || '')}" placeholder="Tel..."
+                       onblur="saveInlineContact(${a.id}, 'telefono', this.value)">
             </td>
             <td class="email-cell" data-label="Email / PEC">
-                <input class="edit-input" value="${esc(a.email || '')}"
+                <input class="email-input edit-input" value="${esc(a.email || '')}"
                        placeholder="mail@dominio.it / pec@pec.it"
-                       onkeydown="saveOnEnter(event)"
-                       onblur="saveContact('${esc(a.contact_key)}', null, this)">
-                ${renderEmailBadges(a.email)}
-            </td>
-            <td class="response-cell" data-label="Invii e risposta">
-                <div class="send-status">
-                    ${a.invii_ok
-                        ? `<span class="badge sent">${a.invii_ok} ${a.invii_ok === 1 ? 'invio' : 'invii'}</span>`
-                        : '<span class="mini">Nessun invio registrato</span>'}
-                    <div class="mini">${a.last_sent_ts ? 'Ultimo: ' + fmtTs(a.last_sent_ts) : ''}</div>
+                       onblur="saveInlineContact(${a.id}, 'email', this.value)">
+                <div class="email-badges">
+                    ${emails.length ? emails.map(e => `<span class="badge ${e.pec ? 'pec' : ''}">${e.pec ? 'PEC' : 'MAIL'}</span>`).join('') : ((a.email || '').trim() ? `<span class="badge" style="background:var(--surface-raised, #334155);color:var(--text-muted);font-size:0.65rem;">${esc(a.email)}</span>` : '')}
                 </div>
-                <label>
-                    <input type="checkbox" id="risposta_${a.id}" ${a.risposta ? 'checked' : ''}
-                           onchange="saveRisposta(${a.id}, this.checked)">
-                    Risposta
-                </label>
-                <input class="note-input" value="${esc(a.note || '')}" placeholder="Nota risposta"
-                       onblur="saveRisposta(${a.id}, document.getElementById('risposta_${a.id}').checked, this.value)">
+            </td>
+            <td class="invii-cell">
+                <div class="invii-status">${inviiLabel}</div>
+                <div class="risposta-row">
+                    <label class="risposta-label">
+                        <input type="checkbox" class="risposta-check" ${a.risposta ? 'checked' : ''}
+                                onchange="saveRisposta(${a.id}, this.checked)">
+                        <span>Risposta</span>
+                    </label>
+                    <input class="note-input" value="${esc(a.note || '')}" placeholder="Nota risposta"
+                           onblur="saveRisposta(${a.id}, undefined, this.value)">
+                </div>
             </td>
         </tr>
     `;
 }
 
-function saveOnEnter(event) {
-    if (event.key !== 'Enter') return;
-    event.preventDefault();
-    event.target.blur();
+function onRowCheckChange(cb) {
+    const id = Number(cb.dataset.id);
+    if (cb.checked) {
+        selectedAziendeIds.add(id);
+    } else {
+        selectedAziendeIds.delete(id);
+    }
+    const tr = cb.closest('tr');
+    if (tr) tr.classList.toggle('selected', cb.checked);
+    updateBulkButton();
 }
 
-async function saveContact(contactKey, telInput, emailInput) {
-    const row = aziende.find(a => a.contact_key === contactKey);
+async function saveInlineContact(id, field, value) {
+    const row = aziende.find(a => Number(a.id) === Number(id));
     if (!row) return;
-    const payload = {};
-    if (telInput) {
-        const val = telInput.value.trim();
-        if ((row.telefono || '') === val) return;
-        payload.telefono = val;
-    }
-    if (emailInput) {
-        const val = emailInput.value.trim();
-        if ((row.email || '') === val) return;
-        payload.email = val;
-    }
+    if ((row[field] || '') === (value || '').trim()) return;
     try {
-        const res = await fetch(`/api/lettere/contatti/${encodeURIComponent(contactKey)}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+        await fetchApi(`/api/lettere/aziende/${id}/contatto`, {
+            method: 'POST',
+            body: JSON.stringify({ [field]: value.trim() })
         });
-        const data = await res.json();
-        if (!data.success) throw new Error(data.error || 'Errore salvataggio');
-        propagateContactLocally(row.nominativo, row.comune, payload.telefono, payload.email);
-        showToast(data.contatto?.sync_filone?.synced ? 'Salvato anche sul filone' : 'Contatto salvato');
+        row[field] = value.trim();
         renderAziende();
-        updateBulkButton();
-        loadStats();
+        showToast('Contatto salvato');
     } catch (e) {
         showToast(e.message, true);
     }
@@ -738,37 +825,48 @@ async function saveContact(contactKey, telInput, emailInput) {
 async function saveRisposta(id, checked, noteValue) {
     const row = aziende.find(a => Number(a.id) === Number(id));
     if (!row) return;
+    const risposta = checked !== undefined ? checked : row.risposta;
     const note = noteValue !== undefined ? noteValue : row.note;
     try {
-        const res = await fetch(`/api/lettere/aziende/${id}/risposta`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+        await fetchApi(`/api/lettere/aziende/${id}/risposta`, {
+            method: 'POST',
             body: JSON.stringify({ risposta: checked, note })
         });
-        const data = await res.json();
-        if (!data.success) throw new Error(data.error || 'Errore risposta');
-        row.risposta = checked ? 1 : 0;
+        if (checked !== undefined) row.risposta = checked ? 1 : 0;
         if (noteValue !== undefined) row.note = noteValue;
+        renderAziende();
         showToast('Risposta aggiornata');
-        loadStats();
     } catch (e) {
         showToast(e.message, true);
     }
 }
 
 function selectedAziende() {
-    const ids = [...document.querySelectorAll('.row-check:checked')].map(cb => Number(cb.dataset.id));
-    return aziende.filter(a => ids.includes(Number(a.id)));
+    return aziende.filter(a => selectedAziendeIds.has(Number(a.id)));
 }
 
 function toggleSelectAll(checked) {
-    document.querySelectorAll('.row-check').forEach(cb => { cb.checked = checked; });
+    const visible = visibleAziende();
+    visible.forEach(a => {
+        if (checked) {
+            selectedAziendeIds.add(Number(a.id));
+        } else {
+            selectedAziendeIds.delete(Number(a.id));
+        }
+    });
+    document.querySelectorAll('.row-check').forEach(cb => {
+        const id = Number(cb.dataset.id);
+        cb.checked = selectedAziendeIds.has(id);
+        const tr = cb.closest('tr');
+        if (tr) tr.classList.toggle('selected', cb.checked);
+    });
     updateBulkButton();
 }
 
 function updateBulkButton() {
     const count = selectedAziende().filter(a => splitEmails(a.email).length).length;
-    document.getElementById('bulkOpenBtn').disabled = count === 0;
+    const bulkBtn = document.getElementById('bulkOpenBtn');
+    if (bulkBtn) bulkBtn.disabled = count === 0;
 }
 
 function getDefaultAllegati(tipo) {
@@ -795,7 +893,10 @@ function openBulkModal() {
                 pod: a.pod,
                 email: e.email,
                 pec: e.pec,
-                allegati: getDefaultAllegati(a.tipo_misuratore)
+                tipo_misuratore: a.tipo_misuratore || '',
+                note: (a.note_appuntamento || a.note || a.note_filone || '').trim(),
+                allegati: getDefaultAllegati(a.tipo_misuratore),
+                azienda: a
             });
         }
     }
@@ -816,16 +917,96 @@ function closeBulkModal() {
 
 function renderBulkList() {
     const list = document.getElementById('bulkList');
-    list.innerHTML = bulkItems.map((b, i) => `
-        <div class="bulk-item">
-            <input type="checkbox" class="bulk-check" data-idx="${i}" checked>
-            <div>
-                <div class="bulk-name">${esc(b.nome)} ${b.pec ? '<span class="badge pec">PEC</span>' : '<span class="badge">MAIL</span>'}</div>
-                <div class="mini">${esc(b.email)} · ${esc(b.pod || '')}</div>
+    list.innerHTML = bulkItems.map((b, i) => {
+        const tipoStr = (b.tipo_misuratore || '').toLowerCase();
+        let tipoBadge = '';
+        if (tipoStr.includes('semidirett')) {
+            tipoBadge = `<span class="badge" style="background:#8b5cf6;font-size:0.68rem;">SEMIDIRETTA</span>`;
+        } else if (tipoStr.includes('tri')) {
+            tipoBadge = `<span class="badge" style="background:#3b82f6;font-size:0.68rem;">TRIFASE</span>`;
+        } else if (tipoStr.includes('mono')) {
+            tipoBadge = `<span class="badge" style="background:#10b981;font-size:0.68rem;">MONOFASE</span>`;
+        } else if (b.tipo_misuratore) {
+            tipoBadge = `<span class="badge" style="background:#64748b;font-size:0.68rem;">${esc(b.tipo_misuratore)}</span>`;
+        }
+
+        const noteHtml = b.note ? `
+            <div class="bulk-item-note" style="margin-top:4px;font-size:0.8rem;color:#f59e0b;display:flex;align-items:center;gap:5px;font-weight:600;">
+                <i class="fas fa-sticky-note"></i>
+                <span title="${esc(b.note)}">${esc(b.note)}</span>
             </div>
-            <div class="mini">${b.allegati.length ? b.allegati.length + ' allegati' : 'no allegati'}</div>
-        </div>
-    `).join('');
+        ` : '';
+
+        return `
+            <div class="bulk-item" style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--border);gap:12px;">
+                <div style="display:flex;align-items:flex-start;gap:10px;flex:1;min-width:0;">
+                    <input type="checkbox" class="bulk-check" data-idx="${i}" data-pec="${b.pec ? 'true' : 'false'}" data-tipo="${esc(b.tipo_misuratore)}" data-hasnote="${b.note ? 'true' : 'false'}" onchange="updateBulkSelectedCount()" checked style="margin-top:3px;">
+                    <div style="flex:1;min-width:0;">
+                        <div class="bulk-name" style="font-weight:700;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                            ${esc(b.nome)}
+                            ${b.pec ? '<span class="badge pec">PEC</span>' : '<span class="badge">MAIL</span>'}
+                            ${tipoBadge}
+                        </div>
+                        <div class="mini" style="margin-top:2px;">${esc(b.email)} · ${esc(b.pod || '')}</div>
+                        ${noteHtml}
+                    </div>
+                </div>
+                <div class="mini" style="white-space:nowrap;">${b.allegati.length ? b.allegati.length + ' allegati' : 'no allegati'}</div>
+            </div>
+        `;
+    }).join('');
+    updateBulkSelectedCount();
+}
+
+function applyBulkPreset(preset) {
+    document.querySelectorAll('.bulk-filter-presets .btn-preset').forEach(b => b.classList.remove('active'));
+    const activeBtn = document.getElementById(`presetBtn_${preset}`);
+    if (activeBtn) activeBtn.classList.add('active');
+
+    const checkboxes = document.querySelectorAll('.bulk-check');
+    checkboxes.forEach(cb => {
+        const isPec = cb.dataset.pec === 'true';
+        const tipo = (cb.dataset.tipo || '').toLowerCase();
+        const hasNote = cb.dataset.hasnote === 'true';
+
+        if (preset === 'tutti') {
+            cb.checked = true;
+        } else if (preset === 'solo_mail') {
+            cb.checked = !isPec;
+        } else if (preset === 'solo_pec') {
+            cb.checked = isPec;
+        } else if (preset === 'monofase') {
+            cb.checked = tipo.includes('mono');
+        } else if (preset === 'trifase') {
+            cb.checked = tipo.includes('tri') && !tipo.includes('semidirett');
+        } else if (preset === 'semidiretta') {
+            cb.checked = tipo.includes('semidirett');
+        } else if (preset === 'con_note') {
+            cb.checked = hasNote;
+        } else if (preset === 'senza_note') {
+            cb.checked = !hasNote;
+        }
+    });
+    updateBulkSelectedCount();
+}
+
+function updateBulkSelectedCount() {
+    const total = document.querySelectorAll('.bulk-check').length;
+    const checked = document.querySelectorAll('.bulk-check:checked').length;
+    const countEl = document.getElementById('bulkSelectedCount');
+    if (countEl) countEl.textContent = `${checked} / ${total}`;
+    const allCb = document.getElementById('bulkSelectAll');
+    if (allCb) allCb.checked = checked === total && total > 0;
+}
+
+function toggleBulkSelectAll(checked) {
+    document.querySelectorAll('.bulk-check').forEach(cb => {
+        cb.checked = checked;
+    });
+    document.querySelectorAll('.bulk-filter-presets .btn-preset').forEach(b => b.classList.remove('active'));
+    const btn = document.getElementById(checked ? 'presetBtn_tutti' : '');
+    if (btn) btn.classList.add('active');
+    updateBulkSelectedCount();
 }
 
 function contattoDaAzienda(a, emailDest) {
@@ -844,6 +1025,7 @@ function contattoDaAzienda(a, emailDest) {
         tipologia_contatore: a.tipo_misuratore || '',
         nome_societa: a.nominativo || '',
         nome_referente: '',
+        note: (a.note_appuntamento || a.note || a.note_filone || '').trim(),
     };
 }
 
@@ -863,7 +1045,7 @@ function generaAnteprima() {
     }
     const tmpl = TEMPLATES[templateId];
     if (!tmpl) {
-        showToast('Template non trovato', true);
+        showToast('Template non valido', true);
         return;
     }
     const checkboxes = document.querySelectorAll('.bulk-check:checked');
@@ -932,6 +1114,7 @@ function generaAnteprima() {
         return;
     }
 
+    window.bulkPreviews = bulkPreviews;
     renderPreviewCards();
     document.getElementById('bulkSetupSection').style.display = 'none';
     document.getElementById('bulkPreviewSection').style.display = 'block';
@@ -948,16 +1131,67 @@ function chiudiAnteprima() {
 }
 
 function renderPreviewCards() {
+    window.bulkPreviews = bulkPreviews;
     const container = document.getElementById('bulkPreviewCards');
     const tuttiAllegati = allegatiInfo.allegati_disponibili || [];
     container.innerHTML = bulkPreviews.map((p, i) => {
         const renderedHtml = buildMessageHtml(p.bodyHtml);
         const allegatiHtml = BulkEmailPreview.renderAllegatiList(p.allegati || [], i, tuttiAllegati, 'rimuoviAllegato', 'aggiungiAllegato');
         const numContatori = (p.contatori && p.contatori.length) || 1;
-        const contatoriBadge = numContatori > 1 ? `<span class="badge" style="background:#6366f1;font-weight:700;">${numContatori} contatori</span>` : '';
-        const podText = numContatori === 2
-            ? `${p.contatori[0].pod || ''}, ${p.contatori[1].pod || ''}`
-            : (numContatori > 2 ? `${numContatori} contatori` : esc(p.pod || ''));
+        const contatoriBadge = numContatori > 1 ? `<span class="badge" style="background:#6366f1;font-weight:700;white-space:nowrap;flex-shrink:0;">${numContatori} contatori</span>` : '';
+        const podText = numContatori === 1
+            ? esc(p.pod || '')
+            : (numContatori === 2 ? `${p.contatori[0]?.pod || ''}, ${p.contatori[1]?.pod || ''}` : '');
+
+        // Nota di intestazione
+        let headerNoteHtml = '';
+        if (numContatori === 1 && p.contatori[0]?.note) {
+            headerNoteHtml = `<span class="preview-note" title="${esc(p.contatori[0].note)}"><i class="fas fa-sticky-note"></i> ${esc(p.contatori[0].note)}</span>`;
+        } else if (numContatori > 1) {
+            const withNotes = p.contatori.filter(c => c.note);
+            if (withNotes.length > 0) {
+                const noteSummary = withNotes.map(c => `${c.pod}: ${c.note}`).join(' | ');
+                headerNoteHtml = `<span class="preview-note" title="${esc(noteSummary)}"><i class="fas fa-sticky-note"></i> ${withNotes.length} con note</span>`;
+            }
+        }
+
+        // Sezione dettagli contatori e note
+        let contatoriDetailHtml = '';
+        if (numContatori === 1) {
+            const singleNote = p.contatori[0]?.note;
+            if (singleNote) {
+                contatoriDetailHtml = `
+                    <div class="preview-note-box">
+                        <i class="fas fa-sticky-note"></i>
+                        <span><strong>Nota contatore:</strong> ${esc(singleNote)}</span>
+                    </div>
+                `;
+            }
+        } else {
+            contatoriDetailHtml = `
+                <div class="preview-contatori-section">
+                    <div class="preview-field-label" style="margin-top:0;"><i class="fas fa-list-check"></i> Elenco contatori e note (${numContatori}):</div>
+                    <div class="preview-contatori-list">
+                        ${p.contatori.map((c, idx) => `
+                            <div class="preview-contatore-item">
+                                <div class="preview-contatore-main">
+                                    <span class="preview-contatore-idx">#${idx + 1}</span>
+                                    <span class="preview-contatore-pod"><strong>POD:</strong> ${esc(c.pod || '')}</span>
+                                    ${c.indirizzo ? `<span class="preview-contatore-addr">${esc(c.indirizzo)} ${esc(c.civico || '')} (${esc(c.comune || '')})</span>` : ''}
+                                    ${c.tipologia_contatore ? `<span class="badge" style="font-size:0.7rem;">${esc(c.tipologia_contatore)}</span>` : ''}
+                                </div>
+                                ${c.note ? `
+                                    <div class="preview-contatore-note-box">
+                                        <i class="fas fa-sticky-note"></i>
+                                        <span><strong>Nota:</strong> ${esc(c.note)}</span>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
 
         return `
             <div class="preview-card ${i === 0 ? 'expanded' : ''}" id="previewCard${i}">
@@ -968,11 +1202,13 @@ function renderPreviewCards() {
                         ${contatoriBadge}
                         ${p.pec ? '<span class="badge pec">PEC</span>' : '<span class="badge">MAIL</span>'}
                     </span>
-                    <span class="preview-pod">${podText}</span>
+                    ${podText ? `<span class="preview-pod">${podText}</span>` : ''}
+                    ${headerNoteHtml}
                     ${(p.allegati || []).length > 0 ? `<span class="preview-allegati-badge"><i class="fas fa-paperclip"></i> ${p.allegati.length}</span>` : ''}
                     <span class="preview-card-badge edited" id="previewBadge${i}" style="${p.edited ? '' : 'display:none;'}">modificata</span>
                 </div>
                 <div class="preview-card-body">
+                    ${contatoriDetailHtml}
                     <div class="preview-field-label">Oggetto:</div>
                     <input type="text" class="preview-subject-input" id="previewSubject${i}"
                            value="${esc(p.subject)}"

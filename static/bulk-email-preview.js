@@ -232,7 +232,215 @@
         },
 
         /**
-         * Rendering della lista allegati con supporto sia a PDF che Excel dinamici.
+         * Scarica o visualizza l'allegato selezionato (PDF statico o Excel dinamico).
+         */
+        scaricaAllegato: async function (nome, previewIdx) {
+            if (!nome) return;
+            const isXlsx = String(nome).toLowerCase().endsWith('.xlsx');
+
+            if (isXlsx) {
+                let item = null;
+                const previews = (typeof window !== 'undefined' && Array.isArray(window.bulkPreviews) && window.bulkPreviews) ||
+                                 (typeof bulkPreviews !== 'undefined' && Array.isArray(bulkPreviews) && bulkPreviews) || [];
+                if (typeof previewIdx === 'number' && previews[previewIdx]) {
+                    item = previews[previewIdx];
+                }
+
+                // 1. Caso Lettere / Distinte con elenco contatori
+                const contatori = (item && item.contatori && item.contatori.length > 0)
+                    ? item.contatori
+                    : (item && item.contatto ? [item.contatto] : null);
+
+                if (contatori && contatori.length > 0) {
+                    try {
+                        const resp = await fetch('/api/allegati/anteprima-excel-contatori', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                contatori: contatori,
+                                nome_azienda: item.nome || item.nome_societa || item.nominativo || 'Azienda',
+                                filename: nome
+                            })
+                        });
+                        if (resp.ok) {
+                            const blob = await resp.blob();
+                            const url = window.URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = nome;
+                            document.body.appendChild(a);
+                            a.click();
+                            a.remove();
+                            window.URL.revokeObjectURL(url);
+                            return;
+                        } else {
+                            const errData = await resp.json().catch(() => ({}));
+                            console.error('Errore generazione Excel contatori:', errData);
+                            if (typeof showToast === 'function') {
+                                showToast(errData.error || 'Errore generazione Excel contatori', true);
+                            }
+                            return;
+                        }
+                    } catch (e) {
+                        console.error('Errore download excel contatori:', e);
+                        if (typeof showToast === 'function') {
+                            showToast('Errore durante il download dell\'Excel', true);
+                        }
+                        return;
+                    }
+                }
+
+                // 2. Caso Comuni con Excel per comune
+                if (item && item.comune) {
+                    window.open('/api/comuni/download-excel/' + encodeURIComponent(item.comune), '_blank');
+                    return;
+                }
+
+                // Fallback nome Contatori_<comune>.xlsx
+                if (/^Contatori_.+\.xlsx$/i.test(nome)) {
+                    const comuneName = nome.replace(/^Contatori_/i, '').replace(/\.xlsx$/i, '');
+                    window.open('/api/comuni/download-excel/' + encodeURIComponent(comuneName), '_blank');
+                    return;
+                }
+            }
+
+            // File statico (PDF o altro allegato archiviato)
+            window.open('/api/allegati/file/' + encodeURIComponent(nome), '_blank');
+        },
+
+        /**
+         * Apre il file picker per caricare un file dal PC e aggiungerlo alla card di anteprima.
+         */
+        triggerUpload: function (previewIdx) {
+            let input = document.getElementById('bulkFileUploadInputGlobal');
+            if (!input) {
+                input = document.createElement('input');
+                input.type = 'file';
+                input.id = 'bulkFileUploadInputGlobal';
+                input.style.display = 'none';
+                input.accept = '.pdf,.xlsx,.xls,.docx,.doc,.png,.jpg,.jpeg,.zip';
+                document.body.appendChild(input);
+            }
+            input.onchange = async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                await BulkEmailPreview.uploadFile(file, previewIdx);
+                input.value = '';
+            };
+            input.click();
+        },
+
+        /**
+         * Esegue l'upload del file al backend e lo aggancia alla card di anteprima.
+         */
+        uploadFile: async function (file, previewIdx) {
+            if (!file) return;
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const resp = await fetch('/api/allegati/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const res = await resp.json();
+                if (!res.ok) {
+                    if (typeof showToast === 'function') {
+                        showToast(res.error || 'Errore caricamento file', true);
+                    } else {
+                        alert(res.error || 'Errore caricamento file');
+                    }
+                    return;
+                }
+
+                const filename = res.filename;
+
+                // Aggiorna l'elenco globale degli allegati disponibili
+                if (typeof allegatiInfo !== 'undefined' && allegatiInfo.allegati_disponibili) {
+                    if (!allegatiInfo.allegati_disponibili.includes(filename)) {
+                        allegatiInfo.allegati_disponibili.push(filename);
+                    }
+                }
+                if (typeof allegatiDisponibili !== 'undefined' && Array.isArray(allegatiDisponibili)) {
+                    if (!allegatiDisponibili.includes(filename)) {
+                        allegatiDisponibili.push(filename);
+                    }
+                }
+
+                // Aggiunge l'allegato alla card di anteprima corrente
+                if (typeof window !== 'undefined' && Array.isArray(window.bulkPreviews) && window.bulkPreviews[previewIdx]) {
+                    const item = window.bulkPreviews[previewIdx];
+                    if (!item.allegati) item.allegati = [];
+                    if (!item.allegati.includes(filename)) {
+                        item.allegati.push(filename);
+                        item.edited = true;
+                    }
+
+                    const badge = document.getElementById(`previewBadge${previewIdx}`);
+                    if (badge) badge.style.display = '';
+
+                    if (typeof aggiungiAllegato === 'function') {
+                        const section = document.getElementById(`previewAllegati${previewIdx}`);
+                        const tuttiAllegati = (typeof allegatiInfo !== 'undefined' && allegatiInfo.allegati_disponibili) ||
+                                              (typeof allegatiDisponibili !== 'undefined' && allegatiDisponibili) || [];
+                        if (section) {
+                            section.innerHTML = `<div class="preview-field-label" style="margin-top:10px;"><i class="fas fa-paperclip"></i> Allegati:</div>` +
+                                BulkEmailPreview.renderAllegatiList(item.allegati, previewIdx, tuttiAllegati, 'rimuoviAllegato', 'aggiungiAllegato');
+                        }
+                    } else if (typeof renderPreviewCards === 'function') {
+                        renderPreviewCards();
+                    } else if (typeof renderBulkPreviews === 'function') {
+                        renderBulkPreviews();
+                    }
+
+                    if (typeof aggiornaAllegatiBadge === 'function') {
+                        aggiornaAllegatiBadge(previewIdx);
+                    }
+
+                    if (typeof showToast === 'function') {
+                        showToast(`File "${filename}" caricato e inserito!`);
+                    }
+                }
+            } catch (err) {
+                console.error("Errore upload allegato:", err);
+                if (typeof showToast === 'function') {
+                    showToast('Errore di comunicazione durante il caricamento del file.', true);
+                }
+            }
+        },
+
+        /**
+         * Applica un allegato a tutte le card di anteprima correnti.
+         */
+        applicaAllegatoATutti: function (filename) {
+            if (!filename || typeof window === 'undefined' || !Array.isArray(window.bulkPreviews)) return;
+            if (!confirm(`Vuoi inserire l'allegato "${filename}" in tutte le email in anteprima?`)) return;
+
+            window.bulkPreviews.forEach((item, idx) => {
+                if (!item.allegati) item.allegati = [];
+                if (!item.allegati.includes(filename)) {
+                    item.allegati.push(filename);
+                    item.edited = true;
+                }
+                const badge = document.getElementById(`previewBadge${idx}`);
+                if (badge) badge.style.display = '';
+                if (typeof aggiornaAllegatiBadge === 'function') {
+                    aggiornaAllegatiBadge(idx);
+                }
+            });
+
+            if (typeof renderPreviewCards === 'function') {
+                renderPreviewCards();
+            } else if (typeof renderBulkPreviews === 'function') {
+                renderBulkPreviews();
+            }
+            if (typeof showToast === 'function') {
+                showToast(`Allegato "${filename}" applicato a tutte le email!`);
+            }
+        },
+
+        /**
+         * Rendering della lista allegati con supporto sia a PDF che Excel dinamici, download e upload manuale.
          */
         renderAllegatiList: function (allegati, previewIdx, tuttiAllegati, onRemoveFn, onAddFn) {
             const removeName = onRemoveFn || 'rimuoviAllegato';
@@ -240,35 +448,56 @@
             let html = '<div class="allegati-list">';
             (allegati || []).forEach((nome, j) => {
                 const isXlsx = String(nome).toLowerCase().endsWith('.xlsx');
-                const iconClass = isXlsx ? 'fas fa-file-excel' : 'fas fa-file-pdf';
-                const iconColor = isXlsx ? '#10b981' : '#ef4444';
-                const extraBadge = isXlsx ? '<span class="badge" style="background:#10b981;font-size:0.65rem;margin-left:6px;">Generato Auto</span>' : '';
+                const isImg = /\.(png|jpe?g|gif|webp)$/i.test(String(nome));
+                const iconClass = isXlsx ? 'fas fa-file-excel' : (isImg ? 'fas fa-file-image' : 'fas fa-file-pdf');
+                const iconColor = isXlsx ? '#10b981' : (isImg ? '#8b5cf6' : '#ef4444');
+                const extraBadge = isXlsx && nome.toLowerCase().includes('elenco_contatori') ? '<span class="badge" style="background:#10b981;font-size:0.65rem;margin-left:6px;">Generato Auto</span>' : '';
                 html += `
                     <div class="allegato-item">
                         <i class="${iconClass}" style="color:${iconColor};"></i>
-                        <span class="allegato-nome">${this.escapeHtml(nome)}${extraBadge}</span>
-                        <button type="button" class="allegato-remove" onclick="${removeName}(${previewIdx}, ${j})" title="Rimuovi">
+                        <span class="allegato-nome clickable" onclick="BulkEmailPreview.scaricaAllegato('${this.escapeHtml(nome)}', ${previewIdx})" title="Clicca per scaricare o visualizzare">
+                            ${this.escapeHtml(nome)}${extraBadge}
+                        </span>
+                        <button type="button" class="allegato-download" onclick="BulkEmailPreview.scaricaAllegato('${this.escapeHtml(nome)}', ${previewIdx})" title="Scarica / Visualizza allegato">
+                            <i class="fas fa-download"></i>
+                        </button>
+                        <button type="button" class="allegato-apply-all" onclick="BulkEmailPreview.applicaAllegatoATutti('${this.escapeHtml(nome)}')" title="Aggiungi questo allegato a tutte le email">
+                            <i class="fas fa-layer-group"></i>
+                        </button>
+                        <button type="button" class="allegato-remove" onclick="${removeName}(${previewIdx}, ${j})" title="Rimuovi da questa email">
                             <i class="fas fa-times"></i>
                         </button>
                     </div>
                 `;
             });
+
             const nonPresenti = (tuttiAllegati || []).filter(a => !(allegati || []).includes(a));
+            html += '<div class="allegati-actions-row" style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;">';
+
             if (nonPresenti.length > 0) {
                 html += `
-                    <div class="allegato-aggiungi">
+                    <div class="allegato-aggiungi" style="margin-top:0;">
                         <select id="addAllegatoSelect${previewIdx}" class="allegato-select">
-                            <option value="">+ Aggiungi allegato...</option>
+                            <option value="">+ Aggiungi file da archivio...</option>
                             ${nonPresenti.map(a => `<option value="${this.escapeHtml(a)}">${this.escapeHtml(a)}</option>`).join('')}
                         </select>
-                        <button type="button" class="allegato-add-btn" onclick="${addName}(${previewIdx})">
+                        <button type="button" class="allegato-add-btn" onclick="${addName}(${previewIdx})" title="Aggiungi">
                             <i class="fas fa-plus"></i>
                         </button>
                     </div>
                 `;
             }
+
+            html += `
+                <button type="button" class="btn-preset allegato-upload-btn" onclick="BulkEmailPreview.triggerUpload(${previewIdx})" title="Carica un nuovo file dal tuo computer" style="display:flex;align-items:center;gap:6px;">
+                    <i class="fas fa-cloud-arrow-up"></i> Carica dal PC
+                </button>
+            `;
+
+            html += '</div>';
+
             if ((!allegati || allegati.length === 0) && nonPresenti.length === 0) {
-                html += '<div class="mini" style="color:var(--text-muted);">Nessun allegato disponibile</div>';
+                html += '<div class="mini" style="color:var(--text-muted);margin-top:4px;">Nessun allegato presente</div>';
             }
             html += '</div>';
             return html;

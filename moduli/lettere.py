@@ -514,6 +514,8 @@ def list_aziende(generazione_id=None, search='', limit=500, provincia=None):
             COALESCE(NULLIF(c.email, ''), NULLIF(c_same.email, ''), NULLIF(lr.email, ''), f.email, fe.email, f_same.email) AS email,
             COALESCE(NULLIF(lr.via, ''), NULLIF(f.indirizzo, ''), NULLIF(fe.indirizzo, '')) AS via,
             COALESCE(NULLIF(lr.civico, ''), NULLIF(f.civico, ''), NULLIF(fe.civico, '')) AS civico,
+            COALESCE(NULLIF(ag.note, ''), NULLIF(f.note_appuntamento, ''), NULLIF(fe.note_appuntamento, ''), f_same.note_appuntamento, '') AS note_appuntamento,
+            COALESCE(NULLIF(f.note_appuntamento, ''), NULLIF(fe.note_appuntamento, ''), f_same.note_appuntamento, '') AS note_filone,
             lr.cap,
             lr.eneltel,
             lr.lcl,
@@ -522,7 +524,9 @@ def list_aziende(generazione_id=None, search='', limit=500, provincia=None):
             COALESCE(f.longitudine, fe.longitudine) AS longitudine,
             COALESCE(ic.invii_ok, ia.invii_ok, 0) AS invii_ok,
             COALESCE(ia.invii_ok, 0) AS invii_generazione,
-            COALESCE(ic.last_sent_ts, ia.last_sent_ts) AS last_sent_ts
+            COALESCE(ic.last_sent_ts, ia.last_sent_ts) AS last_sent_ts,
+            COALESCE(NULLIF(f.codice_ante, ''), NULLIF(fe.codice_ante, ''), f_same.codice_ante, '') AS codice_ante,
+            COALESCE(NULLIF(f.matricola_ante, ''), NULLIF(fe.matricola_ante, ''), f_same.matricola_ante, '') AS matricola_ante
         FROM lettere_aziende_generazione ag
         JOIN lettere_generazioni g ON g.id=ag.generazione_id
         LEFT JOIN lettere_contatti c
@@ -548,7 +552,10 @@ def list_aziende(generazione_id=None, search='', limit=500, provincia=None):
                 MAX(latitudine) AS latitudine,
                 MAX(longitudine) AS longitudine,
                 MAX(indirizzo) AS indirizzo,
-                MAX(civico) AS civico
+                MAX(civico) AS civico,
+                MAX(note_appuntamento) AS note_appuntamento,
+                MAX(codice_ante) AS codice_ante,
+                MAX(matricola_ante) AS matricola_ante
             FROM filone
             WHERE TRIM(COALESCE(pod, ''))!=''
             GROUP BY 1
@@ -558,7 +565,10 @@ def list_aziende(generazione_id=None, search='', limit=500, provincia=None):
                 UPPER(TRIM(COALESCE(nominativo, ''))) AS nom_norm,
                 UPPER(TRIM(COALESCE(comune, ''))) AS com_norm,
                 MAX(NULLIF(telefono, '')) AS telefono,
-                MAX(NULLIF(email, '')) AS email
+                MAX(NULLIF(email, '')) AS email,
+                MAX(NULLIF(note_appuntamento, '')) AS note_appuntamento,
+                MAX(NULLIF(codice_ante, '')) AS codice_ante,
+                MAX(NULLIF(matricola_ante, '')) AS matricola_ante
             FROM filone
             WHERE TRIM(COALESCE(nominativo, ''))!=''
             GROUP BY 1, 2
@@ -581,7 +591,10 @@ def list_aziende(generazione_id=None, search='', limit=500, provincia=None):
                 MAX(latitudine) AS latitudine,
                 MAX(longitudine) AS longitudine,
                 MAX(indirizzo) AS indirizzo,
-                MAX(civico) AS civico
+                MAX(civico) AS civico,
+                MAX(note_appuntamento) AS note_appuntamento,
+                MAX(codice_ante) AS codice_ante,
+                MAX(matricola_ante) AS matricola_ante
             FROM filone
             WHERE TRIM(COALESCE(eneltel_key, ''))!=''
             GROUP BY 1
@@ -912,7 +925,14 @@ def get_azienda(azienda_id, provincia=None):
                 WHERE UPPER(TRIM(COALESCE(f.pod, '')))=UPPER(TRIM(COALESCE(ag.pod, '')))
                 ORDER BY f.sheets_row
                 LIMIT 1
-            ) AS matricola_ante
+            ) AS matricola_ante,
+            (
+                SELECT f.note_appuntamento
+                FROM filone f
+                WHERE UPPER(TRIM(COALESCE(f.pod, '')))=UPPER(TRIM(COALESCE(ag.pod, '')))
+                ORDER BY f.sheets_row
+                LIMIT 1
+            ) AS note_appuntamento
         FROM lettere_aziende_generazione ag
         JOIN lettere_generazioni g ON g.id=ag.generazione_id
         LEFT JOIN lettere_contatti c
@@ -921,7 +941,8 @@ def get_azienda(azienda_id, provincia=None):
             SELECT
                 UPPER(TRIM(COALESCE(pod, ''))) AS pod,
                 MAX(telefono) AS telefono,
-                MAX(email) AS email
+                MAX(email) AS email,
+                MAX(note_appuntamento) AS note_appuntamento
             FROM filone
             WHERE TRIM(COALESCE(pod, ''))!=''
             GROUP BY 1

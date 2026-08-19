@@ -400,3 +400,50 @@ def test_propagazione_contatti_stessa_azienda_comune(tmp_path, db_isolato, monke
     assert aziende_dopo[1]['email'] == 'info@betalogistica.it'
 
 
+def test_note_appuntamento_filone_in_list_aziende(tmp_path, db_isolato, monkeypatch):
+    import config
+    from moduli import lettere
+
+    monkeypatch.setattr(config, 'PROVINCIA_ATTIVA', 'TORINO', raising=False)
+    conn = db_isolato.get_conn()
+    with conn:
+        db_isolato.upsert_filone_row(
+            conn,
+            eneltel_key='2001',
+            sheets_row=3,
+            typed_values={
+                'pod': 'IT001E00000099',
+                'telefono': '011111111',
+                'email': 'gamma@test.it',
+                'note_appuntamento': 'Citofonare custode scala B',
+            },
+            extra_values={},
+            row_hash='r_gamma',
+            source='bootstrap',
+        )
+
+    path = tmp_path / 'lettere_gamma.xlsx'
+    path.write_bytes(b'gamma-test')
+
+    righe = [
+        _riga_azienda(
+            nominativo='GAMMA SPA',
+            comune='TORINO',
+            pod='IT001E00000099',
+            eneltel='2001',
+        ),
+    ]
+    info = lettere.registra_generazione(
+        str(path),
+        '2026-06-15',
+        '2026-06-15',
+        righe,
+        provincia='TORINO',
+    )
+
+    aziende = lettere.list_aziende(generazione_id=info['generazione_id'])
+    assert len(aziende) == 1
+    assert aziende[0]['note_appuntamento'] == 'Citofonare custode scala B'
+
+
+

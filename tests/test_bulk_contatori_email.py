@@ -69,9 +69,9 @@ def test_registra_nota_su_db(db_isolato):
     ok = registra_nota_su_db(pod, "18/08 mandata mail per 25/08", user='tecnico')
     assert ok is True
 
-    # Verifica sul DB
+    # Verifica sul DB (la nota deve essere in testa)
     row = db.get_filone_row(eneltel)
-    assert "cliente non risponde // 18/08 mandata mail per 25/08" in row['note_appuntamento']
+    assert "18/08 mandata mail per 25/08 // cliente non risponde" == row['note_appuntamento']
 
     # Se richiamata con la stessa nota non duplica
     ok2 = registra_nota_su_db(pod, "18/08 mandata mail per 25/08", user='tecnico')

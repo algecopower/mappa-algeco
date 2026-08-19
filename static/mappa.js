@@ -1677,22 +1677,152 @@ function selectAddressResult(lat, lon, displayName) {
 }
 
 // ============================================================
-// GESTIONALE PANEL
+// GESTIONALE MODAL - Hub strumenti e moduli
 // ============================================================
-function toggleGestionalePanel() {
-    const panel = document.getElementById('gestionalePanel');
-    panel.classList.toggle('visible');
+let currentGestionaleCategory = 'all';
+
+function toggleGestionaleModal() {
+    const id = 'gestionaleModal';
+    const isOpening = !UiModal.isOpen(id);
+    UiModal.toggle(id);
+    if (isOpening) {
+        resetGestionaleSearch();
+        if (typeof lucide !== 'undefined' && lucide.createIcons) {
+            lucide.createIcons();
+        }
+        setTimeout(() => {
+            const searchInput = document.getElementById('gestionaleSearchInput');
+            if (searchInput) searchInput.focus();
+        }, 120);
+    }
 }
 
-// Chiudi panel se si clicca fuori
-document.addEventListener('click', function(e) {
-    const panel = document.getElementById('gestionalePanel');
-    const fab = document.getElementById('gestionaleFab');
-    if (panel && panel.classList.contains('visible') && 
-        !panel.contains(e.target) && !fab.contains(e.target)) {
-        panel.classList.remove('visible');
+// Alias retrocompatibile per il pulsante FAB e tour
+function toggleGestionalePanel() {
+    toggleGestionaleModal();
+}
+
+function apriDaGestionale(action) {
+    UiModal.close('gestionaleModal');
+    switch (action) {
+        case 'orari-lettere':
+            setTimeout(() => toggleOrariLettereModal(), 120);
+            break;
+        case 'boxbeat':
+            setTimeout(() => apriModalBOXBEAT(), 120);
+            break;
+        case 'sigilli':
+            setTimeout(() => apriVistaSigilli(), 120);
+            break;
+        case 'verifica-indirizzi':
+            setTimeout(() => apriModalVerificaIndirizzi(), 120);
+            break;
+        case 'filone':
+            window.open('/filone', '_blank', 'noopener');
+            break;
+        case 'lettere':
+            window.open('/lettere', '_blank', 'noopener');
+            break;
+        case 'distinte':
+            window.open('/distinte', '_blank', 'noopener');
+            break;
+        case 'comuni':
+            window.open('/comuni', '_blank', 'noopener');
+            break;
+        case 'calendario':
+            window.open('/calendario', '_blank', 'noopener');
+            break;
+        case 'appuntamenti':
+            window.open('/appuntamenti', '_blank', 'noopener');
+            break;
+        case 'dashboard':
+            window.open('/dashboard', '_blank', 'noopener');
+            break;
+        case 'report':
+            window.open('/report', '_blank', 'noopener');
+            break;
+        case 'backup':
+            setTimeout(() => apriModalBackup(), 120);
+            break;
+        case 'admin':
+            apriImpostazioni();
+            break;
+        case 'logout':
+            setTimeout(() => effettuaLogout(), 120);
+            break;
     }
-});
+}
+
+function filtraCategoriaGestionale(cat) {
+    currentGestionaleCategory = cat;
+    document.querySelectorAll('.gestionale-chip').forEach(chip => {
+        chip.classList.toggle('active', chip.dataset.cat === cat);
+    });
+    filtraFunzioniGestionale();
+}
+
+function resetGestionaleSearch() {
+    const input = document.getElementById('gestionaleSearchInput');
+    if (input) input.value = '';
+    currentGestionaleCategory = 'all';
+    document.querySelectorAll('.gestionale-chip').forEach(chip => {
+        chip.classList.toggle('active', chip.dataset.cat === 'all');
+    });
+    filtraFunzioniGestionale();
+    if (input) input.focus();
+}
+
+function filtraFunzioniGestionale() {
+    const input = document.getElementById('gestionaleSearchInput');
+    const q = (input ? input.value : '').trim().toLowerCase();
+    const clearBtn = document.getElementById('gestionaleSearchClear');
+    if (clearBtn) clearBtn.style.display = q ? 'flex' : 'none';
+
+    let totalVisible = 0;
+    const sections = document.querySelectorAll('.gestionale-section');
+    const emptyState = document.getElementById('gestionaleEmptyState');
+
+    sections.forEach(section => {
+        const sectionCat = section.dataset.section;
+        const matchesCategory = (currentGestionaleCategory === 'all' || currentGestionaleCategory === sectionCat);
+
+        let visibleInSection = 0;
+        const cards = section.querySelectorAll('.gestionale-card');
+
+        cards.forEach(card => {
+            const title = (card.querySelector('.gestionale-card-title')?.textContent || '').toLowerCase();
+            const desc = (card.querySelector('.gestionale-card-desc')?.textContent || '').toLowerCase();
+            const tags = (card.dataset.tags || '').toLowerCase();
+
+            const matchesText = !q || title.includes(q) || desc.includes(q) || tags.includes(q);
+            const isVisible = matchesCategory && matchesText;
+
+            card.style.display = isVisible ? 'flex' : 'none';
+            if (isVisible) visibleInSection++;
+        });
+
+        section.style.display = (matchesCategory && visibleInSection > 0) ? 'block' : 'none';
+        totalVisible += visibleInSection;
+    });
+
+    if (emptyState) {
+        emptyState.style.display = totalVisible === 0 ? 'flex' : 'none';
+    }
+}
+
+function gestisciKeydownGestionale(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        // Cerca la prima card visibile ed eseguila
+        const cards = document.querySelectorAll('.gestionale-modal-body .gestionale-card');
+        for (let i = 0; i < cards.length; i++) {
+            if (cards[i].offsetParent !== null && cards[i].style.display !== 'none') {
+                cards[i].click();
+                break;
+            }
+        }
+    }
+}
 
 // ============================================================
 // GENERAZIONE ORARI LETTERE

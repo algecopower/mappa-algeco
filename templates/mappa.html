@@ -311,83 +311,353 @@
         <i data-lucide="settings"></i>
     </button>
 
-    <!-- Gestionale Panel -->
-    <div class="gestionale-panel" id="gestionalePanel">
-        <div class="gestionale-panel-header">
-            <div class="gestionale-panel-title"><i data-lucide="settings"></i> Gestionale</div>
-            <button class="gestionale-panel-close" onclick="toggleGestionalePanel()"><i data-lucide="x"></i></button>
-        </div>
-        <div class="gestionale-panel-body">
-            <button class="gestionale-panel-btn gp-btn-lettere" onclick="toggleGestionalePanel(); toggleOrariLettereModal()">
-                <span class="gp-btn-icon"><i data-lucide="mail"></i></span>
-                <span class="gp-btn-text">Orari Lettere</span>
-                <span class="gp-btn-desc">Genera fasce orarie e scrivi nel FILONE</span>
-            </button>
-            <button class="gestionale-panel-btn gp-btn-BOXBEAT" onclick="toggleGestionalePanel(); apriModalBOXBEAT()">
-                <span class="gp-btn-icon"><i data-lucide="package"></i></span>
-                <span class="gp-btn-text">Carica Installato</span>
-                <span class="gp-btn-desc">Importa file BOXBEAT con esiti</span>
-            </button>
-            <button class="gestionale-panel-btn gp-btn-sigilli" onclick="toggleGestionalePanel(); apriVistaSigilli()">
-                <span class="gp-btn-icon"><i data-lucide="lock"></i></span>
-                <span class="gp-btn-text">Sigilli / Matricole</span>
-                <span class="gp-btn-desc">Inserisci sigilli e matricole installate</span>
-            </button>
-            <button class="gestionale-panel-btn gp-btn-sigilli" onclick="toggleGestionalePanel(); apriModalVerificaIndirizzi()">
-                <span class="gp-btn-icon"><i data-lucide="map-pinned"></i></span>
-                <span class="gp-btn-text">Verifica Indirizzi</span>
-                <span class="gp-btn-desc">Confronta vie e civici con l'anagrafe nazionale</span>
-            </button>
-            <a href="/distinte" target="_blank" class="gestionale-panel-btn gp-btn-distinte" style="text-decoration:none;">
-                <span class="gp-btn-icon"><i data-lucide="file-text"></i></span>
-                <span class="gp-btn-text">Gestione PDF E-Distribuzione</span>
-                <span class="gp-btn-desc">Distinte e Moduli Maxy</span>
-            </a>
-            <a href="/lettere" target="_blank" class="gestionale-panel-btn gp-btn-lettere" style="text-decoration:none;">
-                <span class="gp-btn-icon"><i data-lucide="mail-check"></i></span>
-                <span class="gp-btn-text">Gestione Lettere</span>
-                <span class="gp-btn-desc">Generazioni Excel, contatti aziende e invii</span>
-            </a>
-            <a href="/comuni" target="_blank" class="gestionale-panel-btn" style="text-decoration:none;">
-                <span class="gp-btn-icon"><i data-lucide="building-2"></i></span>
-                <span class="gp-btn-text">Gestione Comuni</span>
-                <span class="gp-btn-desc">Informazioni, contatti uffici tecnici e invio email</span>
-            </a>
-            <a href="/calendario" target="_blank" class="gestionale-panel-btn gp-btn-distinte" style="text-decoration:none;">
-                <span class="gp-btn-icon"><i data-lucide="calendar-days"></i></span>
-                <span class="gp-btn-text">Calendario Attività</span>
-                <span class="gp-btn-desc">Gestisci attività condivise tra utenti</span>
-            </a>
-            <a href="/filone" target="_blank" class="gestionale-panel-btn gp-btn-distinte" style="text-decoration:none;">
-                <span class="gp-btn-icon"><i data-lucide="table-2"></i></span>
-                <span class="gp-btn-text">Vista Excel Filone</span>
-                <span class="gp-btn-desc">Modifica il filone come un foglio di calcolo</span>
-            </a>
-            <a href="/dashboard" target="_blank" class="gestionale-panel-btn gp-btn-distinte" style="text-decoration:none;">
-                <span class="gp-btn-icon"><i data-lucide="line-chart"></i></span>
-                <span class="gp-btn-text">Dashboard</span>
-                <span class="gp-btn-desc">Statistiche, report operatori e riepilogo operativo</span>
-            </a>
-            <a href="/appuntamenti" target="_blank" class="gestionale-panel-btn gp-btn-distinte" style="text-decoration:none;">
-                <span class="gp-btn-icon"><i data-lucide="calendar-check"></i></span>
-                <span class="gp-btn-text">Gestione Appuntamenti</span>
-                <span class="gp-btn-desc">Monitoraggio appuntamenti per operatore e data</span>
-            </a>
-            <button class="gestionale-panel-btn gp-btn-backup" onclick="toggleGestionalePanel(); apriModalBackup()">
-                <span class="gp-btn-icon"><i data-lucide="save"></i></span>
-                <span class="gp-btn-text">Backup / Ripristino</span>
-                <span class="gp-btn-desc">Backup giornaliero e ripristino FILONE</span>
-            </button>
-            <button class="gestionale-panel-btn gp-btn-lettere" onclick="toggleGestionalePanel(); apriImpostazioni()">
-                <span class="gp-btn-icon"><i data-lucide="wrench"></i></span>
-                <span class="gp-btn-text">Impostazioni admin</span>
-                <span class="gp-btn-desc">Apre la dashboard admin in una nuova scheda (operatori, date, utenti, colonne, import Excel)</span>
-            </button>
-            <button class="gestionale-panel-btn gp-btn-logout" onclick="effettuaLogout()" style="border-top: 1px solid var(--border); margin-top: 2px; padding-top: 8px;">
-                <span class="gp-btn-icon"><i data-lucide="log-out"></i></span>
-                <span class="gp-btn-text">Disconnetti</span>
-                <span class="gp-btn-desc">Esci dall'account corrente</span>
-            </button>
+    <!-- Gestionale Modal -->
+    <div class="ui-modal" id="gestionaleModal">
+        <div class="ui-modal-content gestionale-modal-content">
+            <!-- Modal Header -->
+            <div class="ui-modal-header gestionale-modal-header">
+                <div class="gestionale-modal-title-wrap">
+                    <div class="gestionale-modal-icon-badge">
+                        <i data-lucide="layout-grid"></i>
+                    </div>
+                    <div>
+                        <h2 class="ui-modal-title">Menu Gestionale & Moduli</h2>
+                        <div class="gestionale-modal-subtitle">Provincia di {{ provincia }} &bull; Accesso rapido a strumenti, pagine e impostazioni</div>
+                    </div>
+                </div>
+                <button class="ui-modal-close" type="button" aria-label="Chiudi">×</button>
+            </div>
+
+            <!-- Search Bar & Category Chips -->
+            <div class="gestionale-modal-topbar">
+                <div class="gestionale-search-wrapper">
+                    <i data-lucide="search" class="gestionale-search-icon"></i>
+                    <input type="text"
+                           id="gestionaleSearchInput"
+                           class="gestionale-search-input"
+                           placeholder="Cerca una funzione o pagina... (es. lettere, boxbeat, excel, distinte, backup)"
+                           autocomplete="off"
+                           oninput="filtraFunzioniGestionale()"
+                           onkeydown="gestisciKeydownGestionale(event)">
+                    <button type="button"
+                            id="gestionaleSearchClear"
+                            class="gestionale-search-clear"
+                            onclick="resetGestionaleSearch()"
+                            title="Cancella ricerca"
+                            style="display: none;">
+                        <i data-lucide="x"></i>
+                    </button>
+                </div>
+
+                <div class="gestionale-category-chips" id="gestionaleCategoryChips">
+                    <button type="button" class="gestionale-chip active" data-cat="all" onclick="filtraCategoriaGestionale('all')">
+                        <i data-lucide="layers"></i>
+                        <span>Tutte</span>
+                        <span class="gestionale-chip-count" id="chipCountAll">15</span>
+                    </button>
+                    <button type="button" class="gestionale-chip" data-cat="operativita" onclick="filtraCategoriaGestionale('operativita')">
+                        <i data-lucide="map-pin"></i>
+                        <span>Operatività</span>
+                    </button>
+                    <button type="button" class="gestionale-chip" data-cat="documenti" onclick="filtraCategoriaGestionale('documenti')">
+                        <i data-lucide="file-spreadsheet"></i>
+                        <span>Documenti</span>
+                    </button>
+                    <button type="button" class="gestionale-chip" data-cat="pianificazione" onclick="filtraCategoriaGestionale('pianificazione')">
+                        <i data-lucide="calendar-range"></i>
+                        <span>Pianificazione</span>
+                    </button>
+                    <button type="button" class="gestionale-chip" data-cat="sistema" onclick="filtraCategoriaGestionale('sistema')">
+                        <i data-lucide="sliders-horizontal"></i>
+                        <span>Sistema & Admin</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Modal Body: Categorized Sections -->
+            <div class="ui-modal-body gestionale-modal-body" id="gestionaleModalBody">
+
+                <!-- Sezione 1: Operatività & Mappa -->
+                <section class="gestionale-section" data-section="operativita">
+                    <div class="gestionale-section-header">
+                        <div class="gestionale-section-title">
+                            <span class="gestionale-section-dot dot-operativita"></span>
+                            <i data-lucide="map-pin"></i> Operatività & Strumenti Mappa
+                        </div>
+                        <span class="gestionale-section-count">5 moduli</span>
+                    </div>
+                    <div class="gestionale-grid">
+                        <!-- Orari Lettere -->
+                        <div class="gestionale-card" data-tags="orari lettere fasce orarie filone percorso genera tempo tappe" onclick="apriDaGestionale('orari-lettere')">
+                            <div class="gestionale-card-icon icon-blue">
+                                <i data-lucide="clock"></i>
+                            </div>
+                            <div class="gestionale-card-content">
+                                <div class="gestionale-card-top">
+                                    <h4 class="gestionale-card-title">Orari Lettere</h4>
+                                    <span class="gestionale-card-badge badge-modal">Finestra Modale</span>
+                                </div>
+                                <p class="gestionale-card-desc">Calcola e assegna le fasce orarie ottimali nel FILONE per la spedizione delle lettere ai clienti.</p>
+                            </div>
+                        </div>
+
+                        <!-- Carica Installato (BOXBEAT) -->
+                        <div class="gestionale-card" data-tags="carica installato boxbeat enel import excel esiti importazione completati" onclick="apriDaGestionale('boxbeat')">
+                            <div class="gestionale-card-icon icon-purple">
+                                <i data-lucide="package-check"></i>
+                            </div>
+                            <div class="gestionale-card-content">
+                                <div class="gestionale-card-top">
+                                    <h4 class="gestionale-card-title">Carica Installato (BOXBEAT)</h4>
+                                    <span class="gestionale-card-badge badge-modal">Finestra Modale</span>
+                                </div>
+                                <p class="gestionale-card-desc">Importa file esiti BOXBEAT Enel (.xlsx/.csv) per aggiornare automaticamente i contatori eseguiti.</p>
+                            </div>
+                        </div>
+
+                        <!-- Sigilli / Matricole -->
+                        <div class="gestionale-card" data-tags="sigilli matricole contatori installate inserisci seriali numeri" onclick="apriDaGestionale('sigilli')">
+                            <div class="gestionale-card-icon icon-amber">
+                                <i data-lucide="shield-check"></i>
+                            </div>
+                            <div class="gestionale-card-content">
+                                <div class="gestionale-card-top">
+                                    <h4 class="gestionale-card-title">Sigilli & Matricole</h4>
+                                    <span class="gestionale-card-badge badge-fullscreen">Vista Dedicata</span>
+                                </div>
+                                <p class="gestionale-card-desc">Inserimento rapido dei sigilli applicati e matricole dei nuovi contatori installati sul campo.</p>
+                            </div>
+                        </div>
+
+                        <!-- Verifica Indirizzi -->
+                        <div class="gestionale-card" data-tags="verifica indirizzi anagrafe nazionale vie civici normalizzazione validazione" onclick="apriDaGestionale('verifica-indirizzi')">
+                            <div class="gestionale-card-icon icon-cyan">
+                                <i data-lucide="map-pinned"></i>
+                            </div>
+                            <div class="gestionale-card-content">
+                                <div class="gestionale-card-top">
+                                    <h4 class="gestionale-card-title">Verifica Indirizzi</h4>
+                                    <span class="gestionale-card-badge badge-modal">Finestra Modale</span>
+                                </div>
+                                <p class="gestionale-card-desc">Confronta e valida toponimi e numeri civici con il database dell'anagrafe nazionale italiana.</p>
+                            </div>
+                        </div>
+
+                        <!-- Vista Excel Filone -->
+                        <div class="gestionale-card" data-tags="vista excel filone tabella foglio di calcolo massiva modifica righe" onclick="apriDaGestionale('filone')">
+                            <div class="gestionale-card-icon icon-emerald">
+                                <i data-lucide="table-2"></i>
+                            </div>
+                            <div class="gestionale-card-content">
+                                <div class="gestionale-card-top">
+                                    <h4 class="gestionale-card-title">Vista Excel Filone</h4>
+                                    <span class="gestionale-card-badge badge-tab">Nuova Scheda</span>
+                                </div>
+                                <p class="gestionale-card-desc">Visualizza e modifica l'intero filone contatori in una griglia tabellare interattiva stile Excel.</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Sezione 2: Documenti & Lettere -->
+                <section class="gestionale-section" data-section="documenti">
+                    <div class="gestionale-section-header">
+                        <div class="gestionale-section-title">
+                            <span class="gestionale-section-dot dot-documenti"></span>
+                            <i data-lucide="file-spreadsheet"></i> Documenti & Comunicazioni
+                        </div>
+                        <span class="gestionale-section-count">3 pagine</span>
+                    </div>
+                    <div class="gestionale-grid">
+                        <!-- Gestione Lettere -->
+                        <div class="gestionale-card" data-tags="gestione lettere avvisi excel contatti aziende spedizioni clienti poste invii" onclick="apriDaGestionale('lettere')">
+                            <div class="gestionale-card-icon icon-indigo">
+                                <i data-lucide="mail-check"></i>
+                            </div>
+                            <div class="gestionale-card-content">
+                                <div class="gestionale-card-top">
+                                    <h4 class="gestionale-card-title">Gestione Lettere</h4>
+                                    <span class="gestionale-card-badge badge-tab">Nuova Scheda</span>
+                                </div>
+                                <p class="gestionale-card-desc">Generazione file Excel per postalizzazione, gestione contatti aziende e monitoraggio invii.</p>
+                            </div>
+                        </div>
+
+                        <!-- Gestione PDF E-Distribuzione -->
+                        <div class="gestionale-card" data-tags="gestione pdf distinte moduli maxy e-distribuzione verbali documenti" onclick="apriDaGestionale('distinte')">
+                            <div class="gestionale-card-icon icon-rose">
+                                <i data-lucide="file-text"></i>
+                            </div>
+                            <div class="gestionale-card-content">
+                                <div class="gestionale-card-top">
+                                    <h4 class="gestionale-card-title">PDF E-Distribuzione</h4>
+                                    <span class="gestionale-card-badge badge-tab">Nuova Scheda</span>
+                                </div>
+                                <p class="gestionale-card-desc">Generazione automatica e gestione di Distinte e Moduli Maxy conformi agli standard Enel.</p>
+                            </div>
+                        </div>
+
+                        <!-- Gestione Comuni -->
+                        <div class="gestionale-card" data-tags="gestione comuni uffici tecnici contatti email comunicazioni enti territoriali sindaci" onclick="apriDaGestionale('comuni')">
+                            <div class="gestionale-card-icon icon-teal">
+                                <i data-lucide="building-2"></i>
+                            </div>
+                            <div class="gestionale-card-content">
+                                <div class="gestionale-card-top">
+                                    <h4 class="gestionale-card-title">Gestione Comuni</h4>
+                                    <span class="gestionale-card-badge badge-tab">Nuova Scheda</span>
+                                </div>
+                                <p class="gestionale-card-desc">Rubrica uffici tecnici comunali, stato contatti, note territoriali e invio comunicazioni.</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Sezione 3: Pianificazione & Statistiche -->
+                <section class="gestionale-section" data-section="pianificazione">
+                    <div class="gestionale-section-header">
+                        <div class="gestionale-section-title">
+                            <span class="gestionale-section-dot dot-pianificazione"></span>
+                            <i data-lucide="calendar-range"></i> Pianificazione & Monitoraggio
+                        </div>
+                        <span class="gestionale-section-count">4 pagine</span>
+                    </div>
+                    <div class="gestionale-grid">
+                        <!-- Calendario Attività -->
+                        <div class="gestionale-card" data-tags="calendario attivita task appuntamenti condivisi eventi agenda note date" onclick="apriDaGestionale('calendario')">
+                            <div class="gestionale-card-icon icon-blue">
+                                <i data-lucide="calendar-days"></i>
+                            </div>
+                            <div class="gestionale-card-content">
+                                <div class="gestionale-card-top">
+                                    <h4 class="gestionale-card-title">Calendario Attività</h4>
+                                    <span class="gestionale-card-badge badge-tab">Nuova Scheda</span>
+                                </div>
+                                <p class="gestionale-card-desc">Agenda condivisa per pianificare e tracciare attività quotidiane, note operative e scadenze.</p>
+                            </div>
+                        </div>
+
+                        <!-- Gestione Appuntamenti -->
+                        <div class="gestionale-card" data-tags="gestione appuntamenti clienti operatori fasce orarie date calendario appuntamenti" onclick="apriDaGestionale('appuntamenti')">
+                            <div class="gestionale-card-icon icon-amber">
+                                <i data-lucide="calendar-check"></i>
+                            </div>
+                            <div class="gestionale-card-content">
+                                <div class="gestionale-card-top">
+                                    <h4 class="gestionale-card-title">Gestione Appuntamenti</h4>
+                                    <span class="gestionale-card-badge badge-tab">Nuova Scheda</span>
+                                </div>
+                                <p class="gestionale-card-desc">Monitoraggio dedicato di tutti gli appuntamenti prefissati suddivisi per operatore e data.</p>
+                            </div>
+                        </div>
+
+                        <!-- Dashboard Statistiche -->
+                        <div class="gestionale-card" data-tags="dashboard statistiche riepilogo avanzamento grafici percentuali kpi produttivita" onclick="apriDaGestionale('dashboard')">
+                            <div class="gestionale-card-icon icon-violet">
+                                <i data-lucide="line-chart"></i>
+                            </div>
+                            <div class="gestionale-card-content">
+                                <div class="gestionale-card-top">
+                                    <h4 class="gestionale-card-title">Dashboard & Statistiche</h4>
+                                    <span class="gestionale-card-badge badge-tab">Nuova Scheda</span>
+                                </div>
+                                <p class="gestionale-card-desc">Panoramica completa sull'avanzamento dei lavori, contatori eseguiti, percentuali e KPI.</p>
+                            </div>
+                        </div>
+
+                        <!-- Reportistica Operatori -->
+                        <div class="gestionale-card" data-tags="reportistica operatori tecnici produttivita analisi storica export excel backup report" onclick="apriDaGestionale('report')">
+                            <div class="gestionale-card-icon icon-emerald">
+                                <i data-lucide="pie-chart"></i>
+                            </div>
+                            <div class="gestionale-card-content">
+                                <div class="gestionale-card-top">
+                                    <h4 class="gestionale-card-title">Reportistica Operatori</h4>
+                                    <span class="gestionale-card-badge badge-tab">Nuova Scheda</span>
+                                </div>
+                                <p class="gestionale-card-desc">Analisi dettagliata della produttività giornaliera e mensile dei singoli operatori con export.</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Sezione 4: Sistema & Amministrazione -->
+                <section class="gestionale-section" data-section="sistema">
+                    <div class="gestionale-section-header">
+                        <div class="gestionale-section-title">
+                            <span class="gestionale-section-dot dot-sistema"></span>
+                            <i data-lucide="sliders-horizontal"></i> Sistema & Amministrazione
+                        </div>
+                        <span class="gestionale-section-count">3 azioni</span>
+                    </div>
+                    <div class="gestionale-grid">
+                        <!-- Backup / Ripristino -->
+                        <div class="gestionale-card" data-tags="backup ripristino filone database sicurezza salvataggio snapshot" onclick="apriDaGestionale('backup')">
+                            <div class="gestionale-card-icon icon-cyan">
+                                <i data-lucide="database"></i>
+                            </div>
+                            <div class="gestionale-card-content">
+                                <div class="gestionale-card-top">
+                                    <h4 class="gestionale-card-title">Backup / Ripristino</h4>
+                                    <span class="gestionale-card-badge badge-modal">Finestra Modale</span>
+                                </div>
+                                <p class="gestionale-card-desc">Crea un punto di ripristino manuale o visualizza e ripristina versioni precedenti del filone.</p>
+                            </div>
+                        </div>
+
+                        <!-- Impostazioni Admin -->
+                        <div class="gestionale-card" data-tags="impostazioni admin configurazione operatori zone lcl utenti colonne import impostazioni" onclick="apriDaGestionale('admin')">
+                            <div class="gestionale-card-icon icon-rose">
+                                <i data-lucide="wrench"></i>
+                            </div>
+                            <div class="gestionale-card-content">
+                                <div class="gestionale-card-top">
+                                    <h4 class="gestionale-card-title">Pannello Admin</h4>
+                                    <span class="gestionale-card-badge badge-admin">Pannello Globale</span>
+                                </div>
+                                <p class="gestionale-card-desc">Dashboard per gestione operatori, utenti, date, LCL, colonne personalizzate e import Excel.</p>
+                            </div>
+                        </div>
+
+                        <!-- Disconnetti -->
+                        <div class="gestionale-card gestionale-card-danger" data-tags="disconnetti logout esci sessione account utente" onclick="apriDaGestionale('logout')">
+                            <div class="gestionale-card-icon icon-danger">
+                                <i data-lucide="log-out"></i>
+                            </div>
+                            <div class="gestionale-card-content">
+                                <div class="gestionale-card-top">
+                                    <h4 class="gestionale-card-title">Disconnetti</h4>
+                                    <span class="gestionale-card-badge badge-danger">Sessione</span>
+                                </div>
+                                <p class="gestionale-card-desc">Termina la sessione di lavoro ed esci dall'account corrente sulla provincia.</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Empty State (nessun risultato di ricerca) -->
+                <div class="gestionale-empty-state" id="gestionaleEmptyState" style="display: none;">
+                    <div class="gestionale-empty-icon">
+                        <i data-lucide="search-x"></i>
+                    </div>
+                    <h3 class="gestionale-empty-title">Nessuna funzione trovata</h3>
+                    <p class="gestionale-empty-desc">Nessuna pagina o strumento corrisponde alla ricerca. Prova con termini come <em>"lettere"</em>, <em>"boxbeat"</em>, <em>"filone"</em>, <em>"comuni"</em> o <em>"operatori"</em>.</p>
+                    <button type="button" class="btn-ghost" onclick="resetGestionaleSearch()">
+                        <i data-lucide="rotate-ccw"></i> Mostra tutte le funzioni
+                    </button>
+                </div>
+
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="ui-modal-footer gestionale-modal-footer">
+                <div class="gestionale-footer-hint">
+                    <i data-lucide="sparkles"></i> <span>Tutte le funzioni sono accessibili con click diretto</span>
+                </div>
+                <button type="button" class="btn-ghost" onclick="UiModal.close('gestionaleModal')">
+                    Chiudi (ESC)
+                </button>
+            </div>
         </div>
     </div>
 

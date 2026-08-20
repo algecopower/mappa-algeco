@@ -37,7 +37,7 @@
             --bg-cell: var(--bg-secondary);
             --bg-cell-alt: var(--bg-primary);
             --bg-cell-hover: rgba(var(--accent-rgb), 0.10);
-            --bg-cell-edit: rgba(var(--accent-rgb), 0.16);
+            --bg-cell-edit: var(--bg-secondary);
             --bg-header: var(--bg-secondary);
             --bg-input: var(--bg-primary);
             --text: var(--text-primary);
@@ -64,7 +64,7 @@
             --bg-cell: var(--bg-secondary);
             --bg-cell-alt: var(--bg-primary);
             --bg-cell-hover: rgba(var(--accent-rgb), 0.10);
-            --bg-cell-edit: rgba(var(--accent-rgb), 0.16);
+            --bg-cell-edit: var(--bg-secondary);
             --bg-header: var(--bg-secondary);
             --bg-input: var(--bg-primary);
             --text: var(--text-primary);
@@ -1150,6 +1150,9 @@
             right: 0;
             border-bottom: 1px solid var(--border);
         }
+        .vrow:has(.vc.editing) {
+            z-index: 20;
+        }
         /* Hover riga: la regola sta più sotto, dopo le zebra-stripe, per
            non aver bisogno di !important — così le celle che hanno un
            background inline (formattazione cell-level / cond format) lo
@@ -1200,7 +1203,7 @@
         .vc.editing {
             padding: 0;
             overflow: visible;
-            z-index: 7;
+            z-index: 20;
             position: relative;
         }
         .cell-input {
@@ -1226,7 +1229,7 @@
             max-height: 180px;
             white-space: pre-wrap;
             word-wrap: break-word;
-            z-index: 10;
+            z-index: 25;
         }
         .vc.mod {
             background: var(--modified-bg) !important;
@@ -1669,14 +1672,14 @@
         /* Status bar stats */
         .status-bar .st-stats { color: var(--info); font-weight: 600; }
 
-        /* VLOOKUP (Filtri Avanzati) Panel */
-        .vl-overlay {
+        /* VLOOKUP (Filtri Avanzati) & AGGIUNGI Panels */
+        .vl-overlay, .add-overlay {
             position: fixed; inset: 0;
             background: rgba(0,0,0,0.45);
             z-index: 399; display: none;
         }
-        .vl-overlay.show { display: block; }
-        .vl-panel {
+        .vl-overlay.show, .add-overlay.show { display: block; }
+        .vl-panel, .add-panel {
             position: fixed; top: 50%; left: 50%;
             transform: translate(-50%, -50%);
             width: 900px; max-width: 95vw;
@@ -1688,15 +1691,15 @@
             flex-direction: column;
             max-height: 85vh;
         }
-        .vl-panel.show { display: flex; }
-        .vl-hdr {
+        .vl-panel.show, .add-panel.show { display: flex; }
+        .vl-hdr, .add-hdr {
             display: flex; align-items: center; justify-content: space-between;
             padding: 12px 16px; border-bottom: 1px solid var(--border);
         }
-        .vl-hdr h3 { font-size: 1em; color: var(--primary); margin: 0; display: flex; align-items: center; gap: 8px; }
-        .vl-close { background: none; border: none; color: var(--text-muted); font-size: 1.3em; cursor: pointer; padding: 0 4px; }
-        .vl-close:hover { color: var(--danger); }
-        .vl-body { padding: 14px 16px; overflow-y: auto; flex: 1; }
+        .vl-hdr h3, .add-hdr h3 { font-size: 1em; color: var(--primary); margin: 0; display: flex; align-items: center; gap: 8px; }
+        .vl-close, .add-close { background: none; border: none; color: var(--text-muted); font-size: 1.3em; cursor: pointer; padding: 0 4px; }
+        .vl-close:hover, .add-close:hover { color: var(--danger); }
+        .vl-body, .add-body { padding: 14px 16px; overflow-y: auto; flex: 1; }
         .vl-config {
             display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap;
             margin-bottom: 14px;
@@ -1975,6 +1978,7 @@
         .fnr-panel,
         .cfm-panel,
         .vl-panel,
+        .add-panel,
         .cell-log-panel,
         .quick-preview-panel,
         .fpop,
@@ -2000,6 +2004,8 @@
         .cfm-foot,
         .vl-hdr,
         .vl-foot,
+        .add-hdr,
+        .add-foot,
         .cell-log-hdr,
         .quick-preview-hdr,
         .quick-preview-foot {
@@ -2085,7 +2091,7 @@
             <button class="tb" onclick="openFindReplace()" title="Trova e Sostituisci (Ctrl+H)">&#x1F50D; Sostituisci</button>
             <button class="tb" onclick="openVlookup()" title="Filtri Avanzati (Ctrl+L)">&#x2699; Filtri Avanzati</button>
             <div class="toolbar-sep"></div>
-            <button class="tb" id="btnNuovoContatore" onclick="aggiungiNuovoContatoreFilone()" title="Aggiungi un nuovo contatore al filone (chiede il codice Eneltel, poi puoi riempire le altre celle cliccandoci)">&#x2795; Nuovo</button>
+            <button class="tb" id="btnNuovoContatore" onclick="openAggiungiModal()" title="Aggiungi contatore singolo o importa dati da Excel (es. nuova LCL)">&#x2795; Aggiungi</button>
             <button class="tb" id="btnAggiungiNota" onclick="aggiungiNotaFilone()" title="Aggiungi nota con data (DD/MM) in testa alla cella selezionata">&#x1F4DD; Nota</button>
             <button class="tb" id="btnCellNote" onclick="openCellNotePopup()" title="Commento sulla cella selezionata">&#x1F4AC; Commento</button>
             <button class="tb" id="btnCellHistory" onclick="showCellHistoryForSelection()" title="Mostra storico modifiche della cella selezionata">&#x1F4DC; Storico</button>
@@ -2290,7 +2296,7 @@
         </div>
         <div class="cell-log-body" id="cellLogBody"></div>
     </div>
-    <!-- VLOOKUP Panel -->
+    <!-- VLOOKUP Panel (Filtri Avanzati) -->
     <div class="vl-overlay" id="vlOverlay" onclick="closeVlookup()"></div>
     <div class="vl-panel" id="vlPanel">
         <div class="vl-hdr">
@@ -2298,12 +2304,6 @@
             <button class="vl-close" onclick="closeVlookup()">&times;</button>
         </div>
         <div class="vl-body">
-            <div class="vl-tabs">
-                <button class="vl-tab active" data-tab="search" onclick="vlSwitchTab('search')">&#x1F50D; Cerca &amp; Filtra</button>
-                <button class="vl-tab" data-tab="import" onclick="vlSwitchTab('import')">&#x1F4E5; Importa Excel</button>
-            </div>
-            <!-- TAB 1: Cerca & Filtra -->
-            <div class="vl-tab-content active" id="vlTabSearch">
             <div class="vl-config">
                 <div class="vl-field">
                     <label>&#x1F511; Colonna di ricerca</label>
@@ -2358,9 +2358,44 @@
                 <div>Seleziona una colonna di ricerca, digita un valore e scegli le colonne da restituire.</div>
                 <div style="margin-top:6px;font-size:0.9em;color:var(--text-muted)">&#x1F4A1; Come il CERCA.VERT di Excel, ma pi&ugrave; veloce e intuitivo!</div>
             </div>
+        </div>
+        <div class="vl-foot">
+            <span>&#x1F4A1; Clicca su una riga per navigare | &#x1F50E; Filtra per lavorare sul filone</span>
+            <span><kbd>Ctrl</kbd>+<kbd>L</kbd> per aprire</span>
+        </div>
+    </div>
+
+    <!-- AGGIUNGI Modal (Nuovo contatore / Importa Excel) -->
+    <div class="vl-overlay add-overlay" id="addOverlay" onclick="closeAggiungiModal()"></div>
+    <div class="vl-panel add-panel" id="addPanel" role="dialog" aria-modal="true">
+        <div class="vl-hdr add-hdr">
+            <h3>&#x2795; Aggiungi al Filone</h3>
+            <button class="vl-close add-close" onclick="closeAggiungiModal()">&times;</button>
+        </div>
+        <div class="vl-body add-body">
+            <div class="vl-tabs add-tabs">
+                <button class="vl-tab active" data-tab="single" onclick="addSwitchTab('single')">&#x2795; Singolo Contatore</button>
+                <button class="vl-tab" data-tab="import" onclick="addSwitchTab('import')">&#x1F4E5; Importa Excel / Nuova LCL</button>
+            </div>
+            <!-- TAB 1: Singolo Contatore -->
+            <div class="vl-tab-content active" id="addTabSingle">
+                <div style="max-width: 580px; margin: 20px auto; padding: 24px; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px;">
+                    <div style="font-size: 1em; font-weight: 600; color: var(--primary); margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                        <span>&#x1F511;</span> Inserisci nuovo contatore
+                    </div>
+                    <p style="font-size: 0.84em; color: var(--text-muted); line-height: 1.5; margin-bottom: 18px;">
+                        Codice <strong>POD</strong> del nuovo contatore (obbligatorio). Tutte le altre celle (NOMINATIVO, Indirizzo, Orari, Note, ecc.) potrai riempirle direttamente cliccando sulle celle vuote della nuova riga nel filone.
+                    </p>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <input type="text" id="addPodInput" placeholder="Es. IT001E..." autocomplete="off"
+                               style="flex: 1; padding: 9px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-input); color: var(--text); font-size: 0.9em; outline: none;"
+                               onkeydown="if(event.key==='Enter'){event.preventDefault();confermaAggiungiSingolo();}">
+                        <button class="tb primary" style="padding: 9px 20px; font-weight: 600;" onclick="confermaAggiungiSingolo()">&#x2795; Aggiungi</button>
+                    </div>
+                </div>
             </div>
             <!-- TAB 2: Importa Excel -->
-            <div class="vl-tab-content" id="vlTabImport">
+            <div class="vl-tab-content" id="addTabImport">
                 <div class="vl-excel-section" id="vlExcelSection">
                     <div class="vl-import-mode-toggle" id="vlImportModeToggle" style="display:none">
                         <button class="active" data-mode="merge" onclick="vlSetImportMode('merge')">&#x1F504; Aggiorna dati esistenti</button>
@@ -2417,9 +2452,9 @@
                 </div>
             </div>
         </div>
-        <div class="vl-foot">
-            <span>&#x1F4A1; Clicca su una riga per navigare | &#x1F50E; Filtra per lavorare sul filone | &#x1F4E5; Importa dati da Excel</span>
-            <span><kbd>Ctrl</kbd>+<kbd>L</kbd> per aprire</span>
+        <div class="vl-foot add-foot">
+            <span>&#x2795; Aggiungi un singolo contatore o carica un file Excel/CSV per inserire più righe (es. nuova LCL)</span>
+            <button class="tb" onclick="closeAggiungiModal()">Chiudi</button>
         </div>
     </div>
 
@@ -2495,10 +2530,9 @@ let editInput = null;
 let selAnchorRow = -1, selAnchorCol = -1;
 let selRange = null; // {viMin, viMax, vpMin, vpMax}
 let isDragging = false;
-let _clickEditPending = false;
-let _clickEditTarget = null;
 let _dragExtended = false;
 let _rowDragging = false;
+let _promptingUnlock = false;
 
 // Undo/Redo
 let undoStack = [];
@@ -3748,6 +3782,7 @@ function createRowNode() {
 
 function fillRow(node, row, visIdx) {
     node.className = 'vrow ' + (visIdx % 2 === 0 ? 'vrow-even' : 'vrow-odd');
+    node.style.zIndex = '';
     node.dataset.rn = row._row;
     node.dataset.vi = visIdx;
     var cells = node.children;
@@ -3864,8 +3899,6 @@ qs('#gridBody').addEventListener('mousedown', function(e) {
         // Abilita drag verticale per estendere la selezione a più righe
         isDragging = true;
         _rowDragging = true;
-        _clickEditPending = false;
-        _clickEditTarget = null;
         if (!document.body.classList.contains('nosel')) document.body.classList.add('nosel');
         e.preventDefault();
         return;
@@ -3882,11 +3915,8 @@ qs('#gridBody').addEventListener('mousedown', function(e) {
         return;
     }
 
-    var wasAlreadySelected = (!editing && rn === selRow && ci === selCol);
     selectCell(rn, ci);
     isDragging = true;
-    _clickEditPending = wasAlreadySelected;
-    _clickEditTarget = { rn: rn, ci: ci };
     _dragExtended = false;
     // Prevent text selection immediately when starting drag
     if (!document.body.classList.contains('nosel')) document.body.classList.add('nosel');
@@ -3926,12 +3956,6 @@ document.addEventListener('mouseup', function() {
         isDragging = false;
         _rowDragging = false;
         document.body.classList.remove('nosel');
-        if (_clickEditPending && !_dragExtended && _clickEditTarget) {
-            var t = _clickEditTarget;
-            setTimeout(function() { startEdit(t.rn, t.ci, false); }, 0);
-        }
-        _clickEditPending = false;
-        _clickEditTarget = null;
     }
 });
 
@@ -4237,58 +4261,97 @@ function confirmFiloneInputModal() {
     bindInputModalShortcut(qs('#filoneInputText'), true);
 })();
 
-// Aggiunge un nuovo contatore al filone (chiede solo Eneltel, le altre celle
-// vengono riempite dall'utente cliccandoci dopo).
-async function aggiungiNuovoContatoreFilone() {
-    const eneltel = await openFiloneInputModal({
-        title: 'Nuovo contatore',
-        message: 'Codice Eneltel del nuovo contatore (obbligatorio).\n\nLe altre celle (POD, NOMINATIVO, telefono, ecc.) potrai riempirle cliccando sulle celle vuote della nuova riga subito dopo.',
-        placeholder: 'Inserisci codice Eneltel',
-        confirmLabel: 'Aggiungi',
-        type: 'text'
-    });
-    if (eneltel === null) return;
-    const ek = eneltel.trim();
-    if (!ek) { toast('Codice Eneltel mancante', 'error'); return; }
+// Modal Aggiungi (Singolo Contatore / Importa Excel)
+function openAggiungiModal(initialTab) {
+    if (editing) commitEdit();
+    qs('#addOverlay').classList.add('show');
+    qs('#addPanel').classList.add('show');
+    addSwitchTab(initialTab || 'single');
+    if (!initialTab || initialTab === 'single') {
+        setTimeout(function() {
+            var inp = qs('#addPodInput');
+            if (inp) { inp.focus(); inp.select(); }
+        }, 80);
+    }
+}
 
-    // Eneltel duplicato? controllo locale
-    const ekUp = ek.toUpperCase();
-    const eneltelColIdx = headers.findIndex(h => h.trim().toLowerCase() === 'eneltel');
-    if (eneltelColIdx >= 0) {
-        const dup = rawData.find(r => String(r[headers[eneltelColIdx]] || '').toUpperCase() === ekUp);
+function closeAggiungiModal() {
+    qs('#addOverlay').classList.remove('show');
+    qs('#addPanel').classList.remove('show');
+}
+
+function addSwitchTab(tab) {
+    var tabs = document.querySelectorAll('.add-tabs .vl-tab');
+    tabs.forEach(function(t) { t.classList.toggle('active', t.dataset.tab === tab); });
+    var singleTab = qs('#addTabSingle');
+    var importTab = qs('#addTabImport');
+    if (singleTab) singleTab.classList.toggle('active', tab === 'single');
+    if (importTab) importTab.classList.toggle('active', tab === 'import');
+    if (tab === 'single') {
+        setTimeout(function() {
+            var inp = qs('#addPodInput');
+            if (inp) inp.focus();
+        }, 50);
+    }
+}
+
+async function confermaAggiungiSingolo() {
+    var inp = qs('#addPodInput');
+    if (!inp) return;
+    var podVal = inp.value.trim();
+    if (!podVal) {
+        toast('Inserisci il codice POD', 'warning');
+        inp.focus();
+        return;
+    }
+
+    var podUp = podVal.toUpperCase();
+    var podColIdx = headers.findIndex(function(h) {
+        var k = h.trim().toLowerCase();
+        return k === 'pod' || k === 'codice_pod' || k === 'punto_di_prelievo';
+    });
+    if (podColIdx >= 0) {
+        var dup = rawData.find(function(r) { return String(r[headers[podColIdx]] || '').trim().toUpperCase() === podUp; });
         if (dup) {
-            toast(`Eneltel ${ek} è già presente nel filone (riga ${dup._row})`, 'error');
+            toast('POD ' + podVal + ' è già presente nel filone (riga ' + dup._row + ')', 'error');
+            inp.focus();
             return;
         }
     }
 
     try {
-        const r = await fetch('/api/filone/append', {
+        var r = await fetch('/api/filone/append', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRF-Token': (document.cookie.match(/(?:^|;\s*)csrf_token=([^;]+)/) || [])[1] || '',
             },
-            body: JSON.stringify({ rows: [{ Eneltel: ek }] }),
+            body: JSON.stringify({ rows: [{ POD: podVal }] }),
         });
-        const resp = await r.json();
+        var resp = await r.json();
         if (!r.ok || !resp.success) {
-            const msg = resp.error || resp.message || (resp.rows_skipped && resp.rows_skipped[0] && resp.rows_skipped[0].reason) || 'errore sconosciuto';
+            var msg = resp.error || resp.message || (resp.rows_skipped && resp.rows_skipped[0] && resp.rows_skipped[0].reason) || 'errore sconosciuto';
             toast('Errore: ' + msg, 'error');
             return;
         }
         if (resp.rows_added > 0) {
-            toast(`✓ Contatore ${ek} aggiunto. Clicca sulle celle vuote per riempirle.`, 'success');
-            // Ricarica dati: dopo loadData la nuova riga sarà in fondo
-            setTimeout(() => loadData(), 500);
+            toast('✓ Contatore ' + podVal + ' aggiunto. Clicca sulle celle vuote per riempirle.', 'success');
+            inp.value = '';
+            closeAggiungiModal();
+            setTimeout(function() { loadData(); }, 500);
         } else if (resp.rows_skipped && resp.rows_skipped.length) {
-            toast(`Riga saltata: ${resp.rows_skipped[0].reason}`, 'error');
+            toast('Riga saltata: ' + resp.rows_skipped[0].reason, 'error');
         } else {
             toast('Nessuna riga aggiunta', 'error');
         }
     } catch (e) {
         toast('Errore di rete: ' + e.message, 'error');
     }
+}
+
+// Alias per compatibilità
+function aggiungiNuovoContatoreFilone() {
+    openAggiungiModal('single');
 }
 
 async function aggiungiNotaFilone() {
@@ -4342,10 +4405,18 @@ async function aggiungiNotaFilone() {
 // EDITING
 // ============================================================
 function startEdit(rn, ci, selectAll) {
+    if (_promptingUnlock) return;
     if (selectAll === undefined) selectAll = true;
     // Block editing on protected columns (unless unlocked)
     if (isProtected(headers[ci])) {
-        if (!confirm('\uD83D\uDD12 La colonna "' + headers[ci] + '" è protetta.\n\nVuoi sbloccarla per questa sessione?')) {
+        _promptingUnlock = true;
+        var ok = false;
+        try {
+            ok = confirm('\uD83D\uDD12 La colonna "' + headers[ci] + '" è protetta.\n\nVuoi sbloccarla per questa sessione?');
+        } finally {
+            _promptingUnlock = false;
+        }
+        if (!ok) {
             return;
         }
         unlockedCols.add(headers[ci].toLowerCase());
@@ -4367,6 +4438,7 @@ function startEdit(rn, ci, selectAll) {
 
     editing = true;
     cellNode.className = cellNode.className.replace(' editing', '') + ' editing';
+    if (cellNode.parentElement) cellNode.parentElement.style.zIndex = '20';
     cellNode.textContent = '';
 
     var input = document.createElement('textarea');
@@ -4530,6 +4602,10 @@ document.addEventListener('keydown', function(e) {
     }
     if (e.key === 'Escape' && qs('#vlPanel').classList.contains('show')) {
         closeVlookup();
+        return;
+    }
+    if (e.key === 'Escape' && qs('#addPanel').classList.contains('show')) {
+        closeAggiungiModal();
         return;
     }
     if (e.key === 'Escape' && qs('#fnrPanel').classList.contains('show')) {

@@ -1045,17 +1045,20 @@ def append_filone_rows():
             now = _db._now_ts()
 
             for idx, row_data in enumerate(new_rows):
-                # Trova Eneltel (case-insensitive sui nomi noti)
+                # Trova Eneltel o POD (case-insensitive sui nomi noti)
                 eneltel_raw = None
+                pod_raw = None
                 for k, v in row_data.items():
-                    if k.startswith('_'):
+                    if not k or k.startswith('_'):
                         continue
-                    if k.strip().lower() in ('eneltel',):
+                    k_clean = k.strip().lower()
+                    if k_clean in ('eneltel',):
                         eneltel_raw = v
-                        break
-                eneltel_key = _db.normalize_eneltel(eneltel_raw or '')
+                    elif k_clean in ('pod', 'codice_pod', 'punto_di_prelievo'):
+                        pod_raw = v
+                eneltel_key = _db.normalize_eneltel(eneltel_raw or pod_raw or '')
                 if not eneltel_key:
-                    skipped.append({'idx': idx, 'reason': 'Eneltel mancante o non valido'})
+                    skipped.append({'idx': idx, 'reason': 'POD o Eneltel mancante o non valido'})
                     continue
 
                 # Lcl opzionale per disambiguare righe Pavia multi-LCL
@@ -1067,13 +1070,13 @@ def append_filone_rows():
 
                 # Già esiste? salta
                 exists = conn.execute(
-                    "SELECT 1 FROM filone WHERE eneltel_key=? AND COALESCE(lcl,'')=?",
-                    (eneltel_key, lcl),
+                    "SELECT 1 FROM filone WHERE (eneltel_key=? OR (pod IS NOT NULL AND pod=?)) AND COALESCE(lcl,'')=?",
+                    (eneltel_key, eneltel_key, lcl),
                 ).fetchone()
                 if exists:
                     skipped.append({
                         'idx': idx,
-                        'reason': f'Eneltel {eneltel_key} già presente'
+                        'reason': f'Contatore {eneltel_key} già presente'
                                   + (f' (LCL={lcl})' if lcl else ''),
                     })
                     continue

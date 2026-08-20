@@ -191,3 +191,26 @@ def test_filone_notes_salva_commenti_persistenti(db_isolato):
     assert resp.status_code == 200
     assert resp.get_json()['deleted'] == 1
     assert client.get('/api/filone/notes').get_json()['notes'] == {}
+
+
+def test_filone_append_con_pod(db_isolato):
+    """L'endpoint /api/filone/append accetta righe specificando solo il POD."""
+    db = db_isolato
+    _setup_filone(db)
+    client = _app().test_client()
+    _login(client)
+
+    resp = client.post('/api/filone/append', json={
+        'rows': [{'POD': 'IT001E99999999'}],
+    })
+
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body['success'] is True
+    assert body['rows_added'] == 1
+
+    headers, rows = db.dump_filone_as_rows()
+    new_row = next((r for r in rows if r.get('POD') == 'IT001E99999999'), None)
+    assert new_row is not None
+    assert new_row['POD'] == 'IT001E99999999'
+

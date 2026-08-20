@@ -1677,9 +1677,92 @@ function selectAddressResult(lat, lon, displayName) {
 }
 
 // ============================================================
-// GESTIONALE MODAL - Hub strumenti e moduli
+// GESTIONALE MODAL - Hub strumenti e moduli & Preferiti
 // ============================================================
+const STORAGE_KEY_FAVORITI = 'algeco_gestionale_favorites';
 let currentGestionaleCategory = 'all';
+
+function getFavoritiGestionale() {
+    try {
+        const raw = localStorage.getItem(STORAGE_KEY_FAVORITI);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function salvaFavoritiGestionale(favoriti) {
+    try {
+        localStorage.setItem(STORAGE_KEY_FAVORITI, JSON.stringify(favoriti));
+    } catch (e) {}
+}
+
+function toggleFavoritoGestionale(e, actionId) {
+    if (e) {
+        e.stopPropagation();
+        e.preventDefault();
+    }
+    const favoriti = getFavoritiGestionale();
+    const idx = favoriti.indexOf(actionId);
+    if (idx === -1) {
+        favoriti.push(actionId);
+    } else {
+        favoriti.splice(idx, 1);
+    }
+    salvaFavoritiGestionale(favoriti);
+    aggiornaUIFavoritiGestionale();
+    filtraFunzioniGestionale();
+}
+
+function aggiornaUIFavoritiGestionale() {
+    const favoriti = getFavoritiGestionale();
+    const countChip = document.getElementById('chipCountPreferiti');
+    if (countChip) countChip.textContent = favoriti.length;
+
+    const countBadge = document.getElementById('preferitiCountBadge');
+    if (countBadge) {
+        countBadge.textContent = `${favoriti.length} ${favoriti.length === 1 ? 'preferito' : 'preferiti'}`;
+    }
+
+    // Aggiorna stato stelle su tutte le card standard
+    const standardCards = document.querySelectorAll('.gestionale-modal-body .gestionale-section:not(#gestionaleSectionPreferiti) .gestionale-card');
+    standardCards.forEach(card => {
+        const action = card.dataset.action;
+        const isFav = favoriti.includes(action);
+        card.classList.toggle('is-favorite', isFav);
+        const favBtn = card.querySelector('.gestionale-card-fav');
+        if (favBtn) {
+            favBtn.classList.toggle('active', isFav);
+            favBtn.title = isFav ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti';
+        }
+    });
+
+    // Popola la griglia Preferiti
+    const prefGrid = document.getElementById('gestionalePreferitiGrid');
+    if (prefGrid) {
+        prefGrid.innerHTML = '';
+        favoriti.forEach(actionId => {
+            const origCard = document.querySelector(`.gestionale-modal-body .gestionale-section:not(#gestionaleSectionPreferiti) .gestionale-card[data-action="${actionId}"]`);
+            if (origCard) {
+                const clone = origCard.cloneNode(true);
+                clone.classList.add('is-favorite');
+                const favBtn = clone.querySelector('.gestionale-card-fav');
+                if (favBtn) {
+                    favBtn.classList.add('active');
+                    favBtn.title = 'Rimuovi dai preferiti';
+                    favBtn.onclick = (ev) => toggleFavoritoGestionale(ev, actionId);
+                }
+                prefGrid.appendChild(clone);
+            }
+        });
+    }
+
+    if (typeof lucide !== 'undefined' && lucide.createIcons) {
+        lucide.createIcons();
+    }
+}
 
 function toggleGestionaleModal() {
     const id = 'gestionaleModal';
@@ -1687,9 +1770,7 @@ function toggleGestionaleModal() {
     UiModal.toggle(id);
     if (isOpening) {
         resetGestionaleSearch();
-        if (typeof lucide !== 'undefined' && lucide.createIcons) {
-            lucide.createIcons();
-        }
+        aggiornaUIFavoritiGestionale();
         setTimeout(() => {
             const searchInput = document.getElementById('gestionaleSearchInput');
             if (searchInput) searchInput.focus();
@@ -1779,10 +1860,37 @@ function filtraFunzioniGestionale() {
     if (clearBtn) clearBtn.style.display = q ? 'flex' : 'none';
 
     let totalVisible = 0;
-    const sections = document.querySelectorAll('.gestionale-section');
+    const favoriti = getFavoritiGestionale();
     const emptyState = document.getElementById('gestionaleEmptyState');
 
-    sections.forEach(section => {
+    // Gestione Sezione Preferiti Rapidi
+    const prefSection = document.getElementById('gestionaleSectionPreferiti');
+    if (prefSection) {
+        const isPrefCat = currentGestionaleCategory === 'preferiti';
+        const isAllCat = currentGestionaleCategory === 'all';
+        const shouldShowPref = (isPrefCat || (isAllCat && favoriti.length > 0));
+
+        let visibleInPref = 0;
+        const prefCards = prefSection.querySelectorAll('.gestionale-card');
+        prefCards.forEach(card => {
+            const title = (card.querySelector('.gestionale-card-title')?.textContent || '').toLowerCase();
+            const desc = (card.querySelector('.gestionale-card-desc')?.textContent || '').toLowerCase();
+            const tags = (card.dataset.tags || '').toLowerCase();
+
+            const matchesText = !q || title.includes(q) || desc.includes(q) || tags.includes(q);
+            const isVisible = shouldShowPref && matchesText;
+
+            card.style.display = isVisible ? 'flex' : 'none';
+            if (isVisible) visibleInPref++;
+        });
+
+        prefSection.style.display = (shouldShowPref && visibleInPref > 0) ? 'block' : 'none';
+        if (isPrefCat) totalVisible += visibleInPref;
+    }
+
+    // Gestione Altre Sezioni (quando non siamo nel tab 'preferiti')
+    const otherSections = document.querySelectorAll('.gestionale-section:not(#gestionaleSectionPreferiti)');
+    otherSections.forEach(section => {
         const sectionCat = section.dataset.section;
         const matchesCategory = (currentGestionaleCategory === 'all' || currentGestionaleCategory === sectionCat);
 
@@ -1802,11 +1910,25 @@ function filtraFunzioniGestionale() {
         });
 
         section.style.display = (matchesCategory && visibleInSection > 0) ? 'block' : 'none';
-        totalVisible += visibleInSection;
+        if (matchesCategory) totalVisible += visibleInSection;
     });
 
     if (emptyState) {
-        emptyState.style.display = totalVisible === 0 ? 'flex' : 'none';
+        if (totalVisible === 0) {
+            emptyState.style.display = 'flex';
+            const titleEl = emptyState.querySelector('.gestionale-empty-title');
+            const descEl = emptyState.querySelector('.gestionale-empty-desc');
+            if (currentGestionaleCategory === 'preferiti' && favoriti.length === 0) {
+                if (titleEl) titleEl.textContent = 'Nessun preferito salvato';
+                if (descEl) descEl.innerHTML = 'Non hai ancora aggiunto funzioni ai preferiti.<br>Clicca sull\'icona stella <i data-lucide="star" style="width:14px;height:14px;vertical-align:middle;display:inline-block;"></i> su qualsiasi funzione per visualizzarla sempre in primo piano al primo clic.';
+                if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
+            } else {
+                if (titleEl) titleEl.textContent = 'Nessuna funzione trovata';
+                if (descEl) descEl.textContent = 'Nessuna pagina o strumento corrisponde alla ricerca. Prova con termini come "lettere", "boxbeat", "filone", "comuni" o "operatori".';
+            }
+        } else {
+            emptyState.style.display = 'none';
+        }
     }
 }
 

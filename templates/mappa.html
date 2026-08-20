@@ -11,7 +11,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/theme.css">
     <link rel="stylesheet" href="/static/tour.css">
-    <link rel="stylesheet" href="/static/mappa.css?v={{ timestamp }}-print-labels-v24">
+    <link rel="stylesheet" href="/static/mappa.css?v={{ timestamp }}-gestionale-grid-v26">
     <style>
         /* CSS dinamico (sidebar gestionale + UI verifica indirizzi) */
         {{ css_gestionale|safe }}
@@ -307,8 +307,8 @@
     </button>
 
     <!-- Gestionale Button -->
-    <button class="gestionale-fab" id="gestionaleFab" onclick="toggleGestionalePanel()" title="Strumenti Gestionale">
-        <i data-lucide="settings"></i>
+    <button class="gestionale-fab" id="gestionaleFab" onclick="toggleGestionalePanel()" title="Menu Gestionale & Moduli">
+        <i data-lucide="layout-grid"></i>
     </button>
 
     <!-- Gestionale Modal -->
@@ -355,6 +355,11 @@
                         <span>Tutte</span>
                         <span class="gestionale-chip-count" id="chipCountAll">15</span>
                     </button>
+                    <button type="button" class="gestionale-chip chip-preferiti" data-cat="preferiti" onclick="filtraCategoriaGestionale('preferiti')">
+                        <i data-lucide="star"></i>
+                        <span>Preferiti</span>
+                        <span class="gestionale-chip-count" id="chipCountPreferiti">0</span>
+                    </button>
                     <button type="button" class="gestionale-chip" data-cat="operativita" onclick="filtraCategoriaGestionale('operativita')">
                         <i data-lucide="map-pin"></i>
                         <span>Operatività</span>
@@ -377,6 +382,18 @@
             <!-- Modal Body: Categorized Sections -->
             <div class="ui-modal-body gestionale-modal-body" id="gestionaleModalBody">
 
+                <!-- Sezione Preferiti Rapidi -->
+                <section class="gestionale-section section-preferiti" id="gestionaleSectionPreferiti" data-section="preferiti" style="display: none;">
+                    <div class="gestionale-section-header">
+                        <div class="gestionale-section-title">
+                            <span class="gestionale-section-dot dot-preferiti"></span>
+                            <i data-lucide="star"></i> Preferiti Rapidi
+                        </div>
+                        <span class="gestionale-section-count" id="preferitiCountBadge">0 preferiti</span>
+                    </div>
+                    <div class="gestionale-grid" id="gestionalePreferitiGrid"></div>
+                </section>
+
                 <!-- Sezione 1: Operatività & Mappa -->
                 <section class="gestionale-section" data-section="operativita">
                     <div class="gestionale-section-header">
@@ -388,70 +405,95 @@
                     </div>
                     <div class="gestionale-grid">
                         <!-- Orari Lettere -->
-                        <div class="gestionale-card" data-tags="orari lettere fasce orarie filone percorso genera tempo tappe" onclick="apriDaGestionale('orari-lettere')">
+                        <div class="gestionale-card" data-action="orari-lettere" data-tags="orari lettere fasce orarie filone percorso genera tempo tappe" onclick="apriDaGestionale('orari-lettere')">
                             <div class="gestionale-card-icon icon-blue">
                                 <i data-lucide="clock"></i>
                             </div>
                             <div class="gestionale-card-content">
                                 <div class="gestionale-card-top">
                                     <h4 class="gestionale-card-title">Orari Lettere</h4>
-                                    <span class="gestionale-card-badge badge-modal">Finestra Modale</span>
+                                    <div class="gestionale-card-top-right">
+                                        <span class="gestionale-card-badge badge-modal">Finestra Modale</span>
+                                        <button type="button" class="gestionale-card-fav" onclick="toggleFavoritoGestionale(event, 'orari-lettere')" title="Aggiungi ai preferiti">
+                                            <i data-lucide="star"></i>
+                                        </button>
+                                    </div>
                                 </div>
                                 <p class="gestionale-card-desc">Calcola e assegna le fasce orarie ottimali nel FILONE per la spedizione delle lettere ai clienti.</p>
                             </div>
                         </div>
 
                         <!-- Carica Installato (BOXBEAT) -->
-                        <div class="gestionale-card" data-tags="carica installato boxbeat enel import excel esiti importazione completati" onclick="apriDaGestionale('boxbeat')">
+                        <div class="gestionale-card" data-action="boxbeat" data-tags="carica installato boxbeat enel import excel esiti importazione completati" onclick="apriDaGestionale('boxbeat')">
                             <div class="gestionale-card-icon icon-purple">
                                 <i data-lucide="package-check"></i>
                             </div>
                             <div class="gestionale-card-content">
                                 <div class="gestionale-card-top">
                                     <h4 class="gestionale-card-title">Carica Installato (BOXBEAT)</h4>
-                                    <span class="gestionale-card-badge badge-modal">Finestra Modale</span>
+                                    <div class="gestionale-card-top-right">
+                                        <span class="gestionale-card-badge badge-modal">Finestra Modale</span>
+                                        <button type="button" class="gestionale-card-fav" onclick="toggleFavoritoGestionale(event, 'boxbeat')" title="Aggiungi ai preferiti">
+                                            <i data-lucide="star"></i>
+                                        </button>
+                                    </div>
                                 </div>
                                 <p class="gestionale-card-desc">Importa file esiti BOXBEAT Enel (.xlsx/.csv) per aggiornare automaticamente i contatori eseguiti.</p>
                             </div>
                         </div>
 
                         <!-- Sigilli / Matricole -->
-                        <div class="gestionale-card" data-tags="sigilli matricole contatori installate inserisci seriali numeri" onclick="apriDaGestionale('sigilli')">
+                        <div class="gestionale-card" data-action="sigilli" data-tags="sigilli matricole contatori installate inserisci seriali numeri" onclick="apriDaGestionale('sigilli')">
                             <div class="gestionale-card-icon icon-amber">
                                 <i data-lucide="shield-check"></i>
                             </div>
                             <div class="gestionale-card-content">
                                 <div class="gestionale-card-top">
                                     <h4 class="gestionale-card-title">Sigilli & Matricole</h4>
-                                    <span class="gestionale-card-badge badge-fullscreen">Vista Dedicata</span>
+                                    <div class="gestionale-card-top-right">
+                                        <span class="gestionale-card-badge badge-fullscreen">Vista Dedicata</span>
+                                        <button type="button" class="gestionale-card-fav" onclick="toggleFavoritoGestionale(event, 'sigilli')" title="Aggiungi ai preferiti">
+                                            <i data-lucide="star"></i>
+                                        </button>
+                                    </div>
                                 </div>
                                 <p class="gestionale-card-desc">Inserimento rapido dei sigilli applicati e matricole dei nuovi contatori installati sul campo.</p>
                             </div>
                         </div>
 
                         <!-- Verifica Indirizzi -->
-                        <div class="gestionale-card" data-tags="verifica indirizzi anagrafe nazionale vie civici normalizzazione validazione" onclick="apriDaGestionale('verifica-indirizzi')">
+                        <div class="gestionale-card" data-action="verifica-indirizzi" data-tags="verifica indirizzi anagrafe nazionale vie civici normalizzazione validazione" onclick="apriDaGestionale('verifica-indirizzi')">
                             <div class="gestionale-card-icon icon-cyan">
                                 <i data-lucide="map-pinned"></i>
                             </div>
                             <div class="gestionale-card-content">
                                 <div class="gestionale-card-top">
                                     <h4 class="gestionale-card-title">Verifica Indirizzi</h4>
-                                    <span class="gestionale-card-badge badge-modal">Finestra Modale</span>
+                                    <div class="gestionale-card-top-right">
+                                        <span class="gestionale-card-badge badge-modal">Finestra Modale</span>
+                                        <button type="button" class="gestionale-card-fav" onclick="toggleFavoritoGestionale(event, 'verifica-indirizzi')" title="Aggiungi ai preferiti">
+                                            <i data-lucide="star"></i>
+                                        </button>
+                                    </div>
                                 </div>
                                 <p class="gestionale-card-desc">Confronta e valida toponimi e numeri civici con il database dell'anagrafe nazionale italiana.</p>
                             </div>
                         </div>
 
                         <!-- Vista Excel Filone -->
-                        <div class="gestionale-card" data-tags="vista excel filone tabella foglio di calcolo massiva modifica righe" onclick="apriDaGestionale('filone')">
+                        <div class="gestionale-card" data-action="filone" data-tags="vista excel filone tabella foglio di calcolo massiva modifica righe" onclick="apriDaGestionale('filone')">
                             <div class="gestionale-card-icon icon-emerald">
                                 <i data-lucide="table-2"></i>
                             </div>
                             <div class="gestionale-card-content">
                                 <div class="gestionale-card-top">
                                     <h4 class="gestionale-card-title">Vista Excel Filone</h4>
-                                    <span class="gestionale-card-badge badge-tab">Nuova Scheda</span>
+                                    <div class="gestionale-card-top-right">
+                                        <span class="gestionale-card-badge badge-tab">Nuova Scheda</span>
+                                        <button type="button" class="gestionale-card-fav" onclick="toggleFavoritoGestionale(event, 'filone')" title="Aggiungi ai preferiti">
+                                            <i data-lucide="star"></i>
+                                        </button>
+                                    </div>
                                 </div>
                                 <p class="gestionale-card-desc">Visualizza e modifica l'intero filone contatori in una griglia tabellare interattiva stile Excel.</p>
                             </div>
@@ -470,42 +512,57 @@
                     </div>
                     <div class="gestionale-grid">
                         <!-- Gestione Lettere -->
-                        <div class="gestionale-card" data-tags="gestione lettere avvisi excel contatti aziende spedizioni clienti poste invii" onclick="apriDaGestionale('lettere')">
+                        <div class="gestionale-card" data-action="lettere" data-tags="gestione lettere avvisi excel contatti aziende spedizioni clienti poste invii" onclick="apriDaGestionale('lettere')">
                             <div class="gestionale-card-icon icon-indigo">
                                 <i data-lucide="mail-check"></i>
                             </div>
                             <div class="gestionale-card-content">
                                 <div class="gestionale-card-top">
                                     <h4 class="gestionale-card-title">Gestione Lettere</h4>
-                                    <span class="gestionale-card-badge badge-tab">Nuova Scheda</span>
+                                    <div class="gestionale-card-top-right">
+                                        <span class="gestionale-card-badge badge-tab">Nuova Scheda</span>
+                                        <button type="button" class="gestionale-card-fav" onclick="toggleFavoritoGestionale(event, 'lettere')" title="Aggiungi ai preferiti">
+                                            <i data-lucide="star"></i>
+                                        </button>
+                                    </div>
                                 </div>
                                 <p class="gestionale-card-desc">Generazione file Excel per postalizzazione, gestione contatti aziende e monitoraggio invii.</p>
                             </div>
                         </div>
 
                         <!-- Gestione PDF E-Distribuzione -->
-                        <div class="gestionale-card" data-tags="gestione pdf distinte moduli maxy e-distribuzione verbali documenti" onclick="apriDaGestionale('distinte')">
+                        <div class="gestionale-card" data-action="distinte" data-tags="gestione pdf distinte moduli maxy e-distribuzione verbali documenti" onclick="apriDaGestionale('distinte')">
                             <div class="gestionale-card-icon icon-rose">
                                 <i data-lucide="file-text"></i>
                             </div>
                             <div class="gestionale-card-content">
                                 <div class="gestionale-card-top">
                                     <h4 class="gestionale-card-title">PDF E-Distribuzione</h4>
-                                    <span class="gestionale-card-badge badge-tab">Nuova Scheda</span>
+                                    <div class="gestionale-card-top-right">
+                                        <span class="gestionale-card-badge badge-tab">Nuova Scheda</span>
+                                        <button type="button" class="gestionale-card-fav" onclick="toggleFavoritoGestionale(event, 'distinte')" title="Aggiungi ai preferiti">
+                                            <i data-lucide="star"></i>
+                                        </button>
+                                    </div>
                                 </div>
                                 <p class="gestionale-card-desc">Generazione automatica e gestione di Distinte e Moduli Maxy conformi agli standard Enel.</p>
                             </div>
                         </div>
 
                         <!-- Gestione Comuni -->
-                        <div class="gestionale-card" data-tags="gestione comuni uffici tecnici contatti email comunicazioni enti territoriali sindaci" onclick="apriDaGestionale('comuni')">
+                        <div class="gestionale-card" data-action="comuni" data-tags="gestione comuni uffici tecnici contatti email comunicazioni enti territoriali sindaci" onclick="apriDaGestionale('comuni')">
                             <div class="gestionale-card-icon icon-teal">
                                 <i data-lucide="building-2"></i>
                             </div>
                             <div class="gestionale-card-content">
                                 <div class="gestionale-card-top">
                                     <h4 class="gestionale-card-title">Gestione Comuni</h4>
-                                    <span class="gestionale-card-badge badge-tab">Nuova Scheda</span>
+                                    <div class="gestionale-card-top-right">
+                                        <span class="gestionale-card-badge badge-tab">Nuova Scheda</span>
+                                        <button type="button" class="gestionale-card-fav" onclick="toggleFavoritoGestionale(event, 'comuni')" title="Aggiungi ai preferiti">
+                                            <i data-lucide="star"></i>
+                                        </button>
+                                    </div>
                                 </div>
                                 <p class="gestionale-card-desc">Rubrica uffici tecnici comunali, stato contatti, note territoriali e invio comunicazioni.</p>
                             </div>
@@ -524,56 +581,76 @@
                     </div>
                     <div class="gestionale-grid">
                         <!-- Calendario Attività -->
-                        <div class="gestionale-card" data-tags="calendario attivita task appuntamenti condivisi eventi agenda note date" onclick="apriDaGestionale('calendario')">
+                        <div class="gestionale-card" data-action="calendario" data-tags="calendario attivita task appuntamenti condivisi eventi agenda note date" onclick="apriDaGestionale('calendario')">
                             <div class="gestionale-card-icon icon-blue">
                                 <i data-lucide="calendar-days"></i>
                             </div>
                             <div class="gestionale-card-content">
                                 <div class="gestionale-card-top">
                                     <h4 class="gestionale-card-title">Calendario Attività</h4>
-                                    <span class="gestionale-card-badge badge-tab">Nuova Scheda</span>
+                                    <div class="gestionale-card-top-right">
+                                        <span class="gestionale-card-badge badge-tab">Nuova Scheda</span>
+                                        <button type="button" class="gestionale-card-fav" onclick="toggleFavoritoGestionale(event, 'calendario')" title="Aggiungi ai preferiti">
+                                            <i data-lucide="star"></i>
+                                        </button>
+                                    </div>
                                 </div>
                                 <p class="gestionale-card-desc">Agenda condivisa per pianificare e tracciare attività quotidiane, note operative e scadenze.</p>
                             </div>
                         </div>
 
                         <!-- Gestione Appuntamenti -->
-                        <div class="gestionale-card" data-tags="gestione appuntamenti clienti operatori fasce orarie date calendario appuntamenti" onclick="apriDaGestionale('appuntamenti')">
+                        <div class="gestionale-card" data-action="appuntamenti" data-tags="gestione appuntamenti clienti operatori fasce orarie date calendario appuntamenti" onclick="apriDaGestionale('appuntamenti')">
                             <div class="gestionale-card-icon icon-amber">
                                 <i data-lucide="calendar-check"></i>
                             </div>
                             <div class="gestionale-card-content">
                                 <div class="gestionale-card-top">
                                     <h4 class="gestionale-card-title">Gestione Appuntamenti</h4>
-                                    <span class="gestionale-card-badge badge-tab">Nuova Scheda</span>
+                                    <div class="gestionale-card-top-right">
+                                        <span class="gestionale-card-badge badge-tab">Nuova Scheda</span>
+                                        <button type="button" class="gestionale-card-fav" onclick="toggleFavoritoGestionale(event, 'appuntamenti')" title="Aggiungi ai preferiti">
+                                            <i data-lucide="star"></i>
+                                        </button>
+                                    </div>
                                 </div>
                                 <p class="gestionale-card-desc">Monitoraggio dedicato di tutti gli appuntamenti prefissati suddivisi per operatore e data.</p>
                             </div>
                         </div>
 
                         <!-- Dashboard Statistiche -->
-                        <div class="gestionale-card" data-tags="dashboard statistiche riepilogo avanzamento grafici percentuali kpi produttivita" onclick="apriDaGestionale('dashboard')">
+                        <div class="gestionale-card" data-action="dashboard" data-tags="dashboard statistiche riepilogo avanzamento grafici percentuali kpi produttivita" onclick="apriDaGestionale('dashboard')">
                             <div class="gestionale-card-icon icon-violet">
                                 <i data-lucide="line-chart"></i>
                             </div>
                             <div class="gestionale-card-content">
                                 <div class="gestionale-card-top">
                                     <h4 class="gestionale-card-title">Dashboard & Statistiche</h4>
-                                    <span class="gestionale-card-badge badge-tab">Nuova Scheda</span>
+                                    <div class="gestionale-card-top-right">
+                                        <span class="gestionale-card-badge badge-tab">Nuova Scheda</span>
+                                        <button type="button" class="gestionale-card-fav" onclick="toggleFavoritoGestionale(event, 'dashboard')" title="Aggiungi ai preferiti">
+                                            <i data-lucide="star"></i>
+                                        </button>
+                                    </div>
                                 </div>
                                 <p class="gestionale-card-desc">Panoramica completa sull'avanzamento dei lavori, contatori eseguiti, percentuali e KPI.</p>
                             </div>
                         </div>
 
                         <!-- Reportistica Operatori -->
-                        <div class="gestionale-card" data-tags="reportistica operatori tecnici produttivita analisi storica export excel backup report" onclick="apriDaGestionale('report')">
+                        <div class="gestionale-card" data-action="report" data-tags="reportistica operatori tecnici produttivita analisi storica export excel backup report" onclick="apriDaGestionale('report')">
                             <div class="gestionale-card-icon icon-emerald">
                                 <i data-lucide="pie-chart"></i>
                             </div>
                             <div class="gestionale-card-content">
                                 <div class="gestionale-card-top">
                                     <h4 class="gestionale-card-title">Reportistica Operatori</h4>
-                                    <span class="gestionale-card-badge badge-tab">Nuova Scheda</span>
+                                    <div class="gestionale-card-top-right">
+                                        <span class="gestionale-card-badge badge-tab">Nuova Scheda</span>
+                                        <button type="button" class="gestionale-card-fav" onclick="toggleFavoritoGestionale(event, 'report')" title="Aggiungi ai preferiti">
+                                            <i data-lucide="star"></i>
+                                        </button>
+                                    </div>
                                 </div>
                                 <p class="gestionale-card-desc">Analisi dettagliata della produttività giornaliera e mensile dei singoli operatori con export.</p>
                             </div>
@@ -592,42 +669,57 @@
                     </div>
                     <div class="gestionale-grid">
                         <!-- Backup / Ripristino -->
-                        <div class="gestionale-card" data-tags="backup ripristino filone database sicurezza salvataggio snapshot" onclick="apriDaGestionale('backup')">
+                        <div class="gestionale-card" data-action="backup" data-tags="backup ripristino filone database sicurezza salvataggio snapshot" onclick="apriDaGestionale('backup')">
                             <div class="gestionale-card-icon icon-cyan">
                                 <i data-lucide="database"></i>
                             </div>
                             <div class="gestionale-card-content">
                                 <div class="gestionale-card-top">
                                     <h4 class="gestionale-card-title">Backup / Ripristino</h4>
-                                    <span class="gestionale-card-badge badge-modal">Finestra Modale</span>
+                                    <div class="gestionale-card-top-right">
+                                        <span class="gestionale-card-badge badge-modal">Finestra Modale</span>
+                                        <button type="button" class="gestionale-card-fav" onclick="toggleFavoritoGestionale(event, 'backup')" title="Aggiungi ai preferiti">
+                                            <i data-lucide="star"></i>
+                                        </button>
+                                    </div>
                                 </div>
                                 <p class="gestionale-card-desc">Crea un punto di ripristino manuale o visualizza e ripristina versioni precedenti del filone.</p>
                             </div>
                         </div>
 
                         <!-- Impostazioni Admin -->
-                        <div class="gestionale-card" data-tags="impostazioni admin configurazione operatori zone lcl utenti colonne import impostazioni" onclick="apriDaGestionale('admin')">
+                        <div class="gestionale-card" data-action="admin" data-tags="impostazioni admin configurazione operatori zone lcl utenti colonne import impostazioni" onclick="apriDaGestionale('admin')">
                             <div class="gestionale-card-icon icon-rose">
                                 <i data-lucide="wrench"></i>
                             </div>
                             <div class="gestionale-card-content">
                                 <div class="gestionale-card-top">
                                     <h4 class="gestionale-card-title">Pannello Admin</h4>
-                                    <span class="gestionale-card-badge badge-admin">Pannello Globale</span>
+                                    <div class="gestionale-card-top-right">
+                                        <span class="gestionale-card-badge badge-admin">Pannello Globale</span>
+                                        <button type="button" class="gestionale-card-fav" onclick="toggleFavoritoGestionale(event, 'admin')" title="Aggiungi ai preferiti">
+                                            <i data-lucide="star"></i>
+                                        </button>
+                                    </div>
                                 </div>
                                 <p class="gestionale-card-desc">Dashboard per gestione operatori, utenti, date, LCL, colonne personalizzate e import Excel.</p>
                             </div>
                         </div>
 
                         <!-- Disconnetti -->
-                        <div class="gestionale-card gestionale-card-danger" data-tags="disconnetti logout esci sessione account utente" onclick="apriDaGestionale('logout')">
+                        <div class="gestionale-card gestionale-card-danger" data-action="logout" data-tags="disconnetti logout esci sessione account utente" onclick="apriDaGestionale('logout')">
                             <div class="gestionale-card-icon icon-danger">
                                 <i data-lucide="log-out"></i>
                             </div>
                             <div class="gestionale-card-content">
                                 <div class="gestionale-card-top">
                                     <h4 class="gestionale-card-title">Disconnetti</h4>
-                                    <span class="gestionale-card-badge badge-danger">Sessione</span>
+                                    <div class="gestionale-card-top-right">
+                                        <span class="gestionale-card-badge badge-danger">Sessione</span>
+                                        <button type="button" class="gestionale-card-fav" onclick="toggleFavoritoGestionale(event, 'logout')" title="Aggiungi ai preferiti">
+                                            <i data-lucide="star"></i>
+                                        </button>
+                                    </div>
                                 </div>
                                 <p class="gestionale-card-desc">Termina la sessione di lavoro ed esci dall'account corrente sulla provincia.</p>
                             </div>
@@ -1000,7 +1092,7 @@
         };
     </script>
     <script src="/static/print_label_layout.js?v={{ timestamp }}-print-labels-v24"></script>
-    <script src="/static/mappa.js?v={{ timestamp }}-print-labels-v24"></script>
+    <script src="/static/mappa.js?v={{ timestamp }}-gestionale-grid-v26"></script>
     <script>
         // JS dinamico (sidebar gestionale + UI verifica indirizzi)
         {{ js_gestionale|safe }}

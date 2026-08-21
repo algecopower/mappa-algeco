@@ -1540,6 +1540,66 @@ function mostraRisultatiVuoti() {
     document.getElementById('statAppuntamenti').textContent = 0;
 }
 
+function checkUrlSearchParameters() {
+    try {
+        const params = new URLSearchParams(window.location.search);
+        const searchVal = params.get('search') || params.get('pod') || params.get('q') || params.get('eneltel') || params.get('filone');
+        
+        if (!searchVal) return false;
+        
+        const query = searchVal.trim();
+        if (!query) return false;
+
+        console.log('🔍 Esecuzione ricerca automatica da URL:', query);
+        
+        if (!contatori || !contatori.length) return false;
+        
+        const qLower = query.toLowerCase();
+        const contatoriTrovati = contatori.filter(c => {
+            return (c.pod && c.pod.toLowerCase().includes(qLower)) ||
+                   (c.eneltel && c.eneltel.toLowerCase().includes(qLower)) ||
+                   (c.cliente && c.cliente.toLowerCase().includes(qLower)) ||
+                   (c.nominativo && c.nominativo.toLowerCase().includes(qLower)) ||
+                   (c.via && c.via.toLowerCase().includes(qLower)) ||
+                   (c.comune && c.comune.toLowerCase().includes(qLower)) ||
+                   (c.matricola && c.matricola.toLowerCase().includes(qLower));
+        });
+
+        if (contatoriTrovati.length > 0) {
+            // Se c'è un solo contatore o un match esatto per POD / Eneltel, portalo direttamente nella Vista Dettaglio completa
+            const exactMatch = contatoriTrovati.find(c => 
+                (c.pod && c.pod.toLowerCase() === qLower) || 
+                (c.eneltel && c.eneltel.toLowerCase() === qLower)
+            );
+            const target = exactMatch || (contatoriTrovati.length === 1 ? contatoriTrovati[0] : null);
+
+            if (target) {
+                vaiAContatoreSingolo(target.eneltel);
+                return true;
+            }
+
+            // Più contatori trovati: mostra risultati ricerca
+            const podInput = document.getElementById('searchPod');
+            if (podInput && qLower.startsWith('it')) {
+                podInput.value = query;
+            }
+            const searchInput = document.getElementById('searchInput');
+            if (searchInput) {
+                searchInput.value = query;
+            }
+
+            mostraRisultatiRicercaAvanzata(contatoriTrovati, query);
+            return true;
+        } else {
+            mostraRisultatiVuoti();
+            return true;
+        }
+    } catch (e) {
+        console.error('Errore esecuzione ricerca automatica URL:', e);
+        return false;
+    }
+}
+
 // ============================================================
 // PIN & DATE NAVIGATION
 // ============================================================
@@ -1809,6 +1869,12 @@ function apriDaGestionale(action) {
             break;
         case 'comuni':
             window.open('/comuni', '_blank', 'noopener');
+            break;
+        case 'mail':
+            window.open('/mail', '_blank', 'noopener');
+            break;
+        case 'templates':
+            window.open('/templates', '_blank', 'noopener');
             break;
         case 'calendario':
             window.open('/calendario', '_blank', 'noopener');
@@ -2283,32 +2349,108 @@ function centraMappaSuPinnati() {
     }
 }
 
-function vaiAContatoreSingolo(eneltel) {
-    const c = contatori.find(x => x.eneltel === eneltel);
+let searchDefaultViewMode = localStorage.getItem('searchDefaultViewMode') || 'detail';
+
+function setSearchDefaultViewMode(mode) {
+    searchDefaultViewMode = mode;
+    localStorage.setItem('searchDefaultViewMode', mode);
+    
+    const pillDetail = document.getElementById('searchModeDetail');
+    const pillDate = document.getElementById('searchModeDate');
+    if (pillDetail) pillDetail.classList.toggle('active', mode === 'detail');
+    if (pillDate) pillDate.classList.toggle('active', mode === 'date');
+}
+
+function vaiAContatoreConModalita(eneltel) {
+    if (searchDefaultViewMode === 'date') {
+        vaiAContatoreDataGlobale(eneltel);
+    } else {
+        vaiAContatoreSingolo(eneltel);
+    }
+}
+
+function vaiAContatoreDataGlobale(eneltel) {
+    const c = contatori.find(x => x.eneltel === eneltel || x.pod === eneltel || x.id === eneltel);
     if (!c) return;
 
-    pinnedContatori.set(eneltel, c);
+    pinnedContatori.set(c.eneltel, c);
 
-    if (UiModal.isOpen('advancedSearchModal')) {
+    if (typeof UiModal !== 'undefined' && UiModal.isOpen('advancedSearchModal')) {
         UiModal.close('advancedSearchModal');
     }
 
-    const zonaDelContatore = zone.find(z => {
-        return z.comuni.some(comune => comune.toLowerCase() === (c.comune || '').toLowerCase());
-    });
-
-    const targetZona = zonaDelContatore ? zonaDelContatore.nome : c.comune;
-    apriDettaglio(targetZona, c.data);
+    if (c.data && c.data.trim() !== '') {
+        // Imposta il valore nel filtro date
+        const dataFilter = document.getElementById('dataFilter');
+        if (dataFilter) dataFilter.value = c.data;
+        
+        currentData = c.data;
+        
+        // Popola e mostra il filtro operatori per questa data
+        populateOperatoreFilter(c.data);
+        const opRow = document.getElementById('operatoreFilterRow');
+        if (opRow) opRow.style.display = 'flex';
+        document.getElementById('dataFilterRow').style.display = 'none';
+        
+        // Mostra tutti gli operatori per questa data (indipendentemente dalla zona)
+        mostraPercorsoTuttiOperatori(c.data);
+    } else {
+        // Se non ha data programmata (schedulabile), apri la vista dettaglio della zona
+        vaiAContatoreSingolo(c.eneltel);
+        return;
+    }
 
     setTimeout(() => {
         if (isValidCoordinate(c.lat, c.lon)) {
-            map.flyTo([c.lat, c.lon], 18);
+            map.flyTo([c.lat, c.lon], 18, { duration: 1.0 });
             setTimeout(() => {
-                const mk = pinnedMarkers.get(eneltel) || markers.find(m => m.contatore && m.contatore.eneltel === eneltel);
-                if (mk) mk.openPopup();
-            }, 500);
+                const mk = pinnedMarkers.get(c.eneltel) || markers.find(m => m.contatore && (m.contatore.eneltel === c.eneltel || m.contatore.id === c.id));
+                if (mk && mk.openPopup) {
+                    mk.openPopup();
+                } else if (typeof mostraContatorePopup === 'function') {
+                    mostraContatorePopup(c);
+                }
+                evidenziaContatore(c.eneltel || c.id);
+            }, 600);
         }
-    }, 300);
+    }, 400);
+}
+
+function vaiAContatoreSingolo(eneltel) {
+    const c = contatori.find(x => x.eneltel === eneltel || x.pod === eneltel || x.id === eneltel);
+    if (!c) return;
+
+    pinnedContatori.set(c.eneltel, c);
+
+    if (typeof UiModal !== 'undefined' && UiModal.isOpen('advancedSearchModal')) {
+        UiModal.close('advancedSearchModal');
+    }
+
+    let targetZona = c.comune;
+    if (zone && zone.length) {
+        const zonaDelContatore = zone.find(z => {
+            return (z.nome && z.nome.toLowerCase() === (c.zona || '').toLowerCase()) ||
+                   (z.comuni && z.comuni.some(comune => comune.toLowerCase() === (c.comune || '').toLowerCase()));
+        });
+        if (zonaDelContatore) targetZona = zonaDelContatore.nome;
+    }
+
+    apriDettaglio(targetZona, c.data || null);
+
+    setTimeout(() => {
+        if (isValidCoordinate(c.lat, c.lon)) {
+            map.flyTo([c.lat, c.lon], 18, { duration: 1.0 });
+            setTimeout(() => {
+                const mk = pinnedMarkers.get(c.eneltel) || markers.find(m => m.contatore && (m.contatore.eneltel === c.eneltel || m.contatore.id === c.id));
+                if (mk && mk.openPopup) {
+                    mk.openPopup();
+                } else if (typeof mostraContatorePopup === 'function') {
+                    mostraContatorePopup(c);
+                }
+                evidenziaContatore(c.eneltel || c.id);
+            }, 600);
+        }
+    }, 400);
 }
 
 function pinContatoreFromPopup(eneltel) {
@@ -2487,6 +2629,20 @@ function applyModalAdvancedSearch() {
     aggiornaModalPinnedBar();
 }
 
+function copiaDatiContatore(e, text) {
+    if (e) e.stopPropagation();
+    if (!text) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text);
+    }
+    const btn = e ? e.currentTarget : null;
+    if (btn) {
+        const oldHtml = btn.innerHTML;
+        btn.innerHTML = '✅';
+        setTimeout(() => { btn.innerHTML = oldHtml; }, 1200);
+    }
+}
+
 function renderModalSearchResultsMarkup(risultati) {
     const resultsDiv = document.getElementById('modalSearchResults');
     if (!resultsDiv) return;
@@ -2511,8 +2667,9 @@ function renderModalSearchResultsMarkup(risultati) {
 
     displayList.forEach(c => {
         const isPinned = pinnedContatori.has(c.eneltel);
+        const copyPayload = `${c.cliente || ''} | POD: ${c.pod || ''} | Eneltel: ${c.eneltel || ''} | ${c.comune || ''} ${c.via || ''} ${c.civico || ''}${c.telefono ? ' | Tel: ' + c.telefono : ''}`;
         html += `
-            <div class="pin-result-item ${isPinned ? 'pinned' : ''}" data-eneltel="${c.eneltel}" onclick="togglePinContatore('${c.eneltel}')">
+            <div class="pin-result-item ${isPinned ? 'pinned' : ''}" data-eneltel="${c.eneltel}" onclick="vaiAContatoreConModalita('${c.eneltel}')" style="cursor: pointer;" title="Clicca per aprire sulla mappa (${searchDefaultViewMode === 'date' ? 'Vista Date' : 'Vista Zona'})">
                 <div class="pin-result-left">
                     <button class="btn-pin-checkbox ${isPinned ? 'pinned' : ''}" 
                             onclick="event.stopPropagation(); togglePinContatore('${c.eneltel}')" 
@@ -2528,15 +2685,18 @@ function renderModalSearchResultsMarkup(risultati) {
                     </div>
                     <div class="pin-result-info">
                         📍 <strong>${c.comune || 'N/D'}</strong> - ${c.via || 'N/D'}${c.civico ? ', ' + c.civico : ''}<br>
-                        🔢 ${c.eneltel || 'N/D'} | ⚡ ${c.pod || 'N/D'} | 📅 ${formatDate(c.data)}
+                        🔢 ${c.eneltel || 'N/D'} | ⚡ ${c.pod || 'N/D'} | 📅 ${formatDate(c.data)}${c.telefono ? ` | 📱 ${c.telefono}` : ''}
                     </div>
                 </div>
                 <div class="pin-result-actions" onclick="event.stopPropagation()">
-                    <button class="btn-pin-goto" onclick="vaiAContatoreSingolo('${c.eneltel}')" title="Apri e centra sulla mappa">
-                        🗺️ Vai
+                    <button class="btn-pin-action btn-copy" onclick="copiaDatiContatore(event, '${copyPayload.replace(/'/g, "\\'")}')" title="Copia dati contatore (POD, Eneltel, Indirizzo)">
+                        📋
                     </button>
-                    <button class="tappa-edit-btn" onclick="toggleAdvancedSearchModal(); apriVistaModifica('${c.eneltel}')" title="Modifica" style="opacity: 0.7; font-size: 1.1em;">
+                    <button class="btn-pin-action btn-edit" onclick="toggleAdvancedSearchModal(); apriVistaModifica('${c.eneltel}')" title="Modifica contatore">
                         ✏️
+                    </button>
+                    <button class="btn-pin-action btn-goto" onclick="vaiAContatoreConModalita('${c.eneltel}')" title="Apri sulla mappa (${searchDefaultViewMode === 'date' ? 'Vista Date' : 'Vista Zona'})">
+                        🗺️
                     </button>
                 </div>
             </div>
@@ -2601,6 +2761,7 @@ function saveAdvancedSearchData() {
 }
 
 function restoreAdvancedSearchData() {
+    setSearchDefaultViewMode(searchDefaultViewMode);
     const saved = localStorage.getItem('advancedSearchData');
     if (!saved) return;
 
@@ -4252,6 +4413,21 @@ function renderZoneMappa(zoneFiltrate) {
         zoneCircles.push(marker);
     });
 
+    // Aggiungi marker deposito
+    if (deposito && isValidCoordinate(deposito.lat, deposito.lon)) {
+        const dMarker = L.marker([deposito.lat, deposito.lon], {
+            icon: L.divIcon({
+                className: 'deposito-marker',
+                html: '<div style="background: #2ecc71; color: white; padding: 8px 12px; border-radius: 20px; font-weight: 600; box-shadow: 0 2px 8px rgba(0,0,0,0.3); white-space: nowrap;">🏠 Deposito</div>',
+                iconSize: [80, 40],
+                iconAnchor: [40, 20]
+            }),
+            zIndexOffset: 500
+        }).addTo(map);
+        dMarker.bindPopup(`<b>🏠 Deposito</b><br>${deposito.nome}`);
+        zoneCircles.push(dMarker);
+    }
+
     // Aggiungi marker pinned se presenti (persistono in tutte le viste)
     renderPinnedMarkers();
 
@@ -4360,23 +4536,9 @@ function renderRisultatiRicercaMappa(contatoriTrovati) {
             fillOpacity: 0.9
         }).addTo(map);
 
-        const popupContent = `
-            <div class="popup-content">
-                <div class="popup-header">
-                    <div class="popup-title">${c.nominativo}</div>
-                </div>
-                <div class="popup-row"><span class="popup-label">Comune</span><span class="popup-value">${c.comune}</span></div>
-                <div class="popup-row"><span class="popup-label">Via</span><span class="popup-value">${c.via || 'N/A'}</span></div>
-                <div class="popup-row"><span class="popup-label">POD</span><span class="popup-value">${c.pod || 'N/A'}</span></div>
-                <div class="popup-row"><span class="popup-label">Eneltel</span><span class="popup-value">${c.eneltel || 'N/A'}</span></div>
-                ${c.lcl ? `<div class="popup-row"><span class="popup-label">LCL</span><span class="popup-value">${c.lcl}</span></div>` : ''}
-                <div class="popup-row"><span class="popup-label">Data</span><span class="popup-value">${formatDate(c.data)}</span></div>
-                ${c.is_appuntamento ? `<div class="popup-row"><span class="popup-label">Appuntamento</span><span class="popup-value">📞 ${c.orario_appuntamento}</span></div>` : ''}
-            </div>
-        `;
-
-        marker.bindPopup(popupContent);
-        marker.on('click', () => evidenziaContatore(c.eneltel));
+        marker.contatore = c;
+        marker.bindPopup(() => createContatorePopup(c, idx + 1, colore));
+        marker.on('click', () => vaiAContatoreSingolo(c.eneltel));
         markers.push(marker);
     });
 
@@ -4714,6 +4876,21 @@ function renderComuniMappa(comuniList) {
         marker.on('click', () => selezionaComune(c.nome));
         zoneCircles.push(marker);
     });
+
+    // Aggiungi marker deposito
+    if (deposito && isValidCoordinate(deposito.lat, deposito.lon)) {
+        const dMarker = L.marker([deposito.lat, deposito.lon], {
+            icon: L.divIcon({
+                className: 'deposito-marker',
+                html: '<div style="background: #2ecc71; color: white; padding: 8px 12px; border-radius: 20px; font-weight: 600; box-shadow: 0 2px 8px rgba(0,0,0,0.3); white-space: nowrap;">🏠 Deposito</div>',
+                iconSize: [80, 40],
+                iconAnchor: [40, 20]
+            }),
+            zIndexOffset: 500
+        }).addTo(map);
+        dMarker.bindPopup(`<b>🏠 Deposito</b><br>${deposito.nome}`);
+        zoneCircles.push(dMarker);
+    }
 
     // Aggiungi marker pinned se presenti (persistono in tutte le viste)
     renderPinnedMarkers();
@@ -5205,10 +5382,15 @@ function renderDettaglioSidebar(perTecnico, data) {
                 dateInfo = `<div style="color: var(--accent-secondary, #06b6d4); font-size: 0.78rem;">📋 schedulabile</div>`;
             }
             
-            // Per schedulabili in showAllDatesInDetail usa mostraContatorePopup (marker temp), altrimenti evidenzia il marker esistente
-            const onclickAction = isSchedulabile && showAllDatesInDetail 
-                ? `mostraContatorePopup(contatori.find(cc => cc.id === '${c.id}'))` 
-                : `evidenziaContatore('${c.id}')`;
+            // Per i risultati di ricerca vai direttamente alla Vista Dettaglio del contatore
+            let onclickAction;
+            if (currentView === 'search-results') {
+                onclickAction = `vaiAContatoreSingolo('${c.eneltel}')`;
+            } else if (isSchedulabile && showAllDatesInDetail) {
+                onclickAction = `mostraContatorePopup(contatori.find(cc => cc.id === '${c.id}'))`;
+            } else {
+                onclickAction = `evidenziaContatore('${c.id}')`;
+            }
             
             html += `
                 <div class="tappa-card ${c.is_appuntamento ? 'appuntamento' : ''}${isSchedulabile ? ' schedulabile-tappa' : ''}" 
@@ -10230,7 +10412,10 @@ async function executeBulkAssign() {
 popolaFiltroDate();
 popolaFiltroLCL();
 updateSchedulabiliBadge();
-mostraVistaZone();
+const hasUrlQuery = checkUrlSearchParameters();
+if (!hasUrlQuery) {
+    mostraVistaZone();
+}
 updatePrintButtonVisibility();
 
 // Prova a caricare dati via fetch in background (se non file://)
@@ -10238,12 +10423,14 @@ updatePrintButtonVisibility();
 (async function() {
     const oldTimestamp = dataTimestamp;
     await initializeData();
-    if (dataTimestamp !== oldTimestamp) {
-        // Dati diversi caricati via fetch, aggiorna vista
+    if (dataTimestamp !== oldTimestamp || hasUrlQuery) {
+        // Dati diversi caricati via fetch o ricerca da URL attiva
         popolaFiltroDate();
         popolaFiltroLCL();
         updateSchedulabiliBadge();
-        refreshCurrentView();
+        if (!checkUrlSearchParameters()) {
+            refreshCurrentView();
+        }
         console.log('🔄 Vista aggiornata con dati fetch');
     }
     // Nascondi lo spinner di caricamento pagina

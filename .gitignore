@@ -79,3 +79,5 @@ Desktop.ini
 data/appuntamenti_*.xlsx
 data/user_workflows.json
 data/postit.json
+data/*/mail_attachments/
+data/allegati/

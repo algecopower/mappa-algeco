@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="it" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modelli & Template Centralizzati · Algeco Power ({{ provincia }})</title>
+    <link rel="icon" type="image/png" href="/static/favicon.png">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="/static/templates.css">
+</head>
+<body>
+    <div class="app-layout">
+        <!-- HEADER PRINCIPALE -->
+        <header class="app-header">
+            <div class="header-left">
+                <a href="/" class="nav-back-btn" title="Torna alla Mappa">
+                    <i data-lucide="arrow-left"></i>
+                </a>
+                <div class="header-title-wrap">
+                    <div class="header-icon-badge">
+                        <i data-lucide="wand-2"></i>
+                    </div>
+                    <div>
+                        <h1 class="header-title">Modelli & Template Centralizzati</h1>
+                        <p class="header-subtitle">Gestione condivisa di testi email, messaggi WhatsApp, frasari rapidi e firma aziendale</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="header-right">
+                <span class="badge-provincia">
+                    <i data-lucide="map-pin"></i> {{ provincia }}
+                </span>
+
+                <div class="quick-nav-links">
+                    <a href="/mail" class="quick-nav-btn" target="_blank" title="Apri Gestione Mail"><i data-lucide="mail"></i> Mail</a>
+                    <a href="/lettere" class="quick-nav-btn" target="_blank" title="Apri Gestione Lettere"><i data-lucide="mail-check"></i> Lettere</a>
+                    <a href="/comuni" class="quick-nav-btn" target="_blank" title="Apri Gestione Comuni"><i data-lucide="building-2"></i> Comuni</a>
+                    <a href="/distinte" class="quick-nav-btn" target="_blank" title="Apri PDF E-Distribuzione"><i data-lucide="file-text"></i> PDF</a>
+                </div>
+
+                <button type="button" class="btn-primary" onclick="createNewTemplate()">
+                    <i data-lucide="plus"></i> Nuovo Modello
+                </button>
+            </div>
+        </header>
+
+        <!-- LAYOUT A SCHERMO INTERO A 2 PANNELLI (SIDEBAR + GRANDE EDITOR) -->
+        <main class="templates-full-layout">
+            
+            <!-- PANNELLO 1: SIDEBAR ELENCO & FILTRI -->
+            <aside class="sidebar-panel">
+                <div class="sidebar-filter-chips">
+                    <button type="button" class="filter-chip active" data-filter="all" onclick="setFilter('all')">
+                        <span class="chip-label-wrap"><i data-lucide="layout-grid"></i> Tutti</span>
+                        <span class="chip-count" id="countAll">0</span>
+                    </button>
+                    <button type="button" class="filter-chip" data-filter="email" onclick="setFilter('email')">
+                        <span class="chip-label-wrap"><i data-lucide="mail"></i> Email Clienti</span>
+                        <span class="chip-count" id="countEmail">0</span>
+                    </button>
+                    <button type="button" class="filter-chip" data-filter="enti" onclick="setFilter('enti')">
+                        <span class="chip-label-wrap"><i data-lucide="building-2"></i> Comuni & Polizia</span>
+                        <span class="chip-count" id="countEnti">0</span>
+                    </button>
+                    <button type="button" class="filter-chip" data-filter="whatsapp" onclick="setFilter('whatsapp')">
+                        <span class="chip-label-wrap"><i data-lucide="message-square"></i> WhatsApp</span>
+                        <span class="chip-count" id="countWa">0</span>
+                    </button>
+                    <button type="button" class="filter-chip" data-filter="snippet" onclick="setFilter('snippet')">
+                        <span class="chip-label-wrap"><i data-lucide="message-square-quote"></i> Frasario Rapido</span>
+                        <span class="chip-count" id="countSnippets">0</span>
+                    </button>
+                    <button type="button" class="filter-chip" data-filter="settings" onclick="setFilter('settings')">
+                        <span class="chip-label-wrap"><i data-lucide="settings"></i> Firma & Impostazioni</span>
+                        <span class="chip-count" id="countProv">0</span>
+                    </button>
+                </div>
+
+                <div class="sidebar-search-box">
+                    <i data-lucide="search"></i>
+                    <input type="text" id="templateSearchInput" placeholder="Cerca tra i modelli..." oninput="filterTemplatesList()">
+                </div>
+
+                <div class="templates-scroll-list" id="templatesListContainer">
+                    <!-- Popolato via JS -->
+                </div>
+            </aside>
+
+            <!-- PANNELLO 2: GRANDE EDITOR COMPLETO (FULLSCREEN WYSIWYG / HTML) -->
+            <section class="editor-main-area">
+                
+                <!-- SEZIONE EDITOR MODELLO -->
+                <div id="editorTemplateWrap" class="editor-content-container">
+                    
+                    <!-- TOP BAR EDITOR CON STATI E CONTROLLI -->
+                    <div class="editor-top-bar">
+                        <div class="editor-status-badges">
+                            <span class="editor-type-badge" id="editorBadgeType">Template Completo</span>
+                            <span class="editor-system-badge" id="editorBadgeSystem" style="display:none;">Predefinito di Sistema</span>
+                        </div>
+
+                        <!-- SWITCH VISUALE / CODICE HTML -->
+                        <div class="editor-mode-switch-group">
+                            <span class="mode-switch-label">Modalità di modifica:</span>
+                            <div class="mode-toggle-pills">
+                                <button type="button" class="mode-toggle-btn active" id="modeVisualBtn" onclick="switchEditorMode('visual')" title="Modifica visiva diretta con formattazione e anteprima reale">
+                                    <i data-lucide="eye"></i> Visuale (Anteprima)
+                                </button>
+                                <button type="button" class="mode-toggle-btn" id="modeHtmlBtn" onclick="switchEditorMode('html')" title="Modifica diretta del codice sorgente HTML">
+                                    <i data-lucide="code-2"></i> Codice HTML
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="editor-top-actions">
+                            <button type="button" class="btn-ghost" onclick="duplicateCurrentTemplate()" title="Crea una copia modificabile">
+                                <i data-lucide="copy"></i> Duplica
+                            </button>
+                            <button type="button" class="btn-danger-ghost" id="deleteTemplateBtn" onclick="deleteCurrentTemplate()" title="Elimina modello">
+                                <i data-lucide="trash-2"></i> Elimina
+                            </button>
+                        </div>
+                    </div>
+
+                    <form id="templateEditForm" class="editor-inner-form" onsubmit="event.preventDefault(); saveTemplate();">
+                        <input type="hidden" id="currentId">
+
+                        <!-- INTESTAZIONE MODELLO (TITOLO & TIPO) -->
+                        <div class="form-row-header">
+                            <div class="form-group flex-2">
+                                <label for="templateTitle">Titolo del Modello *</label>
+                                <input type="text" id="templateTitle" required placeholder="Es. Email Semplificata, Richiesta Appuntamento...">
+                            </div>
+                            <div class="form-group flex-1">
+                                <label for="templateType">Tipologia Modello</label>
+                                <select id="templateType" onchange="onTypeChange()">
+                                    <option value="template">Template Completo (Oggetto + Corpo Email/WA)</option>
+                                    <option value="snippet">Frase Rapida / Snippet (Solo Corpo)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- OGGETTO EMAIL (SE TEMPLATE) -->
+                        <div class="form-group" id="subjectGroup">
+                            <label for="templateSubject">Oggetto del Messaggio / Email</label>
+                            <input type="text" id="templateSubject" placeholder="Es. {nome}: SOSTITUZIONE CONTATORE E-DISTRIBUZIONE POD {pod}">
+                        </div>
+
+                        <!-- TOOLBAR SEGNAPOSTO RAPIDI (CLICK-TO-INSERT) -->
+                        <div class="placeholders-bar">
+                            <div class="placeholders-bar-header">
+                                <span><i data-lucide="sparkles"></i> <strong>Segnaposto Dinamici</strong> (clicca per inserire dove si trova il cursore):</span>
+                            </div>
+                            <div class="placeholders-pills-list" id="placeholdersList">
+                                <!-- Popolato via JS -->
+                            </div>
+                        </div>
+
+                        <!-- TOOLBAR DI FORMATTAZIONE WYSIWYG COMPLETA (COME IN GESTIONE MAIL) -->
+                        <div class="wysiwyg-toolbar" id="wysiwygToolbar">
+                            <div class="toolbar-section">
+                                <button type="button" class="btn-format" onclick="execEditorCmd('bold')" title="Grassetto (Ctrl+B)"><i data-lucide="bold"></i></button>
+                                <button type="button" class="btn-format" onclick="execEditorCmd('italic')" title="Corsivo (Ctrl+I)"><i data-lucide="italic"></i></button>
+                                <button type="button" class="btn-format" onclick="execEditorCmd('underline')" title="Sottolineato (Ctrl+U)"><i data-lucide="underline"></i></button>
+                                <button type="button" class="btn-format" onclick="execEditorCmd('strikeThrough')" title="Barrato"><i data-lucide="strikethrough"></i></button>
+                            </div>
+
+                            <div class="toolbar-sep"></div>
+
+                            <div class="toolbar-section">
+                                <button type="button" class="btn-format" onclick="execEditorCmd('formatBlock', '<h3>')" title="Titolo / Intestazione H3"><i data-lucide="heading"></i></button>
+                                <button type="button" class="btn-format" onclick="execEditorCmd('formatBlock', '<p>')" title="Paragrafo Normale"><i data-lucide="pilcrow"></i></button>
+                                <button type="button" class="btn-format" onclick="execEditorCmd('insertUnorderedList')" title="Elenco puntato"><i data-lucide="list"></i></button>
+                                <button type="button" class="btn-format" onclick="execEditorCmd('insertOrderedList')" title="Elenco numerato"><i data-lucide="list-ordered"></i></button>
+                            </div>
+
+                            <div class="toolbar-sep"></div>
+
+                            <div class="toolbar-section">
+                                <button type="button" class="btn-format" onclick="insertLinkDialog()" title="Inserisci link web"><i data-lucide="link"></i></button>
+                                <button type="button" class="btn-format" onclick="execEditorCmd('unlink')" title="Rimuovi link"><i data-lucide="unlink"></i></button>
+                                <button type="button" class="btn-format" onclick="insertHighlightTag()" title="Evidenziazione Gialla Importante"><i data-lucide="highlighter"></i> Evidenzia</button>
+                                <button type="button" class="btn-format" onclick="execEditorCmd('removeFormat')" title="Rimuovi formattazione"><i data-lucide="eraser"></i></button>
+                            </div>
+                        </div>
+
+                        <!-- AREA DI SCRITTURA (VISUALE WYSIWYG O TEXTAREA HTML) -->
+                        <div class="editor-stage">
+                            <!-- 1. EDIT VISUALE (WYSIWYG) -->
+                            <div class="visual-editor-container" id="visualEditorWrap">
+                                <div class="visual-editor" id="visualEditor" contenteditable="true" placeholder="Scrivi qui il corpo del modello..."></div>
+                            </div>
+
+                            <!-- 2. EDIT CODICE HTML (TEXTAREA MONOSPACE) -->
+                            <div class="html-editor-container" id="htmlEditorWrap" style="display:none;">
+                                <textarea id="htmlEditor" class="html-textarea" rows="18" placeholder="Inserisci o modifica il codice sorgente HTML..."></textarea>
+                            </div>
+                        </div>
+
+                        <!-- FOOTER AZIONI SALVATAGGIO -->
+                        <div class="editor-bottom-bar">
+                            <div class="editor-info-summary">
+                                <i data-lucide="info"></i>
+                                <span>I modelli salvati sono istantaneamente attivi in <strong>Gestione Mail</strong>, <strong>Lettere</strong>, <strong>Comuni</strong> e <strong>PDF Distinte</strong>.</span>
+                            </div>
+
+                            <button type="submit" class="btn-save-master" id="saveBtn">
+                                <i data-lucide="save"></i> Salva Modello Centralizzato
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- SEZIONE IMPOSTAZIONI FIRMA & RECAPITI -->
+                <div id="editorSettingsWrap" class="editor-content-container" style="display:none;">
+                    <div class="editor-top-bar">
+                        <div class="editor-status-badges">
+                            <span class="editor-type-badge">⚙️ Impostazioni Firma & Recapiti Territoriali</span>
+                        </div>
+                        <div class="editor-mode-switch-group">
+                            <div class="mode-toggle-pills">
+                                <button type="button" class="mode-toggle-btn active" id="modeSigVisualBtn" onclick="switchSignatureMode('visual')">
+                                    <i data-lucide="eye"></i> Anteprima Firma
+                                </button>
+                                <button type="button" class="mode-toggle-btn" id="modeSigHtmlBtn" onclick="switchSignatureMode('html')">
+                                    <i data-lucide="code-2"></i> Codice HTML
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <form id="settingsEditForm" class="editor-inner-form" onsubmit="event.preventDefault(); saveSettings();">
+                        <div class="settings-hint-box">
+                            <i data-lucide="shield-check"></i>
+                            <div>
+                                <strong>Configurazione Centralizzata Ufficio Tecnico</strong><br>
+                                Questi recapiti e il layout della firma aziendale vengono applicati automaticamente da tutti i moduli del gestionale.
+                            </div>
+                        </div>
+
+                        <div class="provinces-management-section">
+                            <div class="provinces-section-header">
+                                <div class="section-title">
+                                    <i data-lucide="map-pin"></i> <strong>Recapiti Territoriali per Provincia (Email & Telefono)</strong>
+                                </div>
+                                <span class="provinces-sync-badge"><i data-lucide="refresh-cw"></i> Sincronizzate da Pannello Admin</span>
+                            </div>
+                            <div id="provincesListContainer" class="provinces-cards-grid">
+                                <!-- Popolato dinamicamente da data/provinces.json -->
+                            </div>
+                        </div>
+
+                        <div class="form-group flex-grow" style="margin-top: 10px;">
+                            <label>Firma Aziendale Algeco Power (HTML o Visuale)</label>
+                            
+                            <!-- 1. ANTEPRIMA VISUALE FIRMA -->
+                            <div id="sigVisualContainer" class="signature-visual-box">
+                                <div id="sigVisualPreview"></div>
+                            </div>
+
+                            <!-- 2. EDIT CODICE HTML FIRMA -->
+                            <div id="sigHtmlContainer" style="display:none;">
+                                <textarea id="set_firma_html" class="html-textarea" rows="12" placeholder="<table cellpadding='0'>...</table>" oninput="renderSignaturePreview()"></textarea>
+                            </div>
+                        </div>
+
+                        <div class="editor-bottom-bar">
+                            <div class="editor-info-summary">
+                                <i data-lucide="check-circle-2"></i>
+                                <span>Supporta il tag <code>{email_tecnico}</code> risolto dinamicamente in base alla provincia attiva.</span>
+                            </div>
+                            <button type="submit" class="btn-save-master">
+                                <i data-lucide="save"></i> Salva Impostazioni Firma & Recapiti
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- TOAST NOTIFICATIONS -->
+    <div id="toastNotification" class="toast-notification"></div>
+
+    <script src="/static/templates.js"></script>
+</body>
+</html>

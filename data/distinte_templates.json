@@ -197,6 +197,56 @@
             "icon": "fab fa-whatsapp",
             "label": "Proposta Date Breve",
             "type": "whatsapp"
+        },
+        "email_comune_avvio": {
+            "body": "Gentile Ufficio Tecnico del Comune di {comune},\n\ncon la presente desideriamo informarvi che a partire da {data} la nostra società <a href=\"https://www.algecopower.it\" style=\"color:#0066cc;text-decoration:underline;\">Algeco Power Srl</a>, per conto di <a href=\"https://www.e-distribuzione.it/open-meter.html\" style=\"color:#0066cc;text-decoration:underline;\">E-Distribuzione</a>, avvierà le attività di sostituzione massiva dei contatori di energia elettrica sul vostro territorio comunale.\n\nIn allegato trasmettiamo la nostra lettera di attestazione incarico unitamente all'elenco dei contatori e delle vie interessate dall'intervento.\nI nostri operatori saranno riconoscibili tramite apposito tesserino identificativo aziendale.\n\nRestiamo a disposizione per qualsiasi chiarimento o necessità di coordinamento.\n\nCordiali saluti,\nUFFICIO TECNICO ALGECO POWER",
+            "fields": [
+                "comune",
+                "data"
+            ],
+            "icon": "fas fa-building",
+            "info": "Comunicazione ufficiale di avvio attività per Comuni e Uffici Tecnici con allegato Excel contatori.",
+            "label": "Comunicazione Comune / Uff. Tecnico",
+            "subject": "COMUNE DI {comune}: SOSTITUZIONE CONTATORI E-DISTRIBUZIONE",
+            "type": "email"
+        },
+        "email_polizia_municipale": {
+            "body": "Spettabile Comando di Polizia Municipale di {comune},\n\nvi informiamo che gli operatori tecnici di <a href=\"https://www.algecopower.it\" style=\"color:#0066cc;text-decoration:underline;\">Algeco Power Srl</a>, incaricati ufficiali da <a href=\"https://www.e-distribuzione.it/open-meter.html\" style=\"color:#0066cc;text-decoration:underline;\">E-Distribuzione</a>, saranno presenti sul territorio comunale a partire da {data} per interventi di sostituzione e adeguamento dei contatori di energia elettrica.\n\nAlleghiamo attestazione dell'incarico e restiamo a completa disposizione per eventuali verifiche o richieste di supporto per la viabilità.\n\nCordiali saluti,\nUFFICIO TECNICO ALGECO POWER",
+            "fields": [
+                "comune",
+                "data"
+            ],
+            "icon": "fas fa-shield-alt",
+            "info": "Preavviso attività per Polizia Municipale e sicurezza viabilità.",
+            "label": "Comunicazione Polizia Municipale",
+            "subject": "COMUNE DI {comune}: PREAVVISO ATTIVITÀ SOSTITUZIONE CONTATORI",
+            "type": "email"
+        }
+    },
+    "snippets": {
+        "orari_apertura": {
+            "title": "Richiesta Orari di Apertura",
+            "body": "Chiediamo cortesemente di confermarci i vostri consueti orari di apertura e reperibilità per consentire l'accesso al contatore."
+        },
+        "fascia_semidiretto": {
+            "title": "Fascia Oraria Semidiretto (senza distacco)",
+            "body": "Precisiamo che per la tipologia di contatore installata (semidiretto), l'intervento non comporta alcuna interruzione della fornitura elettrica."
+        },
+        "fascia_distacco": {
+            "title": "Fascia Oraria con Breve Distacco",
+            "body": "Facciamo presente che durante l'intervento sarà necessaria una breve interruzione dell'erogazione elettrica (circa 15-20 minuti)."
+        },
+        "richiesta_referente": {
+            "title": "Richiesta Recapito Referente in Loco",
+            "body": "Vi preghiamo di fornirci il nominativo e un recapito telefonico diretto della persona o custode di riferimento presente in loco."
+        },
+        "accesso_contatore": {
+            "title": "Indicazioni Accesso Locale Contatori",
+            "body": "Chiediamo la gentilezza di assicurarvi che il locale contatori / vano tecnico sia accessibile e non chiuso a chiave nella fascia oraria concordata."
+        },
+        "sollecito_urgente": {
+            "title": "Sollecito Mancato Riscontro",
+            "body": "In riferimento ai precedenti avvisi rimasti privi di riscontro, vi sollecitiamo cortesemente una risposta per programmare l'adeguamento obbligatorio."
         }
     }
 }

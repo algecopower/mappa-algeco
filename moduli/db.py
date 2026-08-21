@@ -48,7 +48,7 @@ COLONNE_NOTE = [
 # Colonne TEXT vs REAL (latitudine/longitudine sono numeriche)
 _COLONNE_REAL = {'latitudine', 'longitudine'}
 
-SCHEMA_VERSION_CORRENTE = 6
+SCHEMA_VERSION_CORRENTE = 7
 
 
 # ============================================================================
@@ -251,6 +251,7 @@ def _bootstrap_schema(conn):
     ''')
 
     _create_lettere_tables(conn)
+    _create_mail_tables(conn)
 
     # Versione schema
     cur = conn.execute("SELECT value FROM sync_state WHERE key='schema_version'")
@@ -291,6 +292,9 @@ def _apply_migrations(conn, da_versione):
     if da_versione < 6:
         _migrate_v5_to_v6(conn)
         da_versione = 6
+    if da_versione < 7:
+        _migrate_v6_to_v7(conn)
+        da_versione = 7
 
     conn.execute(
         "UPDATE sync_state SET value=? WHERE key='schema_version'",
@@ -730,6 +734,132 @@ def _migrate_v5_to_v6(conn):
     if 'indicazioni_ztl' not in cols:
         conn.execute('ALTER TABLE comuni_info ADD COLUMN indicazioni_ztl TEXT')
     logger.info("[DB-migration] v6 applicato.")
+
+
+def _create_mail_tables(conn):
+    """Crea le tabelle del modulo Gestione Mail."""
+    conn.executescript('''
+        CREATE TABLE IF NOT EXISTS mail_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            message_id TEXT,
+            thread_id TEXT,
+            provincia TEXT NOT NULL,
+            folder TEXT NOT NULL DEFAULT 'inbox',
+            from_addr TEXT NOT NULL,
+            from_name TEXT,
+            to_addrs TEXT NOT NULL,
+            cc_addrs TEXT,
+            bcc_addrs TEXT,
+            reply_to TEXT,
+            subject TEXT NOT NULL,
+            body_text TEXT,
+            body_html TEXT,
+            snippet TEXT,
+            category_id TEXT,
+            is_read INTEGER NOT NULL DEFAULT 0,
+            is_starred INTEGER NOT NULL DEFAULT 0,
+            is_archived INTEGER NOT NULL DEFAULT 0,
+            is_scheduled INTEGER NOT NULL DEFAULT 0,
+            scheduled_ts INTEGER,
+            sent_ts INTEGER,
+            received_ts INTEGER,
+            created_ts INTEGER NOT NULL,
+            updated_ts INTEGER NOT NULL,
+            status TEXT NOT NULL DEFAULT 'received',
+            error_msg TEXT,
+            attachments_json TEXT,
+            linked_pod TEXT,
+            linked_comune TEXT,
+            linked_azienda TEXT,
+            meta_json TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_mail_folder_ts
+            ON mail_messages(provincia, folder, received_ts);
+        CREATE INDEX IF NOT EXISTS idx_mail_category
+            ON mail_messages(provincia, category_id);
+        CREATE INDEX IF NOT EXISTS idx_mail_read
+            ON mail_messages(provincia, is_read);
+        CREATE INDEX IF NOT EXISTS idx_mail_scheduled
+            ON mail_messages(folder, scheduled_ts);
+        CREATE INDEX IF NOT EXISTS idx_mail_linked_pod
+            ON mail_messages(provincia, linked_pod);
+        CREATE INDEX IF NOT EXISTS idx_mail_msg_id
+            ON mail_messages(provincia, message_id);
+
+        CREATE TABLE IF NOT EXISTS mail_categories (
+            id TEXT NOT NULL,
+            provincia TEXT NOT NULL,
+            name TEXT NOT NULL,
+            color TEXT NOT NULL,
+            icon TEXT NOT NULL,
+            badge_bg TEXT,
+            badge_text TEXT,
+            keywords_json TEXT,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            is_system INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (provincia, id)
+        );
+
+        CREATE TABLE IF NOT EXISTS mail_templates_snippets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            provincia TEXT NOT NULL,
+            title TEXT NOT NULL,
+            category TEXT,
+            type TEXT NOT NULL DEFAULT 'template',
+            subject TEXT,
+            body TEXT NOT NULL,
+            variables_json TEXT,
+            created_ts INTEGER NOT NULL,
+            updated_ts INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_mail_templates_prov
+            ON mail_templates_snippets(provincia, type);
+    ''')
+
+    # Seed categorie e template default
+    _seed_default_mail_data(conn)
+
+
+def _seed_default_mail_data(conn):
+    """Inizializza categorie e template/snippet standard se la tabella è vuota."""
+    try:
+        from config import PROVINCIA_ATTIVA
+        prov = PROVINCIA_ATTIVA.lower()
+    except Exception:
+        prov = 'torino'
+
+    cur = conn.execute("SELECT COUNT(*) AS c FROM mail_categories WHERE provincia = ?", (prov,))
+    if cur.fetchone()['c'] == 0:
+        default_categories = [
+            ('clienti_appuntamenti', prov, 'Clienti & Appuntamenti', '#3b82f6', 'calendar', 'rgba(59,130,246,0.15)', '#60a5fa',
+             json.dumps(['appuntamento', 'appuntamenti', 'spostamento', 'cliente', 'presenza', 'fascia oraria', 'interruzione', 'disponibilita', 'orario']), 1, 1),
+            ('comuni_enti', prov, 'Enti & Comuni', '#10b981', 'building-2', 'rgba(16,185,129,0.15)', '#34d399',
+             json.dumps(['comune', 'polizia locale', 'polizia municipale', 'ztl', 'ordinanza', 'occupazione suolo', 'sindaco', 'ufficio tecnico', 'autorizzazione']), 2, 1),
+            ('distinte_enel', prov, 'E-Distribuzione & Distinte', '#f59e0b', 'file-text', 'rgba(245,158,11,0.15)', '#fbbf24',
+             json.dumps(['distinta', 'distinte', 'maxy', 'verbale', 'e-distribuzione', 'eneltel', 'semidiretto', 'trifase', 'monofase', 'misuratore']), 3, 1),
+            ('tecnici_operativi', prov, 'Tecnici & Operatività', '#8b5cf6', 'wrench', 'rgba(139,92,246,0.15)', '#a78bfa',
+             json.dumps(['tecnico', 'operatore', 'sigillo', 'sigilli', 'matricola', 'installato', 'posa', 'guasto', 'sostituzione', 'boxbeat']), 4, 1),
+            ('solleciti', prov, 'Solleciti & Urgenze', '#ef4444', 'alert-triangle', 'rgba(239,68,68,0.15)', '#f87171',
+             json.dumps(['sollecito', 'sollecita', 'urgente', 'urgenza', 'reclamo', 'diffida', 'improrogabile', 'mancata', 'ritardo']), 5, 1),
+            ('amministrazione', prov, 'Amministrazione & Varie', '#06b6d4', 'folder', 'rgba(6,182,212,0.15)', '#22d3ee',
+             json.dumps(['amministrazione', 'fattura', 'pagamento', 'preventivo', 'contratto', 'amministrativo']), 6, 1),
+        ]
+        conn.executemany(
+            """INSERT INTO mail_categories (id, provincia, name, color, icon, badge_bg, badge_text, keywords_json, sort_order, is_system)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            default_categories
+        )
+
+    # I template e frasari base sono centralizzati in data/distinte_templates.json
+    # La tabella mail_templates_snippets ospita eventuali template/snippet personalizzati dall'utente.
+    pass
+
+
+def _migrate_v6_to_v7(conn):
+    """Schema v7: modulo Gestione Mail (messaggi, categorie ad HOC, template e frasario)."""
+    logger.info("[DB-migration] v6→v7: modulo Gestione Mail")
+    _create_mail_tables(conn)
+    logger.info("[DB-migration] v7 applicato.")
 
 # ============================================================================
 # HELPER NORMALIZZAZIONE & HASH

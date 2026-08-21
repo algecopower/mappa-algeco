@@ -508,9 +508,28 @@
                             <span class="gestionale-section-dot dot-documenti"></span>
                             <i data-lucide="file-spreadsheet"></i> Documenti & Comunicazioni
                         </div>
-                        <span class="gestionale-section-count">3 pagine</span>
+                        <span class="gestionale-section-count">5 pagine</span>
                     </div>
                     <div class="gestionale-grid">
+                        <!-- Gestione Mail -->
+                        <div class="gestionale-card" data-action="mail" data-tags="gestione mail webmail posta elettronica invio ricezione imap smtp appuntamenti comunicazioni" onclick="apriDaGestionale('mail')">
+                            <div class="gestionale-card-icon icon-blue">
+                                <i data-lucide="mail"></i>
+                            </div>
+                            <div class="gestionale-card-content">
+                                <div class="gestionale-card-top">
+                                    <h4 class="gestionale-card-title">Gestione Mail</h4>
+                                    <div class="gestionale-card-top-right">
+                                        <span class="gestionale-card-badge badge-tab">Nuova Scheda</span>
+                                        <button type="button" class="gestionale-card-fav" onclick="toggleFavoritoGestionale(event, 'mail')" title="Aggiungi ai preferiti">
+                                            <i data-lucide="star"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <p class="gestionale-card-desc">Client di posta avanzato, categorizzazione intelligente ad HOC, invio programmato e template rapidi.</p>
+                            </div>
+                        </div>
+
                         <!-- Gestione Lettere -->
                         <div class="gestionale-card" data-action="lettere" data-tags="gestione lettere avvisi excel contatti aziende spedizioni clienti poste invii" onclick="apriDaGestionale('lettere')">
                             <div class="gestionale-card-icon icon-indigo">
@@ -565,6 +584,25 @@
                                     </div>
                                 </div>
                                 <p class="gestionale-card-desc">Rubrica uffici tecnici comunali, stato contatti, note territoriali e invio comunicazioni.</p>
+                            </div>
+                        </div>
+
+                        <!-- Modelli & Template -->
+                        <div class="gestionale-card" data-action="templates" data-tags="gestione modelli template frasario snippet firme email whatsapp testi comunicazioni" onclick="apriDaGestionale('templates')">
+                            <div class="gestionale-card-icon icon-amber">
+                                <i data-lucide="wand-2"></i>
+                            </div>
+                            <div class="gestionale-card-content">
+                                <div class="gestionale-card-top">
+                                    <h4 class="gestionale-card-title">Modelli & Template</h4>
+                                    <div class="gestionale-card-top-right">
+                                        <span class="gestionale-card-badge badge-tab">Nuova Scheda</span>
+                                        <button type="button" class="gestionale-card-fav" onclick="toggleFavoritoGestionale(event, 'templates')" title="Aggiungi ai preferiti">
+                                            <i data-lucide="star"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <p class="gestionale-card-desc">Editor centralizzato per template email, messaggi WhatsApp, frasario rapido e firma aziendale.</p>
                             </div>
                         </div>
                     </div>
@@ -874,6 +912,19 @@
                 <div class="advanced-search-actions">
                     <button class="btn-clear-advanced" onclick="clearModalAdvancedSearch()"><i data-lucide="trash-2"></i> Pulisci</button>
                     <button class="btn-apply-advanced" onclick="applyModalAdvancedSearch()"><i data-lucide="search"></i> Cerca</button>
+                </div>
+
+                <!-- Selettore modalità di visualizzazione al click -->
+                <div class="search-view-mode-selector">
+                    <span class="view-mode-label"><i data-lucide="compass"></i> Destinazione click:</span>
+                    <div class="view-mode-pills">
+                        <button type="button" class="view-mode-pill active" id="searchModeDetail" onclick="setSearchDefaultViewMode('detail')">
+                            <i data-lucide="map-pin"></i> Vista Zona
+                        </button>
+                        <button type="button" class="view-mode-pill" id="searchModeDate" onclick="setSearchDefaultViewMode('date')">
+                            <i data-lucide="calendar"></i> Vista Date
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Barra di stato pin globali / azioni multiple -->

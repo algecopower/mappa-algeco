@@ -636,6 +636,8 @@ from routes.access_points import bp as access_points_bp
 from routes.verifica_indirizzi import bp as verifica_indirizzi_bp
 from routes.comuni import bp as comuni_bp
 from routes.appuntamenti import bp as appuntamenti_bp
+from routes.mail import bp as mail_bp
+from routes.templates import bp as templates_bp
 
 app.register_blueprint(contatori_bp)
 app.register_blueprint(distinte_bp)
@@ -650,6 +652,8 @@ app.register_blueprint(access_points_bp)
 app.register_blueprint(verifica_indirizzi_bp)
 app.register_blueprint(comuni_bp)
 app.register_blueprint(appuntamenti_bp)
+app.register_blueprint(mail_bp)
+app.register_blueprint(templates_bp)
 
 # ============================================================================
 # CSRF PROTECTION
@@ -2852,14 +2856,24 @@ def background_sync_loop():
 
     # Primo sync al boot per generare mappa_data.json subito disponibile.
     _sync_needed.set()
+    _last_mail_check = 0.0
 
     while _sync_running:
-        # Aspetta indefinitamente che qualcuno chieda un sync
-        # (POST modifica, import Excel, ecc.). Wakeup ogni 5s solo per
-        # poter chiudere pulitamente al SIGTERM (_sync_running=False).
+        # Aspetta che qualcuno chieda un sync (POST modifica, import Excel, ecc.).
+        # Wakeup ogni 5s per poter processare la coda email programmate e gestire SIGTERM.
         triggered = _sync_needed.wait(timeout=5.0)
         if not _sync_running:
             break
+
+        now_t = time.time()
+        if now_t - _last_mail_check >= 15.0:
+            _last_mail_check = now_t
+            try:
+                from moduli import mail_manager
+                mail_manager.process_scheduled_queue()
+            except Exception as e:
+                logger.warning(f"[MAIL-WORKER] Errore check periodico email programmate: {e}")
+
         if not triggered:
             continue
         _sync_needed.clear()

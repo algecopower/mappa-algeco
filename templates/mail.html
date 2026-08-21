@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="it" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2">
+    <title>Gestione Mail - Algeco Power</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/static/theme.css">
+    <link rel="stylesheet" href="/static/mail.css?v=1">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+    <script src="/static/theme-init.js"></script>
+    <script src="/static/csrf.js"></script>
+</head>
+<body class="mail-app-body">
+    <div class="mail-shell">
+        <!-- TOP HEADER -->
+        <header class="mail-header">
+            <div class="mail-header-left">
+                <div class="mail-brand">
+                    <div class="mail-brand-icon">
+                        <i data-lucide="mail"></i>
+                    </div>
+                    <div>
+                        <h1 class="mail-brand-title">Gestione Mail</h1>
+                        <span class="mail-brand-sub">Client di Posta &middot; Provincia di <strong id="currentProvincia">{{ provincia }}</strong></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SEARCH BAR IN HEADER FOR GLOBAL REACH -->
+            <div class="mail-header-search">
+                <div class="search-input-wrap">
+                    <i data-lucide="search" class="search-icon"></i>
+                    <input type="search" id="globalMailSearch" placeholder="Cerca per mittente, destinatario, oggetto, POD o comune..." oninput="handleSearchInput(this.value)">
+                    <button class="search-clear-btn" id="searchClearBtn" onclick="clearSearch()" title="Cancella ricerca" style="display: none;">
+                        <i data-lucide="x"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="mail-header-actions">
+                <!-- SYNC SPLIT BUTTON -->
+                <div class="sync-btn-group" id="syncBtnGroup">
+                    <button class="btn-sync" id="syncImapBtn" onclick="triggerSyncImap(200)" title="Sincronizza ultime 200 email recenti">
+                        <i data-lucide="refresh-cw" id="syncSpinner"></i>
+                        <span>Sincronizza</span>
+                    </button>
+                    <button type="button" class="btn-sync-toggle" onclick="toggleSyncDropdown(event)" title="Opzioni di sincronizzazione">
+                        <i data-lucide="chevron-down"></i>
+                    </button>
+                    <div class="sync-dropdown-menu" id="syncDropdownMenu" style="display: none;">
+                        <div class="dropdown-item" onclick="triggerSyncImap(200)">
+                            <i data-lucide="refresh-cw" style="width: 15px; height: 15px; color: var(--accent);"></i>
+                            <div>
+                                <strong>Sincronizza Recenti</strong>
+                                <div style="font-size: 0.72rem; color: var(--text-muted);">Ultime 200 email dalla casella</div>
+                            </div>
+                        </div>
+                        <div class="dropdown-item" onclick="triggerSyncImap(0)">
+                            <i data-lucide="download-cloud" style="width: 15px; height: 15px; color: #10b981;"></i>
+                            <div>
+                                <strong>Sincronizza Tutto lo Storico</strong>
+                                <div style="font-size: 0.72rem; color: var(--text-muted);">Scarica tutto il pregresso della casella</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="header-divider"></div>
+                <a href="/" class="btn-nav" title="Mappa Contatori"><i data-lucide="map"></i><span>Mappa</span></a>
+                <a href="/dashboard" class="btn-nav" title="Dashboard"><i data-lucide="layout-dashboard"></i><span>Dashboard</span></a>
+                <a href="/distinte" class="btn-nav" title="PDF E-Distribuzione"><i data-lucide="file-text"></i><span>Distinte</span></a>
+                <a href="/lettere" class="btn-nav" title="Archivio Lettere"><i data-lucide="mail-check"></i><span>Lettere</span></a>
+                <a href="/comuni" class="btn-nav" title="Gestione Comuni"><i data-lucide="building-2"></i><span>Comuni</span></a>
+                <button class="btn-theme-toggle" onclick="toggleTheme()" title="Cambia tema chiaro/scuro">
+                    <i data-lucide="sun" class="sun-icon"></i>
+                    <i data-lucide="moon" class="moon-icon"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- MAIN 3-PANE WORKSPACE -->
+        <div class="mail-workspace">
+            
+            <!-- PANE 1: SIDEBAR (Cartelle, Categorie, Frasario) -->
+            <aside class="mail-sidebar" id="mailSidebar">
+                <!-- COMPOSE BUTTON -->
+                <div class="sidebar-compose-wrap">
+                    <button class="btn-compose" onclick="openComposer()">
+                        <i data-lucide="pen-tool"></i>
+                        <span>Scrivi Mail</span>
+                    </button>
+                </div>
+
+                <div class="sidebar-scrollable">
+                    <!-- CARTELLE STANDARD -->
+                    <div class="sidebar-section">
+                        <div class="sidebar-section-title">Cartelle</div>
+                        <nav class="sidebar-nav">
+                            <button class="nav-item active" data-folder="inbox" onclick="selectFolder('inbox')">
+                                <span class="nav-icon"><i data-lucide="inbox"></i></span>
+                                <span class="nav-label">Posta in arrivo</span>
+                                <span class="nav-badge" id="badge-inbox">0</span>
+                            </button>
+                            <button class="nav-item" data-folder="starred" onclick="selectFolder('starred')">
+                                <span class="nav-icon"><i data-lucide="star"></i></span>
+                                <span class="nav-label">Preferiti</span>
+                                <span class="nav-badge muted" id="badge-starred">0</span>
+                            </button>
+                            <button class="nav-item" data-folder="scheduled" onclick="selectFolder('scheduled')">
+                                <span class="nav-icon"><i data-lucide="clock"></i></span>
+                                <span class="nav-label">Programmate</span>
+                                <span class="nav-badge warning" id="badge-scheduled">0</span>
+                            </button>
+                            <button class="nav-item" data-folder="sent" onclick="selectFolder('sent')">
+                                <span class="nav-icon"><i data-lucide="send"></i></span>
+                                <span class="nav-label">Posta inviata</span>
+                                <span class="nav-badge muted" id="badge-sent">0</span>
+                            </button>
+                            <button class="nav-item" data-folder="drafts" onclick="selectFolder('drafts')">
+                                <span class="nav-icon"><i data-lucide="file-edit"></i></span>
+                                <span class="nav-label">Bozze</span>
+                                <span class="nav-badge muted" id="badge-drafts">0</span>
+                            </button>
+                            <button class="nav-item" data-folder="archive" onclick="selectFolder('archive')">
+                                <span class="nav-icon"><i data-lucide="archive"></i></span>
+                                <span class="nav-label">Archivio</span>
+                            </button>
+                            <button class="nav-item" data-folder="trash" onclick="selectFolder('trash')">
+                                <span class="nav-icon"><i data-lucide="trash-2"></i></span>
+                                <span class="nav-label">Cestino</span>
+                                <span class="nav-badge muted" id="badge-trash">0</span>
+                            </button>
+                        </nav>
+                    </div>
+
+                    <!-- CATEGORIZZAZIONE AD HOC -->
+                    <div class="sidebar-section">
+                        <div class="sidebar-section-title">
+                            <span>Categorie Intelligenti</span>
+                            <button class="btn-section-action" onclick="openCategoriesModal()" title="Gestisci categorie">
+                                <i data-lucide="plus"></i>
+                            </button>
+                        </div>
+                        <div class="categories-nav" id="categoriesNavList">
+                            <!-- Popolato dinamicamente da JS -->
+                            <div class="loading-sidebar"><i data-lucide="loader" class="spin"></i> Caricamento...</div>
+                        </div>
+                    </div>
+
+                    <!-- STRUMENTI RAPIDI & TEMPLATE -->
+                    <div class="sidebar-section">
+                        <div class="sidebar-section-title">
+                            <span>Modelli & Frasario</span>
+                            <button class="btn-section-action" onclick="openTemplatesModal()" title="Gestisci template e frasi">
+                                <i data-lucide="settings-2"></i>
+                            </button>
+                        </div>
+                        <nav class="sidebar-nav">
+                            <a href="/templates" class="nav-item" target="_blank" style="text-decoration:none;">
+                                <span class="nav-icon"><i data-lucide="wand-2"></i></span>
+                                <span class="nav-label">Modelli & Template</span>
+                            </a>
+                            <button class="nav-item" onclick="openStandardAttachmentsModal()">
+                                <span class="nav-icon"><i data-lucide="paperclip"></i></span>
+                                <span class="nav-label">Allegati Standard</span>
+                            </button>
+                        </nav>
+                    </div>
+                </div>
+
+                <!-- FOOTER STATO -->
+                <div class="sidebar-footer">
+                    <div class="status-indicator">
+                        <span class="status-dot connected"></span>
+                        <span class="status-text" id="syncStatusText">Connesso &middot; Sincronizzato</span>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- PANE 2: LISTA MESSAGGI -->
+            <section class="mail-list-pane" id="mailListPane">
+                <!-- TOOLBAR LISTA -->
+                <div class="list-toolbar">
+                    <div class="list-toolbar-top">
+                        <div class="toolbar-selection">
+                            <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAllMessages(this.checked)" title="Seleziona tutte">
+                            <span class="folder-current-name" id="currentFolderTitle">Posta in arrivo</span>
+                        </div>
+                        <div class="toolbar-pagination" id="listPaginationWrap">
+                            <span class="pagination-info" id="paginationInfo">0 - 0 di 0</span>
+                            <div class="pagination-btns">
+                                <button class="btn-page" id="prevPageBtn" onclick="changePage(-1)" disabled><i data-lucide="chevron-left"></i></button>
+                                <button class="btn-page" id="nextPageBtn" onclick="changePage(1)" disabled><i data-lucide="chevron-right"></i></button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- FILTRI RAPIDI & BARRA AZIONI BATCH (SOVRASCRIVE A TUTTA LARGHEZZA) -->
+                    <div class="list-filters-bar" id="listFiltersBar">
+                        <div class="filter-pills" id="filterPillsContainer">
+                            <button class="pill-btn active" data-filter="all" onclick="setQuickFilter('all')">Tutte</button>
+                            <button class="pill-btn" data-filter="unread" onclick="setQuickFilter('unread')">Non lette</button>
+                            <button class="pill-btn" data-filter="starred" onclick="setQuickFilter('starred')">Preferiti ⭐</button>
+                            <button class="pill-btn" data-filter="attachments" onclick="setQuickFilter('attachments')">Allegati 📎</button>
+                        </div>
+
+                        <!-- BATCH ACTIONS (compare se selezionati sovrascrivendo l'intera riga) -->
+                        <div class="batch-actions-bar" id="batchActionsBar" style="display: none;">
+                            <span class="batch-count" id="batchSelectedCount">0 selezionate</span>
+                            <div class="batch-btns-group">
+                                <button class="btn-batch" onclick="batchMarkRead(true)" title="Segna come lette"><i data-lucide="mail-open"></i></button>
+                                <button class="btn-batch" onclick="batchMarkRead(false)" title="Segna come non lette"><i data-lucide="mail"></i></button>
+                                <button class="btn-batch" onclick="batchToggleStar()" title="Aggiungi stella"><i data-lucide="star"></i></button>
+                                <div class="batch-dropdown" id="batchCatDropdown">
+                                    <button type="button" class="btn-batch" onclick="toggleBatchCatDropdown(event)" title="Assegna Categoria">
+                                        <i data-lucide="tag"></i> Categoria <i data-lucide="chevron-down"></i>
+                                    </button>
+                                    <div class="batch-dropdown-menu" id="batchCategoryMenu"></div>
+                                </div>
+                                <button class="btn-batch" onclick="batchMoveToArchive()" title="Archivia"><i data-lucide="archive"></i></button>
+                                <button class="btn-batch danger" onclick="batchDelete()" title="Elimina"><i data-lucide="trash-2"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- LISTA SCROLLABILE MESSAGGI -->
+                <div class="mail-messages-container" id="messagesContainer">
+                    <div class="mail-loading-state">
+                        <i data-lucide="loader" class="spin"></i>
+                        <span>Caricamento messaggi in corso...</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- PANE 3: LETTORE DETTAGLIO & AZIONI OPERATIVE -->
+            <section class="mail-reader-pane" id="mailReaderPane">
+                <!-- EMPTY STATE (quando nessuna mail è selezionata) -->
+                <div class="reader-empty-state" id="readerEmptyState">
+                    <div class="empty-icon-wrap">
+                        <i data-lucide="mail-open"></i>
+                    </div>
+                    <h3>Nessun messaggio selezionato</h3>
+                    <p>Scegli un'email dall'elenco a sinistra per visualizzarne il contenuto, gli allegati e i dettagli collegati.</p>
+                    <div class="empty-quick-actions">
+                        <button class="btn-soft" onclick="openComposer()"><i data-lucide="pen-tool"></i> Scrivi una nuova email</button>
+                        <button class="btn-soft" onclick="triggerSyncImap()"><i data-lucide="refresh-cw"></i> Controlla nuova posta</button>
+                    </div>
+                </div>
+
+                <!-- DETTAGLIO EMAIL ATTIVO -->
+                <div class="reader-content-wrap" id="readerContentWrap" style="display: none;">
+                    <!-- HEADER LETTORE -->
+                    <div class="reader-header">
+                        <div class="reader-header-top">
+                            <div class="reader-subject-wrap">
+                                <h2 class="reader-subject" id="readerSubjectTitle">Oggetto email</h2>
+                                <div class="reader-category-badge-wrap" id="readerCategoryBadgeWrap">
+                                    <!-- Badge categoria interattivo per cambio al volo -->
+                                </div>
+                            </div>
+                            <!-- ACTION BUTTONS -->
+                            <div class="reader-actions">
+                                <button class="btn-reader-action" onclick="replyCurrentMail(false)" title="Rispondi"><i data-lucide="reply"></i><span>Rispondi</span></button>
+                                <button class="btn-reader-action" onclick="replyCurrentMail(true)" title="Rispondi a tutti"><i data-lucide="reply-all"></i></button>
+                                <button class="btn-reader-action" onclick="forwardCurrentMail()" title="Inoltra"><i data-lucide="forward"></i></button>
+                                <button class="btn-reader-action" id="readerStarBtn" onclick="toggleCurrentMailStar()" title="Segna con stella"><i data-lucide="star"></i></button>
+                                <button class="btn-reader-action" onclick="archiveCurrentMail()" title="Archivia"><i data-lucide="archive"></i></button>
+                                <button class="btn-reader-action" onclick="toggleCurrentMailReadStatus()" title="Segna come non letta"><i data-lucide="mail"></i></button>
+                                <button class="btn-reader-action" id="toggleMailThemeBtn" onclick="toggleMailReaderTheme()" title="Alterna modalità lettura Sfondo Chiaro / Scuro"><i data-lucide="sun"></i></button>
+                                <button class="btn-reader-action" onclick="printCurrentMail()" title="Stampa email"><i data-lucide="printer"></i></button>
+                                <button class="btn-reader-action danger" onclick="deleteCurrentMail()" title="Elimina email"><i data-lucide="trash-2"></i></button>
+                            </div>
+                        </div>
+
+                        <!-- MITTENTE E DESTINATARI -->
+                        <div class="reader-sender-info">
+                            <div class="sender-avatar" id="readerSenderAvatar">AP</div>
+                            <div class="sender-details">
+                                <div class="sender-line">
+                                    <strong class="sender-name" id="readerSenderName">Mittente</strong>
+                                    <span class="sender-email" id="readerSenderEmail">&lt;email@example.com&gt;</span>
+                                    <span class="sender-date" id="readerDateFull">Data e ora</span>
+                                </div>
+                                <div class="recipient-line">
+                                    <span class="rec-label">A:</span>
+                                    <span class="rec-values" id="readerToRecipients">destinatario@algeco.it</span>
+                                    <span class="rec-cc-wrap" id="readerCcWrap" style="display: none;">
+                                        <span class="rec-label">Cc:</span>
+                                        <span class="rec-values" id="readerCcRecipients"></span>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- CARD INTEGRAZIONE GESTIONALE (POD / COMUNE / AZIENDA) -->
+                        <div class="reader-linked-card" id="readerLinkedCard" style="display: none;">
+                            <div class="linked-card-icon" id="linkedCardIcon"><i data-lucide="zap"></i></div>
+                            <div class="linked-card-content">
+                                <div class="linked-card-title" id="linkedCardTitle">Contatore / Ente collegato</div>
+                                <div class="linked-card-desc" id="linkedCardDesc">Dettagli anagrafica</div>
+                            </div>
+                            <div class="linked-card-action" id="linkedCardAction">
+                                <!-- Pulsante dinamico verso Mappa, Filone o Comuni -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- CORPO EMAIL -->
+                    <div class="reader-body" id="readerBodyContainer">
+                        <!-- Render sicuro del body HTML / Text -->
+                        <div class="mail-body-content" id="mailBodyContent"></div>
+                    </div>
+
+                    <!-- ALLEGATI RICEVUTI / INVIATI -->
+                    <div class="reader-attachments-box" id="readerAttachmentsBox" style="display: none;">
+                        <div class="attachments-header">
+                            <i data-lucide="paperclip"></i>
+                            <span id="attachmentsCountLabel">Allegati (0)</span>
+                        </div>
+                        <div class="attachments-grid" id="readerAttachmentsGrid">
+                            <!-- Popolato da JS -->
+                        </div>
+                    </div>
+
+                    <!-- QUICK REPLY BAR IN FONDO -->
+                    <div class="reader-quick-reply">
+                        <div class="quick-reply-box">
+                            <textarea id="quickReplyInput" placeholder="Scrivi una risposta veloce..." rows="2"></textarea>
+                            <div class="quick-reply-tools">
+                                <div class="quick-reply-tools-left">
+                                    <div class="dropdown-wrap">
+                                        <button type="button" class="btn-tool-sm" onclick="toggleSnippetDropdown('quickReplySnippets')" title="Spiaccica frase rapida">
+                                            <i data-lucide="message-square-plus"></i> Frasi Rapide <i data-lucide="chevron-down"></i>
+                                        </button>
+                                        <div class="snippets-dropdown-menu" id="quickReplySnippets"></div>
+                                    </div>
+                                    <button type="button" class="btn-tool-sm" onclick="openFullReplyComposer()" title="Apri editor completo">
+                                        <i data-lucide="maximize-2"></i> Editor Completo
+                                    </button>
+                                </div>
+                                <button class="btn-primary-sm" onclick="sendQuickReply()">
+                                    <i data-lucide="send"></i> Invia Risposta
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <!-- MODAL / DOCKABLE COMPOSER (Scrivi / Rispondi) -->
+    <div class="composer-overlay" id="composerOverlay" style="display: none;">
+        <div class="composer-window" id="composerWindow">
+            <!-- COMPOSER HEADER -->
+            <div class="composer-header" id="composerHeader">
+                <div class="composer-title-wrap">
+                    <i data-lucide="pen-tool"></i>
+                    <span id="composerTitle">Nuovo Messaggio</span>
+                </div>
+                <div class="composer-window-controls">
+                    <button type="button" class="btn-win-ctrl" onclick="toggleMinimizeComposer()" title="Riduci a icona"><i data-lucide="minus"></i></button>
+                    <button type="button" class="btn-win-ctrl" onclick="toggleMaximizeComposer()" title="Espandi a schermo intero"><i data-lucide="maximize-2"></i></button>
+                    <button type="button" class="btn-win-ctrl close" onclick="closeComposer()" title="Chiudi e salva bozza"><i data-lucide="x"></i></button>
+                </div>
+            </div>
+
+            <!-- COMPOSER FORM -->
+            <form class="composer-body" id="composerForm" onsubmit="event.preventDefault();">
+                <input type="hidden" id="composerDraftId">
+                <input type="hidden" id="composerScheduledAt">
+
+                <!-- DESTINATARI (A, CC, CCN) -->
+                <div class="composer-field-row">
+                    <label class="field-label" for="composerToInput">A:</label>
+                    <div class="recipients-input-box" id="composerToBox">
+                        <div class="chips-list" id="composerToChips"></div>
+                        <input type="text" id="composerToInput" placeholder="Digita indirizzo, comune, azienda o POD..." oninput="handleContactSearch(this.value, 'to')" autocomplete="off">
+                    </div>
+                    <div class="field-toggles">
+                        <button type="button" class="toggle-link" onclick="toggleCcFields('cc')">Cc</button>
+                        <button type="button" class="toggle-link" onclick="toggleCcFields('bcc')">Ccn</button>
+                    </div>
+                    <!-- DROPDOWN AUTOCOMPLETAMENTO CONTATTI -->
+                    <div class="contacts-autocomplete-menu" id="contactsAutocompleteMenu" style="display: none;"></div>
+                </div>
+
+                <div class="composer-field-row" id="composerCcRow" style="display: none;">
+                    <label class="field-label" for="composerCcInput">Cc:</label>
+                    <div class="recipients-input-box" id="composerCcBox">
+                        <div class="chips-list" id="composerCcChips"></div>
+                        <input type="text" id="composerCcInput" placeholder="Copia per conoscenza..." oninput="handleContactSearch(this.value, 'cc')" autocomplete="off">
+                    </div>
+                </div>
+
+                <div class="composer-field-row" id="composerBccRow" style="display: none;">
+                    <label class="field-label" for="composerBccInput">Ccn:</label>
+                    <div class="recipients-input-box" id="composerBccBox">
+                        <div class="chips-list" id="composerBccChips"></div>
+                        <input type="text" id="composerBccInput" placeholder="Copia nascosta..." oninput="handleContactSearch(this.value, 'bcc')" autocomplete="off">
+                    </div>
+                </div>
+
+                <!-- OGGETTO E CATEGORIA -->
+                <div class="composer-field-row subject-row">
+                    <label class="field-label" for="composerSubjectInput">Oggetto:</label>
+                    <input type="text" id="composerSubjectInput" placeholder="Oggetto dell'email" class="composer-subject-field" required>
+                    <div class="category-select-wrap">
+                        <select id="composerCategorySelect" title="Assegna Categoria">
+                            <option value="">🏷️ Auto-categorizza</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- LINK INTEL POD / GESTIONALE (OPZIONALE) -->
+                <div class="composer-pod-row">
+                    <div class="pod-link-input-wrap">
+                        <i data-lucide="zap"></i>
+                        <input type="text" id="composerLinkedPod" placeholder="POD contatore collegato (es. IT001E12345678)" onblur="checkPodAutoFill(this.value)">
+                    </div>
+                    <label class="checkbox-note-filone" title="Se attivo, inserisce automaticamente una nota con la data di oggi nel filone">
+                        <input type="checkbox" id="composerAddFiloneNote" checked>
+                        <span>Registra nota nel Filone</span>
+                    </label>
+                </div>
+
+                <!-- TOOLBAR SPIACCICA TEMPLATE & FORMATTAZIONE -->
+                <div class="composer-toolbar">
+                    <div class="toolbar-group">
+                        <!-- MODELLI TEMPLATE BUTTON -->
+                        <div class="dropdown-wrap">
+                            <button type="button" class="btn-tool accent-glow" onclick="toggleTemplateDropdown()" title="Inserisci modello email preimpostato">
+                                <i data-lucide="wand-2"></i> <strong>Modelli Template</strong> <i data-lucide="chevron-down"></i>
+                            </button>
+                            <div class="templates-dropdown-menu" id="composerTemplatesMenu"></div>
+                        </div>
+
+                        <!-- FRASARIO RAPIDO BUTTON -->
+                        <div class="dropdown-wrap">
+                            <button type="button" class="btn-tool" onclick="toggleSnippetDropdown('composerSnippetsMenu')" title="Inserisci frase veloce al cursore">
+                                <i data-lucide="message-square-quote"></i> Frasi Rapide <i data-lucide="chevron-down"></i>
+                            </button>
+                            <div class="snippets-dropdown-menu" id="composerSnippetsMenu"></div>
+                        </div>
+                    </div>
+
+                    <div class="toolbar-divider"></div>
+
+                    <!-- FORMATTAZIONE RICH TEXT -->
+                    <div class="toolbar-group">
+                        <button type="button" class="btn-tool-icon" onclick="execEditorCmd('bold')" title="Grassetto (Ctrl+B)"><i data-lucide="bold"></i></button>
+                        <button type="button" class="btn-tool-icon" onclick="execEditorCmd('italic')" title="Corsivo (Ctrl+I)"><i data-lucide="italic"></i></button>
+                        <button type="button" class="btn-tool-icon" onclick="execEditorCmd('underline')" title="Sottolineato"><i data-lucide="underline"></i></button>
+                        <button type="button" class="btn-tool-icon" onclick="execEditorCmd('insertUnorderedList')" title="Elenco puntato"><i data-lucide="list"></i></button>
+                        <button type="button" class="btn-tool-icon" onclick="execEditorCmd('insertOrderedList')" title="Elenco numerato"><i data-lucide="list-ordered"></i></button>
+                        <button type="button" class="btn-tool-icon" onclick="insertLinkDialog()" title="Inserisci link"><i data-lucide="link"></i></button>
+                        <button type="button" class="btn-tool-icon" onclick="execEditorCmd('removeFormat')" title="Rimuovi formattazione"><i data-lucide="eraser"></i></button>
+                    </div>
+
+                    <div class="toolbar-divider"></div>
+
+                    <!-- ALLEGATI BUTTONS -->
+                    <div class="toolbar-group">
+                        <button type="button" class="btn-tool" onclick="triggerFileUpload()" title="Carica allegato dal computer">
+                            <i data-lucide="paperclip"></i> Allega File
+                        </button>
+                        <button type="button" class="btn-tool" onclick="openStandardAttachmentsSelector()" title="Allega documento standard aziendale (Attestazioni regionali, Informativa semidiretta)">
+                            <i data-lucide="file-check"></i> Allegati Standard
+                        </button>
+                        <input type="file" id="composerFileInput" style="display: none;" multiple onchange="handleAttachmentUpload(this.files)">
+                    </div>
+                </div>
+
+                <!-- RICH TEXT EDITOR AREA -->
+                <div class="composer-editor-wrap">
+                    <div class="composer-editor" id="composerEditor" contenteditable="true" placeholder="Scrivi qui il corpo del messaggio..."></div>
+                </div>
+
+                <!-- ALLEGATI CARICATI NELLA BOZZA -->
+                <div class="composer-attachments-bar" id="composerAttachmentsBar" style="display: none;">
+                    <div class="attached-chips-list" id="composerAttachedChips"></div>
+                </div>
+
+                <!-- FOOTER CON OPZIONI INVIO & SCHEDULING -->
+                <div class="composer-footer">
+                    <div class="composer-footer-left">
+                        <!-- SPLIT BUTTON INVIO -->
+                        <div class="split-btn-wrap">
+                            <button type="button" class="btn-send-main" onclick="submitMailSend(false)">
+                                <i data-lucide="send"></i>
+                                <span id="sendBtnLabel">Invia Adesso</span>
+                            </button>
+                            <button type="button" class="btn-send-options" onclick="toggleSchedulePopover()" title="Opzioni di invio programmato">
+                                <i data-lucide="chevron-up"></i>
+                            </button>
+                        </div>
+
+                        <!-- SCHEDULING POPOVER -->
+                        <div class="schedule-popover" id="schedulePopover" style="display: none;">
+                            <div class="popover-title"><i data-lucide="clock"></i> Programma Invio</div>
+                            <div class="schedule-presets">
+                                <button type="button" class="preset-btn" onclick="setSchedulePreset('tomorrow_morning')">
+                                    <span>Domani mattina</span> <small>08:30</small>
+                                </button>
+                                <button type="button" class="preset-btn" onclick="setSchedulePreset('tomorrow_afternoon')">
+                                    <span>Domani pomeriggio</span> <small>14:00</small>
+                                </button>
+                                <button type="button" class="preset-btn" onclick="setSchedulePreset('next_monday')">
+                                    <span>Lunedì prossimo</span> <small>09:00</small>
+                                </button>
+                            </div>
+                            <div class="popover-divider"></div>
+                            <div class="custom-schedule-box">
+                                <label for="customScheduleDate">Scegli data e ora:</label>
+                                <input type="datetime-local" id="customScheduleDate">
+                                <button type="button" class="btn-schedule-confirm" onclick="confirmCustomSchedule()">
+                                    <i data-lucide="check"></i> Programma per questa data
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- STATO SALVATAGGIO BOZZA -->
+                        <span class="draft-status-indicator" id="draftStatusIndicator">Bozza salvata</span>
+                    </div>
+
+                    <div class="composer-footer-right">
+                        <button type="button" class="btn-ghost-sm" onclick="saveDraftManual()" title="Salva bozza">
+                            <i data-lucide="save"></i> Salva Bozza
+                        </button>
+                        <button type="button" class="btn-trash-composer" onclick="discardComposer()" title="Elimina bozza">
+                            <i data-lucide="trash-2"></i>
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL GESTIONE CATEGORIE -->
+    <div class="ui-modal" id="categoriesModal" style="display: none;">
+        <div class="ui-modal-content" style="max-width: 680px;">
+            <div class="ui-modal-header">
+                <h2><i data-lucide="tags"></i> Gestione Categorie Intelligenti</h2>
+                <button type="button" class="ui-modal-close" onclick="closeModal('categoriesModal')">&times;</button>
+            </div>
+            <div class="ui-modal-body">
+                <p class="modal-intro-text">
+                    Le categorie intelligenti classificano automaticamente le email in arrivo. Puoi visualizzare e modificare le keyword e i colori di qualunque categoria (comprese quelle di sistema) o crearne di nuove.
+                </p>
+
+                <!-- LISTA CATEGORIE ESISTENTI CON KEYWORDS MODIFICABILI -->
+                <div class="categories-list-manage" id="categoriesManageList">
+                    <!-- Popolato dinamicamente da JS con editor inline -->
+                </div>
+
+                <!-- BOX AGGIUNGI NUOVA CATEGORIA (AMPIO, SPAZIOSO E MODERNO) -->
+                <div class="add-category-panel">
+                    <div class="add-cat-header">
+                        <div class="add-cat-title"><i data-lucide="plus-circle"></i> Aggiungi Nuova Categoria</div>
+                        <span class="add-cat-sub">Definisci nome, colore e parole chiave per il matching automatico</span>
+                    </div>
+
+                    <div class="cat-form-container">
+                        <div class="cat-form-row two-cols">
+                            <div class="cat-form-field">
+                                <label for="newCatName"><i data-lucide="tag"></i> Nome Categoria</label>
+                                <input type="text" id="newCatName" placeholder="Es. Urgenze Improrogabili" class="cat-input">
+                            </div>
+                            <div class="cat-form-field">
+                                <label><i data-lucide="palette"></i> Colore Distintivo</label>
+                                <div class="color-picker-wrapper">
+                                    <div class="color-swatches-row" id="newCatSwatches">
+                                        <button type="button" class="color-swatch-btn active" data-color="#3b82f6" style="background:#3b82f6;" onclick="selectNewCatColor('#3b82f6', this)"></button>
+                                        <button type="button" class="color-swatch-btn" data-color="#10b981" style="background:#10b981;" onclick="selectNewCatColor('#10b981', this)"></button>
+                                        <button type="button" class="color-swatch-btn" data-color="#f59e0b" style="background:#f59e0b;" onclick="selectNewCatColor('#f59e0b', this)"></button>
+                                        <button type="button" class="color-swatch-btn" data-color="#8b5cf6" style="background:#8b5cf6;" onclick="selectNewCatColor('#8b5cf6', this)"></button>
+                                        <button type="button" class="color-swatch-btn" data-color="#ef4444" style="background:#ef4444;" onclick="selectNewCatColor('#ef4444', this)"></button>
+                                        <button type="button" class="color-swatch-btn" data-color="#06b6d4" style="background:#06b6d4;" onclick="selectNewCatColor('#06b6d4', this)"></button>
+                                        <button type="button" class="color-swatch-btn" data-color="#ec4899" style="background:#ec4899;" onclick="selectNewCatColor('#ec4899', this)"></button>
+                                    </div>
+                                    <input type="color" id="newCatColor" value="#3b82f6" class="custom-color-input" title="Personalizza colore" onchange="syncNewCatColorPicker(this.value)">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="cat-form-field" style="margin-top: 12px;">
+                            <label for="newCatKeywords"><i data-lucide="key"></i> Parole Chiave / Keyword Automatiche</label>
+                            <input type="text" id="newCatKeywords" placeholder="Parole separate da virgola (es: guasto, rottura, emergenza, urgente)" class="cat-input">
+                            <span class="field-hint">Le email con queste parole nell'oggetto o nel corpo verranno assegnate automaticamente a questa categoria.</span>
+                        </div>
+
+                        <div class="cat-form-actions" style="margin-top: 16px;">
+                            <button type="button" class="btn-create-category" onclick="saveNewCategory()">
+                                <i data-lucide="plus"></i> Crea Categoria Intelligente
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL GESTIONE TEMPLATE E FRASARIO -->
+    <div class="ui-modal" id="templatesModal" style="display: none;">
+        <div class="ui-modal-content" style="max-width: 800px;">
+            <div class="ui-modal-header">
+                <h2><i data-lucide="wand-2"></i> Gestione Modelli, Template & Frasario Centralizzato</h2>
+                <button type="button" class="ui-modal-close" onclick="closeModal('templatesModal')">&times;</button>
+            </div>
+            <div class="ui-modal-body">
+                <div class="tpl-tabs">
+                    <button class="tpl-tab active" data-tab="templates" onclick="switchTplTab('templates')">Template Completi (Email/WA)</button>
+                    <button class="tpl-tab" data-tab="snippets" onclick="switchTplTab('snippets')">Frasario & Snippet Rapidi</button>
+                    <button class="tpl-tab" data-tab="settings" onclick="switchTplTab('settings')">Firma & Recapiti Ufficio</button>
+                </div>
+
+                <!-- TAB TEMPLATE E FRASARIO -->
+                <div id="tplManageSection">
+                    <div class="tpl-list-manage" id="templatesManageList"></div>
+                    <div class="add-tpl-box" id="addTplBox">
+                        <h4 id="tplFormHeading">Crea / Modifica Modello</h4>
+                        <input type="hidden" id="manageTplId">
+                        <div class="tpl-form">
+                            <div class="form-row">
+                                <input type="text" id="manageTplTitle" placeholder="Titolo modello (es: Richiesta Appuntamento Urgente)">
+                                <select id="manageTplType">
+                                    <option value="template">Template Completo (con Oggetto)</option>
+                                    <option value="snippet">Frase / Snippet Veloce</option>
+                                </select>
+                            </div>
+                            <div class="form-row" id="manageTplSubjectRow">
+                                <input type="text" id="manageTplSubject" placeholder="Oggetto dell'email (supporta segnaposto come {pod}, {comune})">
+                            </div>
+                            <textarea id="manageTplBody" rows="6" placeholder="Testo del modello. Puoi usare {nome}, {indirizzo}, {comune}, {pod}, {data}, {operatore}, {email_tecnico}, {frase_distacco}..."></textarea>
+                            <div class="form-actions">
+                                <button type="button" class="btn-primary-sm" onclick="saveTemplateFromModal()">
+                                    <i data-lucide="save"></i> Salva Modello
+                                </button>
+                                <button type="button" class="btn-soft" onclick="resetTplForm()">Annulla</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB FIRMA & IMPOSTAZIONI -->
+                <div id="tplSettingsSection" style="display: none;">
+                    <div class="tpl-settings-grid">
+                        <div class="settings-field-group">
+                            <label><strong>Email Ufficio Tecnico - Torino:</strong></label>
+                            <input type="email" id="settingEmailTorino" placeholder="tecnico_to2@algecopower.it" class="ui-input-field">
+                        </div>
+                        <div class="settings-field-group">
+                            <label><strong>Email Ufficio Tecnico - Pavia:</strong></label>
+                            <input type="email" id="settingEmailPavia" placeholder="tecnico_pv1@algecopower.it" class="ui-input-field">
+                        </div>
+                        <div class="settings-field-group">
+                            <label><strong>Email Ufficio Tecnico - Lecco:</strong></label>
+                            <input type="email" id="settingEmailLecco" placeholder="tecnico_lc@algecopower.it" class="ui-input-field">
+                        </div>
+                        <div class="settings-field-group full-width">
+                            <label><strong>Firma HTML Aziendale:</strong></label>
+                            <textarea id="settingFirmaHtml" rows="5" placeholder="Codice HTML della firma aziendale (supporta {email_tecnico})..." class="ui-input-field" style="font-family: monospace; font-size: 0.8rem;"></textarea>
+                        </div>
+                        <div class="settings-preview-wrap full-width">
+                            <label><strong>Anteprima Firma:</strong></label>
+                            <div id="signaturePreviewBox" class="signature-preview-box"></div>
+                        </div>
+                        <div class="form-actions full-width" style="margin-top: 12px;">
+                            <button type="button" class="btn-primary-sm" onclick="saveGlobalTemplateSettings()">
+                                <i data-lucide="save"></i> Salva Impostazioni Firma & Recapiti
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL SELETTORE ALLEGATI STANDARD -->
+    <div class="ui-modal" id="standardAttachmentsModal" style="display: none;">
+        <div class="ui-modal-content" style="max-width: 500px;">
+            <div class="ui-modal-header">
+                <h2><i data-lucide="paperclip"></i> Allegati Standard Aziendali</h2>
+                <button type="button" class="ui-modal-close" onclick="closeModal('standardAttachmentsModal')">&times;</button>
+            </div>
+            <div class="ui-modal-body">
+                <div class="standard-docs-list" id="standardDocsList"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOAST NOTIFICATION CONTAINER -->
+    <div class="toast-notification" id="toastNotification"></div>
+
+    <script src="/static/mail.js?v=1"></script>
+</body>
+</html>

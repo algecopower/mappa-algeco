@@ -1862,7 +1862,7 @@
 
     </style>
     <script src="/static/csrf.js"></script>
-    <script src="/static/bulk-email-preview.js?v=1"></script>
+    <script src="/static/bulk-email-preview.js?v=20260902_2"></script>
 </head>
 <body>
     <script>
@@ -2271,6 +2271,7 @@
                 const resp = await fetch('/api/config');
                 const config = await resp.json();
                 provincia = config.provincia;
+                window.provincia = provincia;
                 document.getElementById('provinciaBadge').textContent = provincia;
             } catch (e) {
                 console.error('Errore caricamento config:', e);
@@ -2766,11 +2767,16 @@
                     result = result.replace(new RegExp('\\{' + key + '\\}', 'g'), replacement);
                 }
             }
-            // Risolvi {email_tecnico}
-            const provKey = 'email_' + (provincia || '').toLowerCase();
-            const emailTecnico = templateSettings[provKey] || templateSettings.email_tecnico ||
-                (provincia === 'PAVIA' ? templateSettings.email_pavia : templateSettings.email_torino) || '';
-            result = result.replace(/\{email_tecnico\}/g, emailTecnico || '');
+            // Risolvi {email_tecnico} e {telefono_tecnico} dinamicamente per qualsiasi provincia
+            const pk = (provincia || window.provincia || (window.BulkEmailPreview && BulkEmailPreview.getDetectedProvince()) || 'TORINO').toUpperCase();
+            const provSettings = (templateSettings.province && templateSettings.province[pk]) || {};
+            const emailTecnico = provSettings.email || templateSettings['email_' + pk.toLowerCase()] || templateSettings.email_tecnico || `tecnico_${pk.toLowerCase()}@algecopower.it`;
+            const telefonoTecnico = provSettings.telefono || templateSettings['telefono_' + pk.toLowerCase()] || templateSettings.telefono_tecnico || '011 025 2702';
+            const telClean = telefonoTecnico.replace(/[^0-9+]/g, '');
+            result = result.replace(/\{email_tecnico\}/g, emailTecnico);
+            result = result.replace(/\{telefono_tecnico\}/g, telefonoTecnico);
+            result = result.replace(/\{telefono_ufficio\}/g, telefonoTecnico);
+            result = result.replace(/\{telefono_tecnico_clean\}/g, telClean);
             // Risolvi tutti i {campo} — formatta date in formato esteso
             const dateFields = ['data', 'nuova_data'];
             for (const [k, v] of Object.entries(fields)) {
@@ -2790,6 +2796,10 @@
                 if (!resp.ok) throw new Error('Errore caricamento template');
                 const data = await resp.json();
                 templateSettings = data.settings || {};
+                window.templateSettings = templateSettings;
+                if (window.BulkEmailPreview) {
+                    BulkEmailPreview.cachedSettings = templateSettings;
+                }
 
                 // Ricostruisci FIELD_DEFS con autoFill come funzione
                 FIELD_DEFS = {};
@@ -2826,11 +2836,11 @@
                         type: tmpl.type,
                         fields: tmpl.fields,
                         info: tmpl.info || null,
-                        generate: (c, f) => resolveTemplate(tmpl.body, f, tmpl.conditionals),
+                        generate: (c, f, pEmail, pTel, pKey) => resolveTemplate(tmpl.body, f, tmpl.conditionals),
                     };
                     if (tmpl.subject) {
                         const subjTmpl = tmpl.subject;
-                        TEMPLATES[id].subject = (c, f) => resolveTemplate(subjTmpl, f);
+                        TEMPLATES[id].subject = (c, f, pEmail, pTel, pKey) => resolveTemplate(subjTmpl, f);
                     }
                 }
                 console.log('[Templates] Caricati dal JSON centralizzato');
@@ -4384,9 +4394,10 @@
                 return;
             }
 
-            const provKey = 'email_' + (provincia || '').toLowerCase();
-            const emailTecnico = templateSettings[provKey] || templateSettings.email_tecnico ||
-                (provincia === 'PAVIA' ? templateSettings.email_pavia : templateSettings.email_torino) || '';
+            const pk = (provincia || window.provincia || (window.BulkEmailPreview && BulkEmailPreview.getDetectedProvince()) || 'TORINO').toUpperCase();
+            const provSettings = (templateSettings.province && templateSettings.province[pk]) || {};
+            const emailTecnico = provSettings.email || templateSettings['email_' + pk.toLowerCase()] || templateSettings.email_tecnico || `tecnico_${pk.toLowerCase()}@algecopower.it`;
+            const telefonoTecnico = provSettings.telefono || templateSettings['telefono_' + pk.toLowerCase()] || templateSettings.telefono_tecnico || '011 025 2702';
 
             // Raccogli contatti selezionati grezzi
             const selectedRaw = [];
@@ -4453,7 +4464,7 @@
                         bodyText: tmpl.generate(first.contatto, {}),
                         excelFilename: null,
                     }
-                    : BulkEmailPreview.buildPluralContent(tmpl, contatoriList, FIELD_DEFS, emailTecnico);
+                    : BulkEmailPreview.buildPluralContent(tmpl, contatoriList, FIELD_DEFS, emailTecnico, telefonoTecnico);
 
                 const allegatiSet = new Set(first.allegatiDefault || []);
                 if (content.excelFilename && !isWhatsapp) {
@@ -4501,10 +4512,11 @@
 
         function buildMessageHtml(bodyText, isWhatsapp) {
             if (isWhatsapp) return (bodyText || '').replace(/\n/g, '<br>');
-            const provKey = 'email_' + (provincia || '').toLowerCase();
-            const emailTecnico = templateSettings[provKey] || templateSettings.email_tecnico ||
-                (provincia === 'PAVIA' ? templateSettings.email_pavia : templateSettings.email_torino) || '';
-            return BulkEmailPreview.buildMessageHtml(bodyText, templateSettings.firma_html || '', emailTecnico);
+            const pk = (provincia || window.provincia || (window.BulkEmailPreview && BulkEmailPreview.getDetectedProvince()) || 'TORINO').toUpperCase();
+            const provSettings = (templateSettings.province && templateSettings.province[pk]) || {};
+            const emailTecnico = provSettings.email || templateSettings['email_' + pk.toLowerCase()] || templateSettings.email_tecnico || `tecnico_${pk.toLowerCase()}@algecopower.it`;
+            const telefonoTecnico = provSettings.telefono || templateSettings['telefono_' + pk.toLowerCase()] || templateSettings.telefono_tecnico || '011 025 2702';
+            return BulkEmailPreview.buildMessageHtml(bodyText, templateSettings.firma_html || '', emailTecnico, telefonoTecnico, pk);
         }
 
         function renderPreviewCards() {

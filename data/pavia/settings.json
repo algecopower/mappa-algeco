@@ -26,7 +26,7 @@
     "AG69238": "#bfdb33"
   },
   "operatori_dict": {
-    "ALESSANDRO": "AF34814",
+    "MERCURI": "AF34814",
     "MELEK": "AF84468",
     "BRAHIM": "AG17430",
     "CIOBANU": "AG49808",
@@ -50,5 +50,6 @@
   "data_inizio": "2025-10-01",
   "data_fine": "",
   "intervallo_sync_secondi": 60,
-  "mappatura_colonne": {}
+  "mappatura_colonne": {},
+  "operatori_disabilitati": []
 }

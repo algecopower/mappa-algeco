@@ -760,7 +760,7 @@ def csrf_check():
 
     # 2) CSRF token check (solo per utenti già autenticati)
     if 'user' in session:
-        header_token = request.headers.get('X-CSRF-Token', '')
+        header_token = request.headers.get('X-CSRF-Token') or request.headers.get('X-CSRFToken') or ''
         session_token = session.get('csrf_token', '')
         if not header_token or not session_token or not _secrets.compare_digest(
             header_token, session_token

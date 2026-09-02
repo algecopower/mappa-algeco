@@ -118,7 +118,7 @@ def _format_data_estesa(date_str):
     return date_str
 
 
-def _resolve_template_server(body_str, fields, conditionals=None, email_tecnico=''):
+def _resolve_template_server(body_str, fields, conditionals=None, email_tecnico='', telefono_tecnico=''):
     """Risolve un template sostituendo i placeholder con i valori dei campi (server-side)."""
     result = body_str
     # Risolvi condizionali (es. {distacco_text})
@@ -129,6 +129,17 @@ def _resolve_template_server(body_str, fields, conditionals=None, email_tecnico=
             result = re.sub(r'\{' + key + r'\}', replacement, result)
     # Risolvi {email_tecnico}
     result = result.replace('{email_tecnico}', email_tecnico)
+    # Risolvi {telefono_tecnico}, {telefono_ufficio}, {telefono_tecnico_clean}
+    tel = telefono_tecnico
+    if not tel:
+        from moduli import mail_manager
+        st = mail_manager.get_template_settings(PROVINCIA_ATTIVA)
+        pv = st.get('province', {}).get(PROVINCIA_ATTIVA.upper(), {})
+        tel = pv.get('telefono') or '011 025 2702'
+    tel_clean = re.sub(r'[^0-9+]', '', str(tel))
+    result = result.replace('{telefono_tecnico}', str(tel))
+    result = result.replace('{telefono_ufficio}', str(tel))
+    result = result.replace('{telefono_tecnico_clean}', tel_clean)
     # Risolvi tutti i {campo} — formatta date in formato esteso
     date_fields = {'data', 'nuova_data'}
     for k, v in fields.items():
@@ -166,6 +177,8 @@ def get_distinte_templates():
         data = _load_templates_data()
         if data is None:
             return jsonify({'error': 'File template non trovato'}), 404
+        from moduli import mail_manager
+        data['settings'] = mail_manager.get_template_settings(PROVINCIA_ATTIVA)
         return jsonify(data)
     except Exception as e:
         return jsonify({'error': f'Errore lettura template: {str(e)}'}), 500
@@ -479,9 +492,14 @@ def invia_email_prova():
         # Converti \n in <br> e aggiungi firma
         body_html_formatted = body_html.replace('\n', '<br>')
         firma_html = tmpl_settings.get('firma_html', '')
+        prov_settings = tmpl_settings.get('province', {}).get(PROVINCIA_ATTIVA.upper(), {})
+        tel_tecnico = prov_settings.get('telefono') or '011 025 2702'
         if firma_html:
-            firma_html = firma_html.replace('{email_tecnico}', email_tecnico)
-            body_html_formatted += firma_html
+            from moduli import mail_manager
+            firma_resolved = mail_manager.resolve_signature_html(
+                firma_html, prov=PROVINCIA_ATTIVA, email_tecnico=email_tecnico, telefono_tecnico=tel_tecnico
+            )
+            body_html_formatted += firma_resolved
 
         # Costruisci messaggio MIME
         import email.utils as email_utils
@@ -498,7 +516,7 @@ def invia_email_prova():
         body_plain = re.sub(r'<a[^>]*href="([^"]*?)"[^>]*>(.*?)</a>', r'\2 (\1)', body_html)
         body_plain = re.sub(r'<[^>]+>', '', body_plain)
         if firma_html:
-            body_plain += f'\n\n--\nUfficio Tecnico\nTelefono: 011 025 2702\nMail: {email_tecnico}\nwww.algecopower.it'
+            body_plain += f'\n\n--\nUfficio Tecnico\nTelefono: {tel_tecnico}\nMail: {email_tecnico}\nwww.algecopower.it'
 
         msg.attach(MIMEText(body_plain, 'plain', 'utf-8'))
         msg.attach(MIMEText(body_html_formatted, 'html', 'utf-8'))
@@ -605,9 +623,14 @@ def invia_singola_email():
 
         # Aggiungi firma HTML in calce
         firma_html = tmpl_settings.get('firma_html', '')
+        prov_settings = tmpl_settings.get('province', {}).get(PROVINCIA_ATTIVA.upper(), {})
+        tel_tecnico = prov_settings.get('telefono') or '011 025 2702'
         if firma_html:
-            firma_html = firma_html.replace('{email_tecnico}', email_tecnico)
-            body_html_formatted += firma_html
+            from moduli import mail_manager
+            firma_resolved = mail_manager.resolve_signature_html(
+                firma_html, prov=PROVINCIA_ATTIVA, email_tecnico=email_tecnico, telefono_tecnico=tel_tecnico
+            )
+            body_html_formatted += firma_resolved
 
         # Costruisci messaggio MIME con header anti-spam
         import email.utils as email_utils
@@ -616,7 +639,7 @@ def invia_singola_email():
         body_plain = re.sub(r'<a[^>]*href="([^"]*?)"[^>]*>(.*?)</a>', r'\2 (\1)', body_html)
         body_plain = re.sub(r'<[^>]+>', '', body_plain)
         if firma_html:
-            body_plain += f'\n\n--\nUfficio Tecnico\nTelefono: 011 025 2702\nMail: {email_tecnico}\nwww.algecopower.it'
+            body_plain += f'\n\n--\nUfficio Tecnico\nTelefono: {tel_tecnico}\nMail: {email_tecnico}\nwww.algecopower.it'
 
         # Parte alternativa (text + html)
         msg_alt = MIMEMultipart('alternative')

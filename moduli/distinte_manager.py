@@ -232,11 +232,11 @@ def genera_messaggio_whatsapp(
         data: Data intervento
         provincia: 'TORINO' o 'PAVIA' (per l'email corretta)
     """
-    # Email tecnico basata sulla provincia
-    if provincia.upper() == 'PAVIA':
-        email = 'tecnico_pv1@algecopower.it'
-    else:
-        email = 'tecnico_to2@algecopower.it'
+    # Email tecnico basata sulla provincia (dinamica)
+    from moduli import mail_manager
+    st = mail_manager.get_template_settings(provincia)
+    pv = st.get('province', {}).get(provincia.upper(), {})
+    email = pv.get('email') or f"tecnico_{provincia.lower()}@algecopower.it"
     
     # Pulisci e formatta i dati
     nome = nome.strip().title() if nome else 'Cliente'

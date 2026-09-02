@@ -997,7 +997,9 @@ def send_or_schedule_mail(data, user='', prov=None):
     signature_html = None
     try:
         tpl_data = json_read(os.path.join(_ROOT_DIR, 'data', 'distinte_templates.json'), default={})
-        signature_html = tpl_data.get('settings', {}).get('firma_html')
+        raw_sig = tpl_data.get('settings', {}).get('firma_html')
+        if raw_sig:
+            signature_html = resolve_signature_html(raw_sig, prov=p, email_tecnico=from_addr)
     except Exception:
         pass
         
@@ -1403,6 +1405,26 @@ def get_template_settings(prov=None):
     return settings
 
 
+def resolve_signature_html(raw_signature, prov=None, email_tecnico=None, telefono_tecnico=None):
+    """Risolve i segnaposto dinamici nella firma HTML ({email_tecnico}, {telefono_tecnico}, ecc.)."""
+    if not raw_signature:
+        return ""
+    p = _get_prov(prov)
+    settings = get_template_settings(p)
+    prov_settings = settings.get('province', {}).get(p.upper(), {})
+
+    email = email_tecnico or prov_settings.get('email') or settings.get(f'email_{p.lower()}') or f"tecnico_{p.lower()}@algecopower.it"
+    tel = telefono_tecnico or prov_settings.get('telefono') or '011 025 2702'
+    tel_clean = re.sub(r'[^0-9+]', '', str(tel))
+
+    sig = str(raw_signature)
+    sig = sig.replace('{email_tecnico}', str(email))
+    sig = sig.replace('{telefono_tecnico}', str(tel))
+    sig = sig.replace('{telefono_ufficio}', str(tel))
+    sig = sig.replace('{telefono_tecnico_clean}', tel_clean)
+    return sig
+
+
 # ============================================================================
 # CATEGORIE AD HOC
 # ============================================================================
@@ -1640,21 +1662,34 @@ def save_template_settings(settings, prov=None):
     p = _get_prov(prov)
     prov_file = os.path.join(_ROOT_DIR, 'data', p, 'distinte_templates.json')
     base_file = os.path.join(_ROOT_DIR, 'data', 'distinte_templates.json')
-    target_file = prov_file if os.path.exists(prov_file) else base_file
-    tpl_data = json_read(target_file, default={})
-    if 'settings' not in tpl_data:
-        tpl_data['settings'] = {}
-    tpl_data['settings'].update(settings)
-    
+
+    # Aggiorna sempre il file base globale (fonte centralizzata condivisa tra tutte le province)
+    base_data = json_read(base_file, default={})
+    if 'settings' not in base_data:
+        base_data['settings'] = {}
+    base_data['settings'].update(settings)
+
     # Mantieni retrocompatibilità per email_{prov}
     if 'province' in settings and isinstance(settings['province'], dict):
         for pk, pval in settings['province'].items():
             if isinstance(pval, dict) and pval.get('email'):
-                tpl_data['settings'][f'email_{pk.lower()}'] = pval['email']
-                
-    os.makedirs(os.path.dirname(prov_file), exist_ok=True)
-    json_write(prov_file, tpl_data, indent=4)
-    return {'success': True, 'settings': tpl_data['settings']}
+                base_data['settings'][f'email_{pk.lower()}'] = pval['email']
+
+    json_write(base_file, base_data, indent=4)
+
+    # Se esiste un file di configurazione specifico provinciale, allinealo
+    if os.path.exists(prov_file):
+        prov_data = json_read(prov_file, default={})
+        if 'settings' not in prov_data:
+            prov_data['settings'] = {}
+        prov_data['settings'].update(settings)
+        if 'province' in settings and isinstance(settings['province'], dict):
+            for pk, pval in settings['province'].items():
+                if isinstance(pval, dict) and pval.get('email'):
+                    prov_data['settings'][f'email_{pk.lower()}'] = pval['email']
+        json_write(prov_file, prov_data, indent=4)
+
+    return {'success': True, 'settings': base_data['settings']}
 
 
 def delete_template_or_snippet(item_id, prov=None):

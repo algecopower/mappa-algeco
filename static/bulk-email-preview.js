@@ -175,9 +175,91 @@
         },
 
         /**
-         * Risolve un template sostituendo segnaposto {campo}, condizionali {key} e {email_tecnico}.
+         * Rileva la provincia attiva esaminando window, badge UI, generazioni, AppState o hostname.
          */
-        resolveTemplate: function (bodyStr, fields, conditionals, emailTecnico) {
+        getDetectedProvince: function () {
+            if (typeof window !== 'undefined') {
+                if (window.provincia) return String(window.provincia).toUpperCase();
+                const badge = document.getElementById('provinciaBadge');
+                if (badge && badge.textContent && badge.textContent.trim()) {
+                    return badge.textContent.trim().toUpperCase();
+                }
+                if (window.generazioni && window.generazioni[0] && window.generazioni[0].provincia) {
+                    return String(window.generazioni[0].provincia).toUpperCase();
+                }
+                if (window.AppState && window.AppState.provincia) {
+                    return String(window.AppState.provincia).toUpperCase();
+                }
+                const host = window.location.hostname || '';
+                const parts = host.split('.');
+                if (parts.length >= 3 && parts[0] !== 'www' && parts[0] !== 'admin') {
+                    return parts[0].toUpperCase();
+                }
+            }
+            return 'TORINO';
+        },
+
+        /**
+         * Ritorna le impostazioni dei template attive con fallback.
+         */
+        getTemplateSettings: function () {
+            if (typeof window !== 'undefined') {
+                if (window.templateSettings && window.templateSettings.province) {
+                    return window.templateSettings;
+                }
+                if (BulkEmailPreview.cachedSettings && BulkEmailPreview.cachedSettings.province) {
+                    return BulkEmailPreview.cachedSettings;
+                }
+                if (window.AppState && window.AppState.settings) {
+                    return window.AppState.settings;
+                }
+            }
+            return BulkEmailPreview.cachedSettings || {};
+        },
+
+        /**
+         * Risolve tutti i tag della firma HTML per qualsiasi provincia passata o rilevata dinamicamente.
+         */
+        resolveSignatureHtml: function (rawSig, emailTecnico, telefonoTecnico, provKey) {
+            if (!rawSig) return '';
+            const st = this.getTemplateSettings();
+            const prov = (provKey || this.getDetectedProvince()).toUpperCase();
+            const provSettings = (st.province && st.province[prov]) || {};
+
+            let email = emailTecnico;
+            if (!email) {
+                email = provSettings.email || st['email_' + prov.toLowerCase()] || st.email_tecnico || `tecnico_${prov.toLowerCase()}@algecopower.it`;
+            }
+
+            let tel = telefonoTecnico;
+            if (!tel) {
+                tel = provSettings.telefono;
+                if (!tel && email && st.province) {
+                    for (const p of Object.values(st.province)) {
+                        if (p && p.email && p.email.toLowerCase() === email.toLowerCase()) {
+                            tel = p.telefono;
+                            break;
+                        }
+                    }
+                }
+                if (!tel) {
+                    tel = st.telefono_tecnico || '011 025 2702';
+                }
+            }
+
+            const telClean = (tel || '').replace(/[^0-9+]/g, '');
+            let sig = String(rawSig);
+            sig = sig.replace(/\{email_tecnico\}/g, email || '');
+            sig = sig.replace(/\{telefono_tecnico\}/g, tel || '');
+            sig = sig.replace(/\{telefono_ufficio\}/g, tel || '');
+            sig = sig.replace(/\{telefono_tecnico_clean\}/g, telClean);
+            return sig;
+        },
+
+        /**
+         * Risolve un template sostituendo segnaposto {campo}, condizionali {key}, {email_tecnico} e {telefono_tecnico}.
+         */
+        resolveTemplate: function (bodyStr, fields, conditionals, emailTecnico, telefonoTecnico, provKey) {
             let result = bodyStr || '';
             if (conditionals) {
                 for (const [key, cond] of Object.entries(conditionals)) {
@@ -186,7 +268,38 @@
                     result = result.replace(new RegExp('\\{' + key + '\\}', 'g'), replacement);
                 }
             }
-            result = result.replace(/\{email_tecnico\}/g, emailTecnico || '');
+
+            const st = this.getTemplateSettings();
+            const prov = (provKey || this.getDetectedProvince()).toUpperCase();
+            const provSettings = (st.province && st.province[prov]) || {};
+
+            let email = emailTecnico;
+            if (!email) {
+                email = provSettings.email || st['email_' + prov.toLowerCase()] || st.email_tecnico || `tecnico_${prov.toLowerCase()}@algecopower.it`;
+            }
+
+            let tel = telefonoTecnico;
+            if (!tel) {
+                tel = provSettings.telefono;
+                if (!tel && email && st.province) {
+                    for (const p of Object.values(st.province)) {
+                        if (p && p.email && p.email.toLowerCase() === email.toLowerCase()) {
+                            tel = p.telefono;
+                            break;
+                        }
+                    }
+                }
+                if (!tel) {
+                    tel = st.telefono_tecnico || '011 025 2702';
+                }
+            }
+
+            const telClean = (tel || '').replace(/[^0-9+]/g, '');
+            result = result.replace(/\{email_tecnico\}/g, email || '');
+            result = result.replace(/\{telefono_tecnico\}/g, tel || '');
+            result = result.replace(/\{telefono_ufficio\}/g, tel || '');
+            result = result.replace(/\{telefono_tecnico_clean\}/g, telClean);
+
             const dateFields = ['data', 'nuova_data'];
             for (const [k, v] of Object.entries(fields || {})) {
                 const val = dateFields.includes(k) ? this.formatDataEstesa(v) : (v || '');
@@ -198,10 +311,10 @@
         /**
          * Converte il testo con ritorni a capo in HTML e aggiunge la firma configurata.
          */
-        buildMessageHtml: function (bodyText, firmaHtml, emailTecnico) {
+        buildMessageHtml: function (bodyText, firmaHtml, emailTecnico, telefonoTecnico, provKey) {
             let html = (bodyText || '').replace(/\n/g, '<br>');
             if (firmaHtml) {
-                html += firmaHtml.replace(/\{email_tecnico\}/g, emailTecnico || '');
+                html += this.resolveSignatureHtml(firmaHtml, emailTecnico, telefonoTecnico, provKey);
             }
             return html;
         },
@@ -538,6 +651,10 @@
             if (!resp.ok) throw new Error('Errore caricamento template centralizzati');
             const data = await resp.json();
             const templateSettings = data.settings || {};
+            BulkEmailPreview.cachedSettings = templateSettings;
+            if (typeof window !== 'undefined') {
+                window.templateSettings = templateSettings;
+            }
 
             const fieldDefs = {};
             for (const [id, def] of Object.entries(data.fields || {})) {
@@ -566,9 +683,9 @@
             for (const [id, tmpl] of Object.entries(data.templates || {})) {
                 templates[id] = {
                     ...tmpl,
-                    generate: (c, f, provEmail) => BulkEmailPreview.resolveTemplate(tmpl.body, f, tmpl.conditionals, provEmail),
-                    generateSubject: (c, f, provEmail) => tmpl.subject
-                        ? BulkEmailPreview.resolveTemplate(tmpl.subject, f, null, provEmail)
+                    generate: (c, f, provEmail, provTel, provKey) => BulkEmailPreview.resolveTemplate(tmpl.body, f, tmpl.conditionals, provEmail, provTel, provKey),
+                    generateSubject: (c, f, provEmail, provTel, provKey) => tmpl.subject
+                        ? BulkEmailPreview.resolveTemplate(tmpl.subject, f, null, provEmail, provTel, provKey)
                         : `Sostituzione contatore - ${c.nome || ''}`,
                 };
             }

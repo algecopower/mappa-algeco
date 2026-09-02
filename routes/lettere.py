@@ -16,6 +16,7 @@ from moduli.auth import login_required
 from moduli.safe_json import json_read
 from moduli.shared import _get_username
 from moduli import lettere as lettere_store
+from moduli import mail_manager
 from moduli.bulk_contatori_email import (
     generate_contatori_excel,
     sanitize_filename,
@@ -259,14 +260,18 @@ def _build_email_message(
 
     body_html_formatted = (body_html or '').replace('\n', '<br>')
     firma_html = tmpl_settings.get('firma_html', '')
+    prov_settings = tmpl_settings.get('province', {}).get(PROVINCIA_ATTIVA.upper(), {})
+    tel_tecnico = prov_settings.get('telefono') or '011 025 2702'
     if firma_html:
-        firma_html = firma_html.replace('{email_tecnico}', email_tecnico)
-        body_html_formatted += firma_html
+        firma_resolved = mail_manager.resolve_signature_html(
+            firma_html, prov=PROVINCIA_ATTIVA, email_tecnico=email_tecnico, telefono_tecnico=tel_tecnico
+        )
+        body_html_formatted += firma_resolved
 
     body_plain = _plain_from_html(body_html)
     if firma_html:
         body_plain += (
-            f'\n\n--\nUfficio Tecnico\nTelefono: 011 025 2702\n'
+            f'\n\n--\nUfficio Tecnico\nTelefono: {tel_tecnico}\n'
             f'Mail: {email_tecnico}\nwww.algecopower.it'
         )
 

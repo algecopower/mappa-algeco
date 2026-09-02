@@ -328,7 +328,7 @@ async function saveTemplate() {
 
         const res = await fetch('/api/templates/save', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
             body: JSON.stringify(payload)
         });
         const data = await res.json();
@@ -399,7 +399,7 @@ async function deleteCurrentTemplate() {
     try {
         const res = await fetch(`/api/templates/delete/${id}`, {
             method: 'DELETE',
-            headers: { 'X-CSRFToken': getCsrfToken() }
+            headers: { 'X-CSRF-Token': getCsrfToken() }
         });
         const data = await res.json();
         if (data.success) {
@@ -489,9 +489,13 @@ function renderSignaturePreview() {
     const raw = document.getElementById('set_firma_html')?.value || '';
     const activeProv = AppState.provincia.toUpperCase();
     const provData = AppState.settings?.province?.[activeProv] || {};
-    
-    const emailTec = provData.email || AppState.settings[`email_${AppState.provincia.toLowerCase()}`] || `tecnico_${AppState.provincia.toLowerCase()}@algecopower.it`;
-    const telTec = provData.telefono || '011 025 2702';
+
+    const activeCard = document.querySelector(`.province-manage-card[data-prov-key="${activeProv}"]`);
+    const cardEmail = activeCard?.querySelector('.prov-input-email')?.value?.trim();
+    const cardTel = activeCard?.querySelector('.prov-input-tel')?.value?.trim();
+
+    const emailTec = cardEmail || provData.email || AppState.settings[`email_${AppState.provincia.toLowerCase()}`] || `tecnico_${AppState.provincia.toLowerCase()}@algecopower.it`;
+    const telTec = cardTel || provData.telefono || '011 025 2702';
     const telClean = telTec.replace(/[^0-9+]/g, '');
 
     let resolved = raw.replace(/{email_tecnico}/g, emailTec);
@@ -523,7 +527,7 @@ async function saveSettings() {
     try {
         const res = await fetch('/api/templates/settings', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
             body: JSON.stringify(payload)
         });
         const data = await res.json();

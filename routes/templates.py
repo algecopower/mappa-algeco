@@ -115,8 +115,12 @@ def api_templates_preview():
         if include_signature:
             settings = mail_manager.get_template_settings()
             raw_sig = settings.get('firma_html', '')
-            email_tec = variables.get('email_tecnico') or settings.get(f'email_{PROVINCIA_ATTIVA.lower()}', '')
-            signature_html = raw_sig.replace('{email_tecnico}', email_tec)
+            signature_html = mail_manager.resolve_signature_html(
+                raw_sig,
+                prov=PROVINCIA_ATTIVA,
+                email_tecnico=variables.get('email_tecnico'),
+                telefono_tecnico=variables.get('telefono_tecnico') or variables.get('telefono_ufficio')
+            )
 
         return jsonify({
             'success': True,

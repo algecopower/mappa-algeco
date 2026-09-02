@@ -95,6 +95,9 @@ async function loadGenerazioni() {
     const res = await fetch('/api/lettere/generazioni');
     const data = await res.json();
     if (!data.success) throw new Error(data.error || 'Errore generazioni');
+    if (data.provincia) {
+        window.provincia = data.provincia;
+    }
     generazioni = data.generazioni || [];
     renderGenerazioni();
 }
@@ -102,6 +105,7 @@ async function loadGenerazioni() {
 async function loadTemplates() {
     const data = await BulkEmailPreview.loadCentralizedTemplates('/api/distinte/templates');
     templateSettings = data.settings || {};
+    window.templateSettings = templateSettings;
     FIELD_DEFS = data.fieldDefs || {};
     TEMPLATES = data.templates || {};
 
@@ -1030,11 +1034,12 @@ function contattoDaAzienda(a, emailDest) {
 }
 
 function buildMessageHtml(bodyText) {
-    const prov = (generazioni[0]?.provincia || '').toLowerCase();
-    const provKey = 'email_' + prov;
-    const emailTecnico = templateSettings[provKey] || templateSettings.email_tecnico ||
-        (prov === 'pavia' ? templateSettings.email_pavia : templateSettings.email_torino) || '';
-    return BulkEmailPreview.buildMessageHtml(bodyText, templateSettings.firma_html || '', emailTecnico);
+    const prov = (window.provincia || generazioni[0]?.provincia || (window.BulkEmailPreview && BulkEmailPreview.getDetectedProvince()) || 'TORINO').toUpperCase();
+    const provSettings = (templateSettings.province && templateSettings.province[prov]) || {};
+    const provKey = 'email_' + prov.toLowerCase();
+    const emailTecnico = provSettings.email || templateSettings[provKey] || templateSettings.email_tecnico || `tecnico_${prov.toLowerCase()}@algecopower.it`;
+    const telefonoTecnico = provSettings.telefono || templateSettings['telefono_' + prov.toLowerCase()] || templateSettings.telefono_tecnico || '011 025 2702';
+    return BulkEmailPreview.buildMessageHtml(bodyText, templateSettings.firma_html || '', emailTecnico, telefonoTecnico, prov);
 }
 
 function generaAnteprima() {
@@ -1053,10 +1058,11 @@ function generaAnteprima() {
         showToast('Nessun contatto selezionato', true);
         return;
     }
-    const prov = (generazioni[0]?.provincia || '').toLowerCase();
-    const provKey = 'email_' + prov;
-    const emailTecnico = templateSettings[provKey] || templateSettings.email_tecnico ||
-        (prov === 'pavia' ? templateSettings.email_pavia : templateSettings.email_torino) || '';
+    const prov = (window.provincia || generazioni[0]?.provincia || (window.BulkEmailPreview && BulkEmailPreview.getDetectedProvince()) || 'TORINO').toUpperCase();
+    const provSettings = (templateSettings.province && templateSettings.province[prov]) || {};
+    const provKey = 'email_' + prov.toLowerCase();
+    const emailTecnico = provSettings.email || templateSettings[provKey] || templateSettings.email_tecnico || `tecnico_${prov.toLowerCase()}@algecopower.it`;
+    const telefonoTecnico = provSettings.telefono || templateSettings['telefono_' + prov.toLowerCase()] || templateSettings.telefono_tecnico || '011 025 2702';
 
     // Raccogli gli elementi selezionati
     const selectedRaw = [];
@@ -1086,7 +1092,7 @@ function generaAnteprima() {
         const contatoriList = group.map(g => g.contatto);
         const aziendaIds = group.map(g => g.azienda_id);
 
-        const content = BulkEmailPreview.buildPluralContent(tmpl, contatoriList, FIELD_DEFS, emailTecnico);
+        const content = BulkEmailPreview.buildPluralContent(tmpl, contatoriList, FIELD_DEFS, emailTecnico, telefonoTecnico);
 
         const allegatiSet = new Set(first.allegati || []);
         if (content.excelFilename) {

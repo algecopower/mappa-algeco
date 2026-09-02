@@ -453,8 +453,8 @@ def generate_email_previews(comuni_ids, template_name, escludi_pec=False, filtro
             tmpl_data = json.load(f)
             raw_firma = tmpl_data.get('settings', {}).get('firma_html', '')
             if raw_firma:
-                email_tecnico = tmpl_data.get('settings', {}).get(f'email_{PROVINCIA_ATTIVA.lower()}', '')
-                firma_html = raw_firma.replace('{email_tecnico}', email_tecnico)
+                from moduli import mail_manager
+                firma_html = mail_manager.resolve_signature_html(raw_firma, prov=PROVINCIA_ATTIVA)
     except Exception:
         pass
     

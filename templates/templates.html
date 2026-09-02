@@ -11,6 +11,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="/static/csrf.js"></script>
     <link rel="stylesheet" href="/static/templates.css">
 </head>
 <body>
@@ -273,7 +274,7 @@
                         <div class="editor-bottom-bar">
                             <div class="editor-info-summary">
                                 <i data-lucide="check-circle-2"></i>
-                                <span>Supporta il tag <code>{email_tecnico}</code> risolto dinamicamente in base alla provincia attiva.</span>
+                                <span>Supporta i tag <code>{email_tecnico}</code>, <code>{telefono_tecnico}</code> e <code>{telefono_ufficio}</code> risolti dinamicamente in base alla provincia attiva.</span>
                             </div>
                             <button type="submit" class="btn-save-master">
                                 <i data-lucide="save"></i> Salva Impostazioni Firma & Recapiti
@@ -289,6 +290,6 @@
     <!-- TOAST NOTIFICATIONS -->
     <div id="toastNotification" class="toast-notification"></div>
 
-    <script src="/static/templates.js"></script>
+    <script src="/static/templates.js?v=20260902_2"></script>
 </body>
 </html>

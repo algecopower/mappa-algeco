@@ -631,7 +631,7 @@ def _admin_csrf_check():
         if not p.hostname or p.hostname.lower() != req_host:
             return jsonify({'error': 'Richiesta bloccata: origine non autorizzata'}), 403
 
-    header_token = request.headers.get('X-CSRF-Token', '')
+    header_token = request.headers.get('X-CSRF-Token') or request.headers.get('X-CSRFToken') or ''
     cookie_token = request.cookies.get('csrf_token', '')
     if not header_token or not cookie_token or not hmac.compare_digest(header_token, cookie_token):
         return jsonify({'error': 'Token CSRF mancante o non valido'}), 403
@@ -856,7 +856,7 @@ def _proxy_admin_to_backend(slug, path, method='GET', body=None, timeout=130):
     headers = {
         'Cookie': request.headers.get('Cookie', ''),
         # Inoltra CSRF + Origin (richiesti dal backend su POST/PUT/DELETE)
-        'X-CSRF-Token': request.headers.get('X-CSRF-Token', ''),
+        'X-CSRF-Token': request.headers.get('X-CSRF-Token') or request.headers.get('X-CSRFToken') or '',
         'Origin': request.headers.get('Origin', '') or request.headers.get('Referer', ''),
     }
     try:
@@ -1069,7 +1069,7 @@ def _admin_import_excel(slug):
         'Cookie': request.headers.get('Cookie', ''),
         # Inoltra anche CSRF e Origin: il backend li richiede su POST/PUT/DELETE
         # (vedi `csrf_check` in server.py)
-        'X-CSRF-Token': request.headers.get('X-CSRF-Token', ''),
+        'X-CSRF-Token': request.headers.get('X-CSRF-Token') or request.headers.get('X-CSRFToken') or '',
         'Origin': request.headers.get('Origin', '') or request.headers.get('Referer', ''),
     }
     try:

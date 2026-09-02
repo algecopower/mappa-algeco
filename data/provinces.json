@@ -80,7 +80,7 @@
       "AG69238": "#bfdb33"
     },
     "operatori_dict": {
-      "ALESSANDRO": "AF34814",
+      "MERCURI": "AF34814",
       "MELEK": "AF84468",
       "BRAHIM": "AG17430",
       "CIOBANU": "AG49808",
@@ -97,7 +97,8 @@
     "ora_inizio_giornata": 480,
     "ora_fine_giornata": 1020,
     "sottodominio": "pavia.mappa-algeco.com",
-    "porta": 5002
+    "porta": 5002,
+    "operatori_disabilitati": []
   },
   "LECCO": {
     "nome": "Lecco",

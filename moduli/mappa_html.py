@@ -37,7 +37,8 @@ from config import (
     INTERVALLO_SYNC_SECONDI,
     DATA_FINE,
     ORA_INIZIO_GIORNATA,
-    ORA_FINE_GIORNATA
+    ORA_FINE_GIORNATA,
+    CARTO_API_KEY
 )
 try:
     from config import OPERATORI_DISABILITATI, LCL_DISABILITATI
@@ -524,7 +525,8 @@ def salva_config_statica():
         'matricoleVip': matricole_attive,
         'operatoriDict': operatori_dict_attivi,
         'provincia': PROVINCIA_ATTIVA,
-        'refreshInterval': INTERVALLO_SYNC_SECONDI * 1000 + 5000
+        'refreshInterval': INTERVALLO_SYNC_SECONDI * 1000 + 5000,
+        'cartoApiKey': CARTO_API_KEY
     }
 
     json_write(filepath, config, indent=2)
@@ -573,6 +575,7 @@ def genera_html_completo(lcl_list, timestamp=None):
         refresh_interval=60000,
         ora_inizio_giornata=ORA_INIZIO_GIORNATA,
         ora_fine_giornata=ORA_FINE_GIORNATA,
+        carto_api_key=CARTO_API_KEY,
         # Placeholders: il frontend li riempie via fetch. Niente embedding pesante.
         zone_json='[]',
         contatori_json='[]',

@@ -1271,6 +1271,10 @@ def update_settings():
                 (config, 'MAPPATURA_COLONNE'),
                 (data_loader, 'MAPPATURA_COLONNE'),
             ],
+            'carto_api_key': [
+                (config, 'CARTO_API_KEY'),
+                (mappa_html, 'CARTO_API_KEY'),
+            ],
         }
         
         for key, targets in _settings_map.items():

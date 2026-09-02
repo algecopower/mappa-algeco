@@ -336,13 +336,17 @@ let tileLayer;
 function setMapTiles(theme) {
     if (tileLayer) map.removeLayer(tileLayer);
     if (theme === 'dark') {
-        tileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            attribution: 'Â© OpenStreetMap Â© CARTO',
+        const cartoKey = (window.__MAPPA_INIT__ && window.__MAPPA_INIT__.carto_api_key) || 'cb1_2sl4_1_dc75ec0c3f06c0dd9d411208';
+        const tileUrl = cartoKey
+            ? `https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?key=${encodeURIComponent(cartoKey)}`
+            : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+        tileLayer = L.tileLayer(tileUrl, {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
             maxZoom: 19
         });
     } else {
         tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: 'Â© OpenStreetMap',
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
             maxZoom: 19
         });
     }
@@ -457,17 +461,6 @@ document.getElementById('zoomIn').addEventListener('click', function() {
     map.zoomIn(0.5);
 });
 
-// Deposito
-const depositoIcon = L.divIcon({
-    className: 'marker-deposito',
-    iconSize: [24, 24],
-    iconAnchor: [12, 12]
-});
-
-const depositoMarker = L.marker([deposito.lat, deposito.lon], { icon: depositoIcon })
-    .bindPopup(`<div class="popup-content"><div class="popup-header"><div class="popup-title">🏠 ${deposito.nome}</div><div class="popup-subtitle">Punto di partenza</div></div></div>`)
-    .addTo(map);
-
 // ============================================================
 // UTILITÃ€
 // ============================================================
@@ -484,7 +477,48 @@ function getColore(tecnico) {
     return coloriTecnici[tecnico] || '#3498db';
 }
 
+// ============================================================
+// GESTIONE UNIFICATA MARKER DEPOSITO
+// ============================================================
+let currentDepositoMarker = null;
+
+function renderMarkerDeposito(trackingList = null) {
+    if (currentDepositoMarker) {
+        map.removeLayer(currentDepositoMarker);
+        currentDepositoMarker = null;
+    }
+    if (!deposito || !isValidCoordinate(deposito.lat, deposito.lon)) {
+        return null;
+    }
+
+    const iconWidth = 116;
+    const iconHeight = 36;
+    currentDepositoMarker = L.marker([deposito.lat, deposito.lon], {
+        icon: L.divIcon({
+            className: 'deposito-marker-container',
+            html: '<div class="deposito-badge-pill">🏠 Deposito</div>',
+            iconSize: [iconWidth, iconHeight],
+            iconAnchor: [Math.round(iconWidth / 2), Math.round(iconHeight / 2)]
+        }),
+        zIndexOffset: 800
+    }).addTo(map);
+
+    currentDepositoMarker.bindPopup(
+        `<div class="popup-content"><div class="popup-header"><div class="popup-title">🏠 ${deposito.nome || 'Deposito'}</div><div class="popup-subtitle">Punto di partenza e rientro</div></div></div>`
+    );
+
+    if (Array.isArray(trackingList)) {
+        trackingList.push(currentDepositoMarker);
+    }
+    return currentDepositoMarker;
+}
+
 function clearMap() {
+    // Rimuovi marker deposito se presente
+    if (currentDepositoMarker) {
+        map.removeLayer(currentDepositoMarker);
+        currentDepositoMarker = null;
+    }
     // Rimuovi planning layer group in blocco se presente
     if (planningLayerGroup) {
         map.removeLayer(planningLayerGroup);
@@ -2927,14 +2961,20 @@ function selectDateFromPicker(data) {
         }
     } else {
         // Vista tuttiOperatori / operatore / multiOperatori
+        const prevSelectedOps = (currentView === 'multiOperatori') ? getSelectedOperatori() : [];
         document.getElementById('dataFilter').value = data;
         populateOperatoreFilter(data);
         if (currentView === 'operatore' && currentOperatore) {
+            setSelectedOperatori([currentOperatore]);
             mostraPercorsoCompletoOperatore(currentOperatore, data);
         } else if (currentView === 'multiOperatori') {
-            const selOps = getSelectedOperatori();
-            if (selOps.length > 0) mostraPercorsoMultiOperatori(selOps, data);
-            else mostraPercorsoTuttiOperatori(data);
+            const selOps = prevSelectedOps.length > 0 ? prevSelectedOps : getSelectedOperatori();
+            if (selOps.length > 0) {
+                setSelectedOperatori(selOps);
+                mostraPercorsoMultiOperatori(selOps, data);
+            } else {
+                mostraPercorsoTuttiOperatori(data);
+            }
         } else {
             mostraPercorsoTuttiOperatori(data);
         }
@@ -2983,14 +3023,20 @@ function navigateDate(direction) {
         }
     } else {
         // Vista tuttiOperatori / operatore / multiOperatori
+        const prevSelectedOps = (currentView === 'multiOperatori') ? getSelectedOperatori() : [];
         document.getElementById('dataFilter').value = newData;
         populateOperatoreFilter(newData);
         if (currentView === 'operatore' && currentOperatore) {
+            setSelectedOperatori([currentOperatore]);
             mostraPercorsoCompletoOperatore(currentOperatore, newData);
         } else if (currentView === 'multiOperatori') {
-            const selOps = getSelectedOperatori();
-            if (selOps.length > 0) mostraPercorsoMultiOperatori(selOps, newData);
-            else mostraPercorsoTuttiOperatori(newData);
+            const selOps = prevSelectedOps.length > 0 ? prevSelectedOps : getSelectedOperatori();
+            if (selOps.length > 0) {
+                setSelectedOperatori(selOps);
+                mostraPercorsoMultiOperatori(selOps, newData);
+            } else {
+                mostraPercorsoTuttiOperatori(newData);
+            }
         } else {
             mostraPercorsoTuttiOperatori(newData);
         }
@@ -3164,8 +3210,20 @@ function onDataFilterChange() {
     applicaFiltri();
 }
 
-function populateOperatoreFilter(data) {
+function populateOperatoreFilter(data, selectedOperatori = null) {
     const dropdown = document.getElementById('operatoreMultiDropdown');
+    if (!dropdown) return;
+    
+    // Se non specificato, conserva la selezione corrente in base alla vista
+    if (selectedOperatori === null) {
+        if (currentView === 'operatore' && currentOperatore) {
+            selectedOperatori = [currentOperatore];
+        } else if (currentView === 'multiOperatori') {
+            selectedOperatori = getSelectedOperatori();
+        } else {
+            selectedOperatori = [];
+        }
+    }
     
     // Trova tutti gli operatori attivi per questa data
     const operatoriData = new Set();
@@ -3173,6 +3231,11 @@ function populateOperatoreFilter(data) {
         const tec = c.tecnico || 'TUTTI';
         operatoriData.add(tec);
     });
+    
+    // Assicura che l'operatore selezionato sia presente nel dropdown
+    if (selectedOperatori && selectedOperatori.length > 0) {
+        selectedOperatori.forEach(op => operatoriData.add(op));
+    }
     
     const operatoriOrdinati = Array.from(operatoriData).sort((a, b) => {
         if (a === 'TUTTI') return 1;
@@ -3185,8 +3248,9 @@ function populateOperatoreFilter(data) {
         const count = contatori.filter(c => c.data === data && (c.tecnico || 'TUTTI') === op).length;
         const label = op === 'TUTTI' ? `📦 Senza Operatore (${count})` : `👤 ${getDisplayName(op)} (${count})`;
         const colore = getColore(op);
+        const isChecked = selectedOperatori && selectedOperatori.includes(op);
         html += `<label class="operatore-multi-item" data-operatore="${op}">
-            <input type="checkbox" value="${op}" onchange="onOperatoreFilterChange()">
+            <input type="checkbox" value="${op}" ${isChecked ? 'checked' : ''} onchange="onOperatoreFilterChange()">
             <span class="op-color-dot" style="background:${colore}"></span>
             <span>${label}</span>
         </label>`;
@@ -3240,9 +3304,15 @@ function resetOperatoreFilter() {
 
 function updateOperatoreTriggerText() {
     const trigger = document.getElementById('operatoreMultiTrigger');
+    if (!trigger) return;
     const selected = getSelectedOperatori();
     if (selected.length === 0) {
-        trigger.textContent = '👥 Tutti gli operatori';
+        if (currentView === 'operatore' && currentOperatore) {
+            const op = currentOperatore;
+            trigger.textContent = op === 'TUTTI' ? '📦 Senza Operatore' : '👤 ' + getDisplayName(op);
+        } else {
+            trigger.textContent = '👥 Tutti gli operatori';
+        }
     } else if (selected.length === 1) {
         const op = selected[0];
         trigger.textContent = op === 'TUTTI' ? '📦 Senza Operatore' : '👤 ' + getDisplayName(op);
@@ -3282,6 +3352,7 @@ function mostraPercorsoTuttiOperatori(data) {
     currentView = 'tuttiOperatori';
     currentData = data;
     currentOperatore = null;
+    resetOperatoreFilter();
     
     // Mostra breadcrumb con pillola data
     document.getElementById('breadcrumb').classList.add('visible');
@@ -3349,6 +3420,9 @@ function mostraPercorsoMultiOperatori(operatoriSelezionati, data) {
     currentView = 'multiOperatori';
     currentData = data;
     currentOperatore = null;
+    
+    // Allinea filtro operatore dropdown
+    setSelectedOperatori(operatoriSelezionati);
     
     // Mostra breadcrumb con pillola data
     const nomi = operatoriSelezionati.map(op => op === 'TUTTI' ? 'Senza Operatore' : getDisplayName(op));
@@ -3511,16 +3585,10 @@ function renderPercorsoTuttiOperatoriMappa(percorsiPerOperatore, data) {
     const allPoints = [];
     
     // Marker deposito
-    const depositoMarker = L.marker([deposito.lat, deposito.lon], {
-        icon: L.divIcon({
-            className: 'deposito-marker',
-            html: '<div style="background: #2ecc71; color: white; padding: 8px 12px; border-radius: 20px; font-weight: 600; box-shadow: 0 2px 8px rgba(0,0,0,0.3); white-space: nowrap;">🏠 Deposito</div>',
-            iconSize: [100, 40],
-            iconAnchor: [50, 40]
-        })
-    }).addTo(map);
-    depositoMarker.bindPopup('<b>🏠 Deposito</b><br>' + deposito.nome);
-    allPoints.push([deposito.lat, deposito.lon]);
+    const dMarker = renderMarkerDeposito(markers);
+    if (dMarker) {
+        allPoints.push([deposito.lat, deposito.lon]);
+    }
     
     // Per ogni operatore, disegna il percorso
     percorsiPerOperatore.forEach(({operatore, percorso, colore}) => {
@@ -3631,6 +3699,9 @@ function mostraPercorsoCompletoOperatore(operatore, data) {
     currentView = 'operatore';
     currentData = data;
     currentOperatore = operatore;  // Salva operatore per refresh
+    
+    // Allinea filtro operatore dropdown
+    setSelectedOperatori([operatore]);
     
     // Mostra breadcrumb con pillola data
     const nomeOp = operatore === 'TUTTI' ? 'Senza Operatore' : getDisplayName(operatore);
@@ -3951,16 +4022,10 @@ function renderPercorsoOperatoreMappa(lista, data, operatore) {
     const allPoints = [];
     
     // Marker deposito
-    const depositoMarker = L.marker([deposito.lat, deposito.lon], {
-        icon: L.divIcon({
-            className: 'deposito-marker',
-            html: '<div style="background: #2ecc71; color: white; padding: 8px 12px; border-radius: 20px; font-weight: 600; box-shadow: 0 2px 8px rgba(0,0,0,0.3); white-space: nowrap;">🏠 Deposito</div>',
-            iconSize: [100, 40],
-            iconAnchor: [50, 40]
-        })
-    }).addTo(map);
-    depositoMarker.bindPopup('<b>🏠 Deposito</b><br>' + deposito.nome);
-    allPoints.push([deposito.lat, deposito.lon]);
+    const dMarker = renderMarkerDeposito(markers);
+    if (dMarker) {
+        allPoints.push([deposito.lat, deposito.lon]);
+    }
     
     // Sortmode coerente con la sidebar (toggle 🧭 Percorso / 🕒 Orario):
     // - 'percorso': ordine OSRM/ancore originale ricevuto
@@ -4414,19 +4479,7 @@ function renderZoneMappa(zoneFiltrate) {
     });
 
     // Aggiungi marker deposito
-    if (deposito && isValidCoordinate(deposito.lat, deposito.lon)) {
-        const dMarker = L.marker([deposito.lat, deposito.lon], {
-            icon: L.divIcon({
-                className: 'deposito-marker',
-                html: '<div style="background: #2ecc71; color: white; padding: 8px 12px; border-radius: 20px; font-weight: 600; box-shadow: 0 2px 8px rgba(0,0,0,0.3); white-space: nowrap;">🏠 Deposito</div>',
-                iconSize: [80, 40],
-                iconAnchor: [40, 20]
-            }),
-            zIndexOffset: 500
-        }).addTo(map);
-        dMarker.bindPopup(`<b>🏠 Deposito</b><br>${deposito.nome}`);
-        zoneCircles.push(dMarker);
-    }
+    renderMarkerDeposito(zoneCircles);
 
     // Aggiungi marker pinned se presenti (persistono in tutte le viste)
     renderPinnedMarkers();
@@ -4515,14 +4568,7 @@ function renderRisultatiRicercaMappa(contatoriTrovati) {
     clearMap();
 
     // Aggiungi deposito
-    L.marker([deposito.lat, deposito.lon], {
-        icon: L.divIcon({
-            className: 'deposito-marker',
-            html: '<div style="background: #2ecc71; color: white; padding: 8px 12px; border-radius: 20px; font-weight: 600; box-shadow: 0 2px 8px rgba(0,0,0,0.3); white-space: nowrap;">📦 Deposito</div>',
-            iconSize: [80, 40],
-            iconAnchor: [40, 40]
-        })
-    }).addTo(map).bindPopup('<b>📦 Deposito</b>');
+    renderMarkerDeposito(markers);
 
     // Aggiungi marker per ogni contatore trovato
     contatoriTrovati.forEach((c, idx) => {
@@ -4878,19 +4924,7 @@ function renderComuniMappa(comuniList) {
     });
 
     // Aggiungi marker deposito
-    if (deposito && isValidCoordinate(deposito.lat, deposito.lon)) {
-        const dMarker = L.marker([deposito.lat, deposito.lon], {
-            icon: L.divIcon({
-                className: 'deposito-marker',
-                html: '<div style="background: #2ecc71; color: white; padding: 8px 12px; border-radius: 20px; font-weight: 600; box-shadow: 0 2px 8px rgba(0,0,0,0.3); white-space: nowrap;">🏠 Deposito</div>',
-                iconSize: [80, 40],
-                iconAnchor: [40, 20]
-            }),
-            zIndexOffset: 500
-        }).addTo(map);
-        dMarker.bindPopup(`<b>🏠 Deposito</b><br>${deposito.nome}`);
-        zoneCircles.push(dMarker);
-    }
+    renderMarkerDeposito(zoneCircles);
 
     // Aggiungi marker pinned se presenti (persistono in tutte le viste)
     renderPinnedMarkers();

@@ -402,6 +402,10 @@ DRAIN_THROTTLE_SECONDI = 2  # min interval tra due batch_update (rate-limit Shee
 # 'manual'    → blocca la riga finché un admin non risolve via UI
 CONFLICT_POLICY = 'local_wins'
 
+# --- TILE MAPPA (CARTO) ---
+# Dal 2026 CARTO richiede una API key gratuita per le basemap raster (carto.com/basemaps/apikey).
+CARTO_API_KEY = os.environ.get('CARTO_API_KEY') or 'cb1_2sl4_1_dc75ec0c3f06c0dd9d411208'
+
 
 
 # ============================================================================
@@ -459,6 +463,8 @@ if os.path.exists(_settings_file):
         if 'lettere_excel' in _user_settings:
             LETTERE_EXCEL_CONFIG = merge_lettere_excel_config(_user_settings['lettere_excel'])
             PROVINCE[PROVINCIA_ATTIVA]['lettere_excel'] = LETTERE_EXCEL_CONFIG
+        if 'carto_api_key' in _user_settings:
+            CARTO_API_KEY = _user_settings['carto_api_key']
         
         print("✅ Impostazioni personalizzate caricate da settings.json")
     except Exception as _e:

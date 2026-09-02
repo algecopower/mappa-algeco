@@ -163,6 +163,17 @@
                         </select>
                     </div>
                 </div>
+                <!-- Filtro Solo Appuntamenti -->
+                <div class="appuntamenti-filter-row" id="appuntamentiFilterRow">
+                    <label class="appuntamenti-filter-label" for="filterAppuntamenti">
+                        <input type="checkbox" id="filterAppuntamenti" onchange="onToggleFilterAppuntamenti(this.checked)">
+                        <span class="appuntamenti-filter-text">
+                            <span class="appuntamenti-icon">☎️</span>
+                            <span>Solo appuntamenti</span>
+                        </span>
+                        <span class="appuntamenti-badge-count" id="appuntamentiFilterCount" title="Numero appuntamenti">0</span>
+                    </label>
+                </div>
                 <!-- Filtro operatore per vista dettaglio (Zone/Comuni) -->
                 <div class="detail-filters" id="detailFilters" style="display: none;">
                     <div class="detail-operatore-container">
@@ -263,7 +274,17 @@
             <input type="range" id="zoomSlider" min="5" max="19" step="0.25" value="10">
             <span class="zoom-label" id="zoomIn" title="Zoom in">+</span>
             <span class="zoom-value" id="zoomValue">10.0x</span>
+            <div class="zoom-slider-divider"></div>
+            <button type="button" class="btn-fit-bounds" id="btnFitBounds" onclick="adattaVistaMappaAiMarker()" title="Adatta la mappa allo spazio dei marker (centra e zooma)">
+                <span class="btn-fit-icon">🎯</span>
+                <span class="btn-fit-text">Adatta vista</span>
+            </button>
         </div>
+
+        <!-- Floating Fit Button (per mobile / schermi compatti) -->
+        <button type="button" class="btn-fit-bounds-floating" id="btnFitBoundsFloating" onclick="adattaVistaMappaAiMarker()" title="Adatta la mappa allo spazio dei marker">
+            <span>🎯</span>
+        </button>
     </div>
 
     <!-- Bulk Assign Modal (Planning Mode) -->

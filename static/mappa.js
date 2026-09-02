@@ -502,6 +502,8 @@ function renderMarkerDeposito(trackingList = null) {
         }),
         zIndexOffset: 800
     }).addTo(map);
+    currentDepositoMarker._isDeposito = true;
+    currentDepositoMarker.isDeposito = true;
 
     currentDepositoMarker.bindPopup(
         `<div class="popup-content"><div class="popup-header"><div class="popup-title">🏠 ${deposito.nome || 'Deposito'}</div><div class="popup-subtitle">Punto di partenza e rientro</div></div></div>`
@@ -759,6 +761,7 @@ function creaMarkerGruppo(gruppo, colore) {
     const allSchedulabili = gruppo.contatori.every(c => c._isSchedulabile);
     const someSchedulabili = gruppo.contatori.some(c => c._isSchedulabile);
     const pulseStyle = hasAppuntamento ? 'animation: pulse 2s infinite;' : '';
+    const groupBadgeHtml = (hasAppuntamento && (filterAppuntamentiOnly || primoContatore.is_appuntamento)) ? createGroupOrarioBadgeHtml(gruppo) : '';
     
     let icon;
     if (allSchedulabili) {
@@ -767,6 +770,7 @@ function creaMarkerGruppo(gruppo, colore) {
             className: '',
             html: `<div style="background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%); width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; position: relative; border: 3px solid white; box-shadow: 0 4px 12px rgba(0,0,0,0.4); font-weight: bold; font-size: 13px; color: white; ${pulseStyle}">
                 ${gruppo.contatori.length}
+                ${groupBadgeHtml}
             </div>`,
             iconSize: [30, 30],
             iconAnchor: [15, 15]
@@ -779,6 +783,7 @@ function creaMarkerGruppo(gruppo, colore) {
                 ${primoContatore.indiceTecnico + 1}
                 <span style="position: absolute; top: -8px; right: -8px; background: var(--accent); color: white; min-width: 18px; height: 18px; border-radius: 50%; font-size: 11px; font-weight: bold; display: flex; align-items: center; justify-content: center; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">${gruppo.contatori.length}</span>
                 ${showEneltelLabels ? `<span class="marker-label">${numeri}</span>` : ''}
+                ${groupBadgeHtml}
             </div>`,
             iconSize: [28, 28],
             iconAnchor: [14, 14]
@@ -791,6 +796,7 @@ function creaMarkerGruppo(gruppo, colore) {
                 ${primoContatore.indiceTecnico + 1}
                 <span style="position: absolute; top: -8px; right: -8px; background: var(--accent); color: white; min-width: 18px; height: 18px; border-radius: 50%; font-size: 11px; font-weight: bold; display: flex; align-items: center; justify-content: center; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">${gruppo.contatori.length}</span>
                 ${showEneltelLabels ? `<span class="marker-label">${numeri}</span>` : ''}
+                ${groupBadgeHtml}
             </div>`,
             iconSize: [28, 28],
             iconAnchor: [14, 14]
@@ -801,7 +807,7 @@ function creaMarkerGruppo(gruppo, colore) {
     
     // Crea popup con binding degli eventi
     const popupContent = createMultiContatorePopup(gruppo, colore);
-    const popup = L.popup({ maxWidth: 350 }).setContent(popupContent);
+    const popup = L.popup({ maxWidth: 350, offset: [0, -14] }).setContent(popupContent);
     
     marker.bindPopup(popup);
     
@@ -816,12 +822,252 @@ function creaMarkerGruppo(gruppo, colore) {
             });
         });
     });
+
+    if (hasAppuntamento || filterAppuntamentiOnly) {
+        abilitaHoverPopup(marker);
+    }
     
     marker.contatore = primoContatore;
     marker.gruppo = gruppo;
     
     return marker;
 }
+
+// ============================================================
+// BADGE ORARIO & POPUP HOVER PER CONTATORI APPUNTAMENTO
+// ============================================================
+function createOrarioBadgeHtml(c) {
+    let orario = '';
+    if (c.ora_appuntamento && String(c.ora_appuntamento).trim()) {
+        orario = String(c.ora_appuntamento).trim();
+    } else if (c.orari_lettere && String(c.orari_lettere).trim()) {
+        orario = String(c.orari_lettere).trim();
+    } else {
+        orario = 'APP';
+    }
+    return `<div class="marker-time-badge" title="Appuntamento ore ${orario}">` +
+        `<span class="marker-time-badge-icon">⏱️</span>` +
+        `<span class="marker-time-badge-text">${orario}</span>` +
+    `</div>`;
+}
+
+function createGroupOrarioBadgeHtml(gruppo) {
+    const appuntamenti = (gruppo.contatori || []).filter(c => c.is_appuntamento);
+    if (appuntamenti.length === 0) return '';
+    
+    let orarioText = '';
+    if (appuntamenti.length === 1) {
+        const c = appuntamenti[0];
+        orarioText = (c.ora_appuntamento && String(c.ora_appuntamento).trim()) || 
+                     (c.orari_lettere && String(c.orari_lettere).trim()) || 'APP';
+    } else {
+        const orari = appuntamenti
+            .map(c => (c.ora_appuntamento && String(c.ora_appuntamento).trim()) || (c.orari_lettere && String(c.orari_lettere).trim()))
+            .filter(Boolean);
+        if (orari.length > 0 && orari.length <= 2) {
+            orarioText = orari.join(' · ');
+        } else {
+            orarioText = `${appuntamenti.length} App.`;
+        }
+    }
+    
+    return `<div class="marker-time-badge" title="Appuntamenti: ${orarioText}">` +
+        `<span class="marker-time-badge-icon">⏱️</span>` +
+        `<span class="marker-time-badge-text">${orarioText}</span>` +
+    `</div>`;
+}
+
+function abilitaHoverPopup(marker) {
+    if (!marker) return;
+    let closeTimer = null;
+    let isPinnedByClick = false;
+
+    marker.on('click', function () {
+        isPinnedByClick = true;
+        if (closeTimer) {
+            clearTimeout(closeTimer);
+            closeTimer = null;
+        }
+    });
+
+    marker.on('popupclose', function () {
+        isPinnedByClick = false;
+        if (closeTimer) {
+            clearTimeout(closeTimer);
+            closeTimer = null;
+        }
+    });
+
+    marker.on('mouseover', function () {
+        if (closeTimer) {
+            clearTimeout(closeTimer);
+            closeTimer = null;
+        }
+        if (!this.isPopupOpen()) {
+            const popup = this.getPopup();
+            if (popup) {
+                popup.options.autoPan = false;
+            }
+            this.openPopup();
+        }
+        const popup = this.getPopup();
+        if (popup) {
+            const el = popup.getElement();
+            if (el && !el._hoverBound) {
+                el._hoverBound = true;
+                el.addEventListener('mouseenter', () => {
+                    if (closeTimer) {
+                        clearTimeout(closeTimer);
+                        closeTimer = null;
+                    }
+                });
+                el.addEventListener('mouseleave', () => {
+                    if (!isPinnedByClick) {
+                        closeTimer = setTimeout(() => {
+                            if (!isPinnedByClick) marker.closePopup();
+                        }, 250);
+                    }
+                });
+            }
+        }
+    });
+
+    marker.on('mouseout', function () {
+        if (!isPinnedByClick) {
+            closeTimer = setTimeout(() => {
+                if (!isPinnedByClick) this.closePopup();
+            }, 250);
+        }
+    });
+}
+
+function onToggleFilterAppuntamenti(checked) {
+    filterAppuntamentiOnly = Boolean(checked);
+    const row = document.getElementById('appuntamentiFilterRow');
+    if (row) {
+        row.classList.toggle('active', filterAppuntamentiOnly);
+    }
+    aggiornaConteggioFiltroAppuntamenti();
+    preserveMapView = false;
+    applicaFiltri();
+}
+
+function aggiornaConteggioFiltroAppuntamenti() {
+    const badge = document.getElementById('appuntamentiFilterCount');
+    if (!badge || !contatori) return;
+    
+    let list = contatoriVisibili || contatori;
+    if (currentLCL) {
+        list = list.filter(c => c.lcl === currentLCL);
+    }
+
+    if (currentView === 'detail' && currentZona) {
+        const zona = zone ? zone.find(z => z.nome === currentZona) : null;
+        if (zona) {
+            const comuniZona = zona.comuni.map(c => c.toLowerCase());
+            list = list.filter(c => comuniZona.includes(c.comune.toLowerCase()));
+        } else {
+            list = list.filter(c => c.comune.toUpperCase() === currentZona.toUpperCase());
+        }
+        if (currentData) {
+            list = list.filter(c => c.data === currentData);
+        }
+    } else if ((currentView === 'tuttiOperatori' || currentView === 'multiOperatori' || currentView === 'operatore') && currentData) {
+        list = list.filter(c => c.data === currentData);
+        if (currentView === 'operatore' && currentOperatore) {
+            list = list.filter(c => (c.tecnico || 'TUTTI') === currentOperatore);
+        } else if (currentView === 'multiOperatori') {
+            const selOps = (typeof getSelectedOperatori === 'function') ? getSelectedOperatori() : [];
+            if (selOps.length > 0) {
+                list = list.filter(c => selOps.includes(c.tecnico || 'TUTTI'));
+            }
+        }
+    } else if (currentDataFiltro) {
+        list = list.filter(c => c.data === currentDataFiltro);
+    }
+    
+    const count = list.filter(c => c.is_appuntamento).length;
+    badge.textContent = count;
+}
+window.onToggleFilterAppuntamenti = onToggleFilterAppuntamenti;
+window.aggiornaConteggioFiltroAppuntamenti = aggiornaConteggioFiltroAppuntamenti;
+
+// ============================================================
+// ADATTA VISTA MAPPA AI MARKER
+// ============================================================
+function adattaVistaMappaAiMarker() {
+    if (!map) return;
+    const points = [];
+
+    // 1. Marker contatori (viste dettaglio, operatore, percorsi)
+    if (markers && markers.length > 0) {
+        markers.forEach(m => {
+            if (m && typeof m.getLatLng === 'function') {
+                const ll = m.getLatLng();
+                if (isValidCoordinate(ll.lat, ll.lng)) {
+                    if (m !== currentDepositoMarker && !m._isDeposito && !m.isDeposito && !(m.options && m.options.isDeposito)) {
+                        points.push([ll.lat, ll.lng]);
+                    }
+                }
+            }
+        });
+        if (points.length === 0) {
+            markers.forEach(m => {
+                if (m && typeof m.getLatLng === 'function') {
+                    const ll = m.getLatLng();
+                    if (isValidCoordinate(ll.lat, ll.lng)) points.push([ll.lat, ll.lng]);
+                }
+            });
+        }
+    }
+
+    // 2. Cerchi zone e comuni
+    if (zoneCircles && zoneCircles.length > 0) {
+        zoneCircles.forEach(zc => {
+            if (zc && typeof zc.getLatLng === 'function') {
+                const ll = zc.getLatLng();
+                if (isValidCoordinate(ll.lat, ll.lng)) {
+                    if (zc !== currentDepositoMarker && !zc._isDeposito && !zc.isDeposito && !(zc.options && zc.options.isDeposito)) {
+                        points.push([ll.lat, ll.lng]);
+                    }
+                }
+            }
+        });
+        if (points.length === 0) {
+            zoneCircles.forEach(zc => {
+                if (zc && typeof zc.getLatLng === 'function') {
+                    const ll = zc.getLatLng();
+                    if (isValidCoordinate(ll.lat, ll.lng)) points.push([ll.lat, ll.lng]);
+                }
+            });
+        }
+    }
+
+    // 3. Pinned markers
+    if (pinnedMarkers && pinnedMarkers.size > 0) {
+        pinnedMarkers.forEach(pm => {
+            if (pm && typeof pm.getLatLng === 'function') {
+                const ll = pm.getLatLng();
+                if (isValidCoordinate(ll.lat, ll.lng)) points.push([ll.lat, ll.lng]);
+            }
+        });
+    }
+
+    if (points.length === 0) {
+        if (deposito && isValidCoordinate(deposito.lat, deposito.lon)) {
+            map.setView([deposito.lat, deposito.lon], 12);
+        }
+        return;
+    }
+
+    if (points.length === 1) {
+        map.setView(points[0], 15);
+    } else {
+        const bounds = L.latLngBounds(points);
+        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 17 });
+    }
+}
+window.adattaVistaMappaAiMarker = adattaVistaMappaAiMarker;
 
 // ============================================================
 // TOGGLES
@@ -1072,13 +1318,12 @@ function onDetailOperatoreCheckChange() {
     
     // Riesegui la vista dettaglio
     if (currentView === 'detail' && currentData) {
-        preserveMapView = true;
+        preserveMapView = false;
         if (zone.find(z => z.nome === currentZona)) {
             apriDettaglio(currentZona, currentData);
         } else {
             apriDettaglioComune(currentZona, currentData);
         }
-        preserveMapView = false;
     }
 }
 
@@ -1106,7 +1351,7 @@ function toggleSchedulabili() {
         schedFilterPosizione = '';
     }
     
-    preserveMapView = true;
+    preserveMapView = false;
     if (currentView === 'zone' || currentView === 'towns') {
         if (viewMode === 'zone') {
             mostraVistaZone(document.getElementById('searchInput').value);
@@ -2595,6 +2840,7 @@ function ridisegnaVistaOperatoriSenzaSidebar() {
         contatoriData = contatoriData.filter(c => selOps.includes(c.tecnico || 'TUTTI'));
     }
     if (currentLCL) contatoriData = contatoriData.filter(c => c.lcl === currentLCL);
+    if (filterAppuntamentiOnly) contatoriData = contatoriData.filter(c => c.is_appuntamento);
 
     const operatoriMap = new Map();
     contatoriData.forEach(c => {
@@ -2622,6 +2868,7 @@ function ridisegnaVistaSingoloOperatoreSenzaSidebar() {
         (c.tecnico || 'TUTTI') === currentOperatore
     );
     if (currentLCL) contatoriOp = contatoriOp.filter(c => c.lcl === currentLCL);
+    if (filterAppuntamentiOnly) contatoriOp = contatoriOp.filter(c => c.is_appuntamento);
     const percorsoOrdinato = ordinaPercorsoJS(contatoriOp);
     preserveMapView = true;
     renderPercorsoOperatoreMappa(percorsoOrdinato, currentData, currentOperatore);
@@ -2824,20 +3071,27 @@ function updateDateNavigation() {
             const dateSet = new Set();
             contatori.forEach(c => {
                 if (c.comune.toUpperCase() === currentZona.toUpperCase() && c.data) {
-                    dateSet.add(c.data);
+                    if (!filterAppuntamentiOnly || c.is_appuntamento) {
+                        dateSet.add(c.data);
+                    }
                 }
             });
             availableDates = Array.from(dateSet).sort().filter(d => d >= oggiStr);
             currentDateIndex = availableDates.indexOf(currentData);
         } else {
-            availableDates = zona.date.map(d => d.data).sort().filter(d => d >= oggiStr);
+            const dateList = filterAppuntamentiOnly 
+                ? (zona.date.filter(d => (d.appuntamenti || 0) > 0))
+                : zona.date;
+            availableDates = dateList.map(d => d.data).sort().filter(d => d >= oggiStr);
             currentDateIndex = availableDates.indexOf(currentData);
         }
     } else if (currentView === 'tuttiOperatori' || currentView === 'operatore' || currentView === 'multiOperatori') {
         // Tutte le date uniche del dataset
         const dateSet = new Set();
         contatoriVisibili.forEach(c => {
-            if (c.data) dateSet.add(c.data);
+            if (c.data && (!filterAppuntamentiOnly || c.is_appuntamento)) {
+                dateSet.add(c.data);
+            }
         });
         availableDates = Array.from(dateSet).sort().filter(d => d >= oggiStr);
         currentDateIndex = availableDates.indexOf(currentData);
@@ -2950,7 +3204,7 @@ function closeDatePicker() {
 
 function selectDateFromPicker(data) {
     closeDatePicker();
-    preserveMapView = true; // Preserva la vista quando selezioni dal picker
+    preserveMapView = false; // Adatta la vista alla nuova data selezionata
 
     if (currentView === 'detail') {
         const zona = zone.find(z => z.nome === currentZona);
@@ -3012,7 +3266,7 @@ function navigateDate(direction) {
     }
     const newData = availableDates[currentDateIndex];
 
-    preserveMapView = true; // Preserva la vista quando navigo tra le date
+    preserveMapView = false; // Adatta la vista alla nuova data
 
     if (currentView === 'detail') {
         const zona = zone.find(z => z.nome === currentZona);
@@ -3101,9 +3355,15 @@ function popolaFiltroLCL() {
 function applicaFiltri() {
     currentLCL = document.getElementById('lclFilter').value;
     currentDataFiltro = document.getElementById('dataFilter').value;
+    const appChk = document.getElementById('filterAppuntamenti');
+    if (appChk) {
+        filterAppuntamentiOnly = appChk.checked;
+        const row = document.getElementById('appuntamentiFilterRow');
+        if (row) row.classList.toggle('active', filterAppuntamentiOnly);
+    }
 
-    // Preserva la vista quando applichi filtri
-    preserveMapView = true;
+    // Adatta la vista quando applichi filtri
+    preserveMapView = false;
 
     if (currentView === 'zone') {
         mostraVistaZone(document.getElementById('searchInput').value);
@@ -3150,6 +3410,7 @@ function applicaFiltri() {
     } else if (currentView === 'tuttiOperatori' && currentData) {
         mostraPercorsoTuttiOperatori(currentData);
     }
+    aggiornaConteggioFiltroAppuntamenti();
 }
 
 // ============================================================
@@ -3374,6 +3635,9 @@ function mostraPercorsoTuttiOperatori(data) {
     if (currentLCL) {
         contatoriData = contatoriData.filter(c => c.lcl === currentLCL);
     }
+    if (filterAppuntamentiOnly) {
+        contatoriData = contatoriData.filter(c => c.is_appuntamento);
+    }
     
     // Raggruppa per operatore
     const operatoriMap = new Map();
@@ -3414,6 +3678,7 @@ function mostraPercorsoTuttiOperatori(data) {
     document.getElementById('statZone').textContent = new Set(tuttiContatori.map(c => c.comune)).size;
     document.getElementById('statContatori').textContent = tuttiContatori.length;
     document.getElementById('statAppuntamenti').textContent = tuttiContatori.filter(c => c.is_appuntamento).length;
+    aggiornaConteggioFiltroAppuntamenti();
 }
 
 function mostraPercorsoMultiOperatori(operatoriSelezionati, data) {
@@ -3446,6 +3711,9 @@ function mostraPercorsoMultiOperatori(operatoriSelezionati, data) {
     // Applica filtro LCL se attivo
     if (currentLCL) {
         contatoriData = contatoriData.filter(c => c.lcl === currentLCL);
+    }
+    if (filterAppuntamentiOnly) {
+        contatoriData = contatoriData.filter(c => c.is_appuntamento);
     }
     
     // Raggruppa per operatore
@@ -3487,6 +3755,7 @@ function mostraPercorsoMultiOperatori(operatoriSelezionati, data) {
     document.getElementById('statZone').textContent = new Set(tuttiContatori.map(c => c.comune)).size;
     document.getElementById('statContatori').textContent = tuttiContatori.length;
     document.getElementById('statAppuntamenti').textContent = tuttiContatori.filter(c => c.is_appuntamento).length;
+    aggiornaConteggioFiltroAppuntamenti();
 }
 
 function renderPercorsoTuttiOperatoriSidebar(percorsiPerOperatore, data) {
@@ -3584,11 +3853,8 @@ function renderPercorsoTuttiOperatoriMappa(percorsiPerOperatore, data) {
     
     const allPoints = [];
     
-    // Marker deposito
-    const dMarker = renderMarkerDeposito(markers);
-    if (dMarker) {
-        allPoints.push([deposito.lat, deposito.lon]);
-    }
+    // Marker deposito (visibile sulla mappa, ma non allarga il bounding box dei contatori)
+    renderMarkerDeposito(markers);
     
     // Per ogni operatore, disegna il percorso
     percorsiPerOperatore.forEach(({operatore, percorso, colore}) => {
@@ -3625,19 +3891,25 @@ function renderPercorsoTuttiOperatoriMappa(percorsiPerOperatore, data) {
                     ? { lat: deposito.lat, lon: deposito.lon, isDeposito: true, num: 0 }
                     : { lat: lista[idx-1].lat, lon: lista[idx-1].lon, isDeposito: false, num: idx };
                 
+                const timeBadgeHtml = (isApp && filterAppuntamentiOnly) ? createOrarioBadgeHtml(c) : '';
                 const icon = L.divIcon({
                     className: 'marker-contatore' + (isApp ? ' marker-appuntamento' : ''),
                     html: `<div style="background: ${colore}; width: 100%; height: 100%; border-radius: 50%; display: flex; align-items: center; justify-content: center; position: relative;">
                         ${c.indiceTecnico + 1}
                         ${showEneltelLabels ? `<span class="marker-label">${eneltelLast3}</span>` : ''}
+                        ${timeBadgeHtml}
                     </div>`,
                     iconSize: [24, 24],
                     iconAnchor: [12, 12]
                 });
                 
                 const marker = L.marker([c.lat, c.lon], { icon })
-                    .bindPopup(() => createContatorePopup(c, c.indiceTecnico + 1, colore, prevPoint))
+                    .bindPopup(() => createContatorePopup(c, c.indiceTecnico + 1, colore, prevPoint), { offset: [0, -14] })
                     .addTo(map);
+                
+                if (isApp) {
+                    abilitaHoverPopup(marker);
+                }
                 
                 marker.contatore = c;
                 marker.numeroTappa = c.indiceTecnico + 1;
@@ -3689,9 +3961,15 @@ function renderPercorsoTuttiOperatoriMappa(percorsiPerOperatore, data) {
     if (savedCenter && savedZoom) {
         map.setView(savedCenter, savedZoom);
         preserveMapView = false;
+    } else if (allPoints.length === 0) {
+        if (deposito && isValidCoordinate(deposito.lat, deposito.lon)) {
+            map.setView([deposito.lat, deposito.lon], 12);
+        }
+    } else if (allPoints.length === 1) {
+        map.setView(allPoints[0], 15);
     } else if (allPoints.length > 1) {
         const bounds = L.latLngBounds(allPoints);
-        map.fitBounds(bounds, { padding: [50, 50] });
+        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
     }
 }
 
@@ -3727,6 +4005,9 @@ function mostraPercorsoCompletoOperatore(operatore, data) {
     if (currentLCL) {
         contatoriOperatore = contatoriOperatore.filter(c => c.lcl === currentLCL);
     }
+    if (filterAppuntamentiOnly) {
+        contatoriOperatore = contatoriOperatore.filter(c => c.is_appuntamento);
+    }
     
     // Ordina con l'algoritmo di ottimizzazione
     const percorsoOrdinato = ordinaPercorsoJS(contatoriOperatore);
@@ -3741,6 +4022,7 @@ function mostraPercorsoCompletoOperatore(operatore, data) {
     document.getElementById('statZone').textContent = new Set(percorsoOrdinato.map(c => c.comune)).size;
     document.getElementById('statContatori').textContent = percorsoOrdinato.length;
     document.getElementById('statAppuntamenti').textContent = percorsoOrdinato.filter(c => c.is_appuntamento).length;
+    aggiornaConteggioFiltroAppuntamenti();
 }
 
 function mostraPercorsoOperatoreConRicerca(operatore, data, searchQuery) {
@@ -3776,6 +4058,9 @@ function mostraPercorsoOperatoreConRicerca(operatore, data, searchQuery) {
     // Applica filtro LCL se attivo
     if (currentLCL) {
         contatoriOperatore = contatoriOperatore.filter(c => c.lcl === currentLCL);
+    }
+    if (filterAppuntamentiOnly) {
+        contatoriOperatore = contatoriOperatore.filter(c => c.is_appuntamento);
     }
     
     // Applica filtro di ricerca se presente
@@ -4021,11 +4306,8 @@ function renderPercorsoOperatoreMappa(lista, data, operatore) {
     const colore = getColore(operatore);
     const allPoints = [];
     
-    // Marker deposito
-    const dMarker = renderMarkerDeposito(markers);
-    if (dMarker) {
-        allPoints.push([deposito.lat, deposito.lon]);
-    }
+    // Marker deposito (visibile sulla mappa, ma non allarga il bounding box dei contatori)
+    renderMarkerDeposito(markers);
     
     // Sortmode coerente con la sidebar (toggle 🧭 Percorso / 🕒 Orario):
     // - 'percorso': ordine OSRM/ancore originale ricevuto
@@ -4082,19 +4364,25 @@ function renderPercorsoOperatoreMappa(lista, data, operatore) {
                     ? { lat: deposito.lat, lon: deposito.lon, isDeposito: true, num: 0 }
                     : { lat: listaDaUsare[idx-1].lat, lon: listaDaUsare[idx-1].lon, isDeposito: false, num: idx });
             
+            const timeBadgeHtml = (isApp && filterAppuntamentiOnly) ? createOrarioBadgeHtml(c) : '';
             const icon = L.divIcon({
                 className: 'marker-contatore' + (isApp ? ' marker-appuntamento' : ''),
                 html: `<div style="background: ${colore}; width: 100%; height: 100%; border-radius: 50%; display: flex; align-items: center; justify-content: center; position: relative;">
                     ${c.indiceTecnico + 1}
                     ${showEneltelLabels ? `<span class="marker-label">${eneltelLast3}</span>` : ''}
+                    ${timeBadgeHtml}
                 </div>`,
                 iconSize: [24, 24],
                 iconAnchor: [12, 12]
             });
             
             const marker = L.marker([c.lat, c.lon], { icon })
-                .bindPopup(() => createContatorePopup(c, c.indiceTecnico + 1, colore, prevPoint))
+                .bindPopup(() => createContatorePopup(c, c.indiceTecnico + 1, colore, prevPoint), { offset: [0, -14] })
                 .addTo(map);
+
+            if (isApp) {
+                abilitaHoverPopup(marker);
+            }
             
             marker.contatore = c;
             marker.numeroTappa = c.indiceTecnico + 1;
@@ -4151,9 +4439,15 @@ function renderPercorsoOperatoreMappa(lista, data, operatore) {
     if (savedCenter && savedZoom) {
         map.setView(savedCenter, savedZoom);
         preserveMapView = false; // Reset del flag
+    } else if (allPoints.length === 0) {
+        if (deposito && isValidCoordinate(deposito.lat, deposito.lon)) {
+            map.setView([deposito.lat, deposito.lon], 12);
+        }
+    } else if (allPoints.length === 1) {
+        map.setView(allPoints[0], 15);
     } else if (allPoints.length > 1) {
         const bounds = L.latLngBounds(allPoints);
-        map.fitBounds(bounds, { padding: [50, 50] });
+        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
     }
 }
 
@@ -4172,7 +4466,8 @@ function mostraVistaZone(searchQuery = '') {
         document.getElementById('detailFilters').style.display = 'none';
         const opRow = document.getElementById('operatoreFilterRow');
         if (opRow) opRow.style.display = 'none';
-        filterAppuntamentiOnly = false;
+        const appChk = document.getElementById('filterAppuntamenti');
+        filterAppuntamentiOnly = appChk ? appChk.checked : false;
         mostraRotteAttivo = false;
         
         // Gestisci dropdown operatore in base alla data selezionata
@@ -4299,6 +4594,7 @@ function mostraVistaZone(searchQuery = '') {
     document.getElementById('statContatori').textContent = zoneFiltrate.reduce((s, z) => s + z.totale, 0);
     document.getElementById('statAppuntamenti').textContent = zoneFiltrate.reduce((s, z) =>
         s + z.date.reduce((s2, d) => s2 + d.appuntamenti, 0), 0);
+    aggiornaConteggioFiltroAppuntamenti();
 }
 
 function renderZoneSidebar(zoneFiltrate) {
@@ -4489,11 +4785,12 @@ function renderZoneMappa(zoneFiltrate) {
         map.setView(savedCenter, savedZoom);
         preserveMapView = false;
     } else if (zoneValide.length > 0) {
-        const bounds = L.latLngBounds(zoneValide.map(z => [z.lat, z.lon]));
-        if (isValidCoordinate(deposito.lat, deposito.lon)) {
-            bounds.extend([deposito.lat, deposito.lon]);
+        if (zoneValide.length === 1) {
+            map.setView([zoneValide[0].lat, zoneValide[0].lon], 13);
+        } else {
+            const bounds = L.latLngBounds(zoneValide.map(z => [z.lat, z.lon]));
+            map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
         }
-        map.fitBounds(bounds, { padding: [50, 50] });
     }
 }
 
@@ -4614,7 +4911,8 @@ function mostraVistaComuni(searchQuery = '') {
         document.getElementById('detailFilters').style.display = 'none';
         const opRow = document.getElementById('operatoreFilterRow');
         if (opRow) opRow.style.display = 'none';
-        filterAppuntamentiOnly = false;
+        const appChk = document.getElementById('filterAppuntamenti');
+        filterAppuntamentiOnly = appChk ? appChk.checked : false;
         mostraRotteAttivo = false;
         
         // Gestisci dropdown operatore in base alla data selezionata
@@ -4632,6 +4930,9 @@ function mostraVistaComuni(searchQuery = '') {
     let contatoriDaUsare = currentLCL ? contatori : contatoriVisibili;
     if (currentDataFiltro) {
         contatoriDaUsare = contatoriDaUsare.filter(c => c.data === currentDataFiltro);
+    }
+    if (filterAppuntamentiOnly) {
+        contatoriDaUsare = contatoriDaUsare.filter(c => c.is_appuntamento);
     }
 
     // Raggruppa contatori per comune
@@ -4782,6 +5083,7 @@ function mostraVistaComuni(searchQuery = '') {
     document.getElementById('statContatori').textContent = comuniList.reduce((s, c) => s + c.totale, 0);
     document.getElementById('statAppuntamenti').textContent = comuniList.reduce((s, c) =>
         s + c.date.reduce((s2, d) => s2 + d.appuntamenti, 0), 0);
+    aggiornaConteggioFiltroAppuntamenti();
 }
 
 function renderComuniSidebar(comuniList) {
@@ -4934,9 +5236,12 @@ function renderComuniMappa(comuniList) {
         map.setView(savedCenter, savedZoom);
         preserveMapView = false;
     } else if (comuniValidi.length > 0) {
-        const bounds = L.latLngBounds(comuniValidi.map(c => [c.lat, c.lon]));
-        bounds.extend([deposito.lat, deposito.lon]);
-        map.fitBounds(bounds, { padding: [50, 50] });
+        if (comuniValidi.length === 1) {
+            map.setView([comuniValidi[0].lat, comuniValidi[0].lon], 14);
+        } else {
+            const bounds = L.latLngBounds(comuniValidi.map(c => [c.lat, c.lon]));
+            map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+        }
     }
 }
 
@@ -5016,6 +5321,9 @@ function apriDettaglioComune(comuneNome, data) {
     if (detailSelectedOperatori.size > 0) {
         contatoriData = contatoriData.filter(c => detailSelectedOperatori.has(c.tecnico || 'TUTTI'));
     }
+    if (filterAppuntamentiOnly) {
+        contatoriData = contatoriData.filter(c => c.is_appuntamento);
+    }
 
     // Raggruppa per tecnico
     const perTecnico = {};
@@ -5044,6 +5352,7 @@ function apriDettaglioComune(comuneNome, data) {
 
     // Abilita navigazione date
     updateDateNavigation();
+    aggiornaConteggioFiltroAppuntamenti();
 }
 
 // ============================================================
@@ -5096,6 +5405,9 @@ function apriDettaglio(zonaNome, data) {
     if (detailSelectedOperatori.size > 0) {
         contatoriData = contatoriData.filter(c => detailSelectedOperatori.has(c.tecnico || 'TUTTI'));
     }
+    if (filterAppuntamentiOnly) {
+        contatoriData = contatoriData.filter(c => c.is_appuntamento);
+    }
 
     // Raggruppa per tecnico
     const perTecnico = {};
@@ -5124,6 +5436,7 @@ function apriDettaglio(zonaNome, data) {
 
     // Abilita navigazione date
     updateDateNavigation();
+    aggiornaConteggioFiltroAppuntamenti();
 }
 
 function apriDettaglioConRicerca(zonaNome, data, searchQuery) {
@@ -5150,6 +5463,9 @@ function apriDettaglioConRicerca(zonaNome, data, searchQuery) {
     // Filtra per operatori selezionati
     if (detailSelectedOperatori.size > 0) {
         contatoriData = contatoriData.filter(c => detailSelectedOperatori.has(c.tecnico || 'TUTTI'));
+    }
+    if (filterAppuntamentiOnly) {
+        contatoriData = contatoriData.filter(c => c.is_appuntamento);
     }
 
     // Filtra per ricerca se presente
@@ -5187,6 +5503,7 @@ function apriDettaglioConRicerca(zonaNome, data, searchQuery) {
     document.getElementById('statZone').textContent = Object.keys(perTecnico).length;
     document.getElementById('statContatori').textContent = totContatori;
     document.getElementById('statAppuntamenti').textContent = totApp;
+    aggiornaConteggioFiltroAppuntamenti();
 }
 
 // ================================================================
@@ -5545,19 +5862,25 @@ function renderDettaglioMappa(perTecnico, data) {
                 return; // skip to next gruppo
             }
             // Marker non-schedulabile
+            const timeBadgeHtml = (isApp && filterAppuntamentiOnly) ? createOrarioBadgeHtml(c) : '';
             icon = L.divIcon({
                 className: 'marker-contatore' + (isApp ? ' marker-appuntamento' : ''),
                 html: `<div style="background: ${colore}; width: 100%; height: 100%; border-radius: 50%; display: flex; align-items: center; justify-content: center; position: relative;">
                     ${c.indiceTecnico + 1}
                     ${showEneltelLabels ? `<span class="marker-label">${eneltelLast3}</span>` : ''}
+                    ${timeBadgeHtml}
                 </div>`,
                 iconSize: [24, 24],
                 iconAnchor: [12, 12]
             });
             
             const marker = L.marker([c.lat, c.lon], { icon })
-                .bindPopup(() => createContatorePopup(c, c.indiceTecnico + 1, colore))
+                .bindPopup(() => createContatorePopup(c, c.indiceTecnico + 1, colore), { offset: [0, -14] })
                 .addTo(map);
+
+            if (isApp) {
+                abilitaHoverPopup(marker);
+            }
 
             marker.contatore = c;
             marker.numeroTappa = c.indiceTecnico + 1;
@@ -5577,9 +5900,12 @@ function renderDettaglioMappa(perTecnico, data) {
         map.setView(savedCenter, savedZoom);
         preserveMapView = false; // Reset del flag
     } else if (allPoints.length > 0) {
-        const bounds = L.latLngBounds(allPoints);
-        bounds.extend([deposito.lat, deposito.lon]);
-        map.fitBounds(bounds, { padding: [50, 50] });
+        if (allPoints.length === 1) {
+            map.setView(allPoints[0], 16);
+        } else {
+            const bounds = L.latLngBounds(allPoints);
+            map.fitBounds(bounds, { padding: [50, 50], maxZoom: 17 });
+        }
     }
 
     // Disegna rotte se toggle attivo
@@ -10446,6 +10772,7 @@ async function executeBulkAssign() {
 popolaFiltroDate();
 popolaFiltroLCL();
 updateSchedulabiliBadge();
+aggiornaConteggioFiltroAppuntamenti();
 const hasUrlQuery = checkUrlSearchParameters();
 if (!hasUrlQuery) {
     mostraVistaZone();
@@ -10462,6 +10789,7 @@ updatePrintButtonVisibility();
         popolaFiltroDate();
         popolaFiltroLCL();
         updateSchedulabiliBadge();
+        aggiornaConteggioFiltroAppuntamenti();
         if (!checkUrlSearchParameters()) {
             refreshCurrentView();
         }

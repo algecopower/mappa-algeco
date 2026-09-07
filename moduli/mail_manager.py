@@ -90,6 +90,50 @@ def _extract_plain_snippet(text, max_len=160):
     return clean[:max_len] + ('...' if len(clean) > max_len else '')
 
 
+def html_to_plain_text(html):
+    """
+    Converte codice HTML in testo puro leggibile, preservando a capi e liste.
+    Converte <br>, <p>, <div> in ritorni a capo, tag <a> in 'testo (url)',
+    grassetto/corsivo in markdown (*, _) e decodifica entità HTML.
+    """
+    if not html:
+        return ''
+    text = str(html)
+    # Link: <a href="url">testo</a> -> testo (url) oppure url se testo vuoto o identico
+    def _link_repl(m):
+        href = (m.group(1) or '').strip()
+        label = (m.group(2) or '').strip()
+        if not label or label == href:
+            return href
+        return f"{label} ({href})"
+    text = re.sub(r'<a[^>]*href="([^"]*?)"[^>]*>\s*(.*?)\s*</a>', _link_repl, text, flags=re.IGNORECASE | re.DOTALL)
+
+    # Interruzioni di riga e blocchi
+    text = re.sub(r'<br\s*/?>', '\n', text, flags=re.IGNORECASE)
+    text = re.sub(r'</p\s*>', '\n\n', text, flags=re.IGNORECASE)
+    text = re.sub(r'</div>', '\n', text, flags=re.IGNORECASE)
+    text = re.sub(r'<li[^>]*>', '• ', text, flags=re.IGNORECASE)
+    text = re.sub(r'</li>', '\n', text, flags=re.IGNORECASE)
+
+    # Formattazione per WhatsApp / markdown
+    text = re.sub(r'<(?:b|strong)[^>]*>(.*?)</(?:b|strong)>', r'*\1*', text, flags=re.IGNORECASE | re.DOTALL)
+    text = re.sub(r'<(?:i|em)[^>]*>(.*?)</(?:i|em)>', r'_\1_', text, flags=re.IGNORECASE | re.DOTALL)
+    text = re.sub(r'<(?:s|strike|del)[^>]*>(.*?)</(?:s|strike|del)>', r'~\1~', text, flags=re.IGNORECASE | re.DOTALL)
+
+    # Rimuovi tutti i restanti tag HTML
+    text = re.sub(r'<[^>]+>', '', text)
+
+    # Decodifica entità HTML (&nbsp;, &amp;, ecc.)
+    import html as html_lib
+    text = html_lib.unescape(text)
+    text = text.replace('\xa0', ' ')
+
+    # Normalizza ritorni a capo
+    text = text.replace('\r\n', '\n').replace('\r', '\n')
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    return text.strip()
+
+
 def _detect_email_province(from_addr, to_addrs, cc_addrs=None, default_prov='torino'):
     """
     Determina dinamicamente la provincia corretta di destinazione/competenza analizzando:
@@ -1598,6 +1642,15 @@ def save_template_or_snippet(data, prov=None):
         found = re.findall(r'\{([a-zA-Z0-9_]+)\}', f"{subject} {body}")
         variables = list(set(found))
 
+    # Se il template o snippet è WhatsApp o frase rapida, normalizza il body rimuovendo tag HTML (<br>, <div>, <p>)
+    is_wa_or_snippet = (
+        category == 'whatsapp' or
+        item_type == 'snippet' or
+        (item_id and (str(item_id).startswith('snip_') or str(item_id).startswith('sys_wa_')))
+    )
+    if is_wa_or_snippet and ('<' in body and '>' in body):
+        body = html_to_plain_text(body)
+
     # Aggiornamento template centralizzato di sistema
     if item_id and str(item_id).startswith('sys_'):
         k = str(item_id)[4:]
@@ -1612,6 +1665,9 @@ def save_template_or_snippet(data, prov=None):
         tpl_data['templates'][k]['label'] = title
         if subject:
             tpl_data['templates'][k]['subject'] = subject
+        # Se è template WhatsApp, garantisci che non contenga tag HTML
+        if k.startswith('wa_') or tpl_data['templates'][k].get('type') == 'whatsapp':
+            body = html_to_plain_text(body)
         tpl_data['templates'][k]['body'] = body
         if variables:
             tpl_data['templates'][k]['fields'] = variables
@@ -1631,12 +1687,14 @@ def save_template_or_snippet(data, prov=None):
         if k not in tpl_data['snippets']:
             tpl_data['snippets'][k] = {}
         tpl_data['snippets'][k]['title'] = title
-        tpl_data['snippets'][k]['body'] = body
+        tpl_data['snippets'][k]['body'] = html_to_plain_text(body)
         os.makedirs(os.path.dirname(prov_file), exist_ok=True)
         json_write(prov_file, tpl_data, indent=4)
         return {'success': True, 'id': item_id}
         
     if item_id and str(item_id).isdigit():
+        if (category == 'whatsapp' or item_type == 'snippet') and ('<' in body and '>' in body):
+            body = html_to_plain_text(body)
         conn.execute(
             """UPDATE mail_templates_snippets SET
                title = ?, category = ?, type = ?, subject = ?, body = ?,
@@ -1646,6 +1704,8 @@ def save_template_or_snippet(data, prov=None):
         )
         return {'success': True, 'id': int(item_id)}
     else:
+        if (category == 'whatsapp' or item_type == 'snippet') and ('<' in body and '>' in body):
+            body = html_to_plain_text(body)
         cur = conn.execute(
             """INSERT INTO mail_templates_snippets (
                 provincia, title, category, type, subject, body, variables_json, created_ts, updated_ts

@@ -14,6 +14,44 @@ const AppState = {
     sigMode: 'visual'     // 'visual' | 'html'
 };
 
+function htmlToPlainText(html) {
+    if (typeof window.BulkEmailPreview !== 'undefined' && window.BulkEmailPreview.htmlToPlainText) {
+        return window.BulkEmailPreview.htmlToPlainText(html);
+    }
+    if (!html) return '';
+    let txt = String(html);
+    txt = txt.replace(/<a[^>]*href="([^"]*?)"[^>]*>\s*(.*?)\s*<\/a>/gi, (m, href, label) => {
+        const cleanHref = (href || '').trim();
+        const cleanLabel = (label || '').trim();
+        if (!cleanLabel || cleanLabel === cleanHref) return cleanHref;
+        return `${cleanLabel} (${cleanHref})`;
+    });
+    txt = txt.replace(/<br\s*[\/]?>/gi, '\n');
+    txt = txt.replace(/<\/div>\s*<div[^>]*>/gi, '\n');
+    txt = txt.replace(/<\/div>/gi, '\n');
+    txt = txt.replace(/<\/p>\s*<p[^>]*>/gi, '\n\n');
+    txt = txt.replace(/<\/p>/gi, '\n\n');
+    txt = txt.replace(/<li[^>]*>/gi, '• ');
+    txt = txt.replace(/<\/li>/gi, '\n');
+    txt = txt.replace(/<strong[^>]*>(.*?)<\/strong>/gi, '*$1*');
+    txt = txt.replace(/<b[^>]*>(.*?)<\/b>/gi, '*$1*');
+    txt = txt.replace(/<em[^>]*>(.*?)<\/em>/gi, '_$1_');
+    txt = txt.replace(/<i[^>]*>(.*?)<\/i>/gi, '_$1_');
+    txt = txt.replace(/<s[^>]*>(.*?)<\/s>/gi, '~$1~');
+    txt = txt.replace(/<strike[^>]*>(.*?)<\/strike>/gi, '~$1~');
+    txt = txt.replace(/<del[^>]*>(.*?)<\/del>/gi, '~$1~');
+    txt = txt.replace(/<[^>]+>/g, '');
+    txt = txt.replace(/&nbsp;/g, ' ')
+             .replace(/&amp;/g, '&')
+             .replace(/&lt;/g, '<')
+             .replace(/&gt;/g, '>')
+             .replace(/&quot;/g, '"')
+             .replace(/&#39;/g, "'");
+    txt = txt.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    txt = txt.replace(/\n{3,}/g, '\n\n');
+    return txt.trim();
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     lucide.createIcons();
     initPage();
@@ -165,11 +203,12 @@ function selectItem(id) {
     document.getElementById('templateSubject').value = item.subject || '';
 
     // Popola sia Visual che HTML
+    const isWaOrSnippet = item.category === 'whatsapp' || String(item.key).startsWith('wa_') || item.type === 'snippet';
     const rawBody = item.body || '';
     const formattedHtml = rawBody.includes('<p>') || rawBody.includes('<br>') || rawBody.includes('<table>') ? rawBody : rawBody.replace(/\n/g, '<br>');
     
     document.getElementById('visualEditor').innerHTML = formattedHtml;
-    document.getElementById('htmlEditor').value = rawBody;
+    document.getElementById('htmlEditor').value = isWaOrSnippet ? htmlToPlainText(rawBody) : rawBody;
 
     // Badges & Actions
     document.getElementById('editorBadgeType').textContent = item.type === 'snippet' ? '💬 Frase Rapida / Snippet' : '🪄 Template Completo';
@@ -201,21 +240,25 @@ function switchEditorMode(mode) {
     const visualEditor = document.getElementById('visualEditor');
     const htmlEditor = document.getElementById('htmlEditor');
 
+    const currentItem = AppState.items.find(i => String(i.id) === String(AppState.selectedId) || String(i.key) === String(AppState.selectedId));
+    const isWaOrSnippet = currentItem && (currentItem.category === 'whatsapp' || String(currentItem.key).startsWith('wa_') || currentItem.type === 'snippet');
+
     if (mode === 'visual') {
         // Passa da HTML a Visuale
         visualBtn.classList.add('active');
         htmlBtn.classList.remove('active');
         
-        visualEditor.innerHTML = htmlEditor.value;
+        const val = htmlEditor.value;
+        visualEditor.innerHTML = val.includes('<p>') || val.includes('<br>') || val.includes('<table>') ? val : val.replace(/\n/g, '<br>');
         visualWrap.style.display = 'flex';
         htmlWrap.style.display = 'none';
         wysiwygToolbar.style.display = 'flex';
     } else {
-        // Passa da Visuale a HTML
+        // Passa da Visuale a HTML/Testo
         htmlBtn.classList.add('active');
         visualBtn.classList.remove('active');
         
-        htmlEditor.value = visualEditor.innerHTML;
+        htmlEditor.value = isWaOrSnippet ? htmlToPlainText(visualEditor.innerHTML) : visualEditor.innerHTML;
         visualWrap.style.display = 'none';
         htmlWrap.style.display = 'flex';
         wysiwygToolbar.style.display = 'none';
@@ -295,6 +338,9 @@ function insertAtCursorInput(input, text) {
 
 async function saveTemplate() {
     const id = document.getElementById('currentId').value;
+    const currentItem = AppState.items.find(i => String(i.id) === String(id) || String(i.key) === String(id));
+    const isWaOrSnippet = (currentItem && (currentItem.category === 'whatsapp' || String(currentItem.key).startsWith('wa_') || currentItem.type === 'snippet')) || type === 'snippet';
+
     const title = document.getElementById('templateTitle').value.trim();
     const type = document.getElementById('templateType').value;
     const subject = document.getElementById('templateSubject').value.trim();
@@ -305,6 +351,11 @@ async function saveTemplate() {
         body = document.getElementById('visualEditor').innerHTML;
     } else {
         body = document.getElementById('htmlEditor').value;
+    }
+
+    // Se è un template WhatsApp o uno snippet, converti sempre in plain text con a capo \n
+    if (isWaOrSnippet) {
+        body = htmlToPlainText(body);
     }
 
     if (!title || !body.trim()) {
@@ -322,6 +373,7 @@ async function saveTemplate() {
             id: id || undefined,
             title: title,
             type: type,
+            category: currentItem ? currentItem.category : undefined,
             subject: subject,
             body: body
         };

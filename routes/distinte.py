@@ -192,6 +192,12 @@ def save_distinte_templates():
         data = request.get_json()
         if not data:
             return jsonify({'error': 'Nessun dato ricevuto'}), 400
+        # Normalizza i template WhatsApp e SMS a plain text senza tag HTML
+        from moduli.mail_manager import html_to_plain_text
+        for tk, tv in (data.get('templates') or {}).items():
+            if isinstance(tv, dict) and (tv.get('type') in ('whatsapp', 'sms') or str(tk).startswith('wa_')):
+                if tv.get('body') and ('<' in tv['body'] and '>' in tv['body']):
+                    tv['body'] = html_to_plain_text(tv['body'])
         _save_templates_data(data)
         return jsonify({'ok': True})
     except Exception as e:
@@ -513,8 +519,8 @@ def invia_email_prova():
         msg['Date'] = email_utils.formatdate(localtime=True)
 
         # Plain text
-        body_plain = re.sub(r'<a[^>]*href="([^"]*?)"[^>]*>(.*?)</a>', r'\2 (\1)', body_html)
-        body_plain = re.sub(r'<[^>]+>', '', body_plain)
+        from moduli.mail_manager import html_to_plain_text
+        body_plain = html_to_plain_text(body_html)
         if firma_html:
             body_plain += f'\n\n--\nUfficio Tecnico\nTelefono: {tel_tecnico}\nMail: {email_tecnico}\nwww.algecopower.it'
 
@@ -636,8 +642,8 @@ def invia_singola_email():
         import email.utils as email_utils
 
         # Versione plain text
-        body_plain = re.sub(r'<a[^>]*href="([^"]*?)"[^>]*>(.*?)</a>', r'\2 (\1)', body_html)
-        body_plain = re.sub(r'<[^>]+>', '', body_plain)
+        from moduli.mail_manager import html_to_plain_text
+        body_plain = html_to_plain_text(body_html)
         if firma_html:
             body_plain += f'\n\n--\nUfficio Tecnico\nTelefono: {tel_tecnico}\nMail: {email_tecnico}\nwww.algecopower.it'
 

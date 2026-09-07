@@ -1862,7 +1862,7 @@
 
     </style>
     <script src="/static/csrf.js"></script>
-    <script src="/static/bulk-email-preview.js?v=20260902_2"></script>
+    <script src="/static/bulk-email-preview.js?v=20260907_1"></script>
 </head>
 <body>
     <script>
@@ -2787,6 +2787,48 @@
         }
 
         /**
+         * Converte codice HTML o testo formattato in plain text per WhatsApp, SMS e clipboard.
+         * Preserva tutti i ritorni a capo (<br>, <p>, <div>), converte i link in "testo (url)" e decodifica entità.
+         */
+        function htmlToPlainText(html) {
+            if (typeof window.BulkEmailPreview !== 'undefined' && window.BulkEmailPreview.htmlToPlainText) {
+                return window.BulkEmailPreview.htmlToPlainText(html);
+            }
+            if (!html) return '';
+            let txt = String(html);
+            txt = txt.replace(/<a[^>]*href="([^"]*?)"[^>]*>\s*(.*?)\s*<\/a>/gi, (m, href, label) => {
+                const cleanHref = (href || '').trim();
+                const cleanLabel = (label || '').trim();
+                if (!cleanLabel || cleanLabel === cleanHref) return cleanHref;
+                return `${cleanLabel} (${cleanHref})`;
+            });
+            txt = txt.replace(/<br\s*[\/]?>/gi, '\n');
+            txt = txt.replace(/<\/div>\s*<div[^>]*>/gi, '\n');
+            txt = txt.replace(/<\/div>/gi, '\n');
+            txt = txt.replace(/<\/p>\s*<p[^>]*>/gi, '\n\n');
+            txt = txt.replace(/<\/p>/gi, '\n\n');
+            txt = txt.replace(/<li[^>]*>/gi, '• ');
+            txt = txt.replace(/<\/li>/gi, '\n');
+            txt = txt.replace(/<strong[^>]*>(.*?)<\/strong>/gi, '*$1*');
+            txt = txt.replace(/<b[^>]*>(.*?)<\/b>/gi, '*$1*');
+            txt = txt.replace(/<em[^>]*>(.*?)<\/em>/gi, '_$1_');
+            txt = txt.replace(/<i[^>]*>(.*?)<\/i>/gi, '_$1_');
+            txt = txt.replace(/<s[^>]*>(.*?)<\/s>/gi, '~$1~');
+            txt = txt.replace(/<strike[^>]*>(.*?)<\/strike>/gi, '~$1~');
+            txt = txt.replace(/<del[^>]*>(.*?)<\/del>/gi, '~$1~');
+            txt = txt.replace(/<[^>]+>/g, '');
+            txt = txt.replace(/&nbsp;/g, ' ')
+                     .replace(/&amp;/g, '&')
+                     .replace(/&lt;/g, '<')
+                     .replace(/&gt;/g, '>')
+                     .replace(/&quot;/g, '"')
+                     .replace(/&#39;/g, "'");
+            txt = txt.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+            txt = txt.replace(/\n{3,}/g, '\n\n');
+            return txt.trim();
+        }
+
+        /**
          * Carica i template dal file JSON centralizzato e
          * ricostruisce TEMPLATES e FIELD_DEFS con le funzioni necessarie.
          */
@@ -3016,20 +3058,17 @@
 
             const fields = getFieldValues();
             const messaggio = tmpl.generate(c, fields);
+            const messaggioPlain = htmlToPlainText(messaggio);
 
-            // Per email: il body può contenere tag <a> HTML per i link
+            // Per email: il body può contenere tag HTML per i link o formattazione
             const previewEl = document.getElementById('messagePreview');
             if (tmpl.type === 'email') {
-                // Render HTML: converti \n in <br>, preservando i tag <a>
-                previewEl.innerHTML = messaggio.replace(/\n/g, '<br>');
+                // Render HTML: converti \n in <br> se non contiene già tag di blocco/br
+                previewEl.innerHTML = messaggio.includes('<p>') || messaggio.includes('<br>') ? messaggio : messaggio.replace(/\n/g, '<br>');
             } else {
-                previewEl.textContent = messaggio;
+                // Per WhatsApp / SMS: mostra il plain text formattato con gli a capo reali (white-space: pre-wrap)
+                previewEl.textContent = messaggioPlain;
             }
-
-            // Plain text version (senza tag HTML) per mailto e WhatsApp
-            const messaggioPlain = messaggio
-                .replace(/<a[^>]*href="([^"]*?)"[^>]*>(.*?)<\/a>/gi, '$2 ($1)')
-                .replace(/<[^>]+>/g, '');
 
             // Update WhatsApp link
             if (tmpl.type === 'whatsapp') {
@@ -3048,11 +3087,11 @@
                 document.getElementById('openMailBtn').href = mailtoUrl;
             }
 
-            // Update copy button — per email copia come rich text HTML
+            // Update copy button — per email copia rich text HTML + fallback plain; per WA copia testo puro con a capo
             document.getElementById('copyMessageBtn').onclick = async () => {
                 if (tmpl.type === 'email') {
                     try {
-                        const htmlContent = messaggio.replace(/\n/g, '<br>');
+                        const htmlContent = messaggio.includes('<p>') || messaggio.includes('<br>') ? messaggio : messaggio.replace(/\n/g, '<br>');
                         const blob = new Blob([htmlContent], { type: 'text/html' });
                         const plainBlob = new Blob([messaggioPlain], { type: 'text/plain' });
                         await navigator.clipboard.write([
@@ -3091,7 +3130,7 @@
             document.getElementById('openMailBtn').onclick = async (e) => {
                 // Copia il corpo HTML formattato negli appunti
                 try {
-                    const htmlContent = messaggio.replace(/\n/g, '<br>');
+                    const htmlContent = messaggio.includes('<p>') || messaggio.includes('<br>') ? messaggio : messaggio.replace(/\n/g, '<br>');
                     const blob = new Blob([htmlContent], { type: 'text/html' });
                     const plainBlob = new Blob([messaggioPlain], { type: 'text/plain' });
                     await navigator.clipboard.write([
@@ -5408,7 +5447,12 @@ Rispondi con un JSON array in questo formato esatto:
                 delete t.subject;
             }
             
-            t.body = document.getElementById('ed_body').innerHTML;
+            const rawBody = document.getElementById('ed_body').innerHTML;
+            if (t.type === 'whatsapp' || t.type === 'sms' || String(editorCurrentKey).startsWith('wa_')) {
+                t.body = htmlToPlainText(rawBody);
+            } else {
+                t.body = rawBody;
+            }
             
             const checkboxes = document.querySelectorAll('#editorContent .editor-checkbox-item input[type="checkbox"]');
             const selectedFields = [];

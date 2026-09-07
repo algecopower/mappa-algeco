@@ -4,7 +4,6 @@ Manager per la Gestione dei Comuni (info, contatti, bulk email).
 """
 import io
 import os
-import re
 
 import logging
 import smtplib
@@ -582,8 +581,8 @@ def _build_comune_email_message(dest_email, subject, body_html, allegati_nomi,
     from_name = smtp_settings.get('from_name', 'Ufficio Tecnico Algeco Power')
 
     # Plain text
-    body_plain = re.sub(r'<a[^>]*href="([^"]*?)"[^>]*>(.*?)</a>', r'\2 (\1)', body_html)
-    body_plain = re.sub(r'<[^>]+>', '', body_plain)
+    from moduli.mail_manager import html_to_plain_text
+    body_plain = html_to_plain_text(body_html)
 
     msg_alt = MIMEMultipart('alternative')
     msg_alt.attach(MIMEText(body_plain, 'plain', 'utf-8'))

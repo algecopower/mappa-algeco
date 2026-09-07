@@ -4,7 +4,6 @@ Blueprint Archivio Lettere — generazioni Excel, contatti aziendali e invii bul
 """
 import logging
 import os
-import re
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -211,8 +210,8 @@ def api_lettere_allegati():
 
 
 def _plain_from_html(html):
-    text = re.sub(r'<a[^>]*href="([^"]*?)"[^>]*>(.*?)</a>', r'\2 (\1)', html or '')
-    return re.sub(r'<[^>]+>', '', text)
+    from moduli.mail_manager import html_to_plain_text
+    return html_to_plain_text(html)
 
 
 def _build_email_message(

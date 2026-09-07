@@ -617,21 +617,61 @@
         },
 
         /**
-         * Converte formattazione HTML in markdown leggibile per WhatsApp.
+         * Converte formattazione HTML in testo puro leggibile con markdown per WhatsApp/SMS/clipboard.
+         * Preserva tutti i ritorni a capo (<br>, <p>, <div>), elenchi puntati,
+         * converte i link in "testo (url)" e decodifica entità HTML.
          */
-        convertHtmlToWhatsApp: function (html) {
-            let txt = html || '';
+        htmlToPlainText: function (html) {
+            if (!html) return '';
+            let txt = String(html);
+            // Link: <a href="url">testo</a> -> testo (url)
+            txt = txt.replace(/<a[^>]*href="([^"]*?)"[^>]*>\s*(.*?)\s*<\/a>/gi, (m, href, label) => {
+                const cleanHref = (href || '').trim();
+                const cleanLabel = (label || '').trim();
+                if (!cleanLabel || cleanLabel === cleanHref) return cleanHref;
+                return `${cleanLabel} (${cleanHref})`;
+            });
+            // Line breaks e blocchi
             txt = txt.replace(/<br\s*[\/]?>/gi, '\n');
             txt = txt.replace(/<\/div>\s*<div[^>]*>/gi, '\n');
+            txt = txt.replace(/<\/div>/gi, '\n');
             txt = txt.replace(/<\/p>\s*<p[^>]*>/gi, '\n\n');
-            txt = txt.replace(/<b>(.*?)<\/b>/gi, '*$1*');
-            txt = txt.replace(/<strong>(.*?)<\/strong>/gi, '*$1*');
-            txt = txt.replace(/<i>(.*?)<\/i>/gi, '_$1_');
-            txt = txt.replace(/<em>(.*?)<\/em>/gi, '_$1_');
-            txt = txt.replace(/<s>(.*?)<\/s>/gi, '~$1~');
+            txt = txt.replace(/<\/p>/gi, '\n\n');
+            txt = txt.replace(/<li[^>]*>/gi, '• ');
+            txt = txt.replace(/<\/li>/gi, '\n');
+
+            // Formattazione WhatsApp / markdown
+            txt = txt.replace(/<strong[^>]*>(.*?)<\/strong>/gi, '*$1*');
+            txt = txt.replace(/<b[^>]*>(.*?)<\/b>/gi, '*$1*');
+            txt = txt.replace(/<em[^>]*>(.*?)<\/em>/gi, '_$1_');
+            txt = txt.replace(/<i[^>]*>(.*?)<\/i>/gi, '_$1_');
+            txt = txt.replace(/<s[^>]*>(.*?)<\/s>/gi, '~$1~');
+            txt = txt.replace(/<strike[^>]*>(.*?)<\/strike>/gi, '~$1~');
+            txt = txt.replace(/<del[^>]*>(.*?)<\/del>/gi, '~$1~');
+
+            // Rimuovi tag residui
             txt = txt.replace(/<[^>]+>/g, '');
-            txt = txt.replace(/&nbsp;/g, ' ');
-            return encodeURIComponent(txt.trim());
+
+            // Decodifica entità HTML
+            txt = txt.replace(/&nbsp;/g, ' ')
+                     .replace(/&amp;/g, '&')
+                     .replace(/&lt;/g, '<')
+                     .replace(/&gt;/g, '>')
+                     .replace(/&quot;/g, '"')
+                     .replace(/&#39;/g, "'");
+
+            // Normalizza a capo
+            txt = txt.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+            txt = txt.replace(/\n{3,}/g, '\n\n');
+            return txt.trim();
+        },
+
+        /**
+         * Converte formattazione HTML in markdown leggibile per WhatsApp codificato per URL.
+         */
+        convertHtmlToWhatsApp: function (html) {
+            const txt = this.htmlToPlainText(html);
+            return encodeURIComponent(txt);
         },
 
         /**
@@ -699,4 +739,5 @@
     };
 
     global.BulkEmailPreview = BulkEmailPreview;
+    global.htmlToPlainText = BulkEmailPreview.htmlToPlainText;
 })(typeof window !== 'undefined' ? window : this);

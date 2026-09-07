@@ -184,8 +184,9 @@
             "type": "whatsapp"
         },
         "wa_conferma": {
-            "body": "Gentile {nome},\ncome da precedente comunicazione inviata a mezzo posta, un incaricato E-Distribuzione sostituirà il vostro contatore il giorno *{data}* nel comune di {comune}.\n\nLa sostituzione, OBBLIGATORIA e GRATUITA, è richiesta da E-Distribuzione per adeguamento tecnologico e NON modificherà il vostro contratto di fornitura che resterà invariato.\n\nSI PREGA DI RISPONDERE CONFERMANDO LA VOSTRA DISPONIBILITÀ PER LA DATA INDICATA.\n\nPer eventuali chiarimenti o verifiche, potete contattarci a questo numero o scriverci all’indirizzo {email_tecnico}.\n\nCordiali saluti,\nAlgeco Power Srl - incaricati ufficiali E-Distribuzione",
+            "body": "Gentile {nome},\ncome da precedente comunicazione inviata a mezzo posta, un incaricato E-Distribuzione sostituirà il vostro contatore il giorno *{data}* nel comune di {comune}.\n\nLa sostituzione, OBBLIGATORIA e GRATUITA, è richiesta da E-Distribuzione per adeguamento tecnologico e NON modificherà il vostro contratto di fornitura che resterà invariato.\n\nSI PREGA DI RISPONDERE CONFERMANDO LA VOSTRA DISPONIBILITÀ PER LA DATA INDICATA.\n\nPer eventuali chiarimenti o verifiche, potete contattarci a questo numero (anche su WhatsApp) o scriverci all’indirizzo {email_tecnico}.\n\nCordiali saluti,\nAlgeco Power Srl - incaricati ufficiali E-Distribuzione",
             "fields": [
+                "email_tecnico",
                 "nome",
                 "data",
                 "comune"

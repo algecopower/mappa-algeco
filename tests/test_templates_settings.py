@@ -161,3 +161,110 @@ def test_dynamic_province_addition_and_removal(tmp_path, monkeypatch):
     assert '011 025 2702' in sig_to
 
 
+def test_html_to_plain_text_preserves_spacing():
+    """Verifica che html_to_plain_text non incolli le parole e preservi i ritorni a capo."""
+    html_input = (
+        "Gentile {nome},<br>"
+        "come da precedente comunicazione.<br><br>"
+        "<p>La sostituzione, OBBLIGATORIA e GRATUITA, è richiesta.</p>"
+        "<p>SI PREGA DI RISPONDERE &amp; CONFERMARE.</p>"
+        "Per chiarimenti scrivici a <a href=\"https://www.algecopower.it\">Algeco Power</a>&nbsp;oppure chiama."
+    )
+    plain = mail_manager.html_to_plain_text(html_input)
+
+    # Verifica che le righe non siano incollate insieme
+    assert "Gentile {nome},\ncome da precedente comunicazione." in plain
+    assert "comunicazione.\n\nLa sostituzione" in plain
+    assert "richiesta.\n\nSI PREGA DI RISPONDERE & CONFERMARE." in plain
+    assert "Algeco Power (https://www.algecopower.it) oppure chiama." in plain
+    assert "<br>" not in plain
+    assert "<p>" not in plain
+    assert "&nbsp;" not in plain
+
+
+def test_save_whatsapp_template_normalizes_html_tags(tmp_path, monkeypatch):
+    """Verifica che salvando un template WhatsApp con tag HTML <br>, vengano normalizzati in \n."""
+    monkeypatch.setattr(mail_manager, '_ROOT_DIR', str(tmp_path))
+    os.makedirs(str(tmp_path / 'data' / 'torino'), exist_ok=True)
+    real_base = str(tmp_path / 'data' / 'distinte_templates.json')
+    json_write(real_base, {
+        'templates': {
+            'wa_conferma': {
+                'label': 'Messaggio Preavviso',
+                'type': 'whatsapp',
+                'body': 'Testo base'
+            }
+        }
+    }, indent=4)
+
+    payload = {
+        'id': 'sys_wa_conferma',
+        'title': 'Messaggio Preavviso Modificato',
+        'type': 'template',
+        'category': 'whatsapp',
+        'body': 'Gentile {nome},<br>testo con a capo.<br><br>Nuovo paragrafo.'
+    }
+
+    res = mail_manager.save_template_or_snippet(payload, prov='torino')
+    assert res['success'] is True
+
+    # Verifica nel file provinciale salvato
+    saved_json = str(tmp_path / 'data' / 'torino' / 'distinte_templates.json')
+    from moduli.safe_json import json_read
+    data = json_read(saved_json)
+    body_saved = data['templates']['wa_conferma']['body']
+
+    assert "<br>" not in body_saved
+    assert "Gentile {nome},\ntesto con a capo.\n\nNuovo paragrafo." == body_saved
+
+
+def test_all_templates_all_provinces_copy_and_newlines():
+    """Verifica che tutti i template di tutte le province si convertano in plain text con spazi e a capo corretti."""
+    import json
+    from routes.distinte import _resolve_template_server
+
+    base_file = os.path.join(mail_manager._ROOT_DIR, 'data', 'distinte_templates.json')
+    with open(base_file, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+
+    provinces = ['TORINO', 'PAVIA', 'LECCO']
+    for prov in provinces:
+        st = data.get('settings', {}).get('province', {}).get(prov, {})
+        email_tec = st.get('email', f'tecnico_{prov.lower()}@algecopower.it')
+        tel_tec = st.get('telefono', '011 025 2702')
+
+        for tid, tmpl in data.get('templates', {}).items():
+            fields = {
+                'nome': 'Mario Rossi',
+                'comune': 'Moncalieri',
+                'data': '15/09/2026',
+                'pod': 'IT001E12345678',
+                'indirizzo': 'Via Roma 1',
+                'matricola': '12345',
+                'eneltel': '98765',
+                'nome_societa': 'Acme Srl',
+                'distacco': 'no',
+                'lista_date': '- Lunedì 15\n- Martedì 16',
+                'nome_operatore': 'Operatore Test',
+                'telefono_operatore': '333 111222'
+            }
+            resolved = _resolve_template_server(
+                tmpl['body'],
+                fields,
+                conditionals=tmpl.get('conditionals'),
+                email_tecnico=email_tec,
+                telefono_tecnico=tel_tec
+            )
+            plain = mail_manager.html_to_plain_text(resolved)
+
+            # Nessun residuo di tag HTML
+            assert '<br>' not in plain, f"Provincia {prov}, template {tid} contiene ancora <br>"
+            assert '<p>' not in plain, f"Provincia {prov}, template {tid} contiene ancora <p>"
+            assert '<a' not in plain, f"Provincia {prov}, template {tid} contiene ancora <a"
+
+            # Spazi e a capo preservati
+            assert '\n' in plain or len(plain.split()) <= 10, f"Provincia {prov}, template {tid} privo di ritorni a capo"
+            assert 'Rossi,come' not in plain, f"Provincia {prov}, template {tid} ha parole incollate!"
+            assert 'Moncalieri.La' not in plain, f"Provincia {prov}, template {tid} ha frasi incollate!"
+
+

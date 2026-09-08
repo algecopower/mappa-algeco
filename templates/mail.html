@@ -11,6 +11,7 @@
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
     <script src="/static/theme-init.js"></script>
     <script src="/static/csrf.js"></script>
+    <script src="/static/smtp_config_modal.js"></script>
 </head>
 <body class="mail-app-body">
     <div class="mail-shell">
@@ -72,6 +73,9 @@
                 <a href="/distinte" class="btn-nav" title="PDF E-Distribuzione"><i data-lucide="file-text"></i><span>Distinte</span></a>
                 <a href="/lettere" class="btn-nav" title="Archivio Lettere"><i data-lucide="mail-check"></i><span>Lettere</span></a>
                 <a href="/comuni" class="btn-nav" title="Gestione Comuni"><i data-lucide="building-2"></i><span>Comuni</span></a>
+                <button type="button" class="btn-nav" onclick="SmtpConfigModal.open({ mode: 'provincia' })" title="Configura Account Email (SMTP / PEC)">
+                    <i data-lucide="settings"></i><span>Configura SMTP</span>
+                </button>
                 <button class="btn-theme-toggle" onclick="toggleTheme()" title="Cambia tema chiaro/scuro">
                     <i data-lucide="sun" class="sun-icon"></i>
                     <i data-lucide="moon" class="moon-icon"></i>

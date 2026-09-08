@@ -4,35 +4,18 @@ Blueprint Archivio Lettere — generazioni Excel, contatti aziendali e invii bul
 """
 import logging
 import os
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-from email.utils import formataddr
-
 from flask import Blueprint, jsonify, request, send_file
 
 from moduli.auth import login_required
-from moduli.safe_json import json_read
 from moduli.shared import _get_username
 from moduli import lettere as lettere_store
-from moduli import mail_manager
-from moduli.bulk_contatori_email import (
-    generate_contatori_excel,
-    sanitize_filename,
-    build_nota_invio,
-    registra_nota_su_db,
-)
+from moduli.bulk_contatori_email import send_contatori_email
 from config import PROVINCIA_ATTIVA
 
-from moduli.smtp import send_smtp_message, load_smtp_settings
 from routes.distinte import (
     _ALLEGATI_DIR,
     _ALLEGATI_DEFAULT,
     _ALLEGATO_SEMIDIRETTA,
-    _TEMPLATES_JSON,
-    _attach_files_to_msg,
-    _build_fields_for_contact,
-    _resolve_template_server,
 )
 
 logger = logging.getLogger('mappa_algeco')
@@ -209,94 +192,6 @@ def api_lettere_allegati():
     })
 
 
-def _plain_from_html(html):
-    from moduli.mail_manager import html_to_plain_text
-    return html_to_plain_text(html)
-
-
-def _build_email_message(
-    *,
-    template_id,
-    contatto,
-    email_dest,
-    subject_override=None,
-    body_override=None,
-    allegati_nomi=None,
-    dynamic_files=None,
-):
-    tmpl_data = json_read(_TEMPLATES_JSON, default=None)
-    if tmpl_data is None:
-        raise RuntimeError('Impossibile caricare i template')
-
-    tmpl = tmpl_data.get('templates', {}).get(template_id)
-    if not tmpl or tmpl.get('type') != 'email':
-        raise ValueError(f'Template "{template_id}" non valido')
-
-    field_defs = tmpl_data.get('fields', {})
-    tmpl_settings = tmpl_data.get('settings', {})
-    email_tecnico = tmpl_settings.get(f'email_{PROVINCIA_ATTIVA.lower()}', '')
-
-    if subject_override and body_override:
-        subject = subject_override
-        body_html = body_override
-    else:
-        fields = _build_fields_for_contact(contatto, tmpl, field_defs)
-        body_html = _resolve_template_server(
-            tmpl['body'], fields,
-            conditionals=tmpl.get('conditionals'),
-            email_tecnico=email_tecnico,
-        )
-        subject = _resolve_template_server(
-            tmpl.get('subject', ''), fields, email_tecnico=email_tecnico,
-        ) if tmpl.get('subject') else f"Sostituzione contatore - {contatto.get('nome', '')}"
-
-    smtp_settings = load_smtp_settings()
-    if not smtp_settings.get('host') or not smtp_settings.get('password'):
-        raise RuntimeError('Configurazione SMTP incompleta')
-
-    from_email = smtp_settings.get('from_email', smtp_settings.get('username', ''))
-    from_name = smtp_settings.get('from_name', 'Ufficio Tecnico Algeco Power')
-
-    body_html_formatted = (body_html or '').replace('\n', '<br>')
-    firma_html = tmpl_settings.get('firma_html', '')
-    prov_settings = tmpl_settings.get('province', {}).get(PROVINCIA_ATTIVA.upper(), {})
-    tel_tecnico = prov_settings.get('telefono') or '011 025 2702'
-    if firma_html:
-        firma_resolved = mail_manager.resolve_signature_html(
-            firma_html, prov=PROVINCIA_ATTIVA, email_tecnico=email_tecnico, telefono_tecnico=tel_tecnico
-        )
-        body_html_formatted += firma_resolved
-
-    body_plain = _plain_from_html(body_html)
-    if firma_html:
-        body_plain += (
-            f'\n\n--\nUfficio Tecnico\nTelefono: {tel_tecnico}\n'
-            f'Mail: {email_tecnico}\nwww.algecopower.it'
-        )
-
-    msg_alt = MIMEMultipart('alternative')
-    msg_alt.attach(MIMEText(body_plain, 'plain', 'utf-8'))
-    msg_alt.attach(MIMEText(body_html_formatted, 'html', 'utf-8'))
-
-    allegati_nomi = allegati_nomi or []
-    if allegati_nomi:
-        msg = MIMEMultipart('mixed')
-        msg.attach(msg_alt)
-        _attach_files_to_msg(msg, allegati_nomi, dynamic_files=dynamic_files)
-    else:
-        msg = msg_alt
-
-    import email.utils as email_utils
-    msg['From'] = formataddr((from_name, from_email))
-    msg['To'] = email_dest
-    msg['Subject'] = subject
-    msg['Reply-To'] = from_email
-    msg['Message-ID'] = email_utils.make_msgid(
-        domain=from_email.split('@')[-1] if '@' in from_email else 'algecopower.it'
-    )
-    msg['Date'] = email_utils.formatdate(localtime=True)
-    return msg, smtp_settings, subject
-
 
 def _contatto_da_azienda(azienda, email_dest):
     """Adatta una riga Archivio Lettere ai template email distinte."""
@@ -350,93 +245,52 @@ def api_lettere_invia_email():
         return jsonify({'error': 'Azienda non trovata'}), 404
 
     contatto = _contatto_da_azienda(azienda, email_dest)
-    nome_azienda = azienda.get('nominativo') or contatto.get('nome') or 'Azienda'
 
-    # Genera allegati dinamici (es. Excel con elenco contatori se N > 2)
-    dynamic_files = {}
-    effective_contatori = contatori_list or [contatto]
+    res = send_contatori_email(
+        email_dest=email_dest,
+        subject=data.get('subject_override'),
+        body_html=data.get('body_override'),
+        template_id=template_id,
+        contatto=contatto,
+        contatori_list=contatori_list,
+        allegati_nomi=allegati_nomi,
+        provincia=PROVINCIA_ATTIVA,
+        username=username,
+        context='lettere',
+        extra_record_details={
+            'azienda_ids': azienda_ids,
+            'primary_id': primary_id
+        }
+    )
 
-    for nom in (allegati_nomi or []):
-        if nom.lower().endswith('.xlsx'):
-            excel_bytes = generate_contatori_excel(effective_contatori, nome_azienda)
-            dynamic_files[nom] = excel_bytes
-
-    if not dynamic_files and len(effective_contatori) > 2:
-        safe_nome = sanitize_filename(nome_azienda)
-        auto_excel_name = f"Elenco_Contatori_{safe_nome}.xlsx"
-        excel_bytes = generate_contatori_excel(effective_contatori, nome_azienda)
-        dynamic_files[auto_excel_name] = excel_bytes
-        if auto_excel_name not in allegati_nomi:
-            allegati_nomi.append(auto_excel_name)
-
-    subject = data.get('subject_override') or ''
-
-    try:
-        msg, smtp_settings, subject = _build_email_message(
-            template_id=template_id,
-            contatto=contatto,
-            email_dest=email_dest,
-            subject_override=data.get('subject_override'),
-            body_override=data.get('body_override'),
-            allegati_nomi=allegati_nomi,
-            dynamic_files=dynamic_files,
-        )
-
-        ok_send, send_err = send_smtp_message(
-            smtp_settings, msg, max_retries=3, base_delay=6, save_sent=True
-        )
-        if not ok_send:
-            raise RuntimeError(send_err or 'Errore invio email')
-
-        # Registra l'invio su tutte le aziende/contatori coinvolti e scrivi la nota sul DB
+    if not res.get('ok'):
+        err_msg = res.get('error') or 'Errore invio'
         for az_id in azienda_ids:
             az_item = lettere_store.get_azienda(az_id)
             if not az_item:
                 continue
-            pod_val = (az_item.get('pod') or '').strip()
-            data_prevista = az_item.get('data_pianificazione') or contatto.get('data_intervento') or ''
-
             lettere_store.registra_invio(
                 azienda_generazione_id=az_item['id'],
                 generazione_id=az_item['generazione_id'],
                 contact_key_value=az_item['contact_key'],
-                pod=pod_val,
+                pod=az_item.get('pod'),
                 email_dest=email_dest,
                 template_id=template_id,
-                subject=subject,
-                status='sent',
+                subject=data.get('subject_override') or '',
+                status='failed',
+                error=err_msg,
                 user=username,
-                detail={'allegati': allegati_nomi, 'contatori_count': len(effective_contatori)},
+                detail={'allegati': allegati_nomi, 'contatori_count': len(contatori_list or [contatto])},
             )
+        logger.error(f"[Lettere] Errore invio a {email_dest}: {err_msg}")
+        status_code = 401 if res.get('error_code') == 'SMTP_AUTH_FAILED' else 400
+        return jsonify({'ok': False, 'azienda_id': primary_id, 'email': email_dest, 'errore': err_msg, 'error': err_msg, 'error_code': res.get('error_code')}), status_code
 
-            # Scrivi nota sul DB locale (es. "18/08 mandata mail per 25/08")
-            if pod_val:
-                nota_invio = build_nota_invio('mail', data_intervento=data_prevista)
-                registra_nota_su_db(pod_val, nota_invio, user=username, origin='lettere_invia_email')
-
-        return jsonify({'ok': True, 'azienda_id': primary_id, 'azienda_ids': azienda_ids, 'email': email_dest})
-
-    except smtplib.SMTPAuthenticationError:
-        err = 'Autenticazione SMTP fallita'
-    except Exception as e:
-        err = str(e)
-
-    for az_id in azienda_ids:
-        az_item = lettere_store.get_azienda(az_id)
-        if not az_item:
-            continue
-        lettere_store.registra_invio(
-            azienda_generazione_id=az_item['id'],
-            generazione_id=az_item['generazione_id'],
-            contact_key_value=az_item['contact_key'],
-            pod=az_item.get('pod') or '',
-            email_dest=email_dest,
-            template_id=template_id,
-            subject=subject,
-            status='failed',
-            error=err,
-            user=username,
-            detail={'allegati': allegati_nomi, 'contatori_count': len(effective_contatori)},
-        )
-    logger.error(f"[Lettere] Errore invio a {email_dest}: {err}")
-    return jsonify({'ok': False, 'azienda_id': primary_id, 'email': email_dest, 'errore': err}), 500
+    return jsonify({
+        'ok': True,
+        'azienda_id': primary_id,
+        'azienda_ids': azienda_ids,
+        'email': email_dest,
+        'pod': res.get('pod'),
+        'contatori_count': res.get('contatori_count', 1)
+    })

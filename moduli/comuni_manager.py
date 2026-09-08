@@ -643,11 +643,12 @@ def send_single_email(email_data, current_user):
     allegati_nomi = email_data.get('allegati', [])
 
     if not comune_name or not dest_email:
-        return {'ok': False, 'comune': comune_name, 'errore': 'Dati email incompleti'}
+        return {'ok': False, 'comune': comune_name, 'error_code': 'INVALID_DATA', 'errore': 'Dati email incompleti'}
 
     smtp_settings = load_smtp_settings()
     if not smtp_settings.get('host') or not smtp_settings.get('password'):
         return {'ok': False, 'comune': comune_name,
+                'error_code': 'SMTP_NOT_CONFIGURED',
                 'errore': 'Configurazione SMTP incompleta. Configura le credenziali SMTP.'}
 
     try:
@@ -660,7 +661,9 @@ def send_single_email(email_data, current_user):
             smtp_settings, msg, max_retries=3, base_delay=6, save_sent=True
         )
         if not ok_send:
-            raise RuntimeError(send_err or 'Errore invio email')
+            if send_err and ('autenticazione' in send_err.lower() or 'auth' in send_err.lower()):
+                return {'ok': False, 'comune': comune_name, 'email': dest_email, 'error_code': 'SMTP_AUTH_FAILED', 'errore': send_err}
+            return {'ok': False, 'comune': comune_name, 'email': dest_email, 'error_code': 'SEND_FAILED', 'errore': send_err or 'Errore invio email'}
 
         logger.info(f"[COMUNI-EMAIL] Inviata a {dest_email} per comune {comune_name} (user={current_user})")
         return {'ok': True, 'comune': comune_name, 'email': dest_email}
@@ -668,10 +671,10 @@ def send_single_email(email_data, current_user):
     except smtplib.SMTPAuthenticationError:
         err = 'Autenticazione SMTP fallita'
         logger.error(f"[COMUNI-EMAIL] {err} per {comune_name}")
-        return {'ok': False, 'comune': comune_name, 'errore': err}
+        return {'ok': False, 'comune': comune_name, 'error_code': 'SMTP_AUTH_FAILED', 'errore': err}
     except Exception as e:
         logger.error(f"[COMUNI-EMAIL] Errore invio a {dest_email} per {comune_name}: {e}")
-        return {'ok': False, 'comune': comune_name, 'email': dest_email, 'errore': str(e)}
+        return {'ok': False, 'comune': comune_name, 'email': dest_email, 'error_code': 'SEND_FAILED', 'errore': str(e)}
 
 
 def send_bulk_emails(emails_data, current_user):

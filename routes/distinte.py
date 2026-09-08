@@ -7,13 +7,9 @@ import os
 import re
 import tempfile
 import logging
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email.mime.application import MIMEApplication
 from email import encoders
-from email.utils import formataddr
 
 from flask import Blueprint, request, jsonify, send_file
 
@@ -24,6 +20,7 @@ from moduli.bulk_contatori_email import (
     sanitize_filename,
     build_nota_invio,
     registra_nota_su_db,
+    send_contatori_email,
 )
 from moduli.shared import (
     get_worksheet, get_header_map, find_row_by_pod,
@@ -31,7 +28,12 @@ from moduli.shared import (
     _api_error, _get_colonna_note, _trova_indice_multi, _resolve_anchor_col_name,
     _callbacks, _get_username,
 )
-from moduli.smtp import load_smtp_settings, connect_smtp, save_to_sent, send_smtp_message
+from moduli.smtp import (
+    load_smtp_settings,
+    save_smtp_settings,
+    test_smtp_connection as core_test_smtp,
+    test_send_email as core_test_send_email,
+)
 from moduli.sms_gateway import (
     load_sms_settings,
     save_sms_settings,
@@ -412,331 +414,110 @@ def api_upload_allegato():
     })
 
 
+@bp.route('/api/distinte/smtp-settings', methods=['GET'])
+@login_required
+def api_distinte_get_smtp_settings():
+    """Restituisce le impostazioni SMTP per la provincia corrente."""
+    try:
+        settings = dict(load_smtp_settings(PROVINCIA_ATTIVA) or {})
+        has_pwd = bool(settings.get('password'))
+        settings['password_set'] = has_pwd
+        settings['password'] = ''
+        settings['provincia'] = PROVINCIA_ATTIVA
+        return jsonify(settings)
+    except Exception as e:
+        logger.exception("[distinte] Errore lettura smtp-settings")
+        return jsonify({'error': str(e)}), 500
+
+
+@bp.route('/api/distinte/smtp-settings', methods=['PUT'])
+@login_required
+def api_distinte_save_smtp_settings():
+    """Salva le impostazioni SMTP per la provincia corrente."""
+    try:
+        data = request.get_json() or {}
+        save_smtp_settings(data, PROVINCIA_ATTIVA)
+        return jsonify({'ok': True, 'message': 'Impostazioni SMTP salvate con successo'})
+    except Exception as e:
+        logger.exception("[distinte] Errore salvataggio smtp-settings")
+        return jsonify({'error': str(e)}), 500
+
+
 @bp.route('/api/distinte/smtp-test', methods=['POST'])
 @login_required
 def test_smtp_connection():
-    """Testa la connessione SMTP con le impostazioni attuali."""
+    """Testa la connessione e login SMTP con le impostazioni passate o correnti."""
     try:
-        settings = load_smtp_settings()
-        if not settings.get('host'):
-            return jsonify({'error': 'Configurazione SMTP mancante'}), 400
-
-        server = connect_smtp(settings, timeout=10)
-        server.quit()
-
-        return jsonify({'ok': True, 'message': 'Connessione SMTP riuscita!'})
-    except smtplib.SMTPAuthenticationError:
-        return jsonify({'error': 'Autenticazione fallita. Controlla username e password.'}), 401
+        data = request.get_json() or {}
+        settings = data.get('settings') or data
+        if not settings or not settings.get('host'):
+            settings = load_smtp_settings(PROVINCIA_ATTIVA)
+        ok, msg = core_test_smtp(settings)
+        if ok:
+            return jsonify({'ok': True, 'message': msg})
+        return jsonify({'ok': False, 'error': msg, 'errore': msg}), 400
     except Exception as e:
-        logger.error(f"Test SMTP fallito: {e}")
-        return jsonify({'error': f'Connessione fallita: {str(e)}'}), 500
+        logger.error(f"[distinte] Test SMTP fallito: {e}")
+        return jsonify({'ok': False, 'error': str(e), 'errore': str(e)}), 500
 
 
 @bp.route('/api/distinte/invia-email-prova', methods=['POST'])
 @login_required
 def invia_email_prova():
-    """Invia una email di prova con dati fittizi all'indirizzo specificato."""
+    """Invia un'email di prova all'indirizzo specificato."""
     try:
-        data = request.get_json()
-        email_dest = (data.get('email') or '').strip()
-        template_id = data.get('template_id', '')
-
-        if not email_dest or '@' not in email_dest:
-            return jsonify({'error': 'Indirizzo email non valido'}), 400
-        if not template_id:
-            return jsonify({'error': 'Template non specificato'}), 400
-
-        # Carica template
-        try:
-            tmpl_data = _load_templates_data()
-            if tmpl_data is None:
-                raise FileNotFoundError
-        except Exception:
-            return jsonify({'error': 'Impossibile caricare i template'}), 500
-
-        tmpl = tmpl_data.get('templates', {}).get(template_id)
-        if not tmpl or tmpl.get('type') != 'email':
-            return jsonify({'error': f'Template "{template_id}" non valido'}), 404
-
-        field_defs = tmpl_data.get('fields', {})
-        tmpl_settings = tmpl_data.get('settings', {})
-        email_tecnico = tmpl_settings.get(f'email_{PROVINCIA_ATTIVA.lower()}', tmpl_settings.get('email_tecnico', ''))
-
-        # Dati fittizi di prova
-        contatto_test = {
-            'pod': 'IT001E98765432',
-            'email': email_dest,
-            'nome': 'AZIENDA DI PROVA SRL',
-            'indirizzo': 'Via Roma',
-            'civico': '1',
-            'comune': 'Milano',
-            'data_intervento': '2026-04-15',
-            'pod_filone': 'IT001E98765432',
-            'eneltel_filone': '123456789',
-            'matricola_filone': 'MAT-TEST-001',
-            'tipologia_contatore': 'diretto',
-            'nome_societa': 'AZIENDA DI PROVA SRL',
-            'nome_referente': 'Mario Rossi',
-        }
-
-        # Carica SMTP settings
-        smtp_settings = load_smtp_settings()
-        if not smtp_settings.get('host') or not smtp_settings.get('password'):
-            return jsonify({'error': 'Configurazione SMTP incompleta. Salva prima le credenziali.'}), 400
-
-        from_email = smtp_settings.get('from_email', smtp_settings.get('username', ''))
-        from_name = smtp_settings.get('from_name', 'Ufficio Tecnico Algeco Power')
-
-        # Costruisci campi e risolvi template
-        fields = _build_fields_for_contact(contatto_test, tmpl, field_defs)
-        body_html = _resolve_template_server(
-            tmpl['body'], fields,
-            conditionals=tmpl.get('conditionals'),
-            email_tecnico=email_tecnico
-        )
-        subject = _resolve_template_server(
-            tmpl.get('subject', ''), fields,
-            email_tecnico=email_tecnico
-        ) if tmpl.get('subject') else 'Sostituzione contatore - AZIENDA DI PROVA SRL'
-
-        subject = '[TEST] ' + subject
-
-        # Converti \n in <br> e aggiungi firma
-        body_html_formatted = body_html.replace('\n', '<br>')
-        firma_html = tmpl_settings.get('firma_html', '')
-        prov_settings = tmpl_settings.get('province', {}).get(PROVINCIA_ATTIVA.upper(), {})
-        tel_tecnico = prov_settings.get('telefono') or '011 025 2702'
-        if firma_html:
-            from moduli import mail_manager
-            firma_resolved = mail_manager.resolve_signature_html(
-                firma_html, prov=PROVINCIA_ATTIVA, email_tecnico=email_tecnico, telefono_tecnico=tel_tecnico
-            )
-            body_html_formatted += firma_resolved
-
-        # Costruisci messaggio MIME
-        import email.utils as email_utils
-        msg = MIMEMultipart('alternative')
-        msg['From'] = formataddr((from_name, from_email))
-        msg['To'] = email_dest
-        msg['Subject'] = subject
-        msg['Reply-To'] = from_email
-        msg['Message-ID'] = email_utils.make_msgid(
-            domain=from_email.split('@')[-1] if '@' in from_email else 'algecopower.it')
-        msg['Date'] = email_utils.formatdate(localtime=True)
-
-        # Plain text
-        from moduli.mail_manager import html_to_plain_text
-        body_plain = html_to_plain_text(body_html)
-        if firma_html:
-            body_plain += f'\n\n--\nUfficio Tecnico\nTelefono: {tel_tecnico}\nMail: {email_tecnico}\nwww.algecopower.it'
-
-        msg.attach(MIMEText(body_plain, 'plain', 'utf-8'))
-        msg.attach(MIMEText(body_html_formatted, 'html', 'utf-8'))
-
-        # Invio
-        server = connect_smtp(smtp_settings, timeout=15)
-        try:
-            server.send_message(msg)
-        finally:
-            try:
-                server.quit()
-            except Exception:
-                pass
-
-        # Salva in cartella Inviati
-        save_to_sent(smtp_settings, msg)
-
-        logger.info(f"[EMAIL-TEST] Inviata email di prova a {email_dest}")
-        return jsonify({'ok': True, 'email': email_dest})
-
-    except smtplib.SMTPAuthenticationError:
-        return jsonify({'ok': False, 'errore': 'Autenticazione SMTP fallita'}), 401
+        data = request.get_json() or {}
+        email_dest = (data.get('email') or data.get('recipient') or '').strip()
+        settings = data.get('settings') or load_smtp_settings(PROVINCIA_ATTIVA)
+        ok, msg = core_test_send_email(settings, email_dest, prov=PROVINCIA_ATTIVA)
+        if ok:
+            return jsonify({'ok': True, 'message': msg, 'email': email_dest})
+        return jsonify({'ok': False, 'error': msg, 'errore': msg}), 400
     except Exception as e:
-        logger.error(f"[EMAIL-TEST] Errore invio prova a {email_dest}: {e}")
-        return jsonify({'ok': False, 'errore': str(e)}), 500
+        logger.error(f"[EMAIL-TEST] Errore invio prova: {e}")
+        return jsonify({'ok': False, 'error': str(e), 'errore': str(e)}), 500
 
 
 @bp.route('/api/distinte/invia-singola-email', methods=['POST'])
 @login_required
 def invia_singola_email():
     """
-    Invia UNA singola email usando un template personalizzato.
-    Il frontend chiama questo endpoint in loop con pausa tra un invio e l'altro
-    per evitare di essere marcati come spam.
-    Body: {
-        "template_id": "email_societa" | "email_semplificata",
-        "contatto": {"pod": "IT...", "email": "...", "nome": "...", ...}
-    }
+    Invia UNA singola email usando il motore di dominio unificato send_contatori_email.
+    Supporta contatori singoli o multipli per azienda, allegati dinamici e note automatiche.
     """
     try:
-        data = request.get_json()
+        data = request.get_json() or {}
         template_id = data.get('template_id', '')
         contatto = data.get('contatto')
         subject_override = data.get('subject_override')
         body_override = data.get('body_override')
         allegati_nomi = data.get('allegati', [])
+        contatori = data.get('contatori')
 
-        if not template_id:
-            return jsonify({'error': 'Template non specificato'}), 400
-        if not contatto:
+        if not contatto and not data.get('email'):
             return jsonify({'error': 'Contatto mancante'}), 400
 
-        email_dest = (contatto.get('email') or '').strip()
-        pod = contatto.get('pod', '?')
-
-        if not email_dest:
-            return jsonify({'ok': False, 'pod': pod, 'errore': 'Email mancante'}), 400
-
-        # Carica template
-        try:
-            tmpl_data = _load_templates_data()
-            if tmpl_data is None:
-                raise FileNotFoundError
-        except Exception:
-            return jsonify({'error': 'Impossibile caricare i template'}), 500
-
-        tmpl = tmpl_data.get('templates', {}).get(template_id)
-        if not tmpl or tmpl.get('type') != 'email':
-            return jsonify({'error': f'Template "{template_id}" non valido'}), 404
-
-        field_defs = tmpl_data.get('fields', {})
-        tmpl_settings = tmpl_data.get('settings', {})
-        email_tecnico = tmpl_settings.get(f'email_{PROVINCIA_ATTIVA.lower()}', tmpl_settings.get('email_tecnico', ''))
-
-        # Carica SMTP settings
-        smtp_settings = load_smtp_settings()
-        if not smtp_settings.get('host') or not smtp_settings.get('password'):
-            return jsonify({'error': 'Configurazione SMTP incompleta'}), 400
-
-        from_email = smtp_settings.get('from_email', smtp_settings.get('username', ''))
-        from_name = smtp_settings.get('from_name', 'Ufficio Tecnico Algeco Power')
-
-        # Se il frontend ha fornito subject/body già risolti (anteprima modificata), usali
-        if subject_override and body_override:
-            subject = subject_override
-            body_html = body_override
-        else:
-            # Costruisci i campi auto-compilati
-            fields = _build_fields_for_contact(contatto, tmpl, field_defs)
-
-            # Risolvi body e subject
-            body_html = _resolve_template_server(
-                tmpl['body'], fields,
-                conditionals=tmpl.get('conditionals'),
-                email_tecnico=email_tecnico
-            )
-            subject = _resolve_template_server(
-                tmpl.get('subject', ''), fields,
-                email_tecnico=email_tecnico
-            ) if tmpl.get('subject') else f'Sostituzione contatore - {contatto.get("nome", "")}'
-
-        # Converti \n in <br> per HTML
-        body_html_formatted = body_html.replace('\n', '<br>')
-
-        # Aggiungi firma HTML in calce
-        firma_html = tmpl_settings.get('firma_html', '')
-        prov_settings = tmpl_settings.get('province', {}).get(PROVINCIA_ATTIVA.upper(), {})
-        tel_tecnico = prov_settings.get('telefono') or '011 025 2702'
-        if firma_html:
-            from moduli import mail_manager
-            firma_resolved = mail_manager.resolve_signature_html(
-                firma_html, prov=PROVINCIA_ATTIVA, email_tecnico=email_tecnico, telefono_tecnico=tel_tecnico
-            )
-            body_html_formatted += firma_resolved
-
-        # Costruisci messaggio MIME con header anti-spam
-        import email.utils as email_utils
-
-        # Versione plain text
-        from moduli.mail_manager import html_to_plain_text
-        body_plain = html_to_plain_text(body_html)
-        if firma_html:
-            body_plain += f'\n\n--\nUfficio Tecnico\nTelefono: {tel_tecnico}\nMail: {email_tecnico}\nwww.algecopower.it'
-
-        # Parte alternativa (text + html)
-        msg_alt = MIMEMultipart('alternative')
-        msg_alt.attach(MIMEText(body_plain, 'plain', 'utf-8'))
-        msg_alt.attach(MIMEText(body_html_formatted, 'html', 'utf-8'))
-
-        # Se ci sono allegati, genera eventuali allegati dinamici (es. Excel riepilogo contatori multipli)
-        dynamic_files = {}
-        contatori_list = data.get('contatori') or contatto.get('contatori') or ([contatto] if contatto else [])
-        nome_azienda = contatto.get('nome') or contatto.get('nome_societa') or ''
-        
-        for nom in (allegati_nomi or []):
-            if nom.lower().endswith('.xlsx'):
-                excel_bytes = generate_contatori_excel(contatori_list, nome_azienda)
-                dynamic_files[nom] = excel_bytes
-
-        if not dynamic_files and len(contatori_list) > 2:
-            safe_nome = sanitize_filename(nome_azienda)
-            auto_excel_name = f"Elenco_Contatori_{safe_nome}.xlsx"
-            excel_bytes = generate_contatori_excel(contatori_list, nome_azienda)
-            dynamic_files[auto_excel_name] = excel_bytes
-            if auto_excel_name not in allegati_nomi:
-                allegati_nomi.append(auto_excel_name)
-
-        if allegati_nomi:
-            msg = MIMEMultipart('mixed')
-            msg.attach(msg_alt)
-            allegati_effettivi = _attach_files_to_msg(msg, allegati_nomi, dynamic_files=dynamic_files)
-            logger.info(f"[EMAIL] Allegati per {pod}: {allegati_effettivi}")
-        else:
-            msg = msg_alt
-
-        msg['From'] = formataddr((from_name, from_email))
-        msg['To'] = email_dest
-        msg['Subject'] = subject
-        msg['Reply-To'] = from_email
-        msg['Message-ID'] = email_utils.make_msgid(domain=from_email.split('@')[-1] if '@' in from_email else 'algecopower.it')
-        msg['Date'] = email_utils.formatdate(localtime=True)
-
-        # Connessione e invio con retry ed exponential backoff
-        ok_send, send_err = send_smtp_message(
-            smtp_settings, msg, max_retries=3, base_delay=6, save_sent=True
-        )
-        if not ok_send:
-            raise RuntimeError(send_err or 'Errore invio email')
-
-        # Rende visibile l'invio anche nell'Archivio Lettere per tutti i contatori coinvolti
+        email_dest = (contatto.get('email') if contatto else data.get('email', '')) or ''
         username = _get_username()
-        try:
-            from moduli import lettere as lettere_store
-            pods_to_record = [c.get('pod') or c.get('pod_filone') for c in contatori_list if (c.get('pod') or c.get('pod_filone'))] or [pod]
-            for p_pod in pods_to_record:
-                lettere_store.registra_invio(
-                    contact_key_value=lettere_store.contact_key(
-                        pod=p_pod,
-                        nominativo=nome_azienda,
-                        comune=contatto.get('comune') or '',
-                    ),
-                    pod=p_pod,
-                    email_dest=email_dest,
-                    template_id=template_id,
-                    subject=subject,
-                    status='sent',
-                    user=username,
-                    detail={'source': 'gestione_pdf', 'allegati': allegati_nomi, 'contatori_count': len(contatori_list)},
-                )
-        except Exception:
-            logger.exception("[EMAIL] Invio riuscito ma registrazione storico fallita")
 
-        # Scrivi nota sul DB locale per ciascun contatore (es. "18/08 mandata mail per 25/08")
-        for c_item in contatori_list:
-            c_pod = c_item.get('pod') or c_item.get('pod_filone') or pod
-            c_data = c_item.get('data_intervento') or c_item.get('data_pian_filone') or contatto.get('data_intervento')
-            if c_pod:
-                nota_invio = build_nota_invio('mail', data_intervento=c_data)
-                registra_nota_su_db(c_pod, nota_invio, user=username, origin='distinte_invia_email')
+        res = send_contatori_email(
+            email_dest=email_dest,
+            subject=subject_override,
+            body_html=body_override,
+            template_id=template_id,
+            contatto=contatto,
+            contatori_list=contatori,
+            allegati_nomi=allegati_nomi,
+            provincia=PROVINCIA_ATTIVA,
+            username=username,
+            context='distinte'
+        )
 
-        logger.info(f"[EMAIL] Inviata a {email_dest} (POD {pod}, {len(contatori_list)} contatori)")
-        return jsonify({'ok': True, 'pod': pod, 'email': email_dest, 'contatori_count': len(contatori_list)})
-
-    except smtplib.SMTPAuthenticationError:
-        return jsonify({'ok': False, 'pod': pod, 'errore': 'Autenticazione SMTP fallita'}), 401
+        status_code = 200 if res.get('ok') else (401 if res.get('error_code') == 'SMTP_AUTH_FAILED' else 400)
+        return jsonify(res), status_code
     except Exception as e:
-        logger.error(f"[EMAIL] Errore invio a {email_dest}: {e}")
-        return jsonify({'ok': False, 'pod': contatto.get('pod', '?'), 'email': email_dest, 'errore': str(e)}), 500
+        logger.exception(f"[EMAIL] Errore invio singola email distinte: {e}")
+        return jsonify({'ok': False, 'error': str(e), 'errore': str(e)}), 500
 
 
 @bp.route('/api/distinte/sms-settings', methods=['GET'])

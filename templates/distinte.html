@@ -1946,6 +1946,7 @@
     <script src="/static/csrf.js"></script>
     <script src="/static/bulk-email-preview.js?v=20260907_1"></script>
     <script src="/static/sms_gateway_modal.js"></script>
+    <script src="/static/smtp_config_modal.js"></script>
 </head>
 <body>
     <script>
@@ -1968,6 +1969,11 @@
                 <span class="provincia-badge" id="provinciaBadge">TORINO</span>
             </div>
             <div style="display: flex; gap: 8px; align-items: center;">
+                <button class="btn" id="headerSmtpConfigBtn" style="background: var(--bg-dark); border: 1px solid var(--border); color: var(--text); display: inline-flex; align-items: center; gap: 6px;" onclick="SmtpConfigModal.open({ mode: 'provincia', onSaveSuccess: caricaStatoSmtpDistinte })" title="Configura Server SMTP / PEC">
+                    <i class="fas fa-envelope" style="color: #2563eb;"></i>
+                    <span>SMTP / PEC</span>
+                    <span id="headerSmtpStatusBadge" style="display:none; font-size: 0.72rem; padding: 2px 6px; border-radius: 4px; font-weight: 700;"></span>
+                </button>
                 <button class="btn" id="headerSmsConfigBtn" style="background: var(--bg-dark); border: 1px solid var(--border); color: var(--text); display: inline-flex; align-items: center; gap: 6px;" onclick="apriDistinteSmsConfigModal()" title="Configura Gateway SMS">
                     <i class="fas fa-sms" style="color: #10b981;"></i>
                     <span>Gateway SMS</span>
@@ -2296,11 +2302,15 @@
                 <button class="modal-close" onclick="chiudiBulkEmailModal()">&times;</button>
             </div>
             <div class="modal-body">
-                <!-- SMTP Config -->
-                <div class="smtp-config-toggle" style="cursor:default;">
-                    <span style="color:var(--text-muted);font-size:0.9em;">
-                        <i class="fas fa-info-circle"></i> Le credenziali SMTP si configurano nella Dashboard Admin.
-                    </span>
+                <!-- SMTP Config Status & Quick Action -->
+                <div id="bulkSmtpStatusBox" style="padding:10px 14px;border-radius:8px;background:var(--surface, #1e293b);border:1px solid var(--border, #334155);margin-bottom:14px;font-size:0.9rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <i class="fas fa-envelope-open-text" style="color:var(--accent, #2563eb);"></i>
+                        <span id="distinteSmtpStatusText">Verifica configurazione SMTP in corso...</span>
+                    </div>
+                    <button type="button" class="btn-preset" onclick="SmtpConfigModal.open({ mode: 'provincia', onSaveSuccess: caricaStatoSmtpDistinte })" style="padding:4px 10px;font-weight:600;display:flex;align-items:center;gap:5px;">
+                        <i class="fas fa-cog"></i> Configura SMTP
+                    </button>
                 </div>
 
                 <!-- Template Selection -->
@@ -2499,6 +2509,8 @@
             await caricaAllegatiInfo();
             // Carica stato gateway SMS e controlla se configurato
             await caricaStatoSmsGateway();
+            // Carica stato SMTP e credenziali
+            await caricaStatoSmtpDistinte();
         }
 
         // Gestione upload file
@@ -4188,118 +4200,40 @@
 
         let smtpConfigured = false;
 
-        async function caricaSmtpSettings() {
+        async function caricaStatoSmtpDistinte() {
             try {
-                const resp = await fetch('/api/distinte/smtp-settings');
+                const resp = await fetch('/api/smtp-settings');
                 if (!resp.ok) return;
                 const data = await resp.json();
-                document.getElementById('smtpHost').value = data.host || '';
-                document.getElementById('smtpPort').value = data.port || 587;
-                document.getElementById('smtpUsername').value = data.username || '';
-                document.getElementById('smtpFromEmail').value = data.from_email || '';
-                document.getElementById('smtpFromName').value = data.from_name || 'Ufficio Tecnico Algeco Power';
-                document.getElementById('smtpUseTls').checked = data.use_tls !== false;
-                document.getElementById('smtpProvLabel').textContent = data.provincia || provincia;
-                smtpConfigured = !!(data.host && data.password_set);
-                aggiornaSmtpStatus();
-            } catch (e) {
-                console.error('Errore caricamento SMTP settings:', e);
-            }
-        }
+                smtpConfigured = Boolean(data.host && (data.password_set || data.password));
 
-        function aggiornaSmtpStatus() {
-            const statusEl = document.getElementById('smtpStatusText');
-            if (smtpConfigured) {
-                statusEl.innerHTML = '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> SMTP configurato</span>';
-            } else {
-                statusEl.innerHTML = '<span style="color:var(--warning)"><i class="fas fa-exclamation-triangle"></i> SMTP non configurato</span>';
-            }
-        }
+                const badge = document.getElementById('headerSmtpStatusBadge');
+                if (badge) {
+                    badge.style.display = 'inline-block';
+                    if (smtpConfigured) {
+                        badge.textContent = 'ATTIVO';
+                        badge.style.background = '#10b981';
+                        badge.style.color = '#fff';
+                    } else {
+                        badge.textContent = 'DA CONFIGURARE';
+                        badge.style.background = '#f59e0b';
+                        badge.style.color = '#000';
+                    }
+                }
 
-        function toggleSmtpConfig() {
-            const form = document.getElementById('smtpForm');
-            const icon = document.getElementById('smtpToggleIcon');
-            form.classList.toggle('visible');
-            icon.style.transform = form.classList.contains('visible') ? 'rotate(180deg)' : '';
-        }
-
-        async function salvaSmtpSettings() {
-            const settings = {
-                host: document.getElementById('smtpHost').value.trim(),
-                port: parseInt(document.getElementById('smtpPort').value) || 587,
-                username: document.getElementById('smtpUsername').value.trim(),
-                password: document.getElementById('smtpPassword').value,
-                from_email: document.getElementById('smtpFromEmail').value.trim(),
-                from_name: document.getElementById('smtpFromName').value.trim(),
-                use_tls: document.getElementById('smtpUseTls').checked
-            };
-            try {
-                const resp = await fetch('/api/distinte/smtp-settings', {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(settings)
-                });
-                const data = await resp.json();
-                if (data.ok) {
-                    showToast('Impostazioni SMTP salvate!');
-                    smtpConfigured = true;
-                    aggiornaSmtpStatus();
-                } else {
-                    showToast(data.error || 'Errore salvataggio', 'error');
+                const textEl = document.getElementById('distinteSmtpStatusText');
+                if (textEl) {
+                    if (smtpConfigured) {
+                        textEl.innerHTML = `<span style="color:#10b981;font-weight:600;"><i class="fas fa-check-circle"></i> SMTP Configurato:</span> <code>${escapeHtml(data.host)}</code> (${escapeHtml(data.from_email || data.username || '')})`;
+                    } else {
+                        textEl.innerHTML = `<span style="color:#f59e0b;font-weight:600;"><i class="fas fa-exclamation-triangle"></i> SMTP non ancora configurato:</span> clicca su Configura a destra.`;
+                    }
                 }
             } catch (e) {
-                showToast('Errore comunicazione server', 'error');
+                console.warn('Errore verifica stato SMTP distinte:', e);
             }
         }
 
-        async function testSmtpConnection() {
-            showToast('Test connessione in corso...');
-            try {
-                const resp = await fetch('/api/distinte/smtp-test', { method: 'POST' });
-                const data = await resp.json();
-                if (data.ok) {
-                    showToast('Connessione SMTP riuscita!');
-                } else {
-                    showToast(data.error || 'Test fallito', 'error');
-                }
-            } catch (e) {
-                showToast('Errore comunicazione server', 'error');
-            }
-        }
-
-        async function inviaEmailDiProva() {
-            const emailDest = (document.getElementById('smtpTestEmail').value || '').trim();
-            if (!emailDest || !emailDest.includes('@')) {
-                showToast('Inserisci un indirizzo email valido', 'error');
-                return;
-            }
-            const templateId = document.getElementById('bulkTemplateSelect').value;
-            if (!templateId) {
-                showToast('Seleziona prima un template email', 'error');
-                return;
-            }
-            const btn = document.getElementById('smtpTestSendBtn');
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Invio...';
-            try {
-                const resp = await fetch('/api/distinte/invia-email-prova', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email: emailDest, template_id: templateId })
-                });
-                const data = await resp.json();
-                if (data.ok) {
-                    showToast(`Email di prova inviata a ${emailDest}!`);
-                } else {
-                    showToast(data.error || data.errore || 'Invio fallito', 'error');
-                }
-            } catch (e) {
-                showToast('Errore comunicazione server', 'error');
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-paper-plane"></i> Invia prova';
-            }
-        }
 
         function isPec(email) {
             if (!email) return false;
@@ -4372,6 +4306,7 @@
         }
 
         function apriBulkEmailModal() {
+            caricaStatoSmtpDistinte();
             if (!contatti || contatti.length === 0) {
                 showToast('Nessun contatto disponibile', 'error');
                 return;
@@ -4944,9 +4879,7 @@
             resultsEl.innerHTML = '<div style="max-height:200px;overflow-y:auto;font-size:0.85em;" id="bulkResultsLog"></div>';
             // Hide preview cards during sending
             document.getElementById('bulkPreviewSection').style.display = 'none';
-            sendBtn.textContent = ' Interrompi';
             sendBtn.innerHTML = '<i class="fas fa-stop"></i> Interrompi';
-            sendBtn.onclick = () => { bulkAbortato = true; };
             sendBtn.style.background = 'var(--danger)';
             document.getElementById('bulkProgressFill').style.width = '0%';
             document.getElementById('bulkProgressText').textContent = `0 / ${selezionati.length}`;
@@ -4957,21 +4890,10 @@
             let inviati = 0, errori = 0;
             const podsInviati = new Set();
 
-            for (let i = 0; i < selezionati.length; i++) {
-                if (bulkAbortato) {
-                    logEl.innerHTML += `<div style="color:var(--warning);"><i class="fas fa-hand-paper"></i> Invio interrotto dall'utente dopo ${inviati} invii</div>`;
-                    break;
-                }
-
-                const c = selezionati[i];
-
-                // Aggiorna progress bar
-                document.getElementById('bulkProgressText').textContent =
-                    `${i + 1} / ${selezionati.length} — Invio email in corso...`;
-                document.getElementById('bulkProgressFill').style.width =
-                    `${Math.round(((i + 1) / selezionati.length) * 100)}%`;
-
-                try {
+            const runner = BulkEmailPreview.createBulkRunner({
+                items: selezionati,
+                pauseBetweenSec: [60, 120],
+                sendItemFn: async (c) => {
                     const resp = await fetch('/api/distinte/invia-singola-email', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -4984,59 +4906,53 @@
                             allegati: c.allegati || []
                         })
                     });
-                    const data = await resp.json();
-
-                    if (data.ok) {
-                        inviati++;
-                        (c.contatori || [c]).forEach(ct => podsInviati.add(ct.pod));
-                        const contText = (c.contatori && c.contatori.length > 1) ? ` (${c.contatori.length} contatori)` : '';
-                        logEl.innerHTML += `<div class="result-ok"><i class="fas fa-check"></i> ${c.pod} → ${c.email}${contText}</div>`;
-                    } else {
-                        errori++;
-                        logEl.innerHTML += `<div class="result-err"><i class="fas fa-times"></i> ${c.pod} → ${c.email}: ${data.errore || 'Errore'}</div>`;
-                    }
-                } catch (e) {
+                    return await resp.json();
+                },
+                onProgress: ({ index, total, percent }) => {
+                    document.getElementById('bulkProgressText').textContent =
+                        `${index + 1} / ${total} — Invio email in corso...`;
+                    document.getElementById('bulkProgressFill').style.width = `${percent}%`;
+                },
+                onItemSuccess: (c, idx, res) => {
+                    inviati++;
+                    (c.contatori || [c]).forEach(ct => { if (ct && ct.pod) podsInviati.add(ct.pod); });
+                    const contText = (c.contatori && c.contatori.length > 1) ? ` (${c.contatori.length} contatori)` : '';
+                    logEl.innerHTML += `<div class="result-ok"><i class="fas fa-check"></i> ${escapeHtml(c.pod)} → ${escapeHtml(c.email)}${contText}</div>`;
+                    logEl.scrollTop = logEl.scrollHeight;
+                },
+                onItemError: (c, idx, res) => {
                     errori++;
-                    logEl.innerHTML += `<div class="result-err"><i class="fas fa-times"></i> ${c.pod} → ${c.email}: Errore invio email</div>`;
-                }
+                    const errMsg = res.error || res.errore || 'Errore invio email';
+                    logEl.innerHTML += `<div class="result-err"><i class="fas fa-times"></i> ${escapeHtml(c.pod)} → ${escapeHtml(c.email)}: ${escapeHtml(errMsg)}</div>`;
+                    logEl.scrollTop = logEl.scrollHeight;
+                },
+                onPauseCountdown: ({ timeLeft, index, total }) => {
+                    document.getElementById('bulkProgressText').textContent =
+                        `${index + 1} / ${total} — attendere ${timeLeft}s (anti-spam)...`;
+                },
+                onComplete: ({ nSent, nErrors, total, aborted }) => {
+                    progressEl.querySelector('div:first-child').innerHTML =
+                        `<i class="fas fa-check-circle" style="color:var(--success)"></i> ${aborted ? 'Interrotto' : 'Completato'}`;
+                    document.getElementById('bulkProgressText').textContent =
+                        `${nSent} invii, ${nErrors} errori su ${total}`;
+                    document.getElementById('bulkProgressFill').style.width = '100%';
 
-                logEl.scrollTop = logEl.scrollHeight;
+                    sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Invia';
+                    sendBtn.onclick = inviaEmailBulk;
+                    sendBtn.style.background = 'linear-gradient(135deg, var(--accent-hover), var(--accent-deep))';
 
-                // Pausa tra invii (tranne dopo l'ultimo)
-                if (i < selezionati.length - 1 && !bulkAbortato) {
-                    const randomPause = Math.floor(Math.random() * (120 - 60 + 1) + 60); // 60 a 120 sec
-                    let timeLeft = randomPause;
-                    
-                    while (timeLeft > 0 && !bulkAbortato) {
-                        document.getElementById('bulkProgressText').textContent =
-                            `${i + 1} / ${selezionati.length} — attendere ${timeLeft}s (anti-spam)...`;
-                        await new Promise(r => setTimeout(r, 1000));
-                        timeLeft--;
+                    if (nSent > 0) {
+                        showToast(`${nSent} email processate con successo!`);
+                    }
+                    if (aborted) {
+                        logEl.innerHTML += `<div style="color:var(--warning);"><i class="fas fa-hand-paper"></i> Invio interrotto dall'utente dopo ${nSent} invii</div>`;
+                        logEl.scrollTop = logEl.scrollHeight;
                     }
                 }
-            }
+            });
 
-            // Riepilogo finale
-            progressEl.querySelector('div:first-child').innerHTML =
-                `<i class="fas fa-check-circle" style="color:var(--success)"></i> ${bulkAbortato ? 'Interrotto' : 'Completato'}`;
-            document.getElementById('bulkProgressText').textContent =
-                `${inviati} invii, ${errori} errori su ${selezionati.length}`;
-            document.getElementById('bulkProgressFill').style.width = '100%';
-
-            // Ripristina pulsante
-            sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Invia';
-            sendBtn.onclick = inviaEmailBulk;
-            sendBtn.style.background = 'linear-gradient(135deg, var(--accent-hover), var(--accent-deep))';
-
-            if (inviati > 0) {
-                showToast(`${inviati} email processate con successo!`);
-                // Aggiungi nota "mandata mail" ai POD
-                for (const pod of podsInviati) {
-                    await aggiungiNota(pod, 'mandata mail', true, {
-                        includiDataPianificazione: true
-                    });
-                }
-            }
+            sendBtn.onclick = () => { runner.abort(); };
+            await runner.start();
         }
 
         // ===== INVIO MULTIPLO SMS =====

@@ -735,6 +735,168 @@
                 fieldDefs,
                 settings: templateSettings,
             };
+        },
+
+        /**
+         * Crea un motore di invio bulk sequenziale unificato con gestione progress bar,
+         * pause anti-spam, abort utente e intercettazione errori SMTP (con apertura al volo del modal).
+         */
+        createBulkRunner: function (options) {
+            const items = options.items || [];
+            const sendItemFn = options.sendItemFn;
+            const onProgress = options.onProgress || (() => {});
+            const onItemSuccess = options.onItemSuccess || (() => {});
+            const onItemError = options.onItemError || (() => {});
+            const onPauseCountdown = options.onPauseCountdown || (() => {});
+            const onComplete = options.onComplete || (() => {});
+            const pauseBetweenSec = options.pauseBetweenSec || 3;
+
+            let aborted = false;
+            let isRunning = false;
+            let nSent = 0;
+            let nErrors = 0;
+
+            function _calcPauseSec() {
+                if (Array.isArray(pauseBetweenSec)) {
+                    const min = pauseBetweenSec[0] || 1;
+                    const max = pauseBetweenSec[1] || min;
+                    return Math.floor(Math.random() * (max - min + 1)) + min;
+                }
+                return Number(pauseBetweenSec) || 3;
+            }
+
+            async function _handleSmtpErrorOnTheFly(item, index, res) {
+                if (typeof window.SmtpConfigModal === 'undefined') {
+                    return false;
+                }
+                const errLower = ((res.error || res.errore || '') + ' ' + (res.error_code || '')).toLowerCase();
+                const isSmtpIssue = res.error_code === 'SMTP_NOT_CONFIGURED' ||
+                                    res.error_code === 'SMTP_AUTH_FAILED' ||
+                                    errLower.includes('smtp non configurat') ||
+                                    errLower.includes('autenticazione smtp fallita');
+
+                if (!isSmtpIssue) return false;
+
+                return new Promise((resolve) => {
+                    const msg = (res.error_code === 'SMTP_NOT_CONFIGURED' || errLower.includes('non configurat'))
+                        ? 'Configurazione SMTP non trovata o incompleta.\nVuoi configurare i parametri SMTP adesso per riprendere l\'invio senza perdere la selezione?'
+                        : 'Autenticazione SMTP fallita con le credenziali attuali.\nVuoi verificare o modificare le impostazioni SMTP per riprendere l\'invio?';
+
+                    const proceed = confirm(msg);
+                    if (!proceed) {
+                        resolve(false);
+                        return;
+                    }
+
+                    window.SmtpConfigModal.open({
+                        mode: 'provincia',
+                        onSaveSuccess: async () => {
+                            resolve(true); // segnale per riprovare l'invio
+                        }
+                    });
+
+                    // Se l'utente chiude il modal senza salvare, risolvi a false
+                    const overlay = document.getElementById('smtpConfigModalOverlay');
+                    if (overlay) {
+                        const observer = new MutationObserver(() => {
+                            if (overlay.style.display === 'none') {
+                                observer.disconnect();
+                                setTimeout(() => resolve(false), 200);
+                            }
+                        });
+                        observer.observe(overlay, { attributes: true, attributeFilter: ['style', 'class'] });
+                    }
+                });
+            }
+
+            const runner = {
+                abort: function () {
+                    aborted = true;
+                },
+                isAborted: function () {
+                    return aborted;
+                },
+                start: async function () {
+                    if (isRunning) return;
+                    isRunning = true;
+                    aborted = false;
+                    nSent = 0;
+                    nErrors = 0;
+
+                    const total = items.length;
+
+                    for (let i = 0; i < total; i++) {
+                        if (aborted) {
+                            break;
+                        }
+
+                        const item = items[i];
+                        const pct = Math.round(((i + 1) / total) * 100);
+                        onProgress({
+                            index: i,
+                            total: total,
+                            percent: pct,
+                            item: item,
+                            statusText: `${i + 1} / ${total}`
+                        });
+
+                        let res = null;
+                        try {
+                            res = await sendItemFn(item, i);
+                        } catch (sendErr) {
+                            res = { ok: false, success: false, error: sendErr.message || 'Errore di connessione/rete' };
+                        }
+
+                        // Se errore SMTP, offri configurazione al volo
+                        if (res && (!res.ok && !res.success)) {
+                            const retried = await _handleSmtpErrorOnTheFly(item, i, res);
+                            if (retried) {
+                                try {
+                                    res = await sendItemFn(item, i);
+                                } catch (retryErr) {
+                                    res = { ok: false, success: false, error: retryErr.message || 'Errore di rete' };
+                                }
+                            }
+                        }
+
+                        const isOk = Boolean(res && (res.ok || res.success));
+                        if (isOk) {
+                            nSent++;
+                            onItemSuccess(item, i, res);
+                        } else {
+                            nErrors++;
+                            onItemError(item, i, res);
+                        }
+
+                        // Pausa anti-spam tra un invio e il successivo (tranne dopo l'ultimo)
+                        if (i < total - 1 && !aborted) {
+                            let pauseSec = _calcPauseSec();
+                            while (pauseSec > 0 && !aborted) {
+                                onPauseCountdown({
+                                    timeLeft: pauseSec,
+                                    index: i,
+                                    total: total,
+                                    item: item
+                                });
+                                await new Promise(r => setTimeout(r, 1000));
+                                pauseSec--;
+                            }
+                        }
+                    }
+
+                    isRunning = false;
+                    onComplete({
+                        nSent: nSent,
+                        nErrors: nErrors,
+                        total: total,
+                        aborted: aborted
+                    });
+
+                    return { nSent, nErrors, total, aborted };
+                }
+            };
+
+            return runner;
         }
     };
 

@@ -19,6 +19,7 @@
   })();
 </script>
 <script src="/static/sms_gateway_modal.js"></script>
+<script src="/static/smtp_config_modal.js"></script>
 <style>
   /* ============================================================
      Palette e token solidi allineati a /static/theme.css.
@@ -803,65 +804,7 @@
 </main>
 
 
-<!-- Modal SMTP Settings -->
-<div class="modal" id="modalSmtpSettings">
-  <div class="modal-content">
-    <div class="modal-head">
-      <h2>Configura SMTP per <span id="smtpProvinciaLabel"></span></h2>
-      <button class="close" onclick="chiudiSmtpSettings()">&times;</button>
-    </div>
-    <form id="formSmtpSettings" onsubmit="salvaSmtpSettings(event)">
-      <input type="hidden" id="smtpProvincia" name="provincia">
-      <div class="form-row">
-        <div class="form-group">
-          <label>Host SMTP</label>
-          <input type="text" id="smtpHost" name="host" required placeholder="es. smtps.aruba.it">
-        </div>
-        <div class="form-group">
-          <label>Porta</label>
-          <input type="number" id="smtpPort" name="port" required placeholder="es. 465" value="465">
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Nome Utente</label>
-          <input type="text" id="smtpUsername" name="username" required placeholder="es. invio@azienda.it">
-        </div>
-        <div class="form-group">
-          <label>Password</label>
-          <input type="password" id="smtpPassword" name="password" placeholder="(Lascia vuoto per non modificare)">
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Email Mittente (Da)</label>
-          <input type="email" id="smtpFromEmail" name="from_email" required placeholder="es. ufficio@azienda.it">
-        </div>
-        <div class="form-group">
-          <label>Nome Mittente</label>
-          <input type="text" id="smtpFromName" name="from_name" placeholder="es. Ufficio Tecnico">
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Host IMAP (Opzionale)</label>
-          <input type="text" id="smtpImapHost" name="imap_host" placeholder="es. imaps.aruba.it">
-          <div class="help">Usato per salvare le email inviate nella cartella Inviati. Se vuoto, viene derivato dall'host SMTP.</div>
-        </div>
-        <div class="form-group" style="display:flex; flex-direction:column; justify-content:center;">
-          <label style="display:flex; align-items:center; gap:8px;">
-            <input type="checkbox" id="smtpUseTls" name="use_tls" checked style="width:auto;">
-            Usa STARTTLS (Porta 587)
-          </label>
-        </div>
-      </div>
-      <div class="form-actions">
-        <button type="button" class="btn secondary" onclick="chiudiSmtpSettings()">Annulla</button>
-        <button type="submit" class="btn">💾 Salva Impostazioni</button>
-      </div>
-    </form>
-  </div>
-</div>
+
 
 <!-- Modal Aggiungi/Modifica -->
 <div class="modal" id="modalAggiungi">
@@ -1510,68 +1453,20 @@ function rendiGrid(province) {
 // ============================================================
 
 // ============================================================
-// SMTP SETTINGS
+// SMTP SETTINGS (Unificato con static/smtp_config_modal.js)
 // ============================================================
-async function apriSmtpSettings(slug) {
-  document.getElementById('smtpProvinciaLabel').textContent = slug;
-  document.getElementById('smtpProvincia').value = slug;
-  document.getElementById('formSmtpSettings').reset();
-  
-  try {
-    const data = await api('GET', `/api/provinces/${slug}/smtp-settings`);
-    if (data.host) document.getElementById('smtpHost').value = data.host;
-    if (data.port) document.getElementById('smtpPort').value = data.port;
-    if (data.username) document.getElementById('smtpUsername').value = data.username;
-    if (data.from_email) document.getElementById('smtpFromEmail').value = data.from_email;
-    if (data.from_name) document.getElementById('smtpFromName').value = data.from_name;
-    if (data.imap_host) document.getElementById('smtpImapHost').value = data.imap_host;
-    document.getElementById('smtpUseTls').checked = data.use_tls !== false;
-    
-    if (data.password_set) {
-      document.getElementById('smtpPassword').placeholder = "(Impostata - lascia vuoto per non modificare)";
-    } else {
-      document.getElementById('smtpPassword').placeholder = "Password SMTP";
-    }
-  } catch(e) {
-    // maybe non configurato
+function apriSmtpSettings(slug) {
+  if (window.SmtpConfigModal) {
+    window.SmtpConfigModal.open({ mode: 'admin', slug: slug, provinciaLabel: slug });
+  } else {
+    toast('Componente configurazione SMTP in caricamento...', 'info');
   }
-  
-  document.getElementById('modalSmtpSettings').classList.add('open');
 }
 
 function chiudiSmtpSettings() {
-  document.getElementById('modalSmtpSettings').classList.remove('open');
+  if (window.SmtpConfigModal) window.SmtpConfigModal.close();
 }
 
-async function salvaSmtpSettings(e) {
-  e.preventDefault();
-  const form = e.target;
-  const slug = form.provincia.value;
-  
-  const payload = {
-    host: form.host.value,
-    port: parseInt(form.port.value, 10),
-    username: form.username.value,
-    from_email: form.from_email.value,
-    from_name: form.from_name.value,
-    imap_host: form.imap_host.value,
-    use_tls: form.use_tls.checked
-  };
-  
-  if (form.password.value) {
-    payload.password = form.password.value;
-  }
-  
-  try {
-    const res = await api('PUT', `/api/provinces/${slug}/smtp-settings`, payload);
-    if (res.ok) {
-      toast('Impostazioni SMTP salvate con successo!', 'success');
-      chiudiSmtpSettings();
-    }
-  } catch(err) {
-    toast('Errore salvataggio SMTP: ' + err.message, 'error');
-  }
-}
 
 // AZIONI LIFECYCLE + DB ACTIONS
 // ============================================================

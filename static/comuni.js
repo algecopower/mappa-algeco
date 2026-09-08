@@ -345,7 +345,28 @@ function updateBulkBtn() {
 let bulkPreviews = [];
 let isSending = false;
 
+async function caricaStatoSmtpComuni() {
+    try {
+        const resp = await fetch('/api/smtp-settings');
+        if (!resp.ok) return;
+        const data = await resp.json();
+        const configured = Boolean(data.host && (data.password_set || data.password));
+        const textEl = document.getElementById('comuniSmtpStatusText');
+        if (textEl) {
+            if (configured) {
+                textEl.innerHTML = `<span style="color:#10b981;font-weight:600;"><i class="fas fa-check-circle"></i> SMTP Configurato:</span> <code>${escapeHtml(data.host)}</code> (${escapeHtml(data.from_email || data.username || '')})`;
+            } else {
+                textEl.innerHTML = `<span style="color:#f59e0b;font-weight:600;"><i class="fas fa-exclamation-triangle"></i> SMTP non configurato:</span> clicca su Configura per inserire credenziali.`;
+            }
+        }
+    } catch (e) {
+        console.warn('Errore verifica stato SMTP comuni:', e);
+    }
+}
+window.caricaStatoSmtpComuni = caricaStatoSmtpComuni;
+
 function openBulkModal() {
+    caricaStatoSmtpComuni();
     const checked = Array.from(document.querySelectorAll('.comune-cb:checked')).map(cb => cb.value);
     if(checked.length === 0) return;
     
@@ -610,7 +631,7 @@ function segnaModificata(idx) {
 // INVIO SEQUENZIALE CON PROGRESS BAR
 // ============================================================================
 function sendBulk() {
-    if(bulkPreviews.length === 0) return;
+    if (bulkPreviews.length === 0) return;
 
     // Conferma prima dell'invio
     const nEmails = bulkPreviews.length;
@@ -632,95 +653,79 @@ function sendBulk() {
     });
 
     isSending = true;
-    document.getElementById('bulkSendBtn').disabled = true;
+    const sendBtn = document.getElementById('bulkSendBtn');
+    sendBtn.disabled = true;
     document.getElementById('bulkPreviewBtn').style.display = 'none';
     document.getElementById('bulkProgress').style.display = 'block';
     document.getElementById('progressFill').style.width = '0%';
     document.getElementById('progressText').textContent = `Preparazione invio di ${emailsData.length} email...`;
     document.getElementById('bulkLog').innerHTML = '';
 
-    // Invio sequenziale con pausa di 3 secondi
-    sendSequentially(emailsData, 0, 0, 0);
-}
+    const runner = BulkEmailPreview.createBulkRunner({
+        items: emailsData,
+        pauseBetweenSec: 3,
+        sendItemFn: async (emailData, index) => {
+            const statusBadge = document.getElementById(`previewStatus${index}`);
+            if (statusBadge) {
+                statusBadge.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                statusBadge.className = 'preview-status-badge sending';
+            }
 
-function sendSequentially(emailsData, index, nSent, nErrors) {
-    if (!isSending || index >= emailsData.length) {
-        // Completato
-        isSending = false;
-        const pct = 100;
-        document.getElementById('progressFill').style.width = pct + '%';
-        document.getElementById('progressText').textContent =
-            `Completato: ${nSent} inviate, ${nErrors} errori su ${emailsData.length} totali.`;
-        
-        if (nErrors === 0) {
-            document.getElementById('bulkLog').innerHTML += 
-                `<div class="log-ok"><i class="fas fa-check-circle"></i> Tutte le ${nSent} email sono state inviate con successo!</div>`;
-        }
-        showToast(`Invio completato: ${nSent}/${emailsData.length}`);
-        return;
-    }
-
-    const emailData = emailsData[index];
-    const pct = Math.round((index / emailsData.length) * 100);
-    document.getElementById('progressFill').style.width = pct + '%';
-    document.getElementById('progressText').textContent =
-        `Invio ${index + 1} di ${emailsData.length}: ${emailData.comune}...`;
-
-    // Aggiorna badge status sulla card
-    const statusBadge = document.getElementById(`previewStatus${index}`);
-    if (statusBadge) {
-        statusBadge.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-        statusBadge.className = 'preview-status-badge sending';
-    }
-
-    fetch('/api/comuni/send-single', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken()},
-        body: JSON.stringify(emailData)
-    })
-    .then(r => r.json())
-    .then(res => {
-        if (res.success) {
-            nSent++;
+            const resp = await fetch('/api/comuni/send-single', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
+                body: JSON.stringify(emailData)
+            });
+            return await resp.json();
+        },
+        onProgress: ({ index, total, percent, item }) => {
+            document.getElementById('progressFill').style.width = `${percent}%`;
+            document.getElementById('progressText').textContent =
+                `Invio ${index + 1} di ${total}: ${item.comune}...`;
+        },
+        onItemSuccess: (emailData, index) => {
             document.getElementById('bulkLog').innerHTML +=
                 `<div class="log-ok"><i class="fas fa-check"></i> ${escapeHtml(emailData.comune)} → ${escapeHtml(emailData.email)}</div>`;
+            const statusBadge = document.getElementById(`previewStatus${index}`);
             if (statusBadge) {
                 statusBadge.innerHTML = '<i class="fas fa-check"></i>';
                 statusBadge.className = 'preview-status-badge sent-ok';
             }
-        } else {
-            nErrors++;
-            const errMsg = res.error || 'Errore sconosciuto';
+            const logEl = document.getElementById('bulkLog');
+            if (logEl) logEl.scrollTop = logEl.scrollHeight;
+        },
+        onItemError: (emailData, index, res) => {
+            const errMsg = res.error || res.errore || 'Errore';
             document.getElementById('bulkLog').innerHTML +=
                 `<div class="log-err"><i class="fas fa-times"></i> ${escapeHtml(emailData.comune)}: ${escapeHtml(errMsg)}</div>`;
+            const statusBadge = document.getElementById(`previewStatus${index}`);
             if (statusBadge) {
                 statusBadge.innerHTML = '<i class="fas fa-times"></i>';
                 statusBadge.className = 'preview-status-badge sent-err';
             }
-        }
+            const logEl = document.getElementById('bulkLog');
+            if (logEl) logEl.scrollTop = logEl.scrollHeight;
+        },
+        onPauseCountdown: ({ timeLeft, index, total }) => {
+            document.getElementById('progressText').textContent =
+                `Invio ${index + 1} di ${total} completato — attesa ${timeLeft}s...`;
+        },
+        onComplete: ({ nSent, nErrors, total, aborted }) => {
+            isSending = false;
+            sendBtn.disabled = false;
+            document.getElementById('progressFill').style.width = '100%';
+            document.getElementById('progressText').textContent =
+                `Completato: ${nSent} inviate, ${nErrors} errori su ${total} totali.`;
 
-        // Pausa di 3 secondi prima del prossimo invio (evita rate-limiting SMTP)
-        if (index + 1 < emailsData.length) {
-            setTimeout(() => sendSequentially(emailsData, index + 1, nSent, nErrors), 3000);
-        } else {
-            sendSequentially(emailsData, index + 1, nSent, nErrors);
-        }
-    })
-    .catch(err => {
-        nErrors++;
-        document.getElementById('bulkLog').innerHTML +=
-            `<div class="log-err"><i class="fas fa-times"></i> ${escapeHtml(emailData.comune)}: Errore di connessione</div>`;
-        if (statusBadge) {
-            statusBadge.innerHTML = '<i class="fas fa-times"></i>';
-            statusBadge.className = 'preview-status-badge sent-err';
-        }
-        // Riprova dopo pausa
-        if (index + 1 < emailsData.length) {
-            setTimeout(() => sendSequentially(emailsData, index + 1, nSent, nErrors), 3000);
-        } else {
-            sendSequentially(emailsData, index + 1, nSent, nErrors);
+            if (nErrors === 0 && !aborted) {
+                document.getElementById('bulkLog').innerHTML +=
+                    `<div class="log-ok"><i class="fas fa-check-circle"></i> Tutte le ${nSent} email sono state inviate con successo!</div>`;
+            }
+            showToast(`Invio completato: ${nSent}/${total}`);
         }
     });
+
+    runner.start();
 }
 
 

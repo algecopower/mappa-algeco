@@ -23,6 +23,9 @@
                 <a href="/" class="btn-soft"><i class="fas fa-map"></i> Mappa</a>
                 <a href="/dashboard" class="btn-soft"><i class="fas fa-chart-line"></i> Dashboard</a>
                 <a href="/mail" class="btn-soft"><i class="fas fa-envelope"></i> Gestione Mail</a>
+                <button type="button" class="btn-soft" onclick="SmtpConfigModal.open({ mode: 'provincia', onSaveSuccess: caricaStatoSmtpLettere })" title="Configura SMTP / PEC">
+                    <i class="fas fa-envelope-cog"></i> Configura SMTP
+                </button>
                 <button class="btn-primary" id="bulkOpenBtn" onclick="openBulkModal()" disabled>
                     <i class="fas fa-paper-plane"></i> Invio bulk
                 </button>
@@ -111,6 +114,17 @@
             </div>
             <div class="modal-body">
                 <div class="bulk-setup-section" id="bulkSetupSection">
+                    <!-- Banner Stato SMTP con link rapido di configurazione -->
+                    <div id="lettereSmtpStatusBox" style="padding:10px 14px;border-radius:8px;background:var(--surface, #1e293b);border:1px solid var(--border, #334155);margin-bottom:14px;font-size:0.9rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <i class="fas fa-envelope-open-text" style="color:var(--accent, #2563eb);"></i>
+                            <span id="lettereSmtpStatusText">Verifica configurazione SMTP in corso...</span>
+                        </div>
+                        <button type="button" class="btn-preset" onclick="SmtpConfigModal.open({ mode: 'provincia', onSaveSuccess: caricaStatoSmtpLettere })" style="padding:4px 10px;font-weight:600;display:flex;align-items:center;gap:5px;">
+                            <i class="fas fa-cog"></i> Configura SMTP
+                        </button>
+                    </div>
+
                     <label for="templateSelect">Template email</label>
                     <select id="templateSelect" onchange="onTemplateChange()"></select>
 
@@ -251,6 +265,7 @@
 
     <div class="toast" id="toast"></div>
     <script src="/static/bulk-email-preview.js?v=20260902_2"></script>
+    <script src="/static/smtp_config_modal.js"></script>
     <script src="/static/lettere.js?v=20260902_2"></script>
 </body>
 </html>

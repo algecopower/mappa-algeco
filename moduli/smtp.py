@@ -8,6 +8,9 @@ import smtplib
 import imaplib
 import logging
 
+from email.mime.text import MIMEText
+from email.utils import formataddr, formatdate, make_msgid
+
 from moduli.safe_json import json_read, json_write
 from config import PROVINCIA_ATTIVA
 
@@ -15,6 +18,68 @@ logger = logging.getLogger('mappa_algeco')
 
 _ROOT_DIR = os.path.join(os.path.dirname(__file__), '..')
 _SMTP_SETTINGS_JSON = os.path.join(_ROOT_DIR, 'data', 'smtp_settings.json')
+
+
+def test_smtp_connection(smtp_settings):
+    """Verifica socket e autenticazione SMTP senza inviare email."""
+    if not smtp_settings or not smtp_settings.get('host'):
+        return False, 'Host SMTP non specificato'
+    if not smtp_settings.get('password') and not smtp_settings.get('username'):
+        return False, 'Credenziali SMTP mancanti'
+    server = None
+    try:
+        server = connect_smtp(smtp_settings, timeout=12)
+        try:
+            server.quit()
+        except Exception:
+            pass
+        return True, 'Connessione e autenticazione SMTP riuscite con successo!'
+    except smtplib.SMTPAuthenticationError as e:
+        return False, f'Autenticazione SMTP fallita: nome utente o password non validi ({e})'
+    except Exception as e:
+        return False, f'Errore di connessione SMTP: {e}'
+    finally:
+        if server:
+            try:
+                server.close()
+            except Exception:
+                pass
+
+
+def test_send_email(smtp_settings, recipient, prov=None):
+    """Invia un'email reale di prova all'indirizzo specificato."""
+    recipient = (recipient or '').strip()
+    if not recipient or '@' not in recipient:
+        return False, 'Indirizzo email di prova non valido'
+
+    from_email = smtp_settings.get('from_email') or smtp_settings.get('username') or ''
+    from_name = smtp_settings.get('from_name') or 'Algeco Power - Test SMTP'
+    prov_name = (prov or PROVINCIA_ATTIVA or '').upper()
+
+    if not from_email:
+        return False, 'Indirizzo mittente (from_email) mancante'
+
+    msg = MIMEText(
+        f"Questo e un messaggio di prova automatico inviato da Mappa Algeco.\n\n"
+        f"Provincia: {prov_name}\n"
+        f"Host SMTP: {smtp_settings.get('host')}:{smtp_settings.get('port', 587)}\n"
+        f"Mittente: {from_email}\n"
+        f"Destinatario: {recipient}\n"
+        f"Data/Ora: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+        f"Se hai ricevuto questo messaggio, la configurazione SMTP per {prov_name} e funzionante!",
+        'plain', 'utf-8'
+    )
+    msg['From'] = formataddr((from_name, from_email))
+    msg['To'] = recipient
+    msg['Subject'] = f"Test Configurazione SMTP — {prov_name} (Algeco Power)"
+    msg['Date'] = formatdate(localtime=True)
+    msg['Message-ID'] = make_msgid(domain=from_email.split('@')[-1] if '@' in from_email else 'algecopower.it')
+
+    ok, err = send_smtp_message(smtp_settings, msg, max_retries=1, save_sent=False)
+    if ok:
+        return True, f"Email di prova inviata con successo a {recipient}!"
+    return False, err or "Errore durante l'invio dell'email di prova"
+
 
 
 def load_smtp_settings(prov=None):

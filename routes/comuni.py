@@ -159,9 +159,12 @@ def api_comuni_send_single():
         result = send_single_email(data, user)
         return jsonify({
             'success': result.get('ok', False),
+            'ok': result.get('ok', False),
             'comune': result.get('comune', ''),
             'email': result.get('email', ''),
-            'error': result.get('errore', '')
+            'error': result.get('errore', ''),
+            'errore': result.get('errore', ''),
+            'error_code': result.get('error_code', '')
         })
     except Exception as e:
         logger.error(f"Errore invio singolo comune: {e}")

@@ -882,7 +882,28 @@ function getDefaultAllegati(tipo) {
     return base;
 }
 
+async function caricaStatoSmtpLettere() {
+    try {
+        const resp = await fetch('/api/smtp-settings');
+        if (!resp.ok) return;
+        const data = await resp.json();
+        const configured = Boolean(data.host && (data.password_set || data.password));
+        const textEl = document.getElementById('lettereSmtpStatusText');
+        if (textEl) {
+            if (configured) {
+                textEl.innerHTML = `<span style="color:#10b981;font-weight:600;"><i class="fas fa-check-circle"></i> SMTP Configurato:</span> <code>${esc(data.host)}</code> (${esc(data.from_email || data.username || '')})`;
+            } else {
+                textEl.innerHTML = `<span style="color:#f59e0b;font-weight:600;"><i class="fas fa-exclamation-triangle"></i> SMTP non configurato:</span> clicca su Configura per inserire credenziali.`;
+            }
+        }
+    } catch (e) {
+        console.warn('Errore verifica stato SMTP lettere:', e);
+    }
+}
+window.caricaStatoSmtpLettere = caricaStatoSmtpLettere;
+
 function openBulkModal() {
+    caricaStatoSmtpLettere();
     const selected = selectedAziende();
     bulkItems = [];
     const seen = new Set();
@@ -1352,27 +1373,18 @@ async function sendBulk() {
     log.innerHTML = '';
     fill.style.width = '0%';
     sendBtn.innerHTML = '<i class="fas fa-stop"></i> Interrompi';
-    sendBtn.onclick = () => { bulkAbort = true; };
 
-    let ok = 0;
-    let ko = 0;
-    for (let i = 0; i < bulkPreviews.length; i++) {
-        if (bulkAbort) {
-            log.innerHTML += `<div class="log-err">Invio interrotto dopo ${ok} invii riusciti</div>`;
-            break;
-        }
-        const item = bulkPreviews[i];
-        text.textContent = `${i + 1} / ${bulkPreviews.length}`;
-        fill.style.width = `${Math.round(((i + 1) / bulkPreviews.length) * 100)}%`;
+    const runner = BulkEmailPreview.createBulkRunner({
+        items: bulkPreviews,
+        pauseBetweenSec: PAUSA_TRA_EMAIL_SEC || 3,
+        sendItemFn: async (item, i) => {
+            const subjInput = document.getElementById(`previewSubject${i}`);
+            const currentSubject = subjInput ? subjInput.value : item.subject;
+            const editorEl = document.getElementById(`previewBody${i}`);
+            const currentBody = (editorEl && document.getElementById(`previewBodyContainer${i}`)?.style.display === 'block')
+                ? editorEl.innerHTML
+                : item.bodyHtml;
 
-        const subjInput = document.getElementById(`previewSubject${i}`);
-        const currentSubject = subjInput ? subjInput.value : item.subject;
-        const editorEl = document.getElementById(`previewBody${i}`);
-        const currentBody = (editorEl && document.getElementById(`previewBodyContainer${i}`)?.style.display === 'block')
-            ? editorEl.innerHTML
-            : item.bodyHtml;
-
-        try {
             const res = await fetch('/api/lettere/invia-email', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1387,31 +1399,39 @@ async function sendBulk() {
                     allegati: item.allegati,
                 })
             });
-            const data = await res.json();
-            if (data.ok) {
-                ok++;
-                const countText = item.contatori && item.contatori.length > 1 ? ` (${item.contatori.length} contatori)` : '';
-                log.innerHTML += `<div class="log-ok">OK ${esc(item.email)}${countText}</div>`;
-            } else {
-                ko++;
-                log.innerHTML += `<div class="log-err">Errore ${esc(item.email)}: ${esc(data.errore || data.error || '')}</div>`;
+            return await res.json();
+        },
+        onProgress: ({ index, total, percent }) => {
+            text.textContent = `${index + 1} / ${total}`;
+            fill.style.width = `${percent}%`;
+        },
+        onItemSuccess: (item, i, data) => {
+            const countText = item.contatori && item.contatori.length > 1 ? ` (${item.contatori.length} contatori)` : '';
+            log.innerHTML += `<div class="log-ok">OK ${esc(item.email)}${countText}</div>`;
+            log.scrollTop = log.scrollHeight;
+        },
+        onItemError: (item, i, data) => {
+            log.innerHTML += `<div class="log-err">Errore ${esc(item.email)}: ${esc(data.errore || data.error || 'Errore')}</div>`;
+            log.scrollTop = log.scrollHeight;
+        },
+        onPauseCountdown: ({ timeLeft, index, total }) => {
+            text.textContent = `${index + 1} / ${total} — attesa ${timeLeft}s...`;
+        },
+        onComplete: async ({ nSent, nErrors, total, aborted }) => {
+            sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Invia selezionate';
+            sendBtn.onclick = sendBulk;
+            text.textContent = `${nSent} inviate, ${nErrors} errori`;
+            if (aborted) {
+                log.innerHTML += `<div class="log-err">Invio interrotto dall'utente dopo ${nSent} invii</div>`;
             }
-        } catch (e) {
-            ko++;
-            log.innerHTML += `<div class="log-err">Errore ${esc(item.email)}: rete</div>`;
+            showToast(`${nSent} invii completati${nErrors ? ', ' + nErrors + ' errori' : ''}`, Boolean(nErrors));
+            await loadAziende();
+            await loadStats();
         }
-        log.scrollTop = log.scrollHeight;
-        if (i < bulkPreviews.length - 1 && !bulkAbort) {
-            await new Promise(r => setTimeout(r, PAUSA_TRA_EMAIL_SEC * 1000));
-        }
-    }
+    });
 
-    sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Invia selezionate';
-    sendBtn.onclick = sendBulk;
-    text.textContent = `${ok} inviate, ${ko} errori`;
-    showToast(`${ok} invii completati${ko ? ', ' + ko + ' errori' : ''}`, Boolean(ko));
-    await loadAziende();
-    await loadStats();
+    sendBtn.onclick = () => { runner.abort(); };
+    await runner.start();
 }
 
 document.addEventListener('DOMContentLoaded', () => {

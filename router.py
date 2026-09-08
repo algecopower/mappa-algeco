@@ -755,6 +755,13 @@ def _admin_dispatch(path):
         return _admin_check() or _admin_proxy_simple(m.group(1), '/api/admin/smtp-settings', 'GET')
     if m and method == 'PUT':
         return _admin_check() or _admin_proxy_simple(m.group(1), '/api/admin/smtp-settings', 'PUT')
+    m = re.match(r'^api/provinces/([a-zA-Z0-9_]+)/smtp-test$', p)
+    if m and method == 'POST':
+        return _admin_check() or _admin_proxy_simple(m.group(1), '/api/admin/smtp-test', 'POST')
+    m = re.match(r'^api/provinces/([a-zA-Z0-9_]+)/smtp-test-email$', p)
+    if m and method == 'POST':
+        return _admin_check() or _admin_proxy_simple(m.group(1), '/api/admin/smtp-test-email', 'POST')
+
 
     m = re.match(r'^api/provinces/([a-zA-Z0-9_]+)/sms-settings$', p)
     if m and method == 'GET':

@@ -861,7 +861,7 @@ def sse_stream():
 # ============================================================================
 # GOOGLE SHEETS + HELPER  fonte unica: moduli/shared.py
 # ============================================================================
-from moduli.smtp import load_smtp_settings, save_smtp_settings
+from moduli.smtp import load_smtp_settings, save_smtp_settings, test_smtp_connection, test_send_email
 from moduli.sms_gateway import load_sms_settings, save_sms_settings, test_sms_gateway
 from moduli.shared import (
     get_worksheet, get_headers,
@@ -1459,6 +1459,108 @@ def admin_save_smtp_settings():
     except Exception as e:
         logger.exception('[admin] errore /api/admin/smtp-settings PUT')
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/admin/smtp-test', methods=['POST'])
+@admin_required
+def admin_test_smtp():
+    try:
+        data = request.get_json() or {}
+        settings = data.get('settings')
+        if not settings:
+            if 'host' in data or 'server' in data:
+                settings = data
+            else:
+                settings = load_smtp_settings(PROVINCIA_ATTIVA)
+        ok, msg = test_smtp_connection(settings)
+        return jsonify({'ok': ok, 'message': msg if ok else None, 'error': None if ok else msg})
+    except Exception as e:
+        logger.exception('[admin] errore /api/admin/smtp-test POST')
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/smtp-test-email', methods=['POST'])
+@admin_required
+def admin_test_smtp_email():
+    try:
+        data = request.get_json() or {}
+        test_email = (data.get('email') or data.get('recipient') or data.get('test_email') or '').strip()
+        if not test_email:
+            return jsonify({'ok': False, 'error': 'Indirizzo email di test mancante'}), 400
+
+        settings = data.get('settings')
+        if not settings:
+            if 'host' in data or 'server' in data:
+                settings = data
+            else:
+                settings = load_smtp_settings(PROVINCIA_ATTIVA)
+
+        ok, msg = test_send_email(settings, test_email, prov=PROVINCIA_ATTIVA)
+        return jsonify({'ok': ok, 'message': msg if ok else None, 'error': None if ok else msg})
+    except Exception as e:
+        logger.exception('[admin] errore /api/admin/smtp-test-email POST')
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/smtp-settings', methods=['GET'])
+@login_required
+def api_get_smtp_settings():
+    try:
+        settings = dict(load_smtp_settings(PROVINCIA_ATTIVA) or {})
+        settings['password_set'] = bool(settings.get('password'))
+        settings['password'] = ''
+        settings['provincia'] = PROVINCIA_ATTIVA
+        return jsonify(settings)
+    except Exception as e:
+        logger.exception('errore /api/smtp-settings GET')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/smtp-settings', methods=['PUT'])
+@login_required
+def api_save_smtp_settings():
+    try:
+        data = request.get_json() or {}
+        save_smtp_settings(data, PROVINCIA_ATTIVA)
+        return jsonify({'ok': True, 'message': 'Impostazioni SMTP salvate con successo'})
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        logger.exception('errore /api/smtp-settings PUT')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/smtp-test', methods=['POST'])
+@login_required
+def api_test_smtp():
+    try:
+        data = request.get_json() or {}
+        settings = data.get('settings') or data
+        if not settings or not settings.get('host'):
+            settings = load_smtp_settings(PROVINCIA_ATTIVA)
+        ok, msg = test_smtp_connection(settings)
+        return jsonify({'ok': ok, 'message': msg if ok else None, 'error': None if ok else msg}), (200 if ok else 400)
+    except Exception as e:
+        logger.exception('errore /api/smtp-test POST')
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/smtp-test-email', methods=['POST'])
+@login_required
+def api_test_smtp_email():
+    try:
+        data = request.get_json() or {}
+        test_email = (data.get('email') or data.get('recipient') or data.get('test_email') or '').strip()
+        if not test_email:
+            return jsonify({'ok': False, 'error': 'Indirizzo email di test mancante'}), 400
+        settings = data.get('settings') or data
+        if not settings or not settings.get('host'):
+            settings = load_smtp_settings(PROVINCIA_ATTIVA)
+        ok, msg = test_send_email(settings, test_email, prov=PROVINCIA_ATTIVA)
+        return jsonify({'ok': ok, 'message': msg if ok else None, 'error': None if ok else msg}), (200 if ok else 400)
+    except Exception as e:
+        logger.exception('errore /api/smtp-test-email POST')
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 @app.route('/api/admin/sms-settings', methods=['GET'])

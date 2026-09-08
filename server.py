@@ -862,6 +862,7 @@ def sse_stream():
 # GOOGLE SHEETS + HELPER  fonte unica: moduli/shared.py
 # ============================================================================
 from moduli.smtp import load_smtp_settings, save_smtp_settings
+from moduli.sms_gateway import load_sms_settings, save_sms_settings, test_sms_gateway
 from moduli.shared import (
     get_worksheet, get_headers,
     _api_error,
@@ -1458,6 +1459,69 @@ def admin_save_smtp_settings():
     except Exception as e:
         logger.exception('[admin] errore /api/admin/smtp-settings PUT')
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/admin/sms-settings', methods=['GET'])
+@admin_required
+def admin_get_sms_settings():
+    try:
+        settings = load_sms_settings(PROVINCIA_ATTIVA)
+        if settings.get('password'):
+            settings['password_set'] = True
+            settings['password'] = ''
+        else:
+            settings['password_set'] = False
+        if settings.get('api_key'):
+            settings['api_key_set'] = True
+            settings['api_key'] = ''
+        else:
+            settings['api_key_set'] = False
+        return jsonify(settings)
+    except Exception as e:
+        logger.exception('[admin] errore /api/admin/sms-settings GET')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/admin/sms-settings', methods=['PUT'])
+@admin_required
+def admin_save_sms_settings():
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Nessun dato ricevuto'}), 400
+        save_sms_settings(data, PROVINCIA_ATTIVA)
+        return jsonify({'ok': True})
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        logger.exception('[admin] errore /api/admin/sms-settings PUT')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/admin/sms-test', methods=['POST'])
+@admin_required
+def admin_test_sms():
+    try:
+        data = request.get_json() or {}
+        test_phone = (data.get('test_phone') or data.get('phone') or '').strip()
+        if not test_phone:
+            return jsonify({'ok': False, 'error': 'Numero di telefono test mancante'}), 400
+
+        # Usa impostazioni passate o caricate
+        settings = data.get('settings')
+        if not settings:
+            if 'provider' in data or 'endpoint_url' in data:
+                settings = data
+            else:
+                settings = load_sms_settings(PROVINCIA_ATTIVA)
+
+        ok, msg = test_sms_gateway(settings, test_phone, prov=PROVINCIA_ATTIVA)
+        return jsonify({'ok': ok, 'message': msg if ok else None, 'error': None if ok else msg})
+    except Exception as e:
+        logger.exception('[admin] errore /api/admin/sms-test POST')
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 
 @app.route('/api/admin/users', methods=['GET'])
 @admin_required

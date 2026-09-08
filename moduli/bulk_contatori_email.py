@@ -46,13 +46,21 @@ def build_nota_invio(tipo: str, data_intervento: str | None = None, data_oggi: d
     Costruisce la nota standard da scrivere sul DB.
     Es:
     - tipo='mail' o 'email': "18/08 mandata mail per 25/08" (o "18/08 mandata mail")
+    - tipo='sms': "18/08 mandato SMS per 25/08" (o "18/08 mandato SMS")
     - tipo='wa' o 'whatsapp': "18/08 mandato WA per 25/08" (o "18/08 mandato WA")
     """
     if data_oggi is None:
         data_oggi = datetime.date.today()
     oggi_str = f"{data_oggi.day:02d}/{data_oggi.month:02d}"
     
-    azione = "mandato WA" if str(tipo).lower() in ('wa', 'whatsapp', 'msg wa', 'mandato msg wa') else "mandata mail"
+    tipo_str = str(tipo).lower().strip()
+    if tipo_str in ('sms', 'mandato sms', 'sms gateway'):
+        azione = "mandato SMS"
+    elif tipo_str in ('wa', 'whatsapp', 'msg wa', 'mandato msg wa'):
+        azione = "mandato WA"
+    else:
+        azione = "mandata mail"
+
     data_breve = format_data_breve(data_intervento)
     
     if data_breve:

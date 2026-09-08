@@ -78,3 +78,14 @@ def test_server_cors_origins_includono_province_configurate(monkeypatch):
     server = importlib.import_module('server')
 
     assert 'https://lecco.mappa-algeco.com' in server._CORS_ORIGINS
+
+
+def test_router_serves_static_assets():
+    """Il router serve asset statici come sms_gateway_modal.js anche dall'host admin."""
+    import router
+
+    client = router.app.test_client()
+    res = client.get('/static/sms_gateway_modal.js', headers={'Host': 'admin.mappa-algeco.com'})
+    assert res.status_code == 200
+    assert 'SmsGatewayModal' in res.get_data(as_text=True)
+

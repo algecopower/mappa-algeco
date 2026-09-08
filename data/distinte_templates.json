@@ -240,6 +240,29 @@
             "label": "Comunicazione Polizia Municipale",
             "subject": "COMUNE DI {comune}: PREAVVISO ATTIVITÀ SOSTITUZIONE CONTATORI",
             "type": "email"
+        },
+        "sms_preavviso": {
+            "body": "Algeco Power per E-Distribuzione:\nin data {data} a {comune} e prevista sostituzione contatore per {nome}. Rispondere per conferma o tel. {telefono_tecnico}.",
+            "fields": [
+                "data",
+                "comune",
+                "nome",
+                "telefono_tecnico"
+            ],
+            "icon": "fas fa-sms",
+            "label": "SMS Preavviso Breve (1 SMS)",
+            "type": "sms"
+        },
+        "sms_promemoria": {
+            "body": "Algeco Power per E-Distribuzione:\ndomani {data} il tecnico {nome_operatore} (tel. {telefono_operatore}) sara presente per sostituzione contatore. Grazie.",
+            "fields": [
+                "data",
+                "nome_operatore",
+                "telefono_operatore"
+            ],
+            "icon": "fas fa-sms",
+            "label": "SMS Promemoria Tecnico",
+            "type": "sms"
         }
     },
     "snippets": {

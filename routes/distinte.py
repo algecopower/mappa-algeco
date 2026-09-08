@@ -32,6 +32,12 @@ from moduli.shared import (
     _callbacks, _get_username,
 )
 from moduli.smtp import load_smtp_settings, connect_smtp, save_to_sent, send_smtp_message
+from moduli.sms_gateway import (
+    load_sms_settings,
+    save_sms_settings,
+    send_sms,
+    test_sms_gateway,
+)
 from moduli.distinte_manager import (
     parse_pdf_auto,
     classifica_contatti,
@@ -731,6 +737,157 @@ def invia_singola_email():
     except Exception as e:
         logger.error(f"[EMAIL] Errore invio a {email_dest}: {e}")
         return jsonify({'ok': False, 'pod': contatto.get('pod', '?'), 'email': email_dest, 'errore': str(e)}), 500
+
+
+@bp.route('/api/distinte/sms-settings', methods=['GET'])
+@login_required
+def api_distinte_sms_settings():
+    """Restituisce la configurazione completa del gateway SMS per la provincia corrente."""
+    try:
+        settings = load_sms_settings(PROVINCIA_ATTIVA)
+        has_pwd = bool(settings.get('password'))
+        has_key = bool(settings.get('api_key'))
+        return jsonify({
+            'ok': True,
+            'enabled': bool(settings.get('enabled')),
+            'configured': bool(settings.get('endpoint_url')),
+            'provider': settings.get('provider', 'android_sms_gateway'),
+            'endpoint_url': settings.get('endpoint_url', ''),
+            'auth_type': settings.get('auth_type', 'none'),
+            'username': settings.get('username', ''),
+            'password_set': has_pwd,
+            'api_key_set': has_key,
+            'header_name': settings.get('header_name', 'X-API-Key'),
+            'rate_limit_delay': int(settings.get('rate_limit_delay', 4)),
+            'timeout_seconds': int(settings.get('timeout_seconds', 15)),
+        })
+    except Exception as e:
+        logger.error(f"[SMS] Errore lettura config distinte: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/distinte/sms-settings', methods=['PUT'])
+@login_required
+def api_distinte_save_sms_settings():
+    """Salva le impostazioni SMS Gateway per la provincia corrente direttamente dalla gestione distinte."""
+    try:
+        data = request.get_json() or {}
+        save_sms_settings(data, PROVINCIA_ATTIVA)
+        return jsonify({'ok': True, 'message': 'Impostazioni salvate con successo'})
+    except Exception as e:
+        logger.exception('[distinte] errore salvataggio sms-settings')
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/distinte/sms-test', methods=['POST'])
+@login_required
+def api_distinte_test_sms():
+    """Esegue un invio di prova SMS direttamente dalla gestione distinte."""
+    try:
+        data = request.get_json() or {}
+        test_phone = (data.get('test_phone') or data.get('phone') or '').strip()
+        if not test_phone:
+            return jsonify({'ok': False, 'error': 'Numero di telefono test mancante'}), 400
+
+        settings = data.get('settings')
+        if not settings:
+            if 'provider' in data or 'endpoint_url' in data:
+                settings = data
+            else:
+                settings = load_sms_settings(PROVINCIA_ATTIVA)
+
+        ok, msg = test_sms_gateway(settings, test_phone, prov=PROVINCIA_ATTIVA)
+        return jsonify({'ok': ok, 'message': msg if ok else None, 'error': None if ok else msg})
+    except Exception as e:
+        logger.exception('[distinte] errore /api/distinte/sms-test')
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/distinte/invia-singolo-sms', methods=['POST'])
+@login_required
+def invia_singolo_sms():
+    """
+    Invia un singolo SMS tramite SMS Gateway configurato.
+    Body: {
+        "template_id": str,
+        "contatto": {"pod": str, "telefono": str, "nome": str, ...},
+        "testo_sms": str
+    }
+    """
+    try:
+        data = request.get_json() or {}
+        contatto = data.get('contatto')
+        testo_sms = (data.get('testo_sms') or data.get('body_override') or data.get('testo') or '').strip()
+
+        if not contatto:
+            if data.get('telefono') or data.get('pod'):
+                contatto = {
+                    'pod': data.get('pod'),
+                    'telefono': data.get('telefono'),
+                    'nome': data.get('nome'),
+                    'data_pian_filone': data.get('data_pian_filone') or data.get('data'),
+                }
+            else:
+                return jsonify({'ok': False, 'errore': 'Contatto mancante', 'error': 'Contatto mancante'}), 400
+
+        if not testo_sms:
+            return jsonify({'ok': False, 'errore': 'Testo SMS vuoto', 'error': 'Testo SMS vuoto'}), 400
+
+        telefono = (contatto.get('telefono') or contatto.get('cellulare') or contatto.get('dest_telefono') or '').strip()
+        pod = contatto.get('pod', '?')
+
+        if not telefono:
+            return jsonify({'ok': False, 'pod': pod, 'errore': 'Numero di telefono mancante', 'error': 'Numero di telefono mancante'}), 400
+
+        settings = load_sms_settings(PROVINCIA_ATTIVA)
+        if not settings.get('enabled'):
+            return jsonify({'ok': False, 'pod': pod, 'errore': 'SMS Gateway disabilitato nelle impostazioni', 'error': 'SMS Gateway disabilitato nelle impostazioni'}), 400
+        if not settings.get('endpoint_url'):
+            return jsonify({'ok': False, 'pod': pod, 'errore': 'SMS Gateway non configurato', 'error': 'SMS Gateway non configurato'}), 400
+
+        ok, info, err = send_sms(telefono, testo_sms, settings=settings, prov=PROVINCIA_ATTIVA)
+        if not ok:
+            return jsonify({'ok': False, 'pod': pod, 'telefono': telefono, 'errore': err, 'error': err}), 500
+
+        username = _get_username()
+        c_data = contatto.get('data_intervento') or contatto.get('data_pian_filone')
+
+        # Registra nota sul DB locale (es. "18/08 mandato SMS per 25/08")
+        if pod and pod != '?':
+            nota_invio = build_nota_invio('sms', data_intervento=c_data)
+            registra_nota_su_db(pod, nota_invio, user=username, origin='distinte_invia_sms')
+
+        # Audit log su db locale se disponibile
+        try:
+            from moduli import db as _db
+            _db.record_audit_log(
+                action='send_sms',
+                table_name='filone',
+                record_id=pod,
+                user=username,
+                details={
+                    'telefono': telefono,
+                    'parts': info.get('parts', 1),
+                    'gateway_id': info.get('gateway_id', ''),
+                    'provider': info.get('provider', '')
+                }
+            )
+        except Exception:
+            pass
+
+        logger.info(f"[SMS] Inviato a {telefono} (POD {pod})")
+        return jsonify({
+            'ok': True,
+            'pod': pod,
+            'telefono': telefono,
+            'parts': info.get('parts', 1),
+            'parti_sms': info.get('parts', 1),
+            'gateway_id': info.get('gateway_id', ''),
+        })
+
+    except Exception as e:
+        logger.exception(f"[SMS] Errore invio: {e}")
+        return jsonify({'ok': False, 'pod': contatto.get('pod', '?') if isinstance(contatto, dict) else '?', 'errore': str(e)}), 500
 
 
 @bp.route('/api/distinte/parse-distinta', methods=['POST'])

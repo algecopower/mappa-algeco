@@ -38,13 +38,14 @@ import threading
 from urllib.parse import quote, urlparse
 
 import requests
-from flask import Flask, request, Response, jsonify, redirect
+from flask import Flask, request, Response, jsonify, redirect, send_from_directory
 
 # ============================================================================
 # CONFIGURAZIONE
 # ============================================================================
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROVINCES_FILE = os.path.join(SCRIPT_DIR, 'data', 'provinces.json')
+STATIC_DIR = os.path.join(SCRIPT_DIR, 'static')
 ROUTER_PORT = int(os.environ.get('ROUTER_PORT', 5050))
 ROUTER_HOST = os.environ.get('ROUTER_HOST', '127.0.0.1')
 
@@ -696,6 +697,12 @@ def _admin_dispatch(path):
     p = path.strip('/')
     method = request.method
 
+    # 0. Asset statici (JS/CSS/favicons condivisi)
+    if p.startswith('static/'):
+        return send_from_directory(STATIC_DIR, p[7:])
+    if p in ('favicon.ico', 'favicon.svg'):
+        return send_from_directory(STATIC_DIR, p)
+
     # 1. UI (HTML)
     if p == '' or p == 'index.html':
         guard = _require_admin_or_redirect()
@@ -748,6 +755,16 @@ def _admin_dispatch(path):
         return _admin_check() or _admin_proxy_simple(m.group(1), '/api/admin/smtp-settings', 'GET')
     if m and method == 'PUT':
         return _admin_check() or _admin_proxy_simple(m.group(1), '/api/admin/smtp-settings', 'PUT')
+
+    m = re.match(r'^api/provinces/([a-zA-Z0-9_]+)/sms-settings$', p)
+    if m and method == 'GET':
+        return _admin_check() or _admin_proxy_simple(m.group(1), '/api/admin/sms-settings', 'GET')
+    if m and method == 'PUT':
+        return _admin_check() or _admin_proxy_simple(m.group(1), '/api/admin/sms-settings', 'PUT')
+    m = re.match(r'^api/provinces/([a-zA-Z0-9_]+)/sms-test$', p)
+    if m and method == 'POST':
+        return _admin_check() or _admin_proxy_simple(m.group(1), '/api/admin/sms-test', 'POST')
+
 
     m = re.match(r'^api/provinces/([a-zA-Z0-9_]+)/import-excel$', p)
     if m and method == 'POST':

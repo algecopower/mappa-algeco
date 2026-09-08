@@ -4,6 +4,9 @@ users.json
 .flask_secret_key
 credenziali_utenti_*.txt
 data/smtp_settings.json
+data/*/smtp_settings.json
+data/sms_settings.json
+data/*/sms_settings.json
 
 # Python
 __pycache__/

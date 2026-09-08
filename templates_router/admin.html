@@ -18,6 +18,7 @@
     if (t) document.documentElement.setAttribute('data-theme', t);
   })();
 </script>
+<script src="/static/sms_gateway_modal.js"></script>
 <style>
   /* ============================================================
      Palette e token solidi allineati a /static/theme.css.
@@ -346,6 +347,22 @@
     padding: 20px;
   }
   .modal.open { display: flex; }
+  .sms-modal-overlay {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    background: rgba(0, 0, 0, 0.65) !important;
+    display: none !important;
+    justify-content: center !important;
+    align-items: center !important;
+    z-index: 10000 !important;
+    padding: 20px !important;
+    box-sizing: border-box !important;
+  }
+  .sms-modal-overlay.sms-modal-open {
+    display: flex !important;
+  }
   .modal-content {
     background: var(--surface-raised);
     border: var(--surface-border);
@@ -446,6 +463,66 @@
   .form-group input[readonly] {
     opacity: 0.6;
     cursor: not-allowed;
+  }
+  .sms-test-input {
+    flex: 1;
+    min-width: 0;
+    box-sizing: border-box;
+    height: 40px;
+    padding: 9px 12px;
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 14px;
+    font-family: inherit;
+    line-height: 1.4;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+  }
+  .sms-test-input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.25);
+  }
+  .sms-test-input::placeholder {
+    color: var(--text-muted);
+    opacity: 0.7;
+  }
+  .sms-test-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    white-space: nowrap;
+    height: 40px;
+    padding: 0 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: inherit;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    line-height: 1;
+    text-decoration: none;
+    box-shadow: none;
+    transform: none;
+    transition: all 0.15s ease;
+  }
+  .sms-test-btn:hover:not(:disabled) {
+    background: var(--surface);
+    border-color: var(--accent);
+    color: var(--text-primary);
+    box-shadow: 0 2px 6px var(--shadow, rgba(0, 0, 0, 0.2));
+  }
+  .sms-test-btn:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+  .sms-test-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
   }
   .form-row { display: flex; gap: 12px; }
   .form-row .form-group { flex: 1; }
@@ -1418,6 +1495,7 @@ function rendiGrid(province) {
       <div class="actions">
         ${actionsHtml}
         <button class="btn secondary" onclick='apriSmtpSettings("${p.slug}")' title="Configura credenziali SMTP">📧 SMTP</button>
+        <button class="btn secondary" onclick='apriSmsSettings("${p.slug}")' title="Configura SMS Gateway">📱 SMS Gateway</button>
         <button class="btn secondary" onclick='apriFormModifica(${JSON.stringify(p).replace(/'/g, "&apos;")})' title="Modifica configurazione (deposito, orari…)">✏️ Modifica</button>
         <button class="btn danger" onclick="elimina('${p.slug}')" title="Elimina la provincia">🗑️</button>
       </div>

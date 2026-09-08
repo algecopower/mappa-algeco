@@ -1088,6 +1088,26 @@
             display: flex;
         }
 
+        .sms-modal-overlay {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            background: rgba(0, 0, 0, 0.65) !important;
+            z-index: 99999 !important;
+            display: none !important;
+            align-items: center !important;
+            justify-content: center !important;
+            padding: 20px !important;
+            box-sizing: border-box !important;
+        }
+        .sms-modal-overlay.sms-modal-open {
+            display: flex !important;
+        }
+
         .modal {
             background: var(--bg-card);
             border-radius: 12px;
@@ -1860,9 +1880,72 @@
         }
         .var-badge:active { cursor: grabbing; }
 
+        /* SMS Test Phone Input & Button */
+        .sms-test-input {
+            flex: 1;
+            min-width: 0;
+            box-sizing: border-box;
+            height: 40px;
+            padding: 9px 12px;
+            background-color: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 14px;
+            font-family: inherit;
+            line-height: 1.4;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+        }
+        .sms-test-input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.25);
+        }
+        .sms-test-input::placeholder {
+            color: var(--text-muted);
+            opacity: 0.7;
+        }
+        .sms-test-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            white-space: nowrap;
+            height: 40px;
+            padding: 0 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            font-family: inherit;
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+            cursor: pointer;
+            line-height: 1;
+            text-decoration: none;
+            box-shadow: none;
+            transform: none;
+            transition: all 0.15s ease;
+        }
+        .sms-test-btn:hover:not(:disabled) {
+            background: var(--surface);
+            border-color: var(--accent);
+            color: var(--text-primary);
+            box-shadow: 0 2px 6px var(--shadow, rgba(0, 0, 0, 0.2));
+        }
+        .sms-test-btn:active:not(:disabled) {
+            transform: translateY(1px);
+        }
+        .sms-test-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
     </style>
     <script src="/static/csrf.js"></script>
     <script src="/static/bulk-email-preview.js?v=20260907_1"></script>
+    <script src="/static/sms_gateway_modal.js"></script>
 </head>
 <body>
     <script>
@@ -1884,12 +1967,42 @@
                 </h1>
                 <span class="provincia-badge" id="provinciaBadge">TORINO</span>
             </div>
-            <div>
+            <div style="display: flex; gap: 8px; align-items: center;">
+                <button class="btn" id="headerSmsConfigBtn" style="background: var(--bg-dark); border: 1px solid var(--border); color: var(--text); display: inline-flex; align-items: center; gap: 6px;" onclick="apriDistinteSmsConfigModal()" title="Configura Gateway SMS">
+                    <i class="fas fa-sms" style="color: #10b981;"></i>
+                    <span>Gateway SMS</span>
+                    <span id="headerSmsStatusBadge" style="display:none; font-size: 0.72rem; padding: 2px 6px; border-radius: 4px; font-weight: 700;"></span>
+                </button>
                 <button class="btn" style="background: var(--bg-dark); border: 1px solid var(--border); color: var(--text);" onclick="openTemplateEditor()">
                     <i class="fas fa-edit"></i> Gestione Template
                 </button>
             </div>
         </header>
+
+        <!-- Banner Invito Configurazione SMS se non ancora configurato -->
+        <div id="smsUnconfiguredNotice" style="display: none; background: linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(16, 185, 129, 0.12)); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 10px; padding: 12px 18px; margin-bottom: 20px; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <div style="width: 38px; height: 38px; border-radius: 50%; background: linear-gradient(135deg, #f59e0b, #d97706); color: white; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0; box-shadow: 0 2px 6px rgba(245, 158, 11, 0.3);">
+                    <i class="fas fa-comment-sms"></i>
+                </div>
+                <div>
+                    <div style="font-weight: 700; color: var(--text); font-size: 0.95rem;">
+                        Configurazione SMS non ancora eseguita
+                    </div>
+                    <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 2px;">
+                        Collega uno smartphone Android (app SMS Gateway) per abilitare l'invio degli SMS ai clienti.
+                    </div>
+                </div>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center;">
+                <button type="button" class="btn btn-primary" onclick="apriDistinteSmsConfigModal()" style="background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; font-weight: 600; padding: 8px 16px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                    <i class="fas fa-cog"></i> Configura Ora
+                </button>
+                <button type="button" onclick="nascondiSmsNotice()" title="Nascondi per questa sessione" style="background: transparent; border: none; color: var(--text-muted); font-size: 1.3rem; cursor: pointer; padding: 2px 8px; line-height: 1;">
+                    &times;
+                </button>
+            </div>
+        </div>
 
         <!-- Upload Section -->
         <div class="upload-section" id="uploadSection">
@@ -1986,7 +2099,13 @@
 
                 <button class="bulk-email-btn" id="bulkEmailBtn" onclick="apriBulkEmailModal()" disabled>
                     <i class="fas fa-paper-plane"></i>
-                    Invio Multiplo (Mail/WA)
+                    Invio Multiplo Email
+                </button>
+
+                <button class="bulk-email-btn" id="bulkSmsBtn" onclick="apriBulkSmsModal()" disabled
+                        style="background: linear-gradient(135deg, #10b981, #059669);">
+                    <i class="fas fa-sms"></i>
+                    Invio Multiplo SMS
                 </button>
 
                 <button class="bulk-email-btn" id="aiSearchBtn" onclick="apriAiSearchModal()" disabled
@@ -2172,7 +2291,7 @@
             <div class="modal-header">
                 <h3>
                     <i class="fas fa-paper-plane" style="color: var(--info)"></i>
-                    <span>Invio Multiplo (Mail/WA)</span>
+                    <span>Invio Multiplo Email</span>
                 </h3>
                 <button class="modal-close" onclick="chiudiBulkEmailModal()">&times;</button>
             </div>
@@ -2249,6 +2368,104 @@
         </div>
     </div>
 
+    <!-- MODALE INVIO MULTIPLO SMS -->
+    <div class="modal-overlay bulk-email-modal" id="bulkSmsModal">
+        <div class="modal" style="max-width: 860px;">
+            <div class="modal-header">
+                <h3>
+                    <i class="fas fa-sms" style="color: #10b981"></i>
+                    <span>Invio Multiplo SMS</span>
+                </h3>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <button type="button" class="btn" onclick="apriDistinteSmsConfigModal()" style="font-size:0.75rem;padding:5px 10px;background:var(--card-bg, var(--bg-dark));border:1px solid var(--border);color:var(--text);display:inline-flex;align-items:center;gap:5px;cursor:pointer;border-radius:6px;" title="Modifica impostazioni gateway SMS">
+                        <i class="fas fa-cog" style="color:#10b981;"></i> Impostazioni Gateway
+                    </button>
+                    <button class="modal-close" onclick="chiudiBulkSmsModal()">&times;</button>
+                </div>
+            </div>
+            <div class="modal-body">
+                <!-- Gateway Status Banner -->
+                <div id="bulkSmsGatewayStatus" style="padding:10px 14px;border-radius:8px;background:var(--card-bg, #1e293b);border:1px solid var(--border, #334155);margin-bottom:14px;font-size:0.9rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+                    <div style="display:flex;align-items:center;gap:8px;" id="bulkSmsStatusText">
+                        <i class="fas fa-spinner fa-spin" style="color:var(--text-muted)"></i>
+                        <span>Verifica stato SMS Gateway...</span>
+                    </div>
+                </div>
+
+                <!-- Template Selection and Delay -->
+                <div style="display:grid;grid-template-columns: 1fr 1fr;gap:12px;margin-bottom:12px;" class="bulk-sms-config-row">
+                    <div>
+                        <label style="font-size:0.85rem;font-weight:600;color:var(--text-muted);margin-bottom:4px;display:block;">Template messaggio:</label>
+                        <select class="bulk-template-select" id="bulkSmsTemplateSelect" onchange="onBulkSmsTemplateChange()" style="width:100%;">
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size:0.85rem;font-weight:600;color:var(--text-muted);margin-bottom:4px;display:block;">Pausa tra invii (secondi anti-flood):</label>
+                        <input type="number" id="bulkSmsDelaySec" min="1" max="60" value="4" style="width:100%;padding:8px 12px;border-radius:6px;border:1px solid var(--border);background:var(--input-bg, #0f172a);color:var(--text);">
+                    </div>
+                </div>
+
+                <!-- Messaggio Textarea & Real-time SMS Counter -->
+                <div style="margin-bottom:14px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                        <label style="font-size:0.85rem;font-weight:600;color:var(--text-muted);">
+                            Testo SMS (con segnaposto automatici es. {nome}, {data}, {comune}):
+                        </label>
+                        <div id="bulkSmsCharCount" style="font-size:0.8rem;font-weight:bold;color:var(--text-muted);background:var(--bg);padding:2px 8px;border-radius:4px;border:1px solid var(--border);">
+                            0 car | 0 SMS
+                        </div>
+                    </div>
+                    <textarea id="bulkSmsMessageText" rows="4" oninput="aggiornaSmsCharCounter()"
+                              style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--input-bg, #0f172a);color:var(--text);font-family:inherit;font-size:0.9rem;resize:vertical;"></textarea>
+                    <div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px;">
+                        <span>Segnaposto: <code>{nome}</code>, <code>{data}</code>, <code>{comune}</code>, <code>{indirizzo}</code>, <code>{pod}</code>, <code>{telefono_tecnico}</code></span>
+                        <span id="bulkSmsEncodingNote" style="color:var(--text-muted);">GSM-7 (160 car/SMS)</span>
+                    </div>
+                </div>
+
+                <!-- Filters and Selection -->
+                <div class="bulk-filter-row">
+                    <label class="bulk-select-all" style="margin:0;display:flex;align-items:center;gap:6px;">
+                        <input type="checkbox" id="bulkSmsSelectAll" onchange="toggleBulkSmsSelectAll(this.checked)" checked>
+                        <strong>Seleziona tutti</strong> (<span id="bulkSmsCount">0 contatti</span>)
+                    </label>
+                    <div class="bulk-filter-presets" id="distinteSmsPresets">
+                        <span style="color:var(--text-muted);font-size:0.8rem;font-weight:600;">Filtri rapidi:</span>
+                        <button type="button" class="btn-preset active" id="smsPreset_tutti" onclick="applySmsPreset('tutti')">Tutti</button>
+                        <button type="button" class="btn-preset" id="smsPreset_monofase" onclick="applySmsPreset('monofase')">Monofase</button>
+                        <button type="button" class="btn-preset" id="smsPreset_trifase" onclick="applySmsPreset('trifase')">Trifase</button>
+                        <button type="button" class="btn-preset" id="smsPreset_semidiretta" onclick="applySmsPreset('semidiretta')">Semidiretta</button>
+                        <button type="button" class="btn-preset" id="smsPreset_con_note" onclick="applySmsPreset('con_note')"><i class="fas fa-sticky-note" style="color:#f59e0b;font-size:0.75rem;"></i> Con Note</button>
+                        <button type="button" class="btn-preset" id="smsPreset_senza_note" onclick="applySmsPreset('senza_note')">Senza Note</button>
+                    </div>
+                </div>
+
+                <!-- Contacts List -->
+                <div class="bulk-contacts-list" id="bulkSmsContactsList" style="max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:8px;margin-bottom:12px;"></div>
+
+                <!-- Progress Section -->
+                <div class="bulk-progress" id="bulkSmsProgress" style="display:none;margin-bottom:12px;">
+                    <div style="font-weight:600;margin-bottom:6px;"><i class="fas fa-spinner fa-spin"></i> Invio in corso...</div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="bulkSmsProgressFill" style="width:0%;background:linear-gradient(135deg, #10b981, #059669);"></div>
+                    </div>
+                    <div id="bulkSmsProgressText" style="font-size:0.85rem;color:var(--text-muted);margin-top:4px;">0 / 0</div>
+                </div>
+
+                <!-- Results Log -->
+                <div class="bulk-results" id="bulkSmsResults" style="display:none;margin-bottom:12px;"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="chiudiBulkSmsModal()">Chiudi</button>
+                <button class="btn btn-primary" id="bulkSmsSendBtn" onclick="inviaSmsBulk()"
+                        style="background: linear-gradient(135deg, #10b981, #059669); color: white;">
+                    <i class="fas fa-sms"></i>
+                    Invia SMS Multipli
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Stato applicazione
         let contatti = [];
@@ -2280,6 +2497,8 @@
             await caricaTemplates();
             // Carica info allegati disponibili
             await caricaAllegatiInfo();
+            // Carica stato gateway SMS e controlla se configurato
+            await caricaStatoSmsGateway();
         }
 
         // Gestione upload file
@@ -2508,15 +2727,25 @@
             document.getElementById('countCompleted').textContent = totalCompleted + '/' + contatti.length;
             document.getElementById('countAzienda').textContent = contatti.filter(c => c.is_azienda).length;
 
-            // Abilita/disabilita pulsante invio multiplo (Mail/WA)
-            const conMailWa = contatti.filter(c => {
-                const hasEmail = (c.email_filone || '').trim() !== '';
-                const hasTel = (c.telefono || '').trim() !== '' || (c.numeri_alternativi && c.numeri_alternativi.length > 0);
-                return hasEmail || hasTel;
-            });
+            // Abilita/disabilita pulsante invio multiplo Email
+            const conEmail = contatti.filter(c => (c.email_filone || '').trim() !== '');
             const bulkBtn = document.getElementById('bulkEmailBtn');
-            bulkBtn.disabled = conMailWa.length === 0;
-            bulkBtn.title = conMailWa.length > 0 ? `${conMailWa.length} contatti validi (Mail o WA)` : 'Nessun contatto valido per l\'invio';
+            if (bulkBtn) {
+                bulkBtn.disabled = conEmail.length === 0;
+                bulkBtn.title = conEmail.length > 0 ? `${conEmail.length} contatti con email` : 'Nessun contatto con email valido';
+            }
+
+            // Abilita/disabilita pulsante invio multiplo SMS
+            const conCellulare = contatti.filter(c => {
+                if (c.tipo === 'cellulare' && (c.telefono || '').trim()) return true;
+                if (c.numeri_alternativi && c.numeri_alternativi.some(n => n.tipo === 'cellulare' && (n.numero || '').trim())) return true;
+                return false;
+            });
+            const smsBtn = document.getElementById('bulkSmsBtn');
+            if (smsBtn) {
+                smsBtn.disabled = conCellulare.length === 0;
+                smsBtn.title = conCellulare.length > 0 ? `${conCellulare.length} contatti con cellulare per SMS` : 'Nessun contatto con cellulare';
+            }
 
             // Abilita/disabilita pulsante AI search (solo società)
             const numSocieta = contatti.filter(c => c.is_azienda).length;
@@ -4148,28 +4377,26 @@
                 return;
             }
 
-            // Filtra contatti che hanno email o telefono
+            // Filtra contatti che hanno email
             const contattiValidi = ordinaContattiPerNominativo(
                 contatti.filter(c => {
-                    const hasEmail = (c.email_filone || '').trim() !== '';
-                    const hasTel = (c.telefono || '').trim() !== '' || (c.numeri_alternativi && c.numeri_alternativi.length > 0);
-                    return hasEmail || hasTel;
+                    return (c.email_filone || '').trim() !== '';
                 })
             );
 
             if (contattiValidi.length === 0) {
-                showToast('Nessun contatto valido per l\'invio (no email/telefono)', 'error');
+                showToast('Nessun contatto valido per l\'invio (nessuna email presente)', 'error');
                 return;
             }
 
-            // Popola template select (email e whatsapp)
+            // Popola template select (solo email)
             const select = document.getElementById('bulkTemplateSelect');
             select.innerHTML = '';
             for (const [id, tmpl] of Object.entries(TEMPLATES)) {
-                if (tmpl.type === 'email' || tmpl.type === 'whatsapp') {
+                if (tmpl.type === 'email') {
                     const opt = document.createElement('option');
                     opt.value = id;
-                    opt.textContent = `[${tmpl.type.toUpperCase()}] ${tmpl.label}`;
+                    opt.textContent = tmpl.label || id;
                     select.appendChild(opt);
                 }
             }
@@ -4189,41 +4416,21 @@
             const templateId = document.getElementById('bulkTemplateSelect').value;
             const template = TEMPLATES[templateId];
             if (!template) return;
-            const isWhatsapp = template.type === 'whatsapp';
 
             const righe = [];
             for (const c of baseContacts) {
-                if (isWhatsapp) {
-                    let tel = c.telefono || '';
-                    if (!tel && c.numeri_alternativi && c.numeri_alternativi.length > 0) {
-                        const primoCell = c.numeri_alternativi.find(n => n.tipo === 'cellulare');
-                        if (primoCell) tel = primoCell.numero;
-                    }
-                    if (tel) {
+                if (c.email_filone) {
+                    const emails = splitEmails(c.email_filone);
+                    for (const em of emails) {
                         righe.push({
                             pod: c.pod,
-                            email: tel, // Riusiamo il campo per visualizzazione/logica comune
-                            pec: false,
+                            email: em.email,
+                            pec: em.pec,
                             nome: c.nome || 'N/D',
                             nota: testoNotaContatto(c),
                             contatto: c,
-                            tipo: 'wa'
+                            tipo: 'email'
                         });
-                    }
-                } else {
-                    if (c.email_filone) {
-                        const emails = splitEmails(c.email_filone);
-                        for (const em of emails) {
-                            righe.push({
-                                pod: c.pod,
-                                email: em.email,
-                                pec: em.pec,
-                                nome: c.nome || 'N/D',
-                                nota: testoNotaContatto(c),
-                                contatto: c,
-                                tipo: 'email'
-                            });
-                        }
                     }
                 }
             }
@@ -4257,12 +4464,7 @@
                             <i class="fas fa-sticky-note"></i> <span>${escapeHtml(r.nota)}</span>
                         </div>
                     ` : '';
-                    let destHtml = '';
-                    if (r.tipo === 'wa') {
-                        destHtml = `<div class="bulk-contact-email">${escapeHtml(r.email)} <span class="pec-badge" style="background:#25D366"><i class="fab fa-whatsapp"></i> WA</span></div>`;
-                    } else {
-                        destHtml = `<div class="bulk-contact-email">${escapeHtml(r.email)}${r.pec ? '<span class="pec-badge">PEC</span>' : '<span class="pec-badge" style="background:var(--info)">MAIL</span>'}</div>`;
-                    }
+                    const destHtml = `<div class="bulk-contact-email">${escapeHtml(r.email)}${r.pec ? '<span class="pec-badge">PEC</span>' : '<span class="pec-badge" style="background:var(--info)">MAIL</span>'}</div>`;
                     return `
                     <div class="bulk-contact-item ${r.pec ? 'is-pec' : ''}" data-is-pec="${r.pec}">
                         <input type="checkbox" class="bulk-contact-check" data-pod="${r.pod}" data-email="${escapeHtml(r.email)}" data-pec="${r.pec}" data-tipo="${r.tipo}" data-tipoce="${escapeHtml(tipoCe)}" data-hasnote="${Boolean(r.nota)}" data-idx="${i}" ${r.pec ? '' : 'checked'}>
@@ -4279,26 +4481,15 @@
                     `;
                 }).join('');
 
-                if (isWhatsapp) {
-                    document.getElementById('bulkEmailCount').textContent = `${numNormali} numeri validi`;
-                    document.getElementById('bulkPecCount').textContent = '';
-                    const bp = document.getElementById('distinteBulkPresets');
-                    if (bp) bp.style.display = 'none';
-                } else {
-                    document.getElementById('bulkEmailCount').textContent = `${numNormali} mail` + (numPec > 0 ? `, ${numPec} PEC` : '');
-                    document.getElementById('bulkPecCount').textContent = numPec > 0 ? `${numPec} PEC presenti` : '';
-                    const bp = document.getElementById('distinteBulkPresets');
-                    if (bp) bp.style.display = 'flex';
-                }
+                document.getElementById('bulkEmailCount').textContent = `${numNormali} mail` + (numPec > 0 ? `, ${numPec} PEC` : '');
+                document.getElementById('bulkPecCount').textContent = numPec > 0 ? `${numPec} PEC presenti` : '';
+                const bp = document.getElementById('distinteBulkPresets');
+                if (bp) bp.style.display = 'flex';
             }
 
             if (righe.length > 0) {
                 document.getElementById('bulkSelectAll').checked = true;
-                if (!isWhatsapp) {
-                    applyDistinteBulkPreset('solo_mail');
-                } else {
-                    applyDistinteBulkPreset('tutti');
-                }
+                applyDistinteBulkPreset('solo_mail');
             }
 
             // Reset progress/results
@@ -4442,8 +4633,7 @@
             const selectedRaw = [];
             checkboxes.forEach(cb => {
                 const pod = cb.dataset.pod;
-                const destAddr = cb.dataset.email; 
-                const isWhatsapp = cb.dataset.tipo === 'wa';
+                const destAddr = cb.dataset.email;
                 const contatto = contatti.find(c => c.pod === pod);
                 if (!contatto || !destAddr) return;
 
@@ -4468,9 +4658,8 @@
                     contattoOriginale: contatto,
                     contatto: contattoData,
                     destAddr: destAddr,
-                    isWhatsapp: isWhatsapp,
                     note: testoNotaContatto(contatto),
-                    allegatiDefault: isWhatsapp ? [] : getAllegatiDefault(contatto.tipologia_contatore || ''),
+                    allegatiDefault: getAllegatiDefault(contatto.tipologia_contatore || ''),
                 });
             });
 
@@ -4479,12 +4668,8 @@
                 return;
             }
 
-            // Raggruppa per destinatario / azienda se email
+            // Raggruppa per destinatario / azienda
             const grouped = BulkEmailPreview.groupContattiPerAzienda(selectedRaw, item => {
-                if (item.isWhatsapp) {
-                    // WhatsApp: singolo per numero
-                    return `WA__${item.destAddr}__${item.contatto.pod}`;
-                }
                 const nom = (item.contatto.nome || item.contatto.nome_societa || '').trim().toUpperCase();
                 const em = (item.destAddr || '').trim().toLowerCase();
                 const com = (item.contatto.comune || '').trim().toUpperCase();
@@ -4495,32 +4680,24 @@
             grouped.forEach(group => {
                 const first = group[0];
                 const contatoriList = group.map(g => g.contatto);
-                const isWhatsapp = first.isWhatsapp;
 
-                const content = isWhatsapp
-                    ? {
-                        subject: '',
-                        bodyText: tmpl.generate(first.contatto, {}),
-                        excelFilename: null,
-                    }
-                    : BulkEmailPreview.buildPluralContent(tmpl, contatoriList, FIELD_DEFS, emailTecnico, telefonoTecnico);
+                const content = BulkEmailPreview.buildPluralContent(tmpl, contatoriList, FIELD_DEFS, emailTecnico, telefonoTecnico);
 
                 const allegatiSet = new Set(first.allegatiDefault || []);
-                if (content.excelFilename && !isWhatsapp) {
+                if (content.excelFilename) {
                     allegatiSet.add(content.excelFilename);
                 }
 
                 bulkPreviews.push({
                     pod: contatoriList.length === 1 ? (first.contatto.pod || '') : `${contatoriList.length} POD`,
                     email: first.destAddr,
-                    isWhatsapp: isWhatsapp,
                     nome: first.contatto.nome || 'N/D',
                     subject: content.subject,
                     bodyHtml: content.bodyText,
                     contatto: first.contatto,
                     contatori: contatoriList,
                     note: group.map(g => g.note).filter(Boolean).join(' | '),
-                    allegati: isWhatsapp ? [] : Array.from(allegatiSet),
+                    allegati: Array.from(allegatiSet),
                     edited: false
                 });
             });
@@ -4545,12 +4722,7 @@
             document.getElementById('bulkSendBtn').style.display = '';
         }
 
-        function convertHtmlToWhatsApp(html) {
-            return BulkEmailPreview.convertHtmlToWhatsApp(html);
-        }
-
-        function buildMessageHtml(bodyText, isWhatsapp) {
-            if (isWhatsapp) return (bodyText || '').replace(/\n/g, '<br>');
+        function buildMessageHtml(bodyText) {
             const pk = (provincia || window.provincia || (window.BulkEmailPreview && BulkEmailPreview.getDetectedProvince()) || 'TORINO').toUpperCase();
             const provSettings = (templateSettings.province && templateSettings.province[pk]) || {};
             const emailTecnico = provSettings.email || templateSettings['email_' + pk.toLowerCase()] || templateSettings.email_tecnico || `tecnico_${pk.toLowerCase()}@algecopower.it`;
@@ -4563,7 +4735,7 @@
             const container = document.getElementById('bulkPreviewCards');
             const tuttiAllegati = allegatiDisponibili || [];
             container.innerHTML = bulkPreviews.map((p, i) => {
-                const renderedHtml = buildMessageHtml(p.bodyHtml, p.isWhatsapp);
+                const renderedHtml = buildMessageHtml(p.bodyHtml);
                 const allegatiHtml = BulkEmailPreview.renderAllegatiList(p.allegati || [], i, tuttiAllegati, 'rimuoviAllegato', 'aggiungiAllegato');
                 const numContatori = (p.contatori && p.contatori.length) || 1;
                 const contatoriBadge = numContatori > 1 ? `<span class="badge" style="background:#6366f1;font-weight:700;margin-left:6px;white-space:nowrap;flex-shrink:0;">${numContatori} contatori</span>` : '';
@@ -4577,13 +4749,13 @@
                     </span>
                 ` : '';
                 
-                const subjectRow = p.isWhatsapp ? '' : `
+                const subjectRow = `
                     <div class="preview-field-label">Oggetto:</div>
                     <input type="text" class="preview-subject-input" id="previewSubject${i}"
                            value="${escapeHtml(p.subject)}"
                            oninput="segnaModificata(${i})">
                 `;
-                const allegatiRow = p.isWhatsapp ? '' : `
+                const allegatiRow = `
                     <div class="preview-allegati-section" id="previewAllegati${i}">
                         <div class="preview-field-label" style="margin-top:10px;">
                             <i class="fas fa-paperclip"></i> Allegati:
@@ -4599,7 +4771,6 @@
                         <span class="preview-dest">
                             <span class="preview-dest-text">${escapeHtml(p.nome)} — ${escapeHtml(p.email)}</span>
                             ${contatoriBadge}
-                            ${p.isWhatsapp ? '<i class="fab fa-whatsapp" style="color:#25D366;margin-left:5px;"></i>' : ''}
                         </span>
                         ${notaHtml}
                         ${podText ? `<span class="preview-pod">${podText}</span>` : ''}
@@ -4688,7 +4859,7 @@
             const isEditing = editorContainer.style.display === 'block';
             if (isEditing) {
                 // Switch back to rendered view — re-render with edits
-                rendered.innerHTML = buildMessageHtml(editor.innerHTML, bulkPreviews[idx].isWhatsapp);
+                rendered.innerHTML = buildMessageHtml(editor.innerHTML);
                 rendered.style.display = '';
                 editorContainer.style.display = 'none';
                 btn.innerHTML = '<i class="fas fa-pen"></i> Modifica testo';
@@ -4733,9 +4904,6 @@
                 showToast('Seleziona un template', 'error');
                 return;
             }
-            
-            const templateObj = TEMPLATES[templateId];
-            const isWhatsapp = templateObj && templateObj.type === 'whatsapp';
 
             // Read from preview data (including edits from textareas/inputs)
             if (bulkPreviews.length === 0) {
@@ -4762,8 +4930,7 @@
             const avgPause = 90;
             const tempoStimato = Math.ceil(selezionati.length * avgPause / 60);
             
-            let actionName = isWhatsapp ? 'messaggi WhatsApp' : 'email';
-            if (!confirm(`Stai per inviare ${selezionati.length} ${actionName} con il template "${document.getElementById('bulkTemplateSelect').selectedOptions[0].textContent}".\n\nPausa random (1-2 minuti) tra ogni invio per evitare blocchi spam.\nTempo stimato: ~${tempoStimato} min.\n\nConfermi l'invio?`)) {
+            if (!confirm(`Stai per inviare ${selezionati.length} email con il template "${document.getElementById('bulkTemplateSelect').selectedOptions[0].textContent}".\n\nPausa random (1-2 minuti) tra ogni invio per evitare blocchi spam.\nTempo stimato: ~${tempoStimato} min.\n\nConfermi l'invio?`)) {
                 return;
             }
 
@@ -4797,56 +4964,40 @@
                 }
 
                 const c = selezionati[i];
-                const identifierText = isWhatsapp ? 'WA' : 'Email';
 
-                // Aggiorna progress bar (senza il testo di attesa per ora)
+                // Aggiorna progress bar
                 document.getElementById('bulkProgressText').textContent =
-                    `${i + 1} / ${selezionati.length} — Invio ${identifierText} in corso...`;
+                    `${i + 1} / ${selezionati.length} — Invio email in corso...`;
                 document.getElementById('bulkProgressFill').style.width =
                     `${Math.round(((i + 1) / selezionati.length) * 100)}%`;
 
                 try {
-                    if (isWhatsapp) {
-                        // Logica WhatsApp: formattare url e aprire tab
-                        const digits = c.email.replace(/[^\d]/g, '').replace(/^39/, '');
-                        const waNumero = '39' + digits;
-                        const finalTxt = convertHtmlToWhatsApp(c.body_override);
-                        const waUrl = `https://web.whatsapp.com/send?phone=${waNumero}&text=${finalTxt}`;
-                        
-                        window.open(waUrl, '_blank');
-                        
+                    const resp = await fetch('/api/distinte/invia-singola-email', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            template_id: templateId,
+                            contatto: c,
+                            contatori: c.contatori,
+                            subject_override: c.subject_override || undefined,
+                            body_override: c.body_override || undefined,
+                            allegati: c.allegati || []
+                        })
+                    });
+                    const data = await resp.json();
+
+                    if (data.ok) {
                         inviati++;
                         (c.contatori || [c]).forEach(ct => podsInviati.add(ct.pod));
-                        logEl.innerHTML += `<div class="result-ok"><i class="fab fa-whatsapp"></i> ${c.pod} → ${c.email} (Tab WhatsApp Aperto)</div>`;
+                        const contText = (c.contatori && c.contatori.length > 1) ? ` (${c.contatori.length} contatori)` : '';
+                        logEl.innerHTML += `<div class="result-ok"><i class="fas fa-check"></i> ${c.pod} → ${c.email}${contText}</div>`;
                     } else {
-                        // Logica Email: chiama API
-                        const resp = await fetch('/api/distinte/invia-singola-email', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                template_id: templateId,
-                                contatto: c,
-                                contatori: c.contatori,
-                                subject_override: c.subject_override || undefined,
-                                body_override: c.body_override || undefined,
-                                allegati: c.allegati || []
-                            })
-                        });
-                        const data = await resp.json();
-
-                        if (data.ok) {
-                            inviati++;
-                            (c.contatori || [c]).forEach(ct => podsInviati.add(ct.pod));
-                            const contText = (c.contatori && c.contatori.length > 1) ? ` (${c.contatori.length} contatori)` : '';
-                            logEl.innerHTML += `<div class="result-ok"><i class="fas fa-check"></i> ${c.pod} → ${c.email}${contText}</div>`;
-                        } else {
-                            errori++;
-                            logEl.innerHTML += `<div class="result-err"><i class="fas fa-times"></i> ${c.pod} → ${c.email}: ${data.errore || 'Errore'}</div>`;
-                        }
+                        errori++;
+                        logEl.innerHTML += `<div class="result-err"><i class="fas fa-times"></i> ${c.pod} → ${c.email}: ${data.errore || 'Errore'}</div>`;
                     }
                 } catch (e) {
                     errori++;
-                    logEl.innerHTML += `<div class="result-err"><i class="fas fa-times"></i> ${c.pod} → ${c.email}: Errore invio o popup bloccato</div>`;
+                    logEl.innerHTML += `<div class="result-err"><i class="fas fa-times"></i> ${c.pod} → ${c.email}: Errore invio email</div>`;
                 }
 
                 logEl.scrollTop = logEl.scrollHeight;
@@ -4878,14 +5029,530 @@
             sendBtn.style.background = 'linear-gradient(135deg, var(--accent-hover), var(--accent-deep))';
 
             if (inviati > 0) {
-                showToast(`${inviati} messaggi/email processati con successo!`);
-                // Aggiungi nota "mandata mail" / "mandato WA" ai POD
+                showToast(`${inviati} email processate con successo!`);
+                // Aggiungi nota "mandata mail" ai POD
                 for (const pod of podsInviati) {
-                    const notaTarget = isWhatsapp ? 'mandato msg wa' : 'mandata mail';
-                    await aggiungiNota(pod, notaTarget, true, {
+                    await aggiungiNota(pod, 'mandata mail', true, {
                         includiDataPianificazione: true
                     });
                 }
+            }
+        }
+
+        // ===== INVIO MULTIPLO SMS =====
+        let currentSmsSettings = null;
+        let bulkSmsAbortato = false;
+        let bulkSmsContacts = [];
+
+        async function apriBulkSmsModal() {
+            if (!contatti || contatti.length === 0) {
+                showToast('Nessun contatto disponibile', 'error');
+                return;
+            }
+
+            // Filtra contatti che hanno almeno un numero di cellulare
+            bulkSmsContacts = contatti.filter(c => {
+                if (c.tipo === 'cellulare' && (c.telefono || '').trim()) return true;
+                if (c.numeri_alternativi && c.numeri_alternativi.some(n => n.tipo === 'cellulare' && (n.numero || '').trim())) return true;
+                return false;
+            });
+
+            if (bulkSmsContacts.length === 0) {
+                showToast('Nessun contatto con numero cellulare disponibile', 'error');
+                return;
+            }
+
+            // Popola i template adatti per SMS
+            const select = document.getElementById('bulkSmsTemplateSelect');
+            select.innerHTML = '';
+            
+            // Aggiungi template prioritari SMS
+            let selectedTmplId = '';
+            for (const [id, tmpl] of Object.entries(TEMPLATES || {})) {
+                if (tmpl.type === 'sms' || tmpl.type === 'whatsapp') {
+                    const opt = document.createElement('option');
+                    opt.value = id;
+                    const isSms = tmpl.type === 'sms';
+                    opt.textContent = (isSms ? '📱 ' : '💬 ') + (tmpl.label || id);
+                    select.appendChild(opt);
+                    if (!selectedTmplId && (id === 'sms_preavviso' || id === 'wa_conferma')) {
+                        selectedTmplId = id;
+                    }
+                }
+            }
+            // Opzione personalizzata
+            const optCustom = document.createElement('option');
+            optCustom.value = 'custom';
+            optCustom.textContent = '✏️ Testo personalizzato...';
+            select.appendChild(optCustom);
+
+            if (selectedTmplId) {
+                select.value = selectedTmplId;
+            } else if (select.options.length > 0) {
+                select.selectedIndex = 0;
+            }
+
+            // Carica testo template iniziale
+            onBulkSmsTemplateChange();
+
+            // Carica impostazioni SMS Gateway
+            await caricaStatoSmsGateway();
+
+            // Popola lista contatti
+            popolaBulkSmsContactsList(bulkSmsContacts);
+
+            // Reset UI progresso
+            document.getElementById('bulkSmsProgress').style.display = 'none';
+            document.getElementById('bulkSmsResults').style.display = 'none';
+            const sendBtn = document.getElementById('bulkSmsSendBtn');
+            sendBtn.innerHTML = '<i class="fas fa-sms"></i> Invia SMS Multipli';
+            sendBtn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+            sendBtn.onclick = inviaSmsBulk;
+
+            document.getElementById('bulkSmsModal').classList.add('active');
+        }
+
+        function chiudiBulkSmsModal() {
+            document.getElementById('bulkSmsModal').classList.remove('active');
+        }
+
+        function nascondiSmsNotice() {
+            const el = document.getElementById('smsUnconfiguredNotice');
+            if (el) el.style.display = 'none';
+            sessionStorage.setItem('dismiss_sms_notice', '1');
+        }
+
+        async function caricaStatoSmsGateway() {
+            const statusDiv = document.getElementById('bulkSmsStatusText');
+            const delayInput = document.getElementById('bulkSmsDelaySec');
+            const sendBtn = document.getElementById('bulkSmsSendBtn');
+            const noticeBanner = document.getElementById('smsUnconfiguredNotice');
+            const headerBadge = document.getElementById('headerSmsStatusBadge');
+
+            try {
+                const resp = await fetch('/api/distinte/sms-settings');
+                const data = await resp.json();
+                if (data.ok && data.sms_settings) {
+                    currentSmsSettings = data.sms_settings;
+                    const prov = currentSmsSettings.provider || 'android_sms_gateway';
+                    const enabled = currentSmsSettings.enabled !== false;
+                    const endpoint = (currentSmsSettings.endpoint_url || '').trim();
+                    const configured = currentSmsSettings.configured !== false && Boolean(endpoint);
+                    const isReady = enabled && configured;
+
+                    if (currentSmsSettings.rate_limit_delay_seconds && delayInput) {
+                        delayInput.value = currentSmsSettings.rate_limit_delay_seconds;
+                    }
+
+                    if (!isReady) {
+                        if (noticeBanner && !sessionStorage.getItem('dismiss_sms_notice')) {
+                            noticeBanner.style.display = 'flex';
+                        }
+                        if (headerBadge) {
+                            headerBadge.style.display = 'inline-block';
+                            headerBadge.style.background = 'rgba(245, 158, 11, 0.2)';
+                            headerBadge.style.color = '#f59e0b';
+                            headerBadge.style.border = '1px solid rgba(245, 158, 11, 0.4)';
+                            headerBadge.textContent = !configured ? 'Non configurato' : 'Disabilitato';
+                        }
+                        if (statusDiv) {
+                            statusDiv.innerHTML = `
+                                <div style="display:flex;align-items:center;justify-content:space-between;width:100%;flex-wrap:wrap;gap:10px;">
+                                    <div style="display:flex;align-items:center;gap:10px;color:#f59e0b;">
+                                        <i class="fas fa-exclamation-triangle" style="font-size:1.2rem;"></i>
+                                        <div>
+                                            <div style="font-weight:700;color:var(--text);">Gateway SMS non ancora configurato</div>
+                                            <div style="font-size:0.8rem;color:var(--text-muted);">Configura l'invio per abilitare i messaggi multipli ai clienti.</div>
+                                        </div>
+                                    </div>
+                                    <button type="button" class="btn btn-primary" onclick="apriDistinteSmsConfigModal()" style="font-size:0.82rem;padding:6px 14px;background:linear-gradient(135deg, #10b981, #059669);color:white;border:none;border-radius:6px;cursor:pointer;font-weight:600;display:inline-flex;align-items:center;gap:6px;box-shadow:0 2px 6px rgba(16,185,129,0.3);">
+                                        <i class="fas fa-cog"></i> Configura Ora
+                                    </button>
+                                </div>
+                            `;
+                        }
+                        if (sendBtn) {
+                            sendBtn.disabled = true;
+                            sendBtn.title = "Configura il gateway SMS prima di inviare i messaggi";
+                            sendBtn.style.opacity = '0.6';
+                        }
+                        return;
+                    }
+
+                    // Se configurato e pronto: nascondi notice banner e abilita invio
+                    if (noticeBanner) noticeBanner.style.display = 'none';
+                    if (sendBtn) {
+                        sendBtn.disabled = false;
+                        sendBtn.title = "";
+                        sendBtn.style.opacity = '1';
+                    }
+
+                    if (headerBadge) {
+                        headerBadge.style.display = 'inline-block';
+                        if (prov === 'android_sms_gateway') {
+                            headerBadge.style.background = 'rgba(37, 99, 235, 0.2)';
+                            headerBadge.style.color = '#60a5fa';
+                            headerBadge.style.border = '1px solid rgba(37, 99, 235, 0.4)';
+                            headerBadge.innerHTML = '<i class="fas fa-mobile-alt"></i> Android SIM';
+                        } else {
+                            headerBadge.style.background = 'rgba(99, 102, 241, 0.2)';
+                            headerBadge.style.color = '#a5b4fc';
+                            headerBadge.style.border = '1px solid rgba(99, 102, 241, 0.4)';
+                            headerBadge.textContent = 'SMS Webhook';
+                        }
+                    }
+
+                    if (prov === 'android_sms_gateway') {
+                        if (statusDiv) {
+                            statusDiv.innerHTML = `
+                                <span class="badge" style="background:#2563eb;color:white;font-weight:600;padding:3px 8px;border-radius:4px;">
+                                    <i class="fas fa-mobile-alt"></i> Android SMS Gateway
+                                </span>
+                                <span style="color:var(--text-muted);font-size:0.8rem;margin-left:6px;">Invio tramite SIM aziendale (1000 SMS/mese)</span>
+                            `;
+                        }
+                    } else {
+                        if (statusDiv) {
+                            statusDiv.innerHTML = `
+                                <span class="badge" style="background:#6366f1;color:white;font-weight:600;padding:3px 8px;border-radius:4px;">
+                                    <i class="fas fa-network-wired"></i> Webhook Gateway
+                                </span>
+                            `;
+                        }
+                    }
+                } else {
+                    if (statusDiv) statusDiv.innerHTML = `<span style="color:#ef4444;"><i class="fas fa-times-circle"></i> Errore verifica SMS Gateway</span>`;
+                }
+            } catch (err) {
+                console.error('Errore fetch sms-settings:', err);
+                if (statusDiv) statusDiv.innerHTML = `<span style="color:#ef4444;"><i class="fas fa-times-circle"></i> Impossibile contattare SMS Gateway</span>`;
+            }
+        }
+
+        function onBulkSmsTemplateChange() {
+            const select = document.getElementById('bulkSmsTemplateSelect');
+            const tmplId = select.value;
+            const textarea = document.getElementById('bulkSmsMessageText');
+
+            if (tmplId === 'custom') {
+                textarea.focus();
+                return;
+            }
+
+            const tmpl = (TEMPLATES || {})[tmplId];
+            if (tmpl && tmpl.body) {
+                // Rimuovi tag html e formattazione markdown complessa per SMS
+                let body = tmpl.body
+                    .replace(/<br\s*[\/]?>/gi, '\n')
+                    .replace(/<\/p>/gi, '\n\n')
+                    .replace(/<[^>]+>/gi, '')
+                    .replace(/\*([^*]+)\*/g, '$1'); // togli grassetto WhatsApp *testo*
+                textarea.value = body.trim();
+            }
+            aggiornaSmsCharCounter();
+        }
+
+        function aggiornaSmsCharCounter() {
+            const text = document.getElementById('bulkSmsMessageText').value || '';
+            const len = text.length;
+
+            // Rilevamento caratteri Unicode non compresi in GSM-7
+            // GSM 7-bit charset base standard
+            const gsm7Regex = /^[@£$¥èéùìòÇ\r\nØø\u001fÅåΔ_ΦΓΛΩΠΨΣΘΞ^{}\\[~\]|€ÆæßÉ !"#%&'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà]*$/;
+            const isGsm7 = gsm7Regex.test(text);
+
+            let parts = 0;
+            let maxSingle = isGsm7 ? 160 : 70;
+            let maxConcat = isGsm7 ? 153 : 67;
+
+            if (len === 0) {
+                parts = 0;
+            } else if (len <= maxSingle) {
+                parts = 1;
+            } else {
+                parts = Math.ceil(len / maxConcat);
+            }
+
+            const counterEl = document.getElementById('bulkSmsCharCount');
+            const encEl = document.getElementById('bulkSmsEncodingNote');
+            
+            counterEl.textContent = `${len} car | ${parts} SMS (${isGsm7 ? 'GSM-7' : 'Unicode'})`;
+            if (parts <= 1) {
+                counterEl.style.color = '#10b981'; // Verde
+            } else if (parts === 2) {
+                counterEl.style.color = '#f59e0b'; // Giallo/arancione
+            } else {
+                counterEl.style.color = '#ef4444'; // Rosso
+            }
+
+            if (isGsm7) {
+                encEl.textContent = `GSM-7 (160 car/SMS, max ${maxConcat} per SMS concatenato)`;
+                encEl.style.color = 'var(--text-muted)';
+            } else {
+                encEl.textContent = `⚠️ Contiene caratteri speciali/emoji (Unicode: max 70 car/SMS)`;
+                encEl.style.color = '#f59e0b';
+            }
+        }
+
+        function estraiMigliorCellulare(c) {
+            if (c.tipo === 'cellulare' && (c.telefono || '').trim()) {
+                return c.telefono.trim();
+            }
+            if (c.numeri_alternativi && c.numeri_alternativi.length > 0) {
+                const alt = c.numeri_alternativi.find(n => n.tipo === 'cellulare' && (n.numero || '').trim());
+                if (alt) return alt.numero.trim();
+            }
+            return (c.telefono || '').trim();
+        }
+
+        function popolaBulkSmsContactsList(contattiCell) {
+            const list = document.getElementById('bulkSmsContactsList');
+            if (!contattiCell || contattiCell.length === 0) {
+                list.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text-muted)">Nessun contatto valido con cellulare.</div>`;
+                document.getElementById('bulkSmsCount').textContent = '0 contatti';
+                return;
+            }
+
+            list.innerHTML = contattiCell.map((c, i) => {
+                const tel = estraiMigliorCellulare(c);
+                const tipoCe = (c.tipologia_contatore || c.tipo_misuratore || '').trim();
+                const tipoStr = tipoCe.toLowerCase();
+                let tipoBadge = '';
+                if (tipoStr.includes('semidirett')) {
+                    tipoBadge = `<span class="badge" style="background:#8b5cf6;font-size:0.65rem;color:white;">SEMIDIRETTA</span>`;
+                } else if (tipoStr.includes('tri')) {
+                    tipoBadge = `<span class="badge" style="background:#3b82f6;font-size:0.65rem;color:white;">TRIFASE</span>`;
+                } else if (tipoStr.includes('mono')) {
+                    tipoBadge = `<span class="badge" style="background:#10b981;font-size:0.65rem;color:white;">MONOFASE</span>`;
+                }
+
+                const nota = testoNotaContatto(c);
+                const notaHtml = nota ? `
+                    <div style="color:#f59e0b;font-size:0.8rem;display:flex;align-items:center;gap:5px;margin-top:2px;" title="${escapeHtml(nota)}">
+                        <i class="fas fa-sticky-note"></i> <span>${escapeHtml(nota)}</span>
+                    </div>
+                ` : '';
+
+                return `
+                <div class="bulk-contact-item" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border-bottom:1px solid var(--border);">
+                    <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;">
+                        <input type="checkbox" class="bulk-sms-check" data-pod="${c.pod}" data-tel="${escapeHtml(tel)}" data-nome="${escapeHtml(c.nome || '')}" data-tipoce="${escapeHtml(tipoCe)}" data-hasnote="${Boolean(nota)}" data-idx="${i}" checked onchange="aggiornaSmsConteggi()">
+                        <div style="min-width:0;flex:1;">
+                            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                                <strong style="font-size:0.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(c.nome || 'N/D')}</strong>
+                                ${tipoBadge}
+                            </div>
+                            <div style="font-size:0.75rem;color:var(--text-muted);">
+                                ${escapeHtml(c.comune || '')} ${escapeHtml(c.indirizzo || '')} ${escapeHtml(c.civico || '')}
+                            </div>
+                            ${notaHtml}
+                        </div>
+                    </div>
+                    <div style="text-align:right;">
+                        <span style="font-family:monospace;font-size:0.85rem;font-weight:600;color:#10b981;">
+                            <i class="fas fa-phone-alt" style="font-size:0.75rem;"></i> ${escapeHtml(tel)}
+                        </span>
+                        <div style="font-size:0.75rem;color:var(--text-muted);">${c.pod || ''}</div>
+                    </div>
+                </div>
+                `;
+            }).join('');
+
+            document.getElementById('bulkSmsCount').textContent = `${contattiCell.length} contatti`;
+            aggiornaSmsConteggi();
+        }
+
+        function toggleBulkSmsSelectAll(checked) {
+            document.querySelectorAll('.bulk-sms-check').forEach(cb => {
+                cb.checked = checked;
+                const item = cb.closest('.bulk-contact-item');
+                if (item) item.style.opacity = checked ? '' : '0.45';
+            });
+            aggiornaSmsConteggi();
+        }
+
+        function applySmsPreset(preset) {
+            document.querySelectorAll('#distinteSmsPresets .btn-preset').forEach(b => b.classList.remove('active'));
+            const activeBtn = document.getElementById(`smsPreset_${preset}`);
+            if (activeBtn) activeBtn.classList.add('active');
+
+            const checks = document.querySelectorAll('.bulk-sms-check');
+            checks.forEach(cb => {
+                const tipo = (cb.dataset.tipoce || '').toLowerCase();
+                const hasNote = cb.dataset.hasnote === 'true';
+
+                if (preset === 'tutti') {
+                    cb.checked = true;
+                } else if (preset === 'monofase') {
+                    cb.checked = tipo.includes('mono');
+                } else if (preset === 'trifase') {
+                    cb.checked = tipo.includes('tri') && !tipo.includes('semidirett');
+                } else if (preset === 'semidiretta') {
+                    cb.checked = tipo.includes('semidirett');
+                } else if (preset === 'con_note') {
+                    cb.checked = hasNote;
+                } else if (preset === 'senza_note') {
+                    cb.checked = !hasNote;
+                }
+                const item = cb.closest('.bulk-contact-item');
+                if (item) item.style.opacity = cb.checked ? '' : '0.45';
+            });
+            aggiornaSmsConteggi();
+        }
+
+        function aggiornaSmsConteggi() {
+            const checks = document.querySelectorAll('.bulk-sms-check');
+            const checked = document.querySelectorAll('.bulk-sms-check:checked');
+            const total = checks.length;
+            const checkedCount = checked.length;
+            const allCb = document.getElementById('bulkSmsSelectAll');
+            if (allCb) allCb.checked = checkedCount === total && total > 0;
+            document.getElementById('bulkSmsCount').textContent = `${checkedCount} di ${total} selezionati`;
+        }
+
+        async function inviaSmsBulk() {
+            const checkedBoxes = Array.from(document.querySelectorAll('.bulk-sms-check:checked'));
+            if (checkedBoxes.length === 0) {
+                showToast('Seleziona almeno un contatto', 'warning');
+                return;
+            }
+
+            const rawText = document.getElementById('bulkSmsMessageText').value.trim();
+            if (!rawText) {
+                showToast('Inserisci il testo del messaggio SMS', 'warning');
+                return;
+            }
+
+            const delaySec = Math.max(1, parseInt(document.getElementById('bulkSmsDelaySec').value) || 4);
+            const tempoStimatoSec = checkedBoxes.length * delaySec;
+            const tempoStimatoMin = Math.ceil(tempoStimatoSec / 60);
+
+            if (!confirm(`Stai per inviare messaggi a ${checkedBoxes.length} destinatari.\n\nPausa anti-flood: ${delaySec}s tra ogni invio.\nTempo stimato: ~${tempoStimatoMin} min.\n\nVuoi procedere?`)) {
+                return;
+            }
+
+            // Setup UI di invio
+            bulkSmsAbortato = false;
+            const progressEl = document.getElementById('bulkSmsProgress');
+            const resultsEl = document.getElementById('bulkSmsResults');
+            const sendBtn = document.getElementById('bulkSmsSendBtn');
+
+            progressEl.style.display = 'block';
+            resultsEl.style.display = 'block';
+            resultsEl.innerHTML = '<div style="max-height:220px;overflow-y:auto;font-size:0.85rem;padding:6px;background:var(--bg);border-radius:6px;border:1px solid var(--border);" id="bulkSmsLog"></div>';
+
+            sendBtn.innerHTML = '<i class="fas fa-stop"></i> Interrompi';
+            sendBtn.onclick = () => { bulkSmsAbortato = true; };
+            sendBtn.style.background = '#ef4444';
+
+            document.getElementById('bulkSmsProgressFill').style.width = '0%';
+            document.getElementById('bulkSmsProgressText').textContent = `0 / ${checkedBoxes.length}`;
+            progressEl.querySelector('div:first-child').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Invio in corso...';
+
+            const logEl = document.getElementById('bulkSmsLog');
+            let inviati = 0, errori = 0;
+            const podsAggiornati = new Set();
+
+            const pk = (provincia || window.provincia || 'TORINO').toUpperCase();
+            const provSettings = (templateSettings.province && templateSettings.province[pk]) || {};
+            const telefonoTecnico = provSettings.telefono || templateSettings['telefono_' + pk.toLowerCase()] || templateSettings.telefono_tecnico || '011 025 2702';
+            const emailTecnico = provSettings.email || templateSettings['email_' + pk.toLowerCase()] || templateSettings.email_tecnico || `tecnico_${pk.toLowerCase()}@algecopower.it`;
+
+            for (let i = 0; i < checkedBoxes.length; i++) {
+                if (bulkSmsAbortato) {
+                    logEl.innerHTML += `<div style="color:#f59e0b;padding:3px 0;"><i class="fas fa-hand-paper"></i> <strong>Invio interrotto dall'operatore dopo ${inviati} messaggi.</strong></div>`;
+                    logEl.scrollTop = logEl.scrollHeight;
+                    break;
+                }
+
+                const cb = checkedBoxes[i];
+                const pod = cb.dataset.pod;
+                const tel = cb.dataset.tel;
+                const contatto = contatti.find(c => c.pod === pod) || {};
+                const nome = contatto.nome || cb.dataset.nome || 'Cliente';
+
+                // Risolvi i segnaposto nel testo del messaggio
+                const dataIntervento = contatto.data_pian_filone || contatto.data_intervento || '';
+                const comune = contatto.comune || '';
+                const indirizzo = `${contatto.indirizzo || ''} ${contatto.civico || ''}`.trim();
+                const nomeOp = contatto.nome_operatore || contatto.operatore || '';
+                const telOp = contatto.telefono_operatore || '';
+
+                let msgText = rawText
+                    .replace(/{nome}/g, nome)
+                    .replace(/{data}/g, dataIntervento)
+                    .replace(/{comune}/g, comune)
+                    .replace(/{indirizzo}/g, indirizzo)
+                    .replace(/{pod}/g, pod)
+                    .replace(/{telefono_tecnico}/g, telefonoTecnico)
+                    .replace(/{email_tecnico}/g, emailTecnico)
+                    .replace(/{nome_operatore}/g, nomeOp)
+                    .replace(/{telefono_operatore}/g, telOp);
+
+                document.getElementById('bulkSmsProgressText').textContent =
+                    `${i + 1} / ${checkedBoxes.length} — Invio a ${nome} (${tel})...`;
+                document.getElementById('bulkSmsProgressFill').style.width =
+                    `${Math.round(((i + 1) / checkedBoxes.length) * 100)}%`;
+
+                try {
+                    const resp = await fetch('/api/distinte/invia-singolo-sms', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            pod: pod,
+                            telefono: tel,
+                            testo: msgText,
+                            nome: nome
+                        })
+                    });
+                    const res = await resp.json();
+
+                    if (res.ok) {
+                        inviati++;
+                        podsAggiornati.add(pod);
+                        const parts = res.parti_sms || 1;
+                        logEl.innerHTML += `<div style="color:#10b981;padding:2px 0;"><i class="fas fa-check-circle"></i> <strong>[SMS]</strong> Inviato a <b>${escapeHtml(nome)}</b> (${escapeHtml(tel)}) — ${parts} SMS</div>`;
+                    } else {
+                        errori++;
+                        logEl.innerHTML += `<div style="color:#ef4444;padding:2px 0;"><i class="fas fa-times-circle"></i> <strong>[ERRORE]</strong> <b>${escapeHtml(nome)}</b> (${escapeHtml(tel)}): ${escapeHtml(res.error || 'Errore di invio')}</div>`;
+                    }
+                } catch (e) {
+                    errori++;
+                    logEl.innerHTML += `<div style="color:#ef4444;padding:2px 0;"><i class="fas fa-times-circle"></i> <strong>[ERRORE DI RETE]</strong> <b>${escapeHtml(nome)}</b>: ${escapeHtml(e.message)}</div>`;
+                }
+
+                logEl.scrollTop = logEl.scrollHeight;
+
+                // Pausa anti-flood tra invii
+                if (i < checkedBoxes.length - 1 && !bulkSmsAbortato) {
+                    let sLeft = delaySec;
+                    while (sLeft > 0 && !bulkSmsAbortato) {
+                        document.getElementById('bulkSmsProgressText').textContent =
+                            `${i + 1} / ${checkedBoxes.length} — In attesa anti-flood (${sLeft}s)...`;
+                        await new Promise(r => setTimeout(r, 1000));
+                        sLeft--;
+                    }
+                }
+            }
+
+            // Riepilogo finale
+            progressEl.querySelector('div:first-child').innerHTML =
+                `<i class="fas fa-check-circle" style="color:#10b981"></i> ${bulkSmsAbortato ? 'Interrotto' : 'Completato'}`;
+            document.getElementById('bulkSmsProgressText').textContent =
+                `${inviati} inviati, ${errori} errori su ${checkedBoxes.length}`;
+            document.getElementById('bulkSmsProgressFill').style.width = '100%';
+
+            // Ripristina pulsante
+            sendBtn.innerHTML = '<i class="fas fa-sms"></i> Invia SMS Multipli';
+            sendBtn.onclick = inviaSmsBulk;
+            sendBtn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+
+            if (inviati > 0) {
+                showToast(`${inviati} messaggi processati con successo!`);
+                // Aggiorna visivamente le card dei contatti per mostrare la nuova nota
+                setTimeout(() => {
+                    renderContatti();
+                }, 500);
             }
         }
 

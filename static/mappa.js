@@ -1887,6 +1887,7 @@ function toggleAdvancedSearchModal() {
     const isOpening = !UiModal.isOpen(id);
     UiModal.toggle(id);
     if (isOpening) {
+        setupMultiSearchPasteHandlers();
         restoreAdvancedSearchData();
         aggiornaModalPinnedBar();
     }
@@ -1894,13 +1895,25 @@ function toggleAdvancedSearchModal() {
 
 function clearModalAdvancedSearch() {
     document.getElementById('modalSearchNominativo').value = '';
+    
     document.getElementById('modalSearchPod').value = '';
+    const podMulti = document.getElementById('modalSearchPodMulti');
+    if (podMulti) podMulti.value = '';
+    
     document.getElementById('modalSearchEneltel').value = '';
+    const eneltelMulti = document.getElementById('modalSearchEneltelMulti');
+    if (eneltelMulti) eneltelMulti.value = '';
+    
     document.getElementById('modalSearchComune').value = '';
     document.getElementById('modalSearchVia').value = '';
     document.getElementById('modalSearchTelefono').value = '';
     document.getElementById('modalSearchResults').innerHTML = '';
+    
+    updateMultiTokensBadge('pod');
+    updateMultiTokensBadge('eneltel');
+    
     lastModalSearchResults = [];
+    lastModalMultiSearchMeta = null;
     localStorage.removeItem('advancedSearchData');
     aggiornaModalPinnedBar();
 }
@@ -2553,7 +2566,8 @@ function togglePinContatore(eneltel) {
 function togglePinAllSearchResults() {
     if (!lastModalSearchResults || lastModalSearchResults.length === 0) return;
 
-    const displayList = lastModalSearchResults.slice(0, 100);
+    const maxDisplay = typeof getModalSearchMaxDisplay === 'function' ? getModalSearchMaxDisplay() : 100;
+    const displayList = lastModalSearchResults.slice(0, maxDisplay);
     const allPinned = displayList.every(c => pinnedContatori.has(c.eneltel));
 
     if (allPinned) {
@@ -2874,40 +2888,457 @@ function ridisegnaVistaSingoloOperatoreSenzaSidebar() {
     renderPercorsoOperatoreMappa(percorsoOrdinato, currentData, currentOperatore);
 }
 
+// ============================================================
+// RICERCA MULTIPLA UTENTE (POD ed Eneltel)
+// ============================================================
+let lastModalMultiSearchMeta = null;
+
+function escapeSearchHtml(str) {
+    return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function parseMultiSearchTokens(rawText) {
+    if (!rawText) return [];
+    const tokens = rawText
+        .split(/[\s,;\n\r\t]+/)
+        .map(t => t.replace(/^['"“”(]+|[)''”",]+$/g, '').trim().toLowerCase())
+        .filter(t => t.length > 0);
+    // Deduplica mantenendo l'ordine di inserimento
+    return Array.from(new Set(tokens));
+}
+
+function toggleMultiSearch(type) {
+    const isPod = type === 'pod';
+    const toggle = document.getElementById(`modalMultiSearch${isPod ? 'Pod' : 'Eneltel'}Toggle`);
+    if (!toggle) return;
+    setMultiSearchActive(type, toggle.checked);
+}
+
+function setMultiSearchActive(type, active) {
+    const isPod = type === 'pod';
+    const toggle = document.getElementById(`modalMultiSearch${isPod ? 'Pod' : 'Eneltel'}Toggle`);
+    const singleInput = document.getElementById(`modalSearch${isPod ? 'Pod' : 'Eneltel'}`);
+    const multiInput = document.getElementById(`modalSearch${isPod ? 'Pod' : 'Eneltel'}Multi`);
+
+    if (toggle) toggle.checked = active;
+
+    if (active) {
+        if (singleInput && multiInput) {
+            if (!multiInput.value && singleInput.value) {
+                multiInput.value = singleInput.value.trim();
+            }
+            singleInput.style.display = 'none';
+            multiInput.style.display = 'block';
+            updateMultiTokensBadge(type);
+            multiInput.focus();
+        }
+    } else {
+        if (singleInput && multiInput) {
+            if (!singleInput.value && multiInput.value) {
+                singleInput.value = multiInput.value.trim();
+            }
+            multiInput.style.display = 'none';
+            singleInput.style.display = 'block';
+            updateMultiTokensBadge(type);
+            singleInput.focus();
+        }
+    }
+}
+
+function updateMultiTokensBadge(type) {
+    const isPod = type === 'pod';
+    const toggle = document.getElementById(`modalMultiSearch${isPod ? 'Pod' : 'Eneltel'}Toggle`);
+    const isMulti = toggle ? toggle.checked : false;
+    const badge = document.getElementById(`modalSearch${isPod ? 'Pod' : 'Eneltel'}Badge`);
+    const multiInput = document.getElementById(`modalSearch${isPod ? 'Pod' : 'Eneltel'}Multi`);
+
+    if (!badge) return;
+
+    if (!isMulti || !multiInput) {
+        badge.style.display = 'none';
+        badge.innerHTML = '';
+        return;
+    }
+
+    const tokens = parseMultiSearchTokens(multiInput.value);
+    if (tokens.length > 0) {
+        badge.style.display = 'flex';
+        const label = isPod ?
+            `⚡ <strong>${tokens.length}</strong> POD rilevat${tokens.length === 1 ? 'o' : 'i'}` :
+            `🔢 <strong>${tokens.length}</strong> Eneltel rilevat${tokens.length === 1 ? 'o' : 'i'}`;
+        badge.innerHTML = `
+            <span>${label}</span>
+            <button type="button" class="btn-clear-multi-field" onclick="clearSpecificMultiField('${type}')" title="Svuota campo">×</button>
+        `;
+    } else {
+        badge.style.display = 'none';
+        badge.innerHTML = '';
+    }
+}
+
+function clearSpecificMultiField(type) {
+    const isPod = type === 'pod';
+    const multiInput = document.getElementById(`modalSearch${isPod ? 'Pod' : 'Eneltel'}Multi`);
+    const singleInput = document.getElementById(`modalSearch${isPod ? 'Pod' : 'Eneltel'}`);
+    if (multiInput) multiInput.value = '';
+    if (singleInput) singleInput.value = '';
+    updateMultiTokensBadge(type);
+    if (multiInput && multiInput.style.display !== 'none') {
+        multiInput.focus();
+    } else if (singleInput) {
+        singleInput.focus();
+    }
+}
+
+let _multiSearchPasteHandlersInitialized = false;
+function setupMultiSearchPasteHandlers() {
+    if (_multiSearchPasteHandlersInitialized) return;
+    _multiSearchPasteHandlersInitialized = true;
+
+    ['Pod', 'Eneltel'].forEach(fieldName => {
+        const type = fieldName.toLowerCase();
+        const singleInput = document.getElementById(`modalSearch${fieldName}`);
+        const multiInput = document.getElementById(`modalSearch${fieldName}Multi`);
+
+        if (singleInput) {
+            singleInput.addEventListener('paste', (e) => {
+                const pastedText = (e.clipboardData || window.clipboardData)?.getData('text');
+                if (!pastedText) return;
+                const tokens = parseMultiSearchTokens(pastedText);
+                if (tokens.length > 1) {
+                    e.preventDefault();
+                    setMultiSearchActive(type, true);
+                    const targetMulti = document.getElementById(`modalSearch${fieldName}Multi`);
+                    if (targetMulti) {
+                        targetMulti.value = pastedText.trim();
+                        updateMultiTokensBadge(type);
+                        targetMulti.focus();
+                    }
+                }
+            });
+        }
+
+        if (multiInput) {
+            multiInput.addEventListener('input', () => {
+                updateMultiTokensBadge(type);
+            });
+            multiInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    if (e.ctrlKey || e.metaKey || !e.shiftKey) {
+                        e.preventDefault();
+                        applyModalAdvancedSearch();
+                    }
+                }
+            });
+        }
+    });
+}
+
+function getModalSearchMaxDisplay() {
+    if (lastModalMultiSearchMeta && lastModalMultiSearchMeta.isMulti && lastModalSearchResults) {
+        return Math.max(100, Math.min(500, lastModalSearchResults.length));
+    }
+    return 100;
+}
+
 function applyModalAdvancedSearch() {
     const nominativo = document.getElementById('modalSearchNominativo').value.trim().toLowerCase();
-    const pod = document.getElementById('modalSearchPod').value.trim().toLowerCase();
-    const eneltel = document.getElementById('modalSearchEneltel').value.trim().toLowerCase();
+
+    // Controllo toggle modalità multipla
+    const isMultiPod = document.getElementById('modalMultiSearchPodToggle')?.checked || false;
+    const isMultiEneltel = document.getElementById('modalMultiSearchEneltelToggle')?.checked || false;
+
+    // POD
+    const podRaw = isMultiPod ?
+        (document.getElementById('modalSearchPodMulti')?.value || '') :
+        (document.getElementById('modalSearchPod')?.value || '');
+    const podTokens = isMultiPod ? parseMultiSearchTokens(podRaw) : [];
+    const singlePod = !isMultiPod ? podRaw.trim().toLowerCase() : '';
+
+    // Eneltel
+    const eneltelRaw = isMultiEneltel ?
+        (document.getElementById('modalSearchEneltelMulti')?.value || '') :
+        (document.getElementById('modalSearchEneltel')?.value || '');
+    const eneltelTokens = isMultiEneltel ? parseMultiSearchTokens(eneltelRaw) : [];
+    const singleEneltel = !isMultiEneltel ? eneltelRaw.trim().toLowerCase() : '';
+
     const comune = document.getElementById('modalSearchComune').value.trim().toLowerCase();
     const via = document.getElementById('modalSearchVia').value.trim().toLowerCase();
     const telefono = document.getElementById('modalSearchTelefono').value.trim().replace(/\s+/g, '').toLowerCase();
 
-    if (!nominativo && !pod && !eneltel && !comune && !via && !telefono) return;
+    const hasPod = isMultiPod ? podTokens.length > 0 : !!singlePod;
+    const hasEneltel = isMultiEneltel ? eneltelTokens.length > 0 : !!singleEneltel;
+    if (!nominativo && !hasPod && !hasEneltel && !comune && !via && !telefono) return;
 
     saveAdvancedSearchData();
+
+    // Match con supporto match esatto, sottostringa o prefisso (es. con o senza IT001E)
+    const matchesTokens = (fieldValue, tokens) => {
+        if (!fieldValue || tokens.length === 0) return false;
+        const val = String(fieldValue).toLowerCase().trim();
+        return tokens.some(t => {
+            return val === t || (t.length >= 3 && val.includes(t)) || (val.length >= 3 && t.includes(val));
+        });
+    };
 
     let risultati = contatori.filter(c => {
         let match = true;
         if (nominativo && !(c.cliente || '').toLowerCase().includes(nominativo)) match = false;
-        if (pod && !(c.pod || '').toLowerCase().includes(pod)) match = false;
-        if (eneltel && !(c.eneltel || '').toLowerCase().includes(eneltel)) match = false;
+
+        // POD
+        if (isMultiPod && podTokens.length > 0) {
+            if (!matchesTokens(c.pod, podTokens)) match = false;
+        } else if (singlePod) {
+            if (!(c.pod || '').toLowerCase().includes(singlePod)) match = false;
+        }
+
+        // Eneltel
+        if (isMultiEneltel && eneltelTokens.length > 0) {
+            if (!matchesTokens(c.eneltel, eneltelTokens)) match = false;
+        } else if (singleEneltel) {
+            if (!(c.eneltel || '').toLowerCase().includes(singleEneltel)) match = false;
+        }
+
         if (comune && !(c.comune || '').toLowerCase().includes(comune)) match = false;
         if (via && !(c.via || '').toLowerCase().includes(via)) match = false;
         if (telefono && !(c.telefono || '').replace(/\s+/g, '').toLowerCase().includes(telefono)) match = false;
         return match;
     });
 
+    // Se ricerca multipla, ordina i risultati secondo l'ordine dei codici incollati
+    if (isMultiPod && podTokens.length > 0) {
+        risultati.sort((a, b) => {
+            const aPod = String(a.pod || '').toLowerCase().trim();
+            const bPod = String(b.pod || '').toLowerCase().trim();
+            const idxA = podTokens.findIndex(t => aPod === t || (t.length >= 3 && aPod.includes(t)) || (aPod.length >= 3 && t.includes(aPod)));
+            const idxB = podTokens.findIndex(t => bPod === t || (t.length >= 3 && bPod.includes(t)) || (bPod.length >= 3 && t.includes(bPod)));
+            return (idxA === -1 ? 9999 : idxA) - (idxB === -1 ? 9999 : idxB);
+        });
+    } else if (isMultiEneltel && eneltelTokens.length > 0) {
+        risultati.sort((a, b) => {
+            const aEn = String(a.eneltel || '').toLowerCase().trim();
+            const bEn = String(b.eneltel || '').toLowerCase().trim();
+            const idxA = eneltelTokens.findIndex(t => aEn === t || (t.length >= 3 && aEn.includes(t)) || (aEn.length >= 3 && t.includes(aEn)));
+            const idxB = eneltelTokens.findIndex(t => bEn === t || (t.length >= 3 && bEn.includes(t)) || (bEn.length >= 3 && t.includes(bEn)));
+            return (idxA === -1 ? 9999 : idxA) - (idxB === -1 ? 9999 : idxB);
+        });
+    }
+
+    // Calcolo codici mancanti (non trovati nel database)
+    const isMultiSearchUsed = (isMultiPod && podTokens.length > 0) || (isMultiEneltel && eneltelTokens.length > 0);
+    let missingTokens = [];
+    if (isMultiSearchUsed) {
+        if (podTokens.length > 0) {
+            podTokens.forEach(t => {
+                const found = risultati.some(c => {
+                    const val = String(c.pod || '').toLowerCase().trim();
+                    return val === t || (t.length >= 3 && val.includes(t)) || (val.length >= 3 && t.includes(val));
+                });
+                if (!found) missingTokens.push({ type: 'POD', token: t });
+            });
+        }
+        if (eneltelTokens.length > 0) {
+            eneltelTokens.forEach(t => {
+                const found = risultati.some(c => {
+                    const val = String(c.eneltel || '').toLowerCase().trim();
+                    return val === t || (t.length >= 3 && val.includes(t)) || (val.length >= 3 && t.includes(val));
+                });
+                if (!found) missingTokens.push({ type: 'Eneltel', token: t });
+            });
+        }
+        lastModalMultiSearchMeta = {
+            isMulti: true,
+            totalSearched: podTokens.length + eneltelTokens.length,
+            missingTokens: missingTokens
+        };
+    } else {
+        lastModalMultiSearchMeta = null;
+    }
+
     lastModalSearchResults = risultati;
     const resultsDiv = document.getElementById('modalSearchResults');
+    const searchSeqId = ++_modalSearchSequenceId;
 
     if (risultati.length === 0) {
-        resultsDiv.innerHTML = '<div class="no-results" style="padding: 20px; text-align: center; color: var(--text-muted);">🔍 Nessun contatore trovato con i criteri specificati</div>';
+        if (lastModalMultiSearchMeta && lastModalMultiSearchMeta.missingTokens.length > 0) {
+            resultsDiv.innerHTML = `
+                <div class="no-results" style="padding: 24px; text-align: center;">
+                    <div style="font-size: 1.05rem; font-weight: 600; color: var(--text-primary); margin-bottom: 6px;">
+                        🔍 Nessun contatore trovato per i codici cercati
+                    </div>
+                    <div style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 12px;">
+                        Nessuno dei ${lastModalMultiSearchMeta.totalSearched} codici inseriti corrisponde a contatori nel database.
+                    </div>
+                    <div class="missing-box-tokens" style="justify-content: center;">
+                        ${lastModalMultiSearchMeta.missingTokens.map(m => `<span class="missing-token-pill" data-type="${m.type}" data-token="${escapeSearchHtml(m.token.toUpperCase())}">${m.type}: ${escapeSearchHtml(m.token.toUpperCase())}</span>`).join('')}
+                    </div>
+                    <div id="modalInactiveLclBox"></div>
+                </div>
+            `;
+        } else {
+            resultsDiv.innerHTML = `
+                <div class="no-results" style="padding: 20px; text-align: center; color: var(--text-muted);">
+                    <div>🔍 Nessun contatore trovato con i criteri specificati</div>
+                    <div id="modalInactiveLclBox"></div>
+                </div>
+            `;
+        }
         aggiornaModalPinnedBar();
+
+        // Controllo se l'utente cercato appartiene a una LCL non più attiva senza duplicati attivi
+        let checkPayload = null;
+        if (isMultiSearchUsed) {
+            const missingPods = missingTokens.filter(t => t.type === 'POD').map(t => t.token);
+            const missingEns = missingTokens.filter(t => t.type === 'Eneltel').map(t => t.token);
+            if (missingPods.length > 0 || missingEns.length > 0) {
+                checkPayload = { pod_tokens: missingPods, eneltel_tokens: missingEns };
+            }
+        } else {
+            checkPayload = {};
+            if (singlePod) checkPayload.pod = singlePod;
+            if (singleEneltel) checkPayload.eneltel = singleEneltel;
+            if (nominativo) checkPayload.nominativo = nominativo;
+        }
+
+        if (checkPayload && (checkPayload.pod || checkPayload.eneltel || checkPayload.nominativo || (checkPayload.pod_tokens && checkPayload.pod_tokens.length > 0) || (checkPayload.eneltel_tokens && checkPayload.eneltel_tokens.length > 0))) {
+            checkInactiveLclForSearch(checkPayload, searchSeqId, isMultiSearchUsed);
+        }
         return;
     }
 
     renderModalSearchResultsMarkup(risultati);
     aggiornaModalPinnedBar();
+
+    // Se in ricerca multipla ci sono token mancanti, controlla se appartengono a LCL inattive
+    if (isMultiSearchUsed && missingTokens.length > 0) {
+        const missingPods = missingTokens.filter(t => t.type === 'POD').map(t => t.token);
+        const missingEns = missingTokens.filter(t => t.type === 'Eneltel').map(t => t.token);
+        if (missingPods.length > 0 || missingEns.length > 0) {
+            checkInactiveLclForSearch({ pod_tokens: missingPods, eneltel_tokens: missingEns }, searchSeqId, true);
+        }
+    }
+}
+
+// Sequence ID per evitare race condition tra ricerche veloci
+let _modalSearchSequenceId = 0;
+
+function checkInactiveLclForSearch(params, searchSeqId, isMulti) {
+    if (!params) return;
+    fetch('/api/contatori/check-inactive-lcl', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params)
+    })
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+        if (!data || searchSeqId !== _modalSearchSequenceId) return;
+        const found = data.inactive_found || [];
+        if (found.length === 0) return;
+
+        // 1. Mostra toast di avviso
+        let toastMsg = '';
+        if (found.length === 1) {
+            const it = found[0];
+            const code = it.pod || it.eneltel_key || it.nominativo || 'contatore';
+            toastMsg = `⚠️ Attenzione: "${code}" appartiene alla LCL ${it.lcl || 'inattiva'} non più attiva`;
+        } else {
+            const lcls = Array.from(new Set(found.map(x => x.lcl).filter(Boolean)));
+            const lclStr = lcls.length === 1 ? `LCL ${lcls[0]}` : `LCL disabilitate (${lcls.slice(0, 3).join(', ')})`;
+            toastMsg = `⚠️ Attenzione: ${found.length} contatori cercati appartengono a ${lclStr} non più attiva`;
+        }
+        showMappaToast(toastMsg, { type: 'warn', duration: 7500 });
+
+        // 2. Arricchisci il box risultati
+        renderInactiveLclAlertInResults(found, isMulti);
+    })
+    .catch(err => {
+        console.warn('Verifica LCL disabilitate non riuscita:', err);
+    });
+}
+
+function renderInactiveLclAlertInResults(found, isMulti) {
+    if (!found || found.length === 0) return;
+
+    // Se esiste il contenitore per i risultati vuoti
+    const targetBox = document.getElementById('modalInactiveLclBox');
+    if (targetBox) {
+        targetBox.innerHTML = `
+            <div class="inactive-lcl-alert-box">
+                <div class="inactive-lcl-alert-header">
+                    <span>⚠️</span>
+                    <span>${found.length === 1 ? 'Contatore presente in LCL non più attiva' : `${found.length} contatori presenti in LCL non più attive`}</span>
+                </div>
+                <div class="inactive-lcl-alert-desc">
+                    ${found.length === 1 ? 'Il contatore cercato appartiene a una LCL disabilitata e non ha alcun duplicato attivo nelle LCL correnti:' : 'I seguenti contatori cercati appartengono a LCL disabilitate e non hanno alcun duplicato attivo:'}
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                    ${found.map(it => `
+                        <div class="inactive-lcl-item-pill">
+                            ${it.nominativo ? `<strong>${escapeSearchHtml(it.nominativo)}</strong> &bull; ` : ''}
+                            ${it.pod ? `POD: <code>${escapeSearchHtml(it.pod)}</code> &bull; ` : ''}
+                            ${it.eneltel_key ? `Eneltel: <code>${escapeSearchHtml(it.eneltel_key)}</code> &bull; ` : ''}
+                            ${it.comune ? `${escapeSearchHtml(it.comune)} &bull; ` : ''}
+                            <span class="inactive-lcl-badge">LCL ${escapeSearchHtml(it.lcl)} (inattiva)</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    // Se siamo in modalità con alcuni risultati e un box codici mancanti
+    const missingBox = document.querySelector('.multi-search-missing-box');
+    if (missingBox) {
+        // Evidenzia i pill corrispondenti ai codici trovati in LCL disabilitata
+        found.forEach(it => {
+            const podCode = (it.pod || '').toUpperCase();
+            const enCode = (it.eneltel_key || '').toUpperCase();
+            document.querySelectorAll('.missing-token-pill').forEach(pill => {
+                const t = (pill.getAttribute('data-token') || pill.textContent || '').toUpperCase();
+                if ((podCode && (t === podCode || t.includes(podCode) || podCode.includes(t))) ||
+                    (enCode && (t === enCode || t.includes(enCode) || enCode.includes(t)))) {
+                    pill.classList.add('missing-token-pill--inactive-lcl');
+                    pill.title = `Appartiene alla LCL ${it.lcl} (disabilitata) - nessun duplicato attivo`;
+                    if (!pill.querySelector('.pill-inactive-tag')) {
+                        const tag = document.createElement('small');
+                        tag.className = 'pill-inactive-tag';
+                        tag.style.cssText = 'margin-left: 4px; font-weight: 700; opacity: 0.95;';
+                        tag.textContent = `[LCL ${it.lcl} inattiva]`;
+                        pill.appendChild(tag);
+                    }
+                }
+            });
+        });
+
+        // Aggiungi un box informativo dentro il missingBox se non già presente
+        if (!missingBox.querySelector('.inactive-lcl-alert-box')) {
+            const noteDiv = document.createElement('div');
+            noteDiv.className = 'inactive-lcl-alert-box';
+            noteDiv.style.marginTop = '10px';
+            noteDiv.innerHTML = `
+                <div class="inactive-lcl-alert-header">
+                    <span>⚠️</span>
+                    <span>${found.length === 1 ? '1 codice mancante appartiene a LCL disabilitata' : `${found.length} codici mancanti appartengono a LCL disabilitate`}</span>
+                </div>
+                <div class="inactive-lcl-alert-desc">
+                    Nessun duplicato attivo presente nelle LCL correnti:
+                </div>
+                <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                    ${found.map(it => `
+                        <span class="inactive-lcl-item-pill">
+                            ${escapeSearchHtml(it.pod || it.eneltel_key)} <span class="inactive-lcl-badge">LCL ${escapeSearchHtml(it.lcl)} (inattiva)</span>
+                        </span>
+                    `).join('')}
+                </div>
+            `;
+            missingBox.appendChild(noteDiv);
+        }
+    }
 }
 
 function copiaDatiContatore(e, text) {
@@ -2928,14 +3359,40 @@ function renderModalSearchResultsMarkup(risultati) {
     const resultsDiv = document.getElementById('modalSearchResults');
     if (!resultsDiv) return;
 
-    const displayList = risultati.slice(0, 100);
+    const maxDisplay = getModalSearchMaxDisplay();
+    const displayList = risultati.slice(0, maxDisplay);
     const allPinned = displayList.length > 0 && displayList.every(c => pinnedContatori.has(c.eneltel));
+
+    let countSummaryHtml = `<span>🔍 <strong>${risultati.length}</strong> contator${risultati.length === 1 ? 'e trovato' : 'i trovati'}`;
+    if (lastModalMultiSearchMeta && lastModalMultiSearchMeta.isMulti) {
+        countSummaryHtml += ` <span style="font-weight: normal; color: var(--text-muted);">(su ${lastModalMultiSearchMeta.totalSearched} codici)</span>`;
+    }
+    countSummaryHtml += `</span>`;
+
+    if (risultati.length > maxDisplay) {
+        countSummaryHtml += `<small style="color:var(--text-muted);">(primi ${maxDisplay})</small>`;
+    }
+
+    let missingAlertHtml = '';
+    if (lastModalMultiSearchMeta && lastModalMultiSearchMeta.missingTokens.length > 0) {
+        const miss = lastModalMultiSearchMeta.missingTokens;
+        missingAlertHtml = `
+            <div class="multi-search-missing-box">
+                <div class="missing-box-header">
+                    <i data-lucide="alert-triangle"></i>
+                    <span><strong>${miss.length}</strong> contator${miss.length === 1 ? 'e' : 'i'} non trovat${miss.length === 1 ? 'o' : 'i'} nel database:</span>
+                </div>
+                <div class="missing-box-tokens">
+                    ${miss.map(m => `<span class="missing-token-pill" data-type="${m.type}" data-token="${escapeSearchHtml(m.token.toUpperCase())}" title="Codice non presente nel database">${m.type}: ${escapeSearchHtml(m.token.toUpperCase())}</span>`).join('')}
+                </div>
+            </div>
+        `;
+    }
 
     let html = `
         <div class="pin-results-header">
             <div class="pin-results-count">
-                <span>🔍 <strong>${risultati.length}</strong> contator${risultati.length === 1 ? 'e trovato' : 'i trovati'}</span>
-                ${risultati.length > 100 ? '<small style="color:var(--text-muted);">(primi 100)</small>' : ''}
+                ${countSummaryHtml}
             </div>
             <div class="pin-results-actions">
                 <button class="btn-pin-batch" onclick="togglePinAllSearchResults()">
@@ -2943,6 +3400,7 @@ function renderModalSearchResultsMarkup(risultati) {
                 </button>
             </div>
         </div>
+        ${missingAlertHtml}
         <div class="pin-results-list">
     `;
 
@@ -2960,13 +3418,13 @@ function renderModalSearchResultsMarkup(risultati) {
                 </div>
                 <div class="pin-result-main">
                     <div class="pin-result-name-row">
-                        <span class="pin-result-name">${c.cliente || 'N/D'}</span>
+                        <span class="pin-result-name">${escapeSearchHtml(c.cliente) || 'N/D'}</span>
                         ${c.is_appuntamento ? '<span class="pin-badge-app">☎️ App.</span>' : ''}
                         ${isPinned ? '<span class="pin-badge-pinned">📌 Pinnato</span>' : ''}
                     </div>
                     <div class="pin-result-info">
-                        📍 <strong>${c.comune || 'N/D'}</strong> - ${c.via || 'N/D'}${c.civico ? ', ' + c.civico : ''}<br>
-                        🔢 ${c.eneltel || 'N/D'} | ⚡ ${c.pod || 'N/D'} | 📅 ${formatDate(c.data)}${c.telefono ? ` | 📱 ${c.telefono}` : ''}
+                        📍 <strong>${escapeSearchHtml(c.comune) || 'N/D'}</strong> - ${escapeSearchHtml(c.via) || 'N/D'}${c.civico ? ', ' + escapeSearchHtml(c.civico) : ''}<br>
+                        🔢 ${escapeSearchHtml(c.eneltel) || 'N/D'} | ⚡ ${escapeSearchHtml(c.pod) || 'N/D'} | 📅 ${formatDate(c.data)}${c.telefono ? ` | 📱 ${escapeSearchHtml(c.telefono)}` : ''}
                     </div>
                 </div>
                 <div class="pin-result-actions" onclick="event.stopPropagation()">
@@ -2986,7 +3444,9 @@ function renderModalSearchResultsMarkup(risultati) {
 
     html += `</div>`;
     resultsDiv.innerHTML = html;
-    if (window.refreshLucideIcons) window.refreshLucideIcons();
+    if (typeof lucide !== 'undefined' && lucide.createIcons) {
+        lucide.createIcons();
+    }
 }
 
 function aggiornaStatoPinInModal() {
@@ -3020,7 +3480,8 @@ function aggiornaStatoPinInModal() {
 
         const batchBtn = document.querySelector('.btn-pin-batch');
         if (batchBtn) {
-            const displayList = lastModalSearchResults.slice(0, 100);
+            const maxDisplay = typeof getModalSearchMaxDisplay === 'function' ? getModalSearchMaxDisplay() : 100;
+            const displayList = lastModalSearchResults.slice(0, maxDisplay);
             const allPinned = displayList.length > 0 && displayList.every(c => pinnedContatori.has(c.eneltel));
             batchBtn.innerHTML = allPinned ? '❌ Sblocca tutti' : '📌 Pinna tutti (' + displayList.length + ')';
         }
@@ -3030,30 +3491,60 @@ function aggiornaStatoPinInModal() {
 }
 
 function saveAdvancedSearchData() {
+    const isMultiPod = document.getElementById('modalMultiSearchPodToggle')?.checked || false;
+    const isMultiEneltel = document.getElementById('modalMultiSearchEneltelToggle')?.checked || false;
+
     const data = {
-        nominativo: document.getElementById('modalSearchNominativo').value,
-        pod: document.getElementById('modalSearchPod').value,
-        eneltel: document.getElementById('modalSearchEneltel').value,
-        comune: document.getElementById('modalSearchComune').value,
-        via: document.getElementById('modalSearchVia').value,
-        telefono: document.getElementById('modalSearchTelefono').value
+        nominativo: document.getElementById('modalSearchNominativo')?.value || '',
+        pod: document.getElementById('modalSearchPod')?.value || '',
+        pod_multi_active: isMultiPod,
+        pod_multi_val: document.getElementById('modalSearchPodMulti')?.value || '',
+        eneltel: document.getElementById('modalSearchEneltel')?.value || '',
+        eneltel_multi_active: isMultiEneltel,
+        eneltel_multi_val: document.getElementById('modalSearchEneltelMulti')?.value || '',
+        comune: document.getElementById('modalSearchComune')?.value || '',
+        via: document.getElementById('modalSearchVia')?.value || '',
+        telefono: document.getElementById('modalSearchTelefono')?.value || ''
     };
     localStorage.setItem('advancedSearchData', JSON.stringify(data));
 }
 
 function restoreAdvancedSearchData() {
     setSearchDefaultViewMode(searchDefaultViewMode);
+    setupMultiSearchPasteHandlers();
     const saved = localStorage.getItem('advancedSearchData');
     if (!saved) return;
 
     try {
         const data = JSON.parse(saved);
-        document.getElementById('modalSearchNominativo').value = data.nominativo || '';
-        document.getElementById('modalSearchPod').value = data.pod || '';
-        document.getElementById('modalSearchEneltel').value = data.eneltel || '';
-        document.getElementById('modalSearchComune').value = data.comune || '';
-        document.getElementById('modalSearchVia').value = data.via || '';
-        document.getElementById('modalSearchTelefono').value = data.telefono || '';
+        if (document.getElementById('modalSearchNominativo')) {
+            document.getElementById('modalSearchNominativo').value = data.nominativo || '';
+        }
+        if (document.getElementById('modalSearchComune')) {
+            document.getElementById('modalSearchComune').value = data.comune || '';
+        }
+        if (document.getElementById('modalSearchVia')) {
+            document.getElementById('modalSearchVia').value = data.via || '';
+        }
+        if (document.getElementById('modalSearchTelefono')) {
+            document.getElementById('modalSearchTelefono').value = data.telefono || '';
+        }
+
+        // POD
+        if (document.getElementById('modalSearchPod')) {
+            document.getElementById('modalSearchPod').value = data.pod || '';
+        }
+        const podMulti = document.getElementById('modalSearchPodMulti');
+        if (podMulti) podMulti.value = data.pod_multi_val || '';
+        setMultiSearchActive('pod', !!data.pod_multi_active);
+
+        // Eneltel
+        if (document.getElementById('modalSearchEneltel')) {
+            document.getElementById('modalSearchEneltel').value = data.eneltel || '';
+        }
+        const eneltelMulti = document.getElementById('modalSearchEneltelMulti');
+        if (eneltelMulti) eneltelMulti.value = data.eneltel_multi_val || '';
+        setMultiSearchActive('eneltel', !!data.eneltel_multi_active);
     } catch (e) {
         console.error('Errore ripristino dati ricerca:', e);
     }
@@ -6386,13 +6877,21 @@ function showMappaToast(msg, opts) {
     const toast = document.getElementById('mappaToast');
     if (!toast) return;
     toast.textContent = msg;
+    toast.classList.remove('mappa-toast--success', 'mappa-toast--error', 'mappa-toast--warn', 'mappa-toast--info');
+    if (opts && opts.type) {
+        toast.classList.add(`mappa-toast--${opts.type}`);
+    } else {
+        toast.classList.add('mappa-toast--success');
+    }
     toast.classList.add('visible');
     clearTimeout(_mappaToastTimeout);
     // persistent=true → niente auto-dismiss (chi mostra è responsabile di chiamare hideMappaToast)
     if (opts && opts.persistent) return;
+    const duration = (opts && opts.duration) ? opts.duration : 3500;
     _mappaToastTimeout = setTimeout(() => {
         toast.classList.remove('visible');
-    }, 3500);
+        toast.classList.remove('mappa-toast--success', 'mappa-toast--error', 'mappa-toast--warn', 'mappa-toast--info');
+    }, duration);
 }
 
 function hideMappaToast() {
@@ -6400,6 +6899,7 @@ function hideMappaToast() {
     if (!toast) return;
     clearTimeout(_mappaToastTimeout);
     toast.classList.remove('visible');
+    toast.classList.remove('mappa-toast--success', 'mappa-toast--error', 'mappa-toast--warn', 'mappa-toast--info');
 }
 
 // Flash discreto sull'orario quando i dati vengono aggiornati
@@ -6639,12 +7139,16 @@ document.getElementById('searchInput').addEventListener('input', (e) => {
 
 // Event listener per campi modal search (Enter = avvia ricerca)
 ['modalSearchNominativo', 'modalSearchPod', 'modalSearchEneltel', 'modalSearchComune', 'modalSearchVia', 'modalSearchTelefono'].forEach(id => {
-    document.getElementById(id).addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            applyModalAdvancedSearch();
-        }
-    });
+    const el = document.getElementById(id);
+    if (el) {
+        el.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                applyModalAdvancedSearch();
+            }
+        });
+    }
 });
+setupMultiSearchPasteHandlers();
 
 // Event listener per frecce tastiera (navigazione date)
 document.addEventListener('keydown', (e) => {

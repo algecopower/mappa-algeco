@@ -1260,6 +1260,104 @@ def find_filone_row_by_pod(pod, lcl=None, disabled_lcls=None):
     return (row['eneltel_key'], row['lcl']) if row else None
 
 
+def find_inactive_lcl_contatori(pod_list=None, eneltel_list=None, nominativo=None, disabled_lcls=None, limit=50):
+    """Cerca contatori appartenenti a LCL disabilitate per i quali non esiste
+    alcun duplicato (stesso POD o stesso Eneltel) in una LCL attiva.
+
+    Ritorna una lista di dict:
+    [{'pod': ..., 'eneltel_key': ..., 'nominativo': ..., 'comune': ..., 'lcl': ...}, ...]
+    """
+    if not disabled_lcls:
+        return []
+
+    dis_list = [str(x).strip().upper() for x in disabled_lcls if str(x).strip()]
+    if not dis_list:
+        return []
+
+    dis_placeholders = ', '.join(['?'] * len(dis_list))
+
+    conditions = []
+    params = list(dis_list)
+
+    # Token POD
+    cleaned_pods = [str(p).strip().upper() for p in (pod_list or []) if str(p).strip()]
+    if cleaned_pods:
+        pod_clauses = []
+        for p in cleaned_pods:
+            if len(p) >= 4:
+                pod_clauses.append("(UPPER(TRIM(f.pod)) = ? OR UPPER(TRIM(f.pod)) LIKE ?)")
+                params.extend([p, f"%{p}%"])
+            else:
+                pod_clauses.append("UPPER(TRIM(f.pod)) = ?")
+                params.append(p)
+        conditions.append(f"({' OR '.join(pod_clauses)})")
+
+    # Token Eneltel
+    cleaned_eneltels = [str(e).strip().upper() for e in (eneltel_list or []) if str(e).strip()]
+    if cleaned_eneltels:
+        eneltel_clauses = []
+        for e in cleaned_eneltels:
+            if len(e) >= 4:
+                eneltel_clauses.append("(UPPER(TRIM(f.eneltel_key)) = ? OR UPPER(TRIM(f.eneltel_key)) LIKE ?)")
+                params.extend([e, f"%{e}%"])
+            else:
+                eneltel_clauses.append("UPPER(TRIM(f.eneltel_key)) = ?")
+                params.append(e)
+        conditions.append(f"({' OR '.join(eneltel_clauses)})")
+
+    # Nominativo
+    if nominativo and str(nominativo).strip():
+        nom_clean = str(nominativo).strip().upper()
+        if len(nom_clean) >= 3:
+            conditions.append("UPPER(f.nominativo) LIKE ?")
+            params.append(f"%{nom_clean}%")
+
+    if not conditions:
+        return []
+
+    where_search = ' OR '.join(conditions)
+    params.extend(dis_list)
+
+    sql = f"""
+        SELECT DISTINCT
+            COALESCE(f.pod, '') AS pod,
+            COALESCE(f.eneltel_key, '') AS eneltel_key,
+            COALESCE(f.nominativo, '') AS nominativo,
+            COALESCE(f.comune, '') AS comune,
+            COALESCE(f.lcl, '') AS lcl
+        FROM filone f
+        WHERE UPPER(TRIM(COALESCE(f.lcl, ''))) IN ({dis_placeholders})
+          AND ({where_search})
+          AND NOT EXISTS (
+              SELECT 1 FROM filone a
+              WHERE (
+                  (f.pod IS NOT NULL AND f.pod != '' AND UPPER(TRIM(a.pod)) = UPPER(TRIM(f.pod)))
+                  OR
+                  (f.eneltel_key IS NOT NULL AND f.eneltel_key != '' AND UPPER(TRIM(a.eneltel_key)) = UPPER(TRIM(f.eneltel_key)))
+              )
+              AND (UPPER(TRIM(COALESCE(a.lcl, ''))) NOT IN ({dis_placeholders}) OR a.lcl IS NULL)
+          )
+        ORDER BY f.nominativo ASC
+        LIMIT ?
+    """
+    params.append(int(limit))
+
+    conn = get_conn()
+    cur = conn.execute(sql, params)
+    rows = cur.fetchall()
+    return [
+        {
+            'pod': row['pod'],
+            'eneltel_key': row['eneltel_key'],
+            'nominativo': row['nominativo'],
+            'comune': row['comune'],
+            'lcl': row['lcl'],
+        }
+        for row in rows
+    ]
+
+
+
 def find_filone_row_by_sheets_row(row_num):
     """Lookup sheets_row → (eneltel_key, lcl). None se non trovato.
 

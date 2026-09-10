@@ -503,6 +503,223 @@ body {
     border-color: var(--accent);
 }
 
+/* Multi-search Toggle & Textarea */
+.advanced-search-field-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 2px;
+}
+
+.advanced-search-field-header label {
+    margin: 0;
+}
+
+.multi-search-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    transition: all 0.2s ease;
+    padding: 1px 4px;
+    border-radius: 4px;
+}
+
+.multi-search-toggle:hover {
+    color: var(--text-primary);
+}
+
+.multi-search-toggle input[type="checkbox"] {
+    display: none;
+}
+
+.multi-toggle-track {
+    position: relative;
+    width: 26px;
+    height: 14px;
+    background: var(--border);
+    border-radius: 9999px;
+    transition: background-color 0.2s ease;
+    flex-shrink: 0;
+    display: inline-block;
+}
+
+.multi-toggle-thumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 10px;
+    height: 10px;
+    background: #ffffff;
+    border-radius: 50%;
+    transition: transform 0.2s ease;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.multi-search-toggle input[type="checkbox"]:checked + .multi-toggle-track {
+    background: var(--accent);
+}
+
+.multi-search-toggle input[type="checkbox"]:checked + .multi-toggle-track .multi-toggle-thumb {
+    transform: translateX(12px);
+}
+
+.multi-search-toggle input[type="checkbox"]:checked ~ .multi-toggle-text {
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.multi-search-textarea {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 7px 10px;
+    border: 2px solid var(--accent);
+    border-radius: 8px;
+    font-size: 12.5px;
+    line-height: 1.4;
+    outline: none;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    resize: vertical;
+    min-height: 54px;
+    max-height: 160px;
+    font-family: inherit;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.multi-search-textarea:focus {
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+.multi-tokens-count-badge {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.72rem;
+    color: var(--accent);
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    border-radius: 5px;
+    padding: 2px 8px;
+    margin-top: 3px;
+    animation: fadeIn 0.15s ease;
+}
+
+.btn-clear-multi-field {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 0 2px;
+    font-weight: bold;
+}
+
+.btn-clear-multi-field:hover {
+    color: var(--text-primary);
+}
+
+/* Multi-search Missing Alert in Results */
+.multi-search-missing-box {
+    margin-bottom: 12px;
+    padding: 8px 12px;
+    background: rgba(245, 158, 11, 0.1);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    border-radius: 8px;
+}
+
+.missing-box-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #f59e0b;
+    margin-bottom: 6px;
+}
+
+.missing-box-tokens {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.missing-token-pill {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.72rem;
+    font-family: monospace;
+    font-weight: 600;
+    padding: 2px 8px;
+    background: rgba(245, 158, 11, 0.2);
+    color: #d97706;
+    border-radius: 4px;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+/* Avviso LCL disabilitata in ricerca utente */
+.inactive-lcl-alert-box {
+    margin: 10px 0;
+    padding: 10px 14px;
+    background: rgba(243, 156, 18, 0.12);
+    border: 1px solid rgba(243, 156, 18, 0.45);
+    border-radius: 8px;
+    color: var(--text-primary);
+    text-align: left;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+    animation: fadeIn 0.25s ease;
+}
+
+.inactive-lcl-alert-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #f39c12;
+    margin-bottom: 5px;
+}
+
+.inactive-lcl-alert-desc {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+    line-height: 1.4;
+}
+
+.inactive-lcl-item-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.80rem;
+    padding: 4px 10px;
+    margin: 2px 4px 4px 0;
+    background: var(--surface-card, rgba(255, 255, 255, 0.06));
+    border: 1px solid rgba(243, 156, 18, 0.35);
+    border-radius: 6px;
+    font-family: inherit;
+}
+
+.inactive-lcl-badge {
+    background: rgba(243, 156, 18, 0.25);
+    color: #f39c12;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.missing-token-pill--inactive-lcl {
+    border-color: rgba(243, 156, 18, 0.6) !important;
+    background: rgba(243, 156, 18, 0.22) !important;
+    color: #f39c12 !important;
+}
+
 .advanced-search-actions {
     margin-top: 8px;
     display: flex;

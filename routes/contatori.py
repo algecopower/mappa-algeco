@@ -1597,3 +1597,56 @@ def get_cell_log():
         return jsonify({'history': results})
     except Exception as e:
         return _api_error(e, 'lettura log celle')
+
+
+@bp.route('/api/contatori/check-inactive-lcl', methods=['POST'])
+@login_required
+def check_inactive_lcl():
+    """Controlla se i parametri di ricerca (POD, Eneltel, Nominativo)
+    corrispondono a contatori di LCL disabilitate senza alcun duplicato attivo.
+
+    Payload JSON:
+      - pod_tokens: list[str] (opzionale, per ricerca multipla POD)
+      - eneltel_tokens: list[str] (opzionale, per ricerca multipla Eneltel)
+      - pod: str (opzionale)
+      - eneltel: str (opzionale)
+      - nominativo: str (opzionale)
+    """
+    try:
+        from moduli import db as _db
+        import config
+
+        data = request.get_json(silent=True) or {}
+        disabled_lcls = getattr(config, 'LCL_DISABILITATI', [])
+        if not disabled_lcls:
+            return jsonify({'inactive_found': [], 'total_inactive': 0})
+
+        pod_list = data.get('pod_tokens') or []
+        if not isinstance(pod_list, list):
+            pod_list = []
+        if data.get('pod'):
+            pod_list.append(str(data['pod']))
+
+        eneltel_list = data.get('eneltel_tokens') or []
+        if not isinstance(eneltel_list, list):
+            eneltel_list = []
+        if data.get('eneltel'):
+            eneltel_list.append(str(data['eneltel']))
+
+        nominativo = data.get('nominativo')
+
+        found = _db.find_inactive_lcl_contatori(
+            pod_list=pod_list,
+            eneltel_list=eneltel_list,
+            nominativo=nominativo,
+            disabled_lcls=disabled_lcls,
+            limit=50
+        )
+
+        return jsonify({
+            'inactive_found': found,
+            'total_inactive': len(found),
+        })
+    except Exception as e:
+        return _api_error(e, 'controllo LCL disabilitate')
+

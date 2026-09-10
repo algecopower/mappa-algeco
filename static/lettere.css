@@ -203,25 +203,29 @@ select {
 
 .table-wrap {
     max-width: 100%;
-    overflow: hidden;
+    overflow-x: auto;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
 }
 .lettere-table {
     width: 100%;
+    min-width: 860px;
     table-layout: fixed;
     border-collapse: collapse;
 }
 .lettere-table th:nth-child(1),
-.lettere-table td:nth-child(1) { width: 3%; }
+.lettere-table td:nth-child(1) { width: 44px; text-align: center; }
 .lettere-table th:nth-child(2),
-.lettere-table td:nth-child(2) { width: 31%; }
+.lettere-table td:nth-child(2) { width: 30%; min-width: 220px; }
 .lettere-table th:nth-child(3),
-.lettere-table td:nth-child(3) { width: 12%; }
+.lettere-table td:nth-child(3) { width: 14%; min-width: 120px; }
 .lettere-table th:nth-child(4),
-.lettere-table td:nth-child(4) { width: 13%; }
+.lettere-table td:nth-child(4) { width: 14%; min-width: 120px; }
 .lettere-table th:nth-child(5),
-.lettere-table td:nth-child(5) { width: 24%; }
+.lettere-table td:nth-child(5) { width: 20%; min-width: 150px; }
 .lettere-table th:nth-child(6),
-.lettere-table td:nth-child(6) { width: 17%; }
+.lettere-table td:nth-child(6) { width: 18%; min-width: 170px; }
 .lettere-table td {
     overflow-wrap: anywhere;
 }
@@ -779,3 +783,793 @@ select {
     }
 }
 
+/* ==========================================================================
+   VISTE & TAB SWITCHER (Aziende vs Privati)
+   ========================================================================== */
+.view-switch-tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 10px;
+}
+.view-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 18px;
+    border-radius: 8px;
+    background: var(--surface, rgba(255, 255, 255, 0.05));
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 0.92rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.view-tab:hover {
+    background: var(--surface-raised, rgba(255, 255, 255, 0.1));
+    color: var(--text);
+}
+.view-tab.active {
+    background: var(--primary, #2563eb);
+    color: #fff;
+    border-color: var(--primary, #2563eb);
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
+}
+.view-tab-badge {
+    font-size: 0.74rem;
+    padding: 2px 8px;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.25);
+    color: inherit;
+    font-weight: 800;
+}
+.view-tab.active .view-tab-badge {
+    background: rgba(255, 255, 255, 0.25);
+}
+
+/* ==========================================================================
+   TOOLBAR UTENTI PRIVATI
+   ========================================================================== */
+.privati-toolbar {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: var(--surface, #1e293b);
+    border: 1px solid var(--border, #334155);
+    border-radius: 12px;
+    padding: 14px 18px;
+    margin-bottom: 18px;
+}
+.privati-top-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+.privati-stats-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.privati-stat {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border-radius: 8px;
+    background: var(--surface-raised, #0f172a);
+    border: 1px solid var(--border);
+    font-size: 0.85rem;
+    font-weight: 700;
+}
+.privati-stat small {
+    font-size: 0.74rem;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+.privati-stat.stat-cellulare i { color: #10b981; }
+.privati-stat.stat-fisso i { color: #f59e0b; }
+.privati-stat.stat-no-phone i { color: var(--text-muted); }
+.privati-stat.stat-completed i { color: #22c55e; }
+
+.privati-filters-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    padding-top: 10px;
+}
+.privati-filters-checks {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+.filter-check-lbl {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.84rem;
+    font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+}
+.privati-filter-sep {
+    width: 1px;
+    height: 18px;
+    background: var(--border);
+}
+.privati-search-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1 1 300px;
+    max-width: 450px;
+}
+.privati-search-wrap input {
+    flex: 1;
+    padding: 7px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface-raised);
+    color: var(--text);
+    font-size: 0.84rem;
+}
+
+/* ==========================================================================
+   GRIGLIA E SCHEDE CONTATTI PRIVATI (Stile Gestione Distinte)
+   ========================================================================== */
+.contacts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+.contact-card {
+    background: var(--surface, #1e293b);
+    border: 1px solid var(--border, #334155);
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+.contact-card:hover {
+    border-color: var(--primary, #2563eb);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+.contact-card.completed {
+    background: rgba(34, 197, 94, 0.08);
+    border-color: rgba(34, 197, 94, 0.45);
+}
+
+.contact-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.lavoro-num {
+    font-size: 0.82rem;
+    font-weight: 800;
+    color: var(--text-muted);
+}
+.type-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 6px;
+}
+.type-badge.cellulare {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.35);
+}
+.type-badge.fisso {
+    background: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.35);
+}
+.type-badge.senza_telefono {
+    background: rgba(100, 116, 139, 0.15);
+    color: var(--text-muted);
+    border: 1px solid rgba(100, 116, 139, 0.35);
+}
+
+.contact-name-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+}
+.contact-name {
+    font-size: 1.05rem;
+    font-weight: 800;
+    line-height: 1.25;
+    word-break: break-word;
+}
+.btn-copy-name {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+.btn-copy-name:hover {
+    color: var(--primary);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.contact-details {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.84rem;
+    color: var(--text);
+    border-top: 1px solid var(--border);
+    padding-top: 8px;
+}
+.contact-details i {
+    width: 16px;
+    color: var(--text-muted);
+    text-align: center;
+    margin-right: 4px;
+}
+.contact-details .phone {
+    font-weight: 700;
+    color: #10b981;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.contact-details .phone.phone-invalid {
+    text-decoration: line-through;
+    color: #ef4444;
+}
+.btn-add-to-filone {
+    background: rgba(37, 99, 235, 0.15);
+    border: 1px solid rgba(37, 99, 235, 0.35);
+    color: #60a5fa;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+.btn-add-to-filone:hover {
+    background: rgba(37, 99, 235, 0.3);
+}
+
+.contact-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 4px;
+}
+.numeri-alternativi-box {
+    background: var(--surface-raised, #0f172a);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 0.8rem;
+}
+.numeri-alternativi-header {
+    font-weight: 700;
+    color: #f59e0b;
+    margin-bottom: 5px;
+}
+.numero-alternativo {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 3px 0;
+    border-top: 1px dashed var(--border);
+}
+.numero-fonte {
+    color: var(--text-muted);
+    font-size: 0.72rem;
+}
+.numero-valore {
+    font-family: monospace;
+    font-weight: 700;
+}
+.numero-valore.cellulare { color: #10b981; }
+.numero-valore.fisso { color: #f59e0b; }
+.btn-mini {
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    font-size: 0.72rem;
+}
+.btn-whatsapp {
+    background: #25d366;
+    color: white;
+}
+
+.phone-edit-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 3px 8px;
+}
+.phone-icon {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+}
+.phone-edit-input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    color: var(--text);
+    font-size: 0.82rem;
+    padding: 4px 0;
+}
+.phone-edit-input:focus {
+    outline: none;
+}
+.phone-edit-input.has-phone {
+    font-weight: 600;
+    color: #60a5fa;
+}
+
+.checkbox-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.84rem;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 2px;
+}
+
+.note-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    position: relative;
+}
+.note-display {
+    flex: 1;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface-raised);
+    color: var(--text);
+    font-size: 0.82rem;
+}
+.note-display.has-note {
+    border-color: rgba(245, 158, 11, 0.4);
+    color: #f59e0b;
+    font-weight: 600;
+}
+.btn-add-note {
+    position: relative;
+    padding: 6px 10px;
+    border-radius: 6px;
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.btn-add-note:hover {
+    color: var(--text);
+    border-color: var(--primary);
+}
+.note-dropdown {
+    display: none;
+    position: absolute;
+    right: 0;
+    bottom: 100%;
+    margin-bottom: 5px;
+    background: var(--surface-raised, #0f172a);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+    z-index: 50;
+    min-width: 170px;
+    overflow: hidden;
+}
+.note-dropdown.show {
+    display: block;
+}
+.note-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text);
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+.note-dropdown-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.appuntamento-section {
+    background: var(--surface-raised, #0f172a);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 0.82rem;
+}
+.appuntamento-title {
+    font-weight: 700;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.appuntamento-date-row,
+.appuntamento-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.appuntamento-date-label {
+    font-weight: 700;
+    min-width: 40px;
+}
+.appuntamento-date-input,
+.appuntamento-time-input {
+    padding: 4px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 0.82rem;
+}
+.btn-salva-data,
+.btn-appuntamento {
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+.btn-appuntamento.btn-fissa {
+    background: var(--primary, #2563eb);
+    color: white;
+    border-color: var(--primary);
+}
+.btn-appuntamento.btn-rimuovi {
+    background: #ef4444;
+    color: white;
+    border-color: #ef4444;
+}
+.appuntamento-quick-btns {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+.btn-quick-time {
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+.btn-quick-time:hover {
+    color: var(--text);
+    border-color: var(--primary);
+}
+
+.bulk-contact-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    transition: background 0.15s ease;
+}
+.bulk-contact-item:hover {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+/* ==========================================================================
+   VIEW MODE TOGGLE (COMPATTA / COMPLETA)
+   ========================================================================== */
+.view-mode-toggle {
+    display: inline-flex;
+    align-items: center;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 2px;
+    gap: 2px;
+}
+
+.btn-view-mode {
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 5px 11px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.15s ease;
+}
+
+.btn-view-mode:hover {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.btn-view-mode.active {
+    background: var(--surface-raised, #1e293b);
+    color: var(--primary, #3b82f6);
+    font-weight: 700;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* ==========================================================================
+   TABELLA COMPATTA UTENTI PRIVATI & STILI CONDIVISI
+   ========================================================================== */
+.privati-table {
+    width: 100%;
+}
+
+.privati-table tr.completed td,
+.lettere-table tr.completed td {
+    opacity: 0.6;
+    background: rgba(34, 197, 94, 0.04);
+}
+
+.privati-table tr.selected td,
+.lettere-table tr.selected td {
+    background: rgba(37, 99, 235, 0.08);
+}
+
+.contact-card.selected {
+    border-color: var(--primary, #2563eb);
+    background: rgba(37, 99, 235, 0.08);
+    box-shadow: 0 0 0 1px var(--primary, #2563eb);
+}
+
+.contact-card.completed {
+    opacity: 0.65;
+    background: rgba(34, 197, 94, 0.08);
+    border-color: rgba(34, 197, 94, 0.45);
+}
+
+.risposta-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.risposta-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    white-space: nowrap;
+    user-select: none;
+}
+
+.risposta-label:hover {
+    color: var(--text);
+}
+
+.risposta-label input[type="checkbox"] {
+    cursor: pointer;
+}
+
+.tel-input,
+.email-input {
+    width: 100%;
+    min-width: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 5px 8px;
+    font-size: 0.8rem;
+    color: var(--text);
+    transition: border-color 0.15s;
+}
+
+.tel-input:focus,
+.email-input:focus {
+    outline: none;
+    border-color: var(--primary);
+    background: var(--surface-raised);
+}
+
+.tel-input.has-val,
+.email-input.has-val {
+    color: #60a5fa;
+    font-weight: 600;
+}
+
+.note-input {
+    width: 100%;
+    min-width: 0;
+    padding: 5px 7px;
+    font-size: 0.78rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    color: var(--text);
+    transition: border-color 0.15s;
+}
+
+.note-input:focus {
+    outline: none;
+    border-color: var(--primary);
+    background: var(--surface-raised);
+}
+
+.note-input.has-note {
+    color: #f59e0b;
+    font-weight: 600;
+    border-color: rgba(245, 158, 11, 0.4);
+}
+
+.lettere-table .note-dropdown {
+    top: 100%;
+    bottom: auto;
+    margin-top: 4px;
+    margin-bottom: 0;
+    z-index: 100;
+}
+
+/* Badges e indicatori per cambio data / ripianificazione */
+.badge-cambio-data {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.badge-cambio-data del {
+    color: #94a3b8;
+    text-decoration: line-through;
+    opacity: 0.85;
+}
+
+.badge-cambio-data strong {
+    color: #fef08a;
+    font-weight: 700;
+}
+
+.badge-annullato {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #ef4444;
+    color: #ffffff;
+    border: 1px solid #dc2626;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.privati-stat.stat-ripianificati {
+    border-color: rgba(245, 158, 11, 0.4);
+    background: rgba(245, 158, 11, 0.08);
+    cursor: pointer;
+}
+
+.privati-stat.stat-ripianificati:hover {
+    border-color: #f59e0b;
+}
+
+.privati-stat.stat-ripianificati span {
+    color: #fbbf24;
+}
+
+/* ==========================================================================
+   CARD AZIENDE ED ENTI (VISTA COMPLETA)
+   ========================================================================== */
+.contact-card.azienda-card {
+    position: relative;
+    border-radius: 10px;
+}
+
+.contact-card.azienda-card.selected {
+    border-color: var(--primary, #2563eb);
+    background: rgba(37, 99, 235, 0.08);
+    box-shadow: 0 0 0 1px var(--primary, #2563eb);
+}
+
+.contact-card.azienda-card.incomplete-row {
+    border-left: 4px solid var(--warning, #f59e0b);
+}
+
+.contact-card.azienda-card.row-risposta {
+    border-left: 4px solid #10b981;
+}
+
+.contact-card.azienda-card.row-inviata {
+    opacity: 0.95;
+}
+
+.date-group-card-block {
+    margin-bottom: 20px;
+}
+
+.date-group-header-card {
+    cursor: pointer;
+    user-select: none;
+    padding: 10px 14px;
+    background: var(--surface, #1e293b);
+    border: 1px solid var(--border, #334155);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.date-group-header-card:hover {
+    border-color: var(--primary, #2563eb);
+    background: var(--surface-raised, #334155);
+}
+
+.date-group-header-card .date-group-label {
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--text, #f8fafc);
+}
+
+.date-group-header-card .date-group-count {
+    color: var(--text-muted, #94a3b8);
+    font-size: 0.82rem;
+}

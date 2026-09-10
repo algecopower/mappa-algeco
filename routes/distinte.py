@@ -178,6 +178,7 @@ def _build_fields_for_contact(contatto, template_def, field_defs):
 
 
 @bp.route('/api/distinte/templates', methods=['GET'])
+@bp.route('/api/lettere/templates', methods=['GET'])
 @login_required
 def get_distinte_templates():
     """Restituisce i template messaggi dal file JSON (per provincia o default)."""
@@ -521,6 +522,7 @@ def invia_singola_email():
 
 
 @bp.route('/api/distinte/sms-settings', methods=['GET'])
+@bp.route('/api/lettere/sms-settings', methods=['GET'])
 @login_required
 def api_distinte_sms_settings():
     """Restituisce la configurazione completa del gateway SMS per la provincia corrente."""
@@ -548,6 +550,7 @@ def api_distinte_sms_settings():
 
 
 @bp.route('/api/distinte/sms-settings', methods=['PUT'])
+@bp.route('/api/lettere/sms-settings', methods=['PUT'])
 @login_required
 def api_distinte_save_sms_settings():
     """Salva le impostazioni SMS Gateway per la provincia corrente direttamente dalla gestione distinte."""
@@ -561,6 +564,7 @@ def api_distinte_save_sms_settings():
 
 
 @bp.route('/api/distinte/sms-test', methods=['POST'])
+@bp.route('/api/lettere/sms-test', methods=['POST'])
 @login_required
 def api_distinte_test_sms():
     """Esegue un invio di prova SMS direttamente dalla gestione distinte."""
@@ -585,6 +589,7 @@ def api_distinte_test_sms():
 
 
 @bp.route('/api/distinte/invia-singolo-sms', methods=['POST'])
+@bp.route('/api/lettere/invia-singolo-sms', methods=['POST'])
 @login_required
 def invia_singolo_sms():
     """
@@ -1014,6 +1019,7 @@ def aggiorna_operatori_filone():
 
 
 @bp.route('/api/distinte/salva-nota', methods=['POST'])
+@bp.route('/api/lettere/salva-nota', methods=['POST'])
 @login_required
 def salva_nota_distinte():
     """
@@ -1030,16 +1036,20 @@ def salva_nota_distinte():
         pod = data.get('pod', '').strip().upper()
         nota = data.get('nota', '').strip()
         sovrascrivere = data.get('sovrascrivere', True)  # Default: sovrascrive
+        lcl = data.get('lcl', '').strip()
 
         if not pod:
             return jsonify({'error': 'POD mancante'}), 400
 
         # DB-only: no chiamate Sheets nel path di scrittura. Il drainer pusha.
         from moduli import db as _db
-        ek = _db.find_eneltel_by_pod(pod)
-        if not ek:
+        from moduli.lettere import _get_disabled_lcls
+        disabled = _get_disabled_lcls()
+        found = _db.find_filone_row_by_pod(pod, lcl=lcl, disabled_lcls=disabled)
+        if not found:
             return jsonify({'error': f'POD {pod} non trovato'}), 404
-        local = _db.get_filone_row(ek) or {}
+        ek, resolved_lcl = found
+        local = _db.get_filone_row(ek, lcl=resolved_lcl) or {}
         nota_attuale = local.get('note_appuntamento') or ''
         if sovrascrivere:
             nuova_nota = nota
@@ -1057,6 +1067,7 @@ def salva_nota_distinte():
             ek, {col_note_name: nuova_nota},
             origin='distinte_salva_nota',
             initial_state='pending',
+            lcl=resolved_lcl,
         )
         try:
             from moduli import sync_engine as _se
@@ -1108,6 +1119,7 @@ def segna_numero_errato():
 
 
 @bp.route('/api/distinte/appuntamento', methods=['POST'])
+@bp.route('/api/lettere/appuntamento', methods=['POST'])
 @login_required
 def set_appuntamento_distinte():
     """
@@ -1147,6 +1159,7 @@ def set_appuntamento_distinte():
 
 
 @bp.route('/api/distinte/rimuovi-appuntamento', methods=['POST'])
+@bp.route('/api/lettere/rimuovi-appuntamento', methods=['POST'])
 @login_required
 def remove_appuntamento_distinte():
     """Rimuove l'appuntamento da un contatore cercato per POD."""
@@ -1175,6 +1188,7 @@ def remove_appuntamento_distinte():
 
 
 @bp.route('/api/distinte/aggiorna-data', methods=['POST'])
+@bp.route('/api/lettere/aggiorna-data', methods=['POST'])
 @login_required
 def aggiorna_data_distinte():
     """
@@ -1221,6 +1235,7 @@ def aggiorna_data_distinte():
 
 
 @bp.route('/api/distinte/salva-telefono', methods=['POST'])
+@bp.route('/api/lettere/salva-telefono', methods=['POST'])
 @login_required
 def salva_telefono_filone():
     """
@@ -1232,11 +1247,22 @@ def salva_telefono_filone():
         data = request.json
         pod = data.get('pod', '').strip().upper()
         telefono = data.get('telefono', '').strip()
+        lcl = data.get('lcl', '').strip()
 
         if not pod:
             return jsonify({'error': 'POD mancante'}), 400
 
-        row = find_row_by_pod(pod)
+        from moduli import db as _db
+        from moduli.lettere import _get_disabled_lcls
+        disabled = _get_disabled_lcls()
+        found = _db.find_filone_row_by_pod(pod, lcl=lcl, disabled_lcls=disabled)
+        row = None
+        if found:
+            loc = _db.get_filone_row(found[0], lcl=found[1])
+            if loc:
+                row = loc.get('sheets_row')
+        if row is None:
+            row = find_row_by_pod(pod)
         if row is None:
             return jsonify({'error': f'POD {pod} non trovato'}), 404
 
@@ -1276,6 +1302,7 @@ def salva_telefono_filone():
 
 
 @bp.route('/api/distinte/salva-email', methods=['POST'])
+@bp.route('/api/lettere/salva-email', methods=['POST'])
 @login_required
 def salva_email_filone():
     """
@@ -1286,11 +1313,22 @@ def salva_email_filone():
         data = request.json
         pod = data.get('pod', '').strip().upper()
         email = data.get('email', '').strip()
+        lcl = data.get('lcl', '').strip()
 
         if not pod:
             return jsonify({'error': 'POD mancante'}), 400
 
-        row = find_row_by_pod(pod)
+        from moduli import db as _db
+        from moduli.lettere import _get_disabled_lcls
+        disabled = _get_disabled_lcls()
+        found = _db.find_filone_row_by_pod(pod, lcl=lcl, disabled_lcls=disabled)
+        row = None
+        if found:
+            loc = _db.get_filone_row(found[0], lcl=found[1])
+            if loc:
+                row = loc.get('sheets_row')
+        if row is None:
+            row = find_row_by_pod(pod)
         if row is None:
             return jsonify({'error': f'POD {pod} non trovato'}), 404
 

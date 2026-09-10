@@ -26,17 +26,21 @@
                 <button type="button" class="btn-soft" onclick="SmtpConfigModal.open({ mode: 'provincia', onSaveSuccess: caricaStatoSmtpLettere })" title="Configura SMTP / PEC">
                     <i class="fas fa-envelope-cog"></i> Configura SMTP
                 </button>
+                <button type="button" class="btn-soft" onclick="apriDistinteSmsConfigModal()" title="Configura Gateway SMS">
+                    <i class="fas fa-sms" style="color: #10b981;"></i> Gateway SMS
+                </button>
                 <button class="btn-primary" id="bulkOpenBtn" onclick="openBulkModal()" disabled>
-                    <i class="fas fa-paper-plane"></i> Invio bulk
+                    <i class="fas fa-paper-plane"></i> Invio bulk email
                 </button>
             </div>
         </header>
 
         <section class="kpi-grid" id="statsBox">
-            <div class="kpi"><span>-</span><small>Generazioni</small></div>
-            <div class="kpi"><span>-</span><small>Aziende</small></div>
-            <div class="kpi"><span>-</span><small>Con email/PEC</small></div>
-            <div class="kpi"><span>-</span><small>Feedback</small></div>
+            <div class="kpi" id="kpiGenerazioni"><span>-</span><small>Generazioni</small></div>
+            <div class="kpi" id="kpiAziende"><span>-</span><small>Aziende</small></div>
+            <div class="kpi" id="kpiPrivati"><span>-</span><small>Utenti Privati</small></div>
+            <div class="kpi" id="kpiEmailPec"><span>-</span><small>Con email/PEC</small></div>
+            <div class="kpi" id="kpiFeedback"><span>-</span><small>Feedback</small></div>
         </section>
 
         <section class="layout">
@@ -57,55 +61,199 @@
             </aside>
 
             <main class="main-panel">
-                <div class="toolbar">
-                    <div>
-                        <h2>Aziende e contatti</h2>
-                        <p id="resultInfo">Caricamento...</p>
-                    </div>
-                    <div class="toolbar-controls">
-                        <select id="filterRecapito" class="btn-soft" onchange="setFilterRecapito(this.value)" style="font-size:0.84rem;padding:7px 10px;font-weight:600;">
-                            <option value="tutti">Tutti i contatti</option>
-                            <option value="con_email">Con Email o PEC</option>
-                            <option value="solo_mail">Solo MAIL</option>
-                            <option value="solo_pec">Solo PEC</option>
-                            <option value="monofase">Monofase</option>
-                            <option value="trifase">Trifase</option>
-                            <option value="semidiretta">Semidiretta</option>
-                            <option value="con_note">Con Note</option>
-                            <option value="senza_note">Senza Note</option>
-                            <option value="senza_email">Senza Email / PEC</option>
-                            <option value="incompleti">Solo incompleti</option>
-                            <option value="non_inviati">Non ancora inviati</option>
-                        </select>
-                        <button class="btn-soft" id="researchQueueBtn" onclick="startContactResearchQueue()" title="Apre il primo contatto senza telefono o email">
-                            <i class="fas fa-magnifying-glass-location"></i> Coda ricerche
-                        </button>
-                        <input type="search" id="searchInput" placeholder="Cerca azienda, POD, comune o email">
-                        <button class="btn-soft" onclick="loadAziende()"><i class="fas fa-search"></i></button>
-                    </div>
+                <!-- Selettore Viste: Aziende ed Enti vs Utenti Privati -->
+                <div class="view-switch-tabs">
+                    <button type="button" class="view-tab active" id="tabViewAziende" onclick="switchMainView('aziende')">
+                        <i class="fas fa-building"></i> Aziende ed Enti
+                        <span class="view-tab-badge" id="badgeCountAziende">0</span>
+                    </button>
+                    <button type="button" class="view-tab" id="tabViewPrivati" onclick="switchMainView('privati')">
+                        <i class="fas fa-user-friends"></i> Utenti Privati
+                        <span class="view-tab-badge" id="badgeCountPrivati">0</span>
+                    </button>
                 </div>
 
-                <div class="table-wrap">
-                    <table class="lettere-table">
-                        <thead>
-                            <tr>
-                                <th><input type="checkbox" id="selectAll" onchange="toggleSelectAll(this.checked)"></th>
-                                <th>Azienda</th>
-                                <th>Intervento</th>
-                                <th>Telefono</th>
-                                <th>Email / PEC</th>
-                                <th>Invii e risposta</th>
-                            </tr>
-                        </thead>
-                        <tbody id="aziendeBody">
-                            <tr><td colspan="6" class="empty">Caricamento...</td></tr>
-                        </tbody>
-                    </table>
+                <!-- SEZIONE 1: AZIENDE ED ENTI -->
+                <div id="sectionAziende" class="view-section">
+                    <div class="toolbar">
+                        <div>
+                            <h2>Aziende e contatti</h2>
+                            <p id="resultInfo">Caricamento...</p>
+                        </div>
+                        <div class="toolbar-controls">
+                            <div class="view-mode-toggle">
+                                <button type="button" class="btn-view-mode active" id="btnAziendeViewTable" onclick="setAziendeViewMode('table')" title="Visualizzazione Compatta (Tabella)">
+                                    <i class="fas fa-table"></i> Compatta
+                                </button>
+                                <button type="button" class="btn-view-mode" id="btnAziendeViewCards" onclick="setAziendeViewMode('cards')" title="Visualizzazione Completa (Schede)">
+                                    <i class="fas fa-th-large"></i> Completa
+                                </button>
+                            </div>
+                            <select id="filterRecapito" class="btn-soft" onchange="setFilterRecapito(this.value)" style="font-size:0.84rem;padding:7px 10px;font-weight:600;">
+                                <option value="tutti">Tutti i contatti</option>
+                                <option value="da_fare">Solo da fare</option>
+                                <option value="completati">Solo completati (Fatto)</option>
+                                <option value="con_email">Con Email o PEC</option>
+                                <option value="solo_mail">Solo MAIL</option>
+                                <option value="solo_pec">Solo PEC</option>
+                                <option value="monofase">Monofase</option>
+                                <option value="trifase">Trifase</option>
+                                <option value="semidiretta">Semidiretta</option>
+                                <option value="con_note">Con Note</option>
+                                <option value="senza_note">Senza Note</option>
+                                <option value="senza_email">Senza Email / PEC</option>
+                                <option value="incompleti">Solo incompleti</option>
+                                <option value="non_inviati">Non ancora inviati</option>
+                                <option value="date_modificate">Date modificate / annullate</option>
+                            </select>
+                            <button class="btn-soft" id="researchQueueBtn" onclick="startContactResearchQueue()" title="Apre il primo contatto senza telefono o email">
+                                <i class="fas fa-magnifying-glass-location"></i> Coda ricerche
+                            </button>
+                            <input type="search" id="searchInput" placeholder="Cerca azienda, POD, comune o email">
+                            <button class="btn-soft" onclick="loadAziende()"><i class="fas fa-search"></i></button>
+                        </div>
+                    </div>
+
+                    <!-- Vista Compatta a Tabella Aziende -->
+                    <div class="table-wrap" id="aziendeTableWrap">
+                        <table class="lettere-table">
+                            <thead>
+                                <tr>
+                                    <th><input type="checkbox" id="selectAll" onchange="toggleSelectAll(this.checked)"></th>
+                                    <th>Azienda</th>
+                                    <th>Intervento</th>
+                                    <th>Telefono</th>
+                                    <th>Email / PEC</th>
+                                    <th>Stato e Note</th>
+                                </tr>
+                            </thead>
+                            <tbody id="aziendeBody">
+                                <tr><td colspan="6" class="empty">Caricamento...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Vista Completa a Schede Aziende -->
+                    <div id="aziendeGrid" style="display:none;"></div>
+                </div>
+
+                <!-- SEZIONE 2: UTENTI PRIVATI (Stile Gestione Distinte integrato on-the-fly) -->
+                <div id="sectionPrivati" class="view-section" style="display:none;">
+                    <div class="privati-toolbar">
+                        <div class="privati-top-row">
+                            <div class="privati-stats-bar">
+                                <div class="privati-stat stat-cellulare">
+                                    <i class="fas fa-mobile-alt"></i>
+                                    <span id="privatiCountCellulare">0</span>
+                                    <small>Cellulari</small>
+                                </div>
+                                <div class="privati-stat stat-fisso">
+                                    <i class="fas fa-phone"></i>
+                                    <span id="privatiCountFisso">0</span>
+                                    <small>Fissi</small>
+                                </div>
+                                <div class="privati-stat stat-no-phone">
+                                    <i class="fas fa-phone-slash"></i>
+                                    <span id="privatiCountNoPhone">0</span>
+                                    <small>Senza Tel</small>
+                                </div>
+                                <div class="privati-stat stat-completed">
+                                    <i class="fas fa-check-circle"></i>
+                                    <span id="privatiCountCompleted">0</span>
+                                    <small>Completati</small>
+                                </div>
+                                <div class="privati-stat stat-ripianificati" id="privatiStatRipianificatiBox" style="display:none;" onclick="toggleFilterSoloModificati()" title="Utenti con data modificata o annullata nel database">
+                                    <i class="fas fa-history" style="color:#f59e0b;"></i>
+                                    <span id="privatiCountRipianificati">0</span>
+                                    <small>Date modif.</small>
+                                </div>
+                            </div>
+
+                            <div class="privati-actions-bar" style="display:flex;align-items:center;gap:10px;">
+                                <div class="view-mode-toggle">
+                                    <button type="button" class="btn-view-mode" id="btnPrivatiViewTable" onclick="setPrivatiViewMode('table')" title="Visualizzazione Compatta (Tabella)">
+                                        <i class="fas fa-table"></i> Compatta
+                                    </button>
+                                    <button type="button" class="btn-view-mode active" id="btnPrivatiViewCards" onclick="setPrivatiViewMode('cards')" title="Visualizzazione Completa (Schede)">
+                                        <i class="fas fa-th-large"></i> Completa
+                                    </button>
+                                </div>
+                                <button type="button" class="btn-primary" id="privatiBulkSmsBtn" onclick="apriPrivatiBulkSmsModal()" disabled style="background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; font-weight: 600; display: inline-flex; align-items: center; gap: 7px; padding: 7px 15px; border-radius: 6px; cursor: pointer;">
+                                    <i class="fas fa-sms"></i> Invio Multiplo SMS
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="privati-filters-row">
+                            <div class="privati-filters-checks">
+                                <label class="filter-check-lbl">
+                                    <input type="checkbox" id="filterPrivatiCellulare" checked onchange="renderPrivati()">
+                                    <i class="fas fa-mobile-alt" style="color:#10b981;"></i> Cellulare
+                                </label>
+                                <label class="filter-check-lbl">
+                                    <input type="checkbox" id="filterPrivatiFisso" checked onchange="renderPrivati()">
+                                    <i class="fas fa-phone" style="color:#f59e0b;"></i> Fisso
+                                </label>
+                                <label class="filter-check-lbl">
+                                    <input type="checkbox" id="filterPrivatiNoPhone" checked onchange="renderPrivati()">
+                                    <i class="fas fa-phone-slash" style="color:var(--text-muted);"></i> Senza tel
+                                </label>
+                                <span class="privati-filter-sep"></span>
+                                <label class="filter-check-lbl">
+                                    <input type="checkbox" id="filterPrivatiCompleted" checked onchange="renderPrivati()">
+                                    <i class="fas fa-check-circle" style="color:#22c55e;"></i> Completati
+                                </label>
+                                <label class="filter-check-lbl">
+                                    <input type="checkbox" id="filterPrivatiNotCompleted" checked onchange="renderPrivati()">
+                                    <i class="fas fa-circle" style="color:var(--text-muted);"></i> Da fare
+                                </label>
+                                <span class="privati-filter-sep"></span>
+                                <label class="filter-check-lbl" title="Mostra solo utenti con data modificata o annullata nel database">
+                                    <input type="checkbox" id="filterPrivatiSoloModificati" onchange="renderPrivati()">
+                                    <i class="fas fa-history" style="color:#f59e0b;"></i> Solo modificate
+                                </label>
+                            </div>
+
+                            <div class="privati-search-wrap">
+                                <input type="search" id="searchPrivatiInput" placeholder="Cerca privato, POD, comune, telefono o via..." oninput="onPrivatiSearchChange()">
+                                <button type="button" class="btn-soft" onclick="renderPrivati()"><i class="fas fa-search"></i></button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Vista Compatta a Tabella Utenti Privati -->
+                    <div class="table-wrap" id="privatiTableWrap" style="display:none;">
+                        <table class="lettere-table privati-table">
+                            <thead>
+                                <tr>
+                                    <th><input type="checkbox" id="selectAllPrivati" onchange="toggleSelectAllPrivati(this.checked)"></th>
+                                    <th>Utente</th>
+                                    <th>Intervento</th>
+                                    <th>Telefono</th>
+                                    <th>Email</th>
+                                    <th>Stato e Note</th>
+                                </tr>
+                            </thead>
+                            <tbody id="privatiTableBody">
+                                <tr><td colspan="6" class="empty">Caricamento utenti privati...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Vista Completa a Schede Utenti Privati -->
+                    <div id="privatiGrid" style="display:none;">
+                        <div class="empty-state">
+                            <i class="fas fa-user-friends"></i>
+                            <h3>Nessun utente privato caricato</h3>
+                            <p>Seleziona una generazione o verifica i filtri impostati</p>
+                        </div>
+                    </div>
                 </div>
             </main>
         </section>
     </div>
 
+    <!-- Modale Invio Bulk Email Aziende (Esistente) -->
     <div class="modal-backdrop" id="bulkModal">
         <div class="modal bulk-modal">
             <div class="modal-header">
@@ -114,7 +262,6 @@
             </div>
             <div class="modal-body">
                 <div class="bulk-setup-section" id="bulkSetupSection">
-                    <!-- Banner Stato SMTP con link rapido di configurazione -->
                     <div id="lettereSmtpStatusBox" style="padding:10px 14px;border-radius:8px;background:var(--surface, #1e293b);border:1px solid var(--border, #334155);margin-bottom:14px;font-size:0.9rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
                         <div style="display:flex;align-items:center;gap:8px;">
                             <i class="fas fa-envelope-open-text" style="color:var(--accent, #2563eb);"></i>
@@ -154,7 +301,6 @@
                     <div class="bulk-list" id="bulkList"></div>
                 </div>
 
-                <!-- Preview Section (stile Gestione Distinte) -->
                 <div class="bulk-preview-section" id="bulkPreviewSection" style="display:none;">
                     <div class="bulk-preview-header">
                         <span><i class="fas fa-eye"></i> Anteprima email (<span id="previewCount">0</span>)</span>
@@ -183,6 +329,7 @@
         </div>
     </div>
 
+    <!-- Modale Coda Ricerche Google Aziende (Esistente) -->
     <div class="modal-backdrop" id="researchModal">
         <div class="modal research-modal">
             <div class="modal-header">
@@ -263,9 +410,90 @@
         </div>
     </div>
 
+    <!-- MODALE INVIO MULTIPLO SMS UTENTI PRIVATI -->
+    <div class="modal-backdrop" id="privatiBulkSmsModal">
+        <div class="modal bulk-modal bulk-sms-modal-wrap" style="max-width: 900px;">
+            <div class="modal-header">
+                <h2><i class="fas fa-sms" style="color: #10b981;"></i> Invio Multiplo SMS a Utenti Privati</h2>
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <button type="button" class="btn-soft" onclick="apriDistinteSmsConfigModal()" style="font-size:0.8rem;padding:4px 9px;" title="Configura Gateway SMS">
+                        <i class="fas fa-cog"></i> Gateway SMS
+                    </button>
+                    <button class="icon-btn" onclick="chiudiPrivatiBulkSmsModal()"><i class="fas fa-times"></i></button>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div id="privatiBulkSmsGatewayStatus" style="padding:10px 14px;border-radius:8px;background:var(--surface, #1e293b);border:1px solid var(--border, #334155);margin-bottom:14px;font-size:0.9rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:gap;gap:8px;">
+                    <div style="display:flex;align-items:center;gap:8px;" id="privatiBulkSmsStatusText">
+                        <i class="fas fa-spinner fa-spin"></i> <span>Verifica stato SMS Gateway...</span>
+                    </div>
+                </div>
+
+                <div style="display:grid;grid-template-columns: 1fr 1fr;gap:12px;margin-bottom:12px;" class="bulk-sms-config-row">
+                    <div>
+                        <label for="privatiBulkSmsTemplateSelect" style="font-size:0.82rem;font-weight:700;display:block;margin-bottom:4px;">Template SMS:</label>
+                        <select id="privatiBulkSmsTemplateSelect" onchange="onPrivatiBulkSmsTemplateChange()" style="width:100%;padding:8px 10px;border-radius:6px;background:var(--surface-raised, #0f172a);color:var(--text, #fff);border:1px solid var(--border, #334155);"></select>
+                    </div>
+                    <div>
+                        <label for="privatiBulkSmsDelaySec" style="font-size:0.82rem;font-weight:700;display:block;margin-bottom:4px;">Pausa anti-flood (secondi):</label>
+                        <input type="number" id="privatiBulkSmsDelaySec" min="1" max="60" value="4" style="width:100%;padding:8px 10px;border-radius:6px;background:var(--surface-raised, #0f172a);color:var(--text, #fff);border:1px solid var(--border, #334155);">
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 12px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                        <label for="privatiBulkSmsMessageText" style="font-size:0.82rem;font-weight:700;">
+                            Testo SMS (con segnaposto automatici es. {nome}, {data}, {comune}, {indirizzo}, {pod}, {telefono_tecnico}):
+                        </label>
+                        <div id="privatiBulkSmsCharCount" style="font-size:0.8rem;font-weight:bold;color:var(--text-muted);background:var(--surface-raised);padding:2px 8px;border-radius:4px;border:1px solid var(--border);">
+                            0 car | 0 SMS
+                        </div>
+                    </div>
+                    <textarea id="privatiBulkSmsMessageText" rows="4" oninput="aggiornaPrivatiSmsCharCounter()" style="width:100%;padding:10px;border-radius:6px;background:var(--surface-raised, #0f172a);color:var(--text, #fff);border:1px solid var(--border, #334155);font-family:inherit;font-size:0.88rem;resize:vertical;"></textarea>
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:3px;font-size:0.75rem;">
+                        <span id="privatiBulkSmsEncodingNote" style="color:var(--text-muted);">GSM-7 (160 car/SMS)</span>
+                        <span style="color:var(--text-muted);">Segnaposto: {nome}, {data}, {comune}, {indirizzo}, {pod}, {telefono_tecnico}</span>
+                    </div>
+                </div>
+
+                <div class="bulk-filter-bar" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+                    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;font-size:0.86rem;">
+                        <input type="checkbox" id="privatiBulkSmsSelectAll" onchange="togglePrivatiBulkSmsSelectAll(this.checked)" checked>
+                        <strong>Seleziona tutti</strong> (<span id="privatiBulkSmsCount">0 contatti</span>)
+                    </label>
+                    <div class="bulk-filter-presets" id="privatiSmsPresets">
+                        <button type="button" class="btn-preset active" id="privatiSmsPreset_tutti" onclick="applyPrivatiSmsPreset('tutti')">Tutti</button>
+                        <button type="button" class="btn-preset" id="privatiSmsPreset_monofase" onclick="applyPrivatiSmsPreset('monofase')">Monofase</button>
+                        <button type="button" class="btn-preset" id="privatiSmsPreset_trifase" onclick="applyPrivatiSmsPreset('trifase')">Trifase</button>
+                        <button type="button" class="btn-preset" id="privatiSmsPreset_con_note" onclick="applyPrivatiSmsPreset('con_note')"><i class="fas fa-sticky-note" style="color:#f59e0b;font-size:0.75rem;"></i> Con Note</button>
+                        <button type="button" class="btn-preset" id="privatiSmsPreset_senza_note" onclick="applyPrivatiSmsPreset('senza_note')">Senza Note</button>
+                    </div>
+                </div>
+
+                <div id="privatiBulkSmsContactsList" style="max-height: 250px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-raised);"></div>
+
+                <div id="privatiBulkSmsProgress" style="display:none;margin-top:14px;">
+                    <div style="font-weight:600;font-size:0.88rem;margin-bottom:6px;color:var(--text);"><i class="fas fa-spinner fa-spin"></i> Invio in corso...</div>
+                    <div class="progress-bar"><div id="privatiBulkSmsProgressFill" style="width:0%;height:100%;background:linear-gradient(90deg, #10b981, #059669);border-radius:4px;transition:width 0.3s ease;"></div></div>
+                    <div id="privatiBulkSmsProgressText" style="margin-top:4px;font-size:0.82rem;color:var(--text-muted);font-weight:600;">0 / 0</div>
+                    <div id="privatiBulkSmsLog" class="bulk-log" style="max-height:180px;overflow-y:auto;font-size:0.82rem;padding:8px;background:var(--surface);border-radius:6px;border:1px solid var(--border);margin-top:8px;"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-soft" onclick="chiudiPrivatiBulkSmsModal()">Chiudi</button>
+                <button type="button" class="btn-primary" id="privatiBulkSmsSendBtn" onclick="inviaPrivatiSmsBulk()" style="background: linear-gradient(135deg, #10b981, #059669);">
+                    <i class="fas fa-sms"></i> Invia SMS Selezionati
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div class="toast" id="toast"></div>
     <script src="/static/bulk-email-preview.js?v=20260902_2"></script>
     <script src="/static/smtp_config_modal.js"></script>
-    <script src="/static/lettere.js?v=20260902_2"></script>
+    <script src="/static/sms_gateway_modal.js"></script>
+    <script src="/static/message_template_modal.js"></script>
+    <script src="/static/lettere.js?v=20260908_3"></script>
 </body>
 </html>
+

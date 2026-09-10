@@ -1942,11 +1942,161 @@
             pointer-events: none;
         }
 
+        /* ==========================================================================
+           VIEW MODE TOGGLE (COMPATTA / COMPLETA) E TABELLA DISTINTE
+           ========================================================================== */
+        .view-mode-toggle {
+            display: inline-flex;
+            align-items: center;
+            background: var(--surface, #1e293b);
+            border: 1px solid var(--border, #334155);
+            border-radius: 8px;
+            padding: 2px;
+            gap: 2px;
+        }
+
+        .btn-view-mode {
+            border: none;
+            background: transparent;
+            color: var(--text-muted, #94a3b8);
+            font-size: 0.8rem;
+            font-weight: 600;
+            padding: 5px 11px;
+            border-radius: 6px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.15s ease;
+        }
+
+        .btn-view-mode:hover {
+            color: var(--text, #f8fafc);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .btn-view-mode.active {
+            background: var(--surface-raised, #283548);
+            color: var(--primary, #3b82f6);
+            font-weight: 700;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .distinte-table {
+            width: 100%;
+            font-size: 0.84rem;
+            border-collapse: collapse;
+            background: var(--bg-card, #182234);
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .distinte-table th {
+            white-space: nowrap;
+            padding: 10px 12px;
+            text-align: left;
+            background: rgba(var(--accent-rgb, 59, 130, 246), 0.06);
+            border-bottom: 1px solid var(--border, #334155);
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            color: var(--text-muted, #94a3b8);
+        }
+
+        .distinte-table td {
+            padding: 8px 12px;
+            vertical-align: middle;
+            border-bottom: 1px solid var(--border, #334155);
+        }
+
+        .distinte-table tr:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .distinte-table tr.completed td {
+            opacity: 0.65;
+            background: rgba(34, 197, 94, 0.04);
+        }
+
+        .distinte-table .contact-name-cell {
+            font-weight: 700;
+            color: var(--text, #f8fafc);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .distinte-table .meta-sub {
+            font-size: 0.74rem;
+            color: var(--text-muted, #94a3b8);
+            margin-top: 2px;
+        }
+
+        .distinte-table .input-cell-inline {
+            width: 100%;
+            background: var(--surface, #1e293b);
+            border: 1px solid var(--border, #334155);
+            border-radius: 5px;
+            padding: 4px 8px;
+            font-size: 0.8rem;
+            color: var(--text, #f8fafc);
+            box-sizing: border-box;
+            transition: border-color 0.15s;
+        }
+
+        .distinte-table .input-cell-inline:focus {
+            outline: none;
+            border-color: var(--primary, #3b82f6);
+            background: var(--surface-raised, #283548);
+        }
+
+        .distinte-table .input-cell-inline.has-phone {
+            color: #60a5fa;
+            font-weight: 600;
+        }
+
+        .distinte-table .input-cell-inline.has-note {
+            color: #f59e0b;
+            font-weight: 600;
+        }
+
+        .distinte-table .btn-table-action {
+            padding: 5px 9px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            border-radius: 6px;
+            cursor: pointer;
+            border: 1px solid var(--border, #334155);
+            background: var(--surface, #1e293b);
+            color: var(--text, #f8fafc);
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            transition: all 0.15s ease;
+            white-space: nowrap;
+        }
+
+        .distinte-table .btn-table-action:hover {
+            border-color: var(--primary, #3b82f6);
+            color: var(--primary, #3b82f6);
+        }
+
+        .distinte-table .btn-table-action.btn-wa {
+            color: #10b981;
+            border-color: rgba(16, 185, 129, 0.4);
+        }
+
+        .distinte-table .btn-table-action.btn-wa:hover {
+            background: rgba(16, 185, 129, 0.1);
+        }
+
     </style>
     <script src="/static/csrf.js"></script>
     <script src="/static/bulk-email-preview.js?v=20260907_1"></script>
     <script src="/static/sms_gateway_modal.js"></script>
     <script src="/static/smtp_config_modal.js"></script>
+    <script src="/static/message_template_modal.js"></script>
 </head>
 <body>
     <script>
@@ -2125,11 +2275,44 @@
                     <i class="fas fa-user-cog"></i>
                     Aggiorna Operatori
                 </button>
+
+                <div class="view-mode-toggle" style="margin-left:auto;">
+                    <button type="button" class="btn-view-mode" id="btnDistinteViewTable" onclick="setDistinteViewMode('table')" title="Visualizzazione Compatta (Tabella)">
+                        <i class="fas fa-table"></i> Compatta
+                    </button>
+                    <button type="button" class="btn-view-mode active" id="btnDistinteViewCards" onclick="setDistinteViewMode('cards')" title="Visualizzazione Completa (Schede)">
+                        <i class="fas fa-th-large"></i> Completa
+                    </button>
+                </div>
             </div>
 
         </div>
 
-        <!-- Contacts Grid -->
+        <!-- Contacts Table (Vista Compatta) -->
+        <div class="table-wrap" id="distinteTableWrap" style="display:none;margin-top:20px;overflow-x:auto;">
+            <table class="distinte-table">
+                <thead>
+                    <tr>
+                        <th style="width:44px;text-align:center;">#</th>
+                        <th style="width:50px;text-align:center;">Fatto</th>
+                        <th style="width:100px;">Tipo</th>
+                        <th>Nominativo</th>
+                        <th>POD / Misuratore</th>
+                        <th>Indirizzo / Comune</th>
+                        <th>Data / Ora</th>
+                        <th>Telefono (Filone)</th>
+                        <th>Email (Filone)</th>
+                        <th>Note Filone</th>
+                        <th style="text-align:center;width:110px;">Azioni</th>
+                    </tr>
+                </thead>
+                <tbody id="distinteTableBody">
+                    <tr><td colspan="11" style="text-align:center;padding:24px;color:var(--text-muted);">Carica una distinta per iniziare</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Contacts Grid (Vista Completa a Schede) -->
         <div class="contacts-grid" id="contactsGrid">
             <div class="empty-state">
                 <i class="fas fa-file-upload"></i>
@@ -2148,60 +2331,7 @@
         </div>
     </div>
 
-    <!-- Message Modal (Template System) -->
-    <div class="modal-overlay" id="messageModal">
-        <div class="modal modal-wide">
-            <div class="modal-header">
-                <h3 id="modalTitle">
-                    <i class="fab fa-whatsapp" style="color: var(--primary)"></i>
-                    <span>Messaggi e Template</span>
-                </h3>
-                <button class="modal-close" onclick="closeModal()">&times;</button>
-            </div>
-            <div class="modal-body">
-                <p style="margin-bottom: 12px; color: var(--text-muted);" id="modalContactInfo"></p>
-
-                <!-- Template Tabs -->
-                <div class="template-tabs" id="templateTabs"></div>
-
-                <!-- Editable Fields -->
-                <div id="templateFields"></div>
-
-                <!-- Template Info -->
-                <div class="template-info" id="templateInfo" style="display:none;">
-                    <i class="fas fa-info-circle"></i>
-                    <span id="templateInfoText"></span>
-                </div>
-
-                <!-- Email Subject (only for email) -->
-                <div class="email-subject-box" id="emailSubjectBox" style="display:none;">
-                    <strong>Oggetto:</strong> <span id="emailSubjectPreview"></span>
-                </div>
-
-                <!-- Message Preview -->
-                <div class="message-preview" id="messagePreview"></div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn" onclick="closeModal()">Chiudi</button>
-                <button class="btn btn-primary" id="copyMessageBtn">
-                    <i class="fas fa-copy"></i>
-                    Copia
-                </button>
-                <button class="btn btn-info" id="copySubjectBtn" style="display:none;">
-                    <i class="fas fa-copy"></i>
-                    Copia Oggetto
-                </button>
-                <a class="btn btn-primary" id="openWhatsappBtn" target="_blank" style="display:none;">
-                    <i class="fab fa-whatsapp"></i>
-                    Apri WhatsApp
-                </a>
-                <a class="btn btn-info" id="openMailBtn" target="_blank" style="display:none;">
-                    <i class="fas fa-envelope"></i>
-                    Apri Mail
-                </a>
-            </div>
-        </div>
-    </div>
+    <!-- Message Modal gestito centralmente da static/message_template_modal.js -->
 
 
 
@@ -2706,9 +2836,37 @@
             showToast('Differenza ignorata, mantenuto valore filone');
         }
 
+        let distinteViewMode = localStorage.getItem('distinte_view_mode') || 'cards';
+
+        function setDistinteViewMode(mode) {
+            distinteViewMode = mode;
+            try {
+                localStorage.setItem('distinte_view_mode', mode);
+            } catch (e) {}
+            renderContacts();
+        }
+
         // Rendering contatti
         function renderContacts() {
             const container = document.getElementById('contactsGrid');
+            const tableWrap = document.getElementById('distinteTableWrap');
+            const btnTable = document.getElementById('btnDistinteViewTable');
+            const btnCards = document.getElementById('btnDistinteViewCards');
+
+            if (btnTable && btnCards) {
+                btnTable.classList.toggle('active', distinteViewMode === 'table');
+                btnCards.classList.toggle('active', distinteViewMode === 'cards');
+            }
+
+            if (tableWrap && container) {
+                if (distinteViewMode === 'table') {
+                    tableWrap.style.display = 'block';
+                    container.style.display = 'none';
+                } else {
+                    tableWrap.style.display = 'none';
+                    container.style.display = 'grid';
+                }
+            }
             
             // Applica filtri
             const showCellulare = document.getElementById('filterCellulare').checked;
@@ -2778,17 +2936,134 @@
             }
             
             if (filtered.length === 0) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <i class="fas fa-filter"></i>
-                        <h3>Nessun contatto trovato</h3>
-                        <p>Prova a modificare i filtri</p>
-                    </div>
-                `;
+                if (container) {
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-filter"></i>
+                            <h3>Nessun contatto trovato</h3>
+                            <p>Prova a modificare i filtri</p>
+                        </div>
+                    `;
+                }
+                const tbody = document.getElementById('distinteTableBody');
+                if (tbody) {
+                    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center;padding:28px;color:var(--text-muted);"><i class="fas fa-filter"></i> Nessun contatto trovato con i filtri attivi</td></tr>`;
+                }
                 return;
             }
 
             const contattiVisualizzati = ordinaContattiPerNominativo(filtered);
+
+            if (distinteViewMode === 'table') {
+                renderDistinteTable(contattiVisualizzati);
+            } else {
+                renderDistinteCards(contattiVisualizzati);
+            }
+        }
+
+        function renderDistinteTable(contattiVisualizzati) {
+            const tbody = document.getElementById('distinteTableBody');
+            if (!tbody) return;
+
+            tbody.innerHTML = contattiVisualizzati.map(c => {
+                const isCompleted = completedStates[c.pod] || false;
+                const note = noteStates[c.pod] || '';
+                const nomeContatto = c.nome || 'Nome non disponibile';
+                const badgeContatto = c.is_azienda
+                    ? `<span class="tipo-badge ${c.tipo_contatto}" style="font-size:0.68rem;padding:2px 6px;margin-left:4px;">${
+                        c.tipo_contatto === 'condominio' ? '🏢 Cond.' :
+                        c.tipo_contatto === 'ente_pubblico' ? '🏛️ Ente' :
+                        '🏭 Az.'
+                    }</span>`
+                    : '';
+
+                return `
+                <tr class="${isCompleted ? 'completed' : ''}" data-pod="${escapeHtml(c.pod)}">
+                    <td style="text-align:center;font-weight:700;color:var(--text-muted);font-size:0.78rem;">${escapeHtml(c.lavoro || '')}</td>
+                    <td style="text-align:center;">
+                        <input type="checkbox" id="completedTable_${escapeHtml(c.pod)}" ${isCompleted ? 'checked' : ''} onchange="toggleCompleted('${escapeHtml(c.pod)}')">
+                    </td>
+                    <td>
+                        <span class="type-badge ${c.tipo}" style="font-size:0.75rem;padding:3px 7px;">
+                            ${c.tipo === 'cellulare' ? '<i class="fas fa-mobile-alt"></i> Cell' :
+                              c.tipo === 'fisso' ? '<i class="fas fa-phone"></i> Fisso' :
+                              '<i class="fas fa-phone-slash"></i> No Tel'}
+                        </span>
+                        ${badgeContatto}
+                    </td>
+                    <td>
+                        <div class="contact-name-cell" style="display:flex;align-items:center;gap:6px;">
+                            <strong>${escapeHtml(nomeContatto)}</strong>
+                            ${c.nome ? `
+                                <button type="button" class="btn-mini" onclick="copiaNominativo('${escapeHtml(c.pod)}', event)" title="Copia nominativo" style="background:transparent;border:none;color:var(--text-muted);cursor:pointer;">
+                                    <i class="fas fa-copy"></i>
+                                </button>
+                            ` : ''}
+                        </div>
+                    </td>
+                    <td>
+                        <div style="font-family:monospace;font-size:0.82rem;font-weight:700;">${escapeHtml(c.pod || '')}</div>
+                        ${c.tipologia_contatore ? `<div style="font-size:0.72rem;color:var(--text-muted);"><i class="fas fa-tachometer-alt"></i> ${escapeHtml(c.tipologia_contatore)}</div>` : ''}
+                        ${c.posizione_contatore ? `<div style="font-size:0.72rem;color:var(--text-muted);"><i class="fas fa-map-pin"></i> ${escapeHtml(c.posizione_contatore)}</div>` : ''}
+                    </td>
+                    <td>
+                        <div style="font-size:0.82rem;">${escapeHtml(c.indirizzo || '')} ${escapeHtml(c.civico || '')}</div>
+                        <div style="font-size:0.74rem;color:var(--text-muted);">${escapeHtml(c.cap || '')} <b>${escapeHtml(c.comune || '')}</b></div>
+                    </td>
+                    <td>
+                        <div style="font-size:0.82rem;font-weight:600;"><i class="fas fa-calendar" style="font-size:0.75rem;color:var(--text-muted);"></i> ${escapeHtml(c.data_pian_filone || c.data_intervento || '')}</div>
+                    </td>
+                    <td style="min-width:135px;">
+                        <input type="text" class="input-cell-inline ${c.telefono_filone ? 'has-phone' : ''}" id="phoneEditTable_${escapeHtml(c.pod)}"
+                            value="${escapeHtml(c.telefono_filone || '')}" placeholder="Tel filone..."
+                            onkeydown="if(event.key==='Enter'){event.preventDefault(); salvaTelefonoInline('${escapeHtml(c.pod)}', this.value);}"
+                            onblur="salvaTelefonoInline('${escapeHtml(c.pod)}', this.value)">
+                        ${(c.telefono && !(c.telefono_filone || '').trim()) ? `
+                            <div style="margin-top:3px;">
+                                <button type="button" class="btn-mini" onclick="event.stopPropagation(); aggiungiTelFilone('${escapeHtml(c.pod)}', '${escapeHtml(c.telefono)}')" style="font-size:0.7rem;padding:2px 5px;background:rgba(59,130,246,0.15);color:#60a5fa;border:1px solid rgba(59,130,246,0.3);border-radius:4px;cursor:pointer;" title="Aggiungi numero al filone">
+                                    + ${escapeHtml(c.telefono)}
+                                </button>
+                            </div>
+                        ` : ''}
+                    </td>
+                    <td style="min-width:135px;">
+                        <input type="text" class="input-cell-inline ${c.email_filone ? 'has-phone' : ''}" id="emailEditTable_${escapeHtml(c.pod)}"
+                            value="${escapeHtml(c.email_filone || '')}" placeholder="Email filone..."
+                            onkeydown="if(event.key==='Enter'){event.preventDefault(); salvaEmailInline('${escapeHtml(c.pod)}', this.value);}"
+                            onblur="salvaEmailInline('${escapeHtml(c.pod)}', this.value)">
+                    </td>
+                    <td style="min-width:150px;position:relative;">
+                        <div style="display:flex;align-items:center;gap:4px;">
+                            <input type="text" class="input-cell-inline ${note ? 'has-note' : ''}" id="noteDisplayTable_${escapeHtml(c.pod)}"
+                                value="${escapeHtml(note)}" placeholder="Nota..."
+                                onkeydown="if(event.key==='Enter'){event.preventDefault(); salvaNota('${escapeHtml(c.pod)}', this.value);}"
+                                onblur="salvaNota('${escapeHtml(c.pod)}', this.value)">
+                            <div class="btn-add-note" onclick="toggleNoteDropdown('table_${escapeHtml(c.pod)}')" style="padding:4px 7px;font-size:0.75rem;">
+                                <i class="fas fa-plus"></i>
+                                <div class="note-dropdown" id="noteDropdown_table_${escapeHtml(c.pod)}">
+                                    ${c.tipo === 'cellulare' ? `<div class="note-dropdown-item" onclick="aggiungiNota('${escapeHtml(c.pod)}', 'mandato wa')"><i class="fab fa-whatsapp" style="color: var(--primary)"></i> Mandato WA</div>` : ''}
+                                    <div class="note-dropdown-item" onclick="aggiungiNota('${escapeHtml(c.pod)}', 'nr')"><i class="fas fa-phone-slash" style="color: var(--danger)"></i> Non risponde</div>
+                                    <div class="note-dropdown-item" onclick="aggiungiNota('${escapeHtml(c.pod)}', 'chiamare')"><i class="fas fa-phone" style="color: var(--info)"></i> Chiamare</div>
+                                    <div class="note-dropdown-item" onclick="aggiungiNota('${escapeHtml(c.pod)}', 'numero errato')"><i class="fas fa-times-circle" style="color: var(--danger)"></i> ❌ Num errato</div>
+                                    <div class="note-dropdown-item" onclick="aggiungiNota('${escapeHtml(c.pod)}', 'mandata mail')"><i class="fas fa-envelope" style="color: var(--info)"></i> Mandata mail</div>
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                    <td style="text-align:center;">
+                        <button type="button" class="btn-table-action ${c.tipo === 'cellulare' ? 'btn-wa' : ''}" onclick="showMessage('${escapeHtml(c.pod)}')" title="Template Messaggio">
+                            <i class="${c.tipo === 'cellulare' ? 'fab fa-whatsapp' : 'fas fa-paper-plane'}"></i> Template
+                        </button>
+                    </td>
+                </tr>
+                `;
+            }).join('');
+        }
+
+        function renderDistinteCards(contattiVisualizzati) {
+            const container = document.getElementById('contactsGrid');
+            if (!container) return;
+
             container.innerHTML = contattiVisualizzati.map(c => {
                 const isCompleted = completedStates[c.pod] || false;
                 const note = noteStates[c.pod] || '';
@@ -2918,7 +3193,6 @@
                             </div>
                         </div>
                     </div>
-                    
                     
                     <div class="appuntamento-section">
                         <div class="appuntamento-title">
@@ -3136,263 +3410,38 @@
             const contatto = contatti.find(c => c.pod === pod);
             if (!contatto) return;
             currentTemplatePod = pod;
-            // Se viene passato un numero override (es. da numeri alternativi), usalo
-            currentTemplateContact = {...contatto};
+            currentTemplateContact = { ...contatto };
+
             if (numeroOverride) {
                 currentTemplateContact.telefono = numeroOverride;
-                const digits = numeroOverride.replace(/[^\d]/g, '').replace(/^39/, '');
-                currentTemplateContact.telefono_formattato = '39' + digits;
             } else if (!currentTemplateContact.telefono && contatto.numeri_alternativi && contatto.numeri_alternativi.length > 0) {
-                // Per senza_telefono con numeri alternativi: usa il primo cellulare trovato
                 const primoCell = contatto.numeri_alternativi.find(n => n.tipo === 'cellulare');
-                if (primoCell) {
-                    currentTemplateContact.telefono = primoCell.numero;
-                    const digits = primoCell.numero.replace(/[^\d]/g, '').replace(/^39/, '');
-                    currentTemplateContact.telefono_formattato = '39' + digits;
-                }
-            }
-            
-            const telefono = currentTemplateContact.telefono_formattato || currentTemplateContact.telefono || '';
-            const infoHtml = telefono 
-                ? `Numero: <strong style="color: var(--primary)">${telefono}</strong> &mdash; ${contatto.nome || ''}`
-                : `<strong>${contatto.nome || ''}</strong>`;
-            document.getElementById('modalContactInfo').innerHTML = infoHtml;
-
-            // Build tabs: usa tipoOverride se fornito, altrimenti se c'è un numero override cellulare trattalo come cellulare
-            const contactType = tipoOverride || (numeroOverride ? 'cellulare' : (contatto.tipo || 'cellulare'));
-            buildTemplateTabs(contactType);
-            // Select default template based on contact type
-            const defaultTemplate = contactType === 'fisso' ? 'email_semplificata' : 'wa_conferma';
-            selectTemplate(defaultTemplate);
-
-            document.getElementById('messageModal').classList.add('active');
-        }
-
-        function buildTemplateTabs(contactType) {
-            const filtered = Object.values(TEMPLATES).filter(t => {
-                // Per i numeri fissi, mostra solo i template email
-                if (contactType === 'fisso' && t.type !== 'email') return false;
-                return true;
-            });
-            const tabsHtml = filtered.map(t => {
-                const isEmail = t.type === 'email';
-                return `<button class="template-tab ${isEmail ? 'email-tab' : ''}" data-template="${t.id}" onclick="selectTemplate('${t.id}')">
-                    <i class="${t.icon}"></i>
-                    ${t.label}
-                </button>`;
-            }).join('');
-            document.getElementById('templateTabs').innerHTML = tabsHtml;
-        }
-
-        function selectTemplate(templateId) {
-            currentTemplateId = templateId;
-            const tmpl = TEMPLATES[templateId];
-            const c = currentTemplateContact;
-            if (!tmpl || !c) return;
-
-            // Update active tab
-            document.querySelectorAll('.template-tab').forEach(tab => {
-                tab.classList.toggle('active', tab.dataset.template === templateId);
-            });
-
-            // Update modal title icon
-            const titleEl = document.getElementById('modalTitle');
-            if (tmpl.type === 'email') {
-                titleEl.innerHTML = `<i class="fas fa-envelope" style="color: var(--info)"></i><span>${tmpl.label}</span>`;
-            } else {
-                titleEl.innerHTML = `<i class="fab fa-whatsapp" style="color: var(--primary)"></i><span>${tmpl.label}</span>`;
+                if (primoCell) currentTemplateContact.telefono = primoCell.numero;
             }
 
-            // Build editable fields
-            buildTemplateFields(tmpl, c);
-
-            // Show/hide info
-            const infoEl = document.getElementById('templateInfo');
-            if (tmpl.info) {
-                document.getElementById('templateInfoText').textContent = tmpl.info;
-                infoEl.style.display = 'flex';
-            } else {
-                infoEl.style.display = 'none';
-            }
-
-            // Generate preview
-            updateTemplatePreview();
-
-            // Show/hide action buttons based on type
-            const waBtn = document.getElementById('openWhatsappBtn');
-            const mailBtn = document.getElementById('openMailBtn');
-            const subjBtn = document.getElementById('copySubjectBtn');
-            const subjBox = document.getElementById('emailSubjectBox');
-            const previewEl = document.getElementById('messagePreview');
-
-            if (tmpl.type === 'email') {
-                waBtn.style.display = 'none';
-                mailBtn.style.display = 'inline-flex';
-                subjBtn.style.display = 'inline-flex';
-                subjBox.style.display = 'block';
-                previewEl.classList.add('email-preview');
-            } else {
-                waBtn.style.display = 'inline-flex';
-                mailBtn.style.display = 'none';
-                subjBtn.style.display = 'none';
-                subjBox.style.display = 'none';
-                previewEl.classList.remove('email-preview');
-            }
-        }
-
-        function buildTemplateFields(tmpl, c) {
-            const container = document.getElementById('templateFields');
-            if (!tmpl.fields || tmpl.fields.length === 0) {
-                container.innerHTML = '';
-                return;
-            }
-
-            const fieldsHtml = tmpl.fields.map(fieldId => {
-                const def = FIELD_DEFS[fieldId];
-                if (!def) return '';
-                const value = def.autoFill(c);
-
-                if (def.type === 'select') {
-                    const optionsHtml = def.options.map(o => 
-                        `<option value="${o.v}" ${o.v === value ? 'selected' : ''}>${o.l}</option>`
-                    ).join('');
-                    return `<div class="template-field">
-                        <label>${def.label}</label>
-                        <select class="template-field-input" data-field="${fieldId}" onchange="updateTemplatePreview()"
-                            style="background-color: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 8px 10px; font-size: 13px;">
-                            ${optionsHtml}
-                        </select>
-                    </div>`;
-                }
-                if (def.type === 'textarea') {
-                    return `<div class="template-field" style="width: 100%;">
-                        <label>${def.label}</label>
-                        <textarea class="template-field-input" data-field="${fieldId}" 
-                            placeholder="${def.placeholder || ''}" rows="4"
-                            oninput="updateTemplatePreview()">${escapeHtml(value || '')}</textarea>
-                    </div>`;
-                }
-
-                return `<div class="template-field">
-                    <label>${def.label}</label>
-                    <input type="text" class="template-field-input" data-field="${fieldId}" 
-                        value="${escapeHtml(value || '')}" placeholder="${def.placeholder || ''}"
-                        oninput="updateTemplatePreview()">
-                </div>`;
-            }).join('');
-
-            container.innerHTML = `<div class="template-fields">${fieldsHtml}</div>`;
-        }
-
-        function getFieldValues() {
-            const values = {};
-            document.querySelectorAll('.template-field-input').forEach(el => {
-                values[el.dataset.field] = el.value;
-            });
-            return values;
-        }
-
-        function updateTemplatePreview() {
-            const tmpl = TEMPLATES[currentTemplateId];
-            const c = currentTemplateContact;
-            if (!tmpl || !c) return;
-
-            const fields = getFieldValues();
-            const messaggio = tmpl.generate(c, fields);
-            const messaggioPlain = htmlToPlainText(messaggio);
-
-            // Per email: il body può contenere tag HTML per i link o formattazione
-            const previewEl = document.getElementById('messagePreview');
-            if (tmpl.type === 'email') {
-                // Render HTML: converti \n in <br> se non contiene già tag di blocco/br
-                previewEl.innerHTML = messaggio.includes('<p>') || messaggio.includes('<br>') ? messaggio : messaggio.replace(/\n/g, '<br>');
-            } else {
-                // Per WhatsApp / SMS: mostra il plain text formattato con gli a capo reali (white-space: pre-wrap)
-                previewEl.textContent = messaggioPlain;
-            }
-
-            // Update WhatsApp link
-            if (tmpl.type === 'whatsapp') {
-                const telefono = c.telefono_formattato || c.telefono || '';
-                const waUrl = `https://wa.me/${telefono.replace('+', '')}?text=${encodeURIComponent(messaggioPlain)}`;
-                document.getElementById('openWhatsappBtn').href = waUrl;
-            }
-
-            // Update email subject & mailto link
-            if (tmpl.type === 'email') {
-                const subject = tmpl.subject ? tmpl.subject(c, fields) : '';
-                document.getElementById('emailSubjectPreview').textContent = subject;
-                
-                // mailto: apre il client con solo l'oggetto; il corpo HTML viene copiato negli appunti al click
-                const mailtoUrl = `mailto:?subject=${encodeURIComponent(subject)}`;
-                document.getElementById('openMailBtn').href = mailtoUrl;
-            }
-
-            // Update copy button — per email copia rich text HTML + fallback plain; per WA copia testo puro con a capo
-            document.getElementById('copyMessageBtn').onclick = async () => {
-                if (tmpl.type === 'email') {
-                    try {
-                        const htmlContent = messaggio.includes('<p>') || messaggio.includes('<br>') ? messaggio : messaggio.replace(/\n/g, '<br>');
-                        const blob = new Blob([htmlContent], { type: 'text/html' });
-                        const plainBlob = new Blob([messaggioPlain], { type: 'text/plain' });
-                        await navigator.clipboard.write([
-                            new ClipboardItem({
-                                'text/html': blob,
-                                'text/plain': plainBlob
-                            })
-                        ]);
-                    } catch (e) {
-                        // Fallback a testo normale
-                        await navigator.clipboard.writeText(messaggioPlain);
+            if (window.MessageTemplateModal) {
+                window.MessageTemplateModal.open({
+                    contact: currentTemplateContact,
+                    telOverride: numeroOverride || currentTemplateContact.telefono,
+                    tipoOverride: tipoOverride,
+                    smsEndpoint: '/api/distinte/invia-singolo-sms',
+                    onSmsSent: (p) => {
+                        aggiungiNota(p, 'mandato sms');
+                    },
+                    onWaOpened: (p) => {
+                        aggiungiNota(p, 'mandato wa');
+                    },
+                    onMailOpened: (p) => {
+                        aggiungiNota(p, 'mandata mail');
                     }
-                } else {
-                    await navigator.clipboard.writeText(messaggioPlain);
-                }
-                showToast('Messaggio copiato negli appunti!');
-                closeModal();
-            };
-
-            // Update copy subject button (email)
-            document.getElementById('copySubjectBtn').onclick = () => {
-                const subject = tmpl.subject ? tmpl.subject(c, getFieldValues()) : '';
-                navigator.clipboard.writeText(subject);
-                showToast('Oggetto copiato negli appunti!');
-            };
-
-            // Close modal when opening WhatsApp + aggiungi nota "mandato wa"
-            document.getElementById('openWhatsappBtn').onclick = () => {
-                if (currentTemplatePod) {
-                    aggiungiNota(currentTemplatePod, 'mandato wa');
-                }
-                setTimeout(closeModal, 300);
-            };
-
-            // Close modal when opening Mail + copia HTML negli appunti + aggiungi nota "mandata mail"
-            document.getElementById('openMailBtn').onclick = async (e) => {
-                // Copia il corpo HTML formattato negli appunti
-                try {
-                    const htmlContent = messaggio.includes('<p>') || messaggio.includes('<br>') ? messaggio : messaggio.replace(/\n/g, '<br>');
-                    const blob = new Blob([htmlContent], { type: 'text/html' });
-                    const plainBlob = new Blob([messaggioPlain], { type: 'text/plain' });
-                    await navigator.clipboard.write([
-                        new ClipboardItem({
-                            'text/html': blob,
-                            'text/plain': plainBlob
-                        })
-                    ]);
-                } catch (err) {
-                    await navigator.clipboard.writeText(messaggioPlain);
-                }
-                showToast('Corpo mail copiato! Incolla con Ctrl+V nel messaggio.');
-                if (currentTemplatePod) {
-                    aggiungiNota(currentTemplatePod, 'mandata mail');
-                }
-                setTimeout(closeModal, 300);
-            };
+                });
+            }
         }
 
         function closeModal() {
-            document.getElementById('messageModal').classList.remove('active');
+            if (window.MessageTemplateModal) {
+                window.MessageTemplateModal.close();
+            }
             currentTemplatePod = null;
             currentTemplateContact = null;
         }
@@ -3750,6 +3799,12 @@
                 noteDisplay.title = nuovaNota;
                 noteDisplay.classList.add('has-note');
             }
+            const noteTableDisplay = document.getElementById(`noteDisplayTable_${pod}`);
+            if (noteTableDisplay) {
+                noteTableDisplay.value = nuovaNota;
+                noteTableDisplay.title = nuovaNota;
+                noteTableDisplay.classList.add('has-note');
+            }
             
             // Salva sul filone
             try {
@@ -3768,6 +3823,10 @@
                         if (noteDisplay) {
                             noteDisplay.value = data.nota;
                             noteDisplay.title = data.nota;
+                        }
+                        if (noteTableDisplay) {
+                            noteTableDisplay.value = data.nota;
+                            noteTableDisplay.title = data.nota;
                         }
                     }
                 } else {
@@ -3790,10 +3849,16 @@
             
             _lastSavedPhone[pod] = valore;
             
-            // Aggiorna classe
+            // Aggiorna classi e valori
             const phoneInput = document.getElementById(`phoneEdit_${pod}`);
             if (phoneInput) {
+                phoneInput.value = valore;
                 phoneInput.classList.toggle('has-phone', !!valore);
+            }
+            const phoneTableInput = document.getElementById(`phoneEditTable_${pod}`);
+            if (phoneTableInput) {
+                phoneTableInput.value = valore;
+                phoneTableInput.classList.toggle('has-phone', !!valore);
             }
             
             // Salva sul filone
@@ -3832,7 +3897,13 @@
             
             const emailInput = document.getElementById(`emailEdit_${pod}`);
             if (emailInput) {
+                emailInput.value = valore;
                 emailInput.classList.toggle('has-phone', !!valore);
+            }
+            const emailTableInput = document.getElementById(`emailEditTable_${pod}`);
+            if (emailTableInput) {
+                emailTableInput.value = valore;
+                emailTableInput.classList.toggle('has-phone', !!valore);
             }
             
             try {
@@ -3869,13 +3940,17 @@
             _lastSavedNote[pod] = valore;
             saveStates();
             
-            // Aggiorna classe
+            // Aggiorna classi e valori
             const noteDisplay = document.getElementById(`noteDisplay_${pod}`);
             if (noteDisplay) {
+                noteDisplay.value = valore;
                 noteDisplay.classList.toggle('has-note', !!valore);
             }
-            
-
+            const noteTableDisplay = document.getElementById(`noteDisplayTable_${pod}`);
+            if (noteTableDisplay) {
+                noteTableDisplay.value = valore;
+                noteTableDisplay.classList.toggle('has-note', !!valore);
+            }
             
             // Salva sul filone
             try {
@@ -3924,11 +3999,16 @@
                         _lastSavedPhone[pod] = telefono;
                     }
                     
-                    // Aggiorna l'input telefono inline
+                    // Aggiorna l'input telefono inline (card e tabella)
                     const phoneEditInput = document.getElementById(`phoneEdit_${pod}`);
                     if (phoneEditInput) {
                         phoneEditInput.value = telefono;
                         phoneEditInput.classList.add('has-phone');
+                    }
+                    const phoneTableInput = document.getElementById(`phoneEditTable_${pod}`);
+                    if (phoneTableInput) {
+                        phoneTableInput.value = telefono;
+                        phoneTableInput.classList.add('has-phone');
                     }
                     
                     // Rimuovi il pulsante dalla card

@@ -116,19 +116,36 @@ def _column_name_for_internal(conn, chiave_interna, fallback):
     return row['column_name'] if row else fallback
 
 
-def _sync_contatto_su_filone(pod, telefono=None, email=None, user=None):
-    """Aggiorna telefono/email sul filone locale se il POD esiste."""
-    found = db.find_filone_row_by_pod(pod)
+def _get_disabled_lcls(provincia=None):
+    """Ritorna l'insieme di codici LCL disabilitati per la provincia specificata."""
+    prov = (provincia or _provincia_attiva()).upper()
+    try:
+        import config
+        prov_dict = getattr(config, 'PROVINCE', {}).get(prov, {})
+        dis = prov_dict.get('lcl_disabilitati')
+        if dis is None and prov == getattr(config, 'PROVINCIA_ATTIVA', '').upper():
+            dis = getattr(config, 'LCL_DISABILITATI', [])
+        return {str(x).strip().upper() for x in (dis or []) if str(x).strip()}
+    except Exception:
+        return set()
+
+
+def _sync_contatto_su_filone(pod, telefono=None, email=None, note=None, user=None, lcl=None, provincia=None):
+    """Aggiorna telefono/email/note sul filone locale se il POD esiste."""
+    disabled = _get_disabled_lcls(provincia)
+    found = db.find_filone_row_by_pod(pod, lcl=lcl, disabled_lcls=disabled)
     if not found:
         return {'synced': False, 'reason': 'pod_not_found'}
 
-    eneltel, lcl = found
+    eneltel, resolved_lcl = found
     conn = db.get_conn()
     fields = {}
     if telefono is not None:
         fields[_column_name_for_internal(conn, 'telefono', 'telefono')] = telefono
     if email is not None:
         fields[_column_name_for_internal(conn, 'email', 'email')] = email
+    if note is not None:
+        fields[_column_name_for_internal(conn, 'note_appuntamento', 'note_appuntamento')] = note
     if not fields:
         return {'synced': False, 'reason': 'empty_fields'}
 
@@ -137,9 +154,9 @@ def _sync_contatto_su_filone(pod, telefono=None, email=None, user=None):
         fields,
         user=user,
         origin='lettere_contatti',
-        lcl=lcl,
+        lcl=resolved_lcl,
     )
-    return {'synced': True, 'eneltel': eneltel, 'lcl': lcl, 'fields': list(fields)}
+    return {'synced': True, 'eneltel': eneltel, 'lcl': resolved_lcl, 'fields': list(fields)}
 
 
 def registra_generazione(
@@ -461,6 +478,9 @@ def list_aziende(generazione_id=None, search='', limit=500, provincia=None):
             '''
         )
         params.extend([like, like, like, like])
+    disabled_lcls = _get_disabled_lcls(provincia)
+    dis_sql = ', '.join(f"'{re.sub(r'[^A-Za-z0-9_-]', '', x)}'" for x in disabled_lcls if x) or "''"
+
     params.append(int(limit))
     rows = conn.execute(
         f'''
@@ -510,23 +530,24 @@ def list_aziende(generazione_id=None, search='', limit=500, provincia=None):
             g.file_name,
             g.periodo_da,
             g.periodo_a,
-            COALESCE(NULLIF(c.telefono, ''), NULLIF(c_same.telefono, ''), NULLIF(lr.telefono, ''), f.telefono, fe.telefono, f_same.telefono) AS telefono,
-            COALESCE(NULLIF(c.email, ''), NULLIF(c_same.email, ''), NULLIF(lr.email, ''), f.email, fe.email, f_same.email) AS email,
-            COALESCE(NULLIF(lr.via, ''), NULLIF(f.indirizzo, ''), NULLIF(fe.indirizzo, '')) AS via,
-            COALESCE(NULLIF(lr.civico, ''), NULLIF(f.civico, ''), NULLIF(fe.civico, '')) AS civico,
-            COALESCE(NULLIF(ag.note, ''), NULLIF(f.note_appuntamento, ''), NULLIF(fe.note_appuntamento, ''), f_same.note_appuntamento, '') AS note_appuntamento,
-            COALESCE(NULLIF(f.note_appuntamento, ''), NULLIF(fe.note_appuntamento, ''), f_same.note_appuntamento, '') AS note_filone,
+            COALESCE(NULLIF(c.telefono, ''), NULLIF(c_same.telefono, ''), NULLIF(lr.telefono, ''), f.telefono, f_same.telefono) AS telefono,
+            COALESCE(NULLIF(c.email, ''), NULLIF(c_same.email, ''), NULLIF(lr.email, ''), f.email, f_same.email) AS email,
+            COALESCE(NULLIF(lr.via, ''), NULLIF(f.indirizzo, '')) AS via,
+            COALESCE(NULLIF(lr.civico, ''), NULLIF(f.civico, '')) AS civico,
+            COALESCE(NULLIF(ag.note, ''), NULLIF(f.note_appuntamento, ''), '') AS note_appuntamento,
+            COALESCE(NULLIF(f.note_appuntamento, ''), '') AS note_filone,
             lr.cap,
             lr.eneltel,
             lr.lcl,
             lr.posizione_mis,
-            COALESCE(f.latitudine, fe.latitudine) AS latitudine,
-            COALESCE(f.longitudine, fe.longitudine) AS longitudine,
+            f.latitudine AS latitudine,
+            f.longitudine AS longitudine,
             COALESCE(ic.invii_ok, ia.invii_ok, 0) AS invii_ok,
             COALESCE(ia.invii_ok, 0) AS invii_generazione,
             COALESCE(ic.last_sent_ts, ia.last_sent_ts) AS last_sent_ts,
-            COALESCE(NULLIF(f.codice_ante, ''), NULLIF(fe.codice_ante, ''), f_same.codice_ante, '') AS codice_ante,
-            COALESCE(NULLIF(f.matricola_ante, ''), NULLIF(fe.matricola_ante, ''), f_same.matricola_ante, '') AS matricola_ante
+            COALESCE(NULLIF(f.codice_ante, ''), '') AS codice_ante,
+            COALESCE(NULLIF(f.matricola_ante, ''), '') AS matricola_ante,
+            COALESCE(NULLIF(f.data_pianificata, ''), '') AS data_pian_filone
         FROM lettere_aziende_generazione ag
         JOIN lettere_generazioni g ON g.id=ag.generazione_id
         LEFT JOIN lettere_contatti c
@@ -544,36 +565,6 @@ def list_aziende(generazione_id=None, search='', limit=500, provincia=None):
         ) c_same ON c_same.provincia=ag.provincia
                 AND c_same.nom_norm=UPPER(TRIM(COALESCE(ag.nominativo, '')))
                 AND (c_same.com_norm=UPPER(TRIM(COALESCE(ag.comune, ''))) OR c_same.com_norm='' OR TRIM(COALESCE(ag.comune, ''))='')
-        LEFT JOIN (
-            SELECT
-                UPPER(TRIM(COALESCE(pod, ''))) AS pod,
-                MAX(telefono) AS telefono,
-                MAX(email) AS email,
-                MAX(latitudine) AS latitudine,
-                MAX(longitudine) AS longitudine,
-                MAX(indirizzo) AS indirizzo,
-                MAX(civico) AS civico,
-                MAX(note_appuntamento) AS note_appuntamento,
-                MAX(codice_ante) AS codice_ante,
-                MAX(matricola_ante) AS matricola_ante
-            FROM filone
-            WHERE TRIM(COALESCE(pod, ''))!=''
-            GROUP BY 1
-        ) f ON f.pod=UPPER(TRIM(COALESCE(ag.pod, '')))
-        LEFT JOIN (
-            SELECT
-                UPPER(TRIM(COALESCE(nominativo, ''))) AS nom_norm,
-                UPPER(TRIM(COALESCE(comune, ''))) AS com_norm,
-                MAX(NULLIF(telefono, '')) AS telefono,
-                MAX(NULLIF(email, '')) AS email,
-                MAX(NULLIF(note_appuntamento, '')) AS note_appuntamento,
-                MAX(NULLIF(codice_ante, '')) AS codice_ante,
-                MAX(NULLIF(matricola_ante, '')) AS matricola_ante
-            FROM filone
-            WHERE TRIM(COALESCE(nominativo, ''))!=''
-            GROUP BY 1, 2
-        ) f_same ON f_same.nom_norm=UPPER(TRIM(COALESCE(ag.nominativo, '')))
-                AND (f_same.com_norm=UPPER(TRIM(COALESCE(ag.comune, ''))) OR f_same.com_norm='' OR TRIM(COALESCE(ag.comune, ''))='')
         LEFT JOIN righe_pod rp
           ON rp.generazione_id=ag.generazione_id
          AND rp.pod_norm=UPPER(TRIM(COALESCE(ag.pod, '')))
@@ -583,22 +574,61 @@ def list_aziende(generazione_id=None, search='', limit=500, provincia=None):
          AND rn.nominativo_norm=UPPER(TRIM(COALESCE(ag.nominativo, '')))
          AND rn.comune_norm=UPPER(TRIM(COALESCE(ag.comune, '')))
         LEFT JOIN lettere_righe lr ON lr.id=COALESCE(rp.row_id, rn.row_id)
+        LEFT JOIN filone f ON f.rowid = COALESCE(
+            (
+                SELECT f1.rowid FROM filone f1
+                WHERE f1.pod = UPPER(TRIM(COALESCE(ag.pod, lr.pod, '')))
+                  AND f1.lcl = lr.lcl
+                  AND TRIM(COALESCE(lr.lcl, '')) != ''
+                ORDER BY f1.sheets_row DESC
+                LIMIT 1
+            ),
+            (
+                SELECT fe1.rowid FROM filone fe1
+                WHERE fe1.eneltel_key = LTRIM(COALESCE(lr.eneltel, ''), '0')
+                  AND fe1.lcl = lr.lcl
+                  AND TRIM(COALESCE(lr.lcl, '')) != ''
+                  AND TRIM(COALESCE(lr.eneltel, '')) != ''
+                ORDER BY fe1.sheets_row DESC
+                LIMIT 1
+            ),
+            (
+                SELECT f2.rowid FROM filone f2
+                WHERE f2.pod = UPPER(TRIM(COALESCE(ag.pod, lr.pod, '')))
+                  AND UPPER(TRIM(f2.lcl)) NOT IN ({dis_sql})
+                ORDER BY f2.sheets_row DESC
+                LIMIT 1
+            ),
+            (
+                SELECT fe2.rowid FROM filone fe2
+                WHERE fe2.eneltel_key = LTRIM(COALESCE(lr.eneltel, ''), '0')
+                  AND TRIM(COALESCE(lr.eneltel, '')) != ''
+                  AND UPPER(TRIM(fe2.lcl)) NOT IN ({dis_sql})
+                ORDER BY fe2.sheets_row DESC
+                LIMIT 1
+            ),
+            (
+                SELECT f3.rowid FROM filone f3
+                WHERE f3.pod = UPPER(TRIM(COALESCE(ag.pod, lr.pod, '')))
+                ORDER BY f3.sheets_row DESC
+                LIMIT 1
+            )
+        )
         LEFT JOIN (
             SELECT
-                eneltel_key,
-                MAX(telefono) AS telefono,
-                MAX(email) AS email,
-                MAX(latitudine) AS latitudine,
-                MAX(longitudine) AS longitudine,
-                MAX(indirizzo) AS indirizzo,
-                MAX(civico) AS civico,
-                MAX(note_appuntamento) AS note_appuntamento,
-                MAX(codice_ante) AS codice_ante,
-                MAX(matricola_ante) AS matricola_ante
+                UPPER(TRIM(COALESCE(nominativo, ''))) AS nom_norm,
+                UPPER(TRIM(COALESCE(comune, ''))) AS com_norm,
+                MAX(NULLIF(telefono, '')) AS telefono,
+                MAX(NULLIF(email, '')) AS email,
+                MAX(NULLIF(note_appuntamento, '')) AS note_appuntamento,
+                MAX(NULLIF(codice_ante, '')) AS codice_ante,
+                MAX(NULLIF(matricola_ante, '')) AS matricola_ante,
+                MAX(NULLIF(data_pianificata, '')) AS data_pianificata
             FROM filone
-            WHERE TRIM(COALESCE(eneltel_key, ''))!=''
-            GROUP BY 1
-        ) fe ON fe.eneltel_key=LTRIM(COALESCE(lr.eneltel, ''), '0') AND COALESCE(lr.eneltel, '')!=''
+            WHERE TRIM(COALESCE(nominativo, ''))!=''
+            GROUP BY 1, 2
+        ) f_same ON f_same.nom_norm=UPPER(TRIM(COALESCE(ag.nominativo, '')))
+                AND (f_same.com_norm=UPPER(TRIM(COALESCE(ag.comune, ''))) OR f_same.com_norm='' OR TRIM(COALESCE(ag.comune, ''))='')
         LEFT JOIN invii_per_azienda ia ON ia.azienda_generazione_id=ag.id
         LEFT JOIN invii_per_contatto ic
           ON ic.provincia=ag.provincia AND ic.contact_key=ag.contact_key
@@ -862,43 +892,90 @@ def update_contatti_by_nominativo(nominativo, comune=None, *, telefono=None, ema
     }
 
 
-def set_risposta(azienda_id, risposta, note=None, user=None, provincia=None):
+def set_risposta(azienda_id, risposta, note=None, user=None, provincia=None, lcl=None):
     provincia = (provincia or _provincia_attiva()).upper()
     conn = db.get_conn()
     row = conn.execute(
         '''
-        SELECT id
-        FROM lettere_aziende_generazione
-        WHERE id=? AND provincia=?
+        SELECT ag.id, ag.pod, ag.generazione_id, lr.lcl
+        FROM lettere_aziende_generazione ag
+        LEFT JOIN lettere_righe lr ON lr.generazione_id=ag.generazione_id AND lr.pod=ag.pod AND TRIM(COALESCE(ag.pod, ''))!=''
+        WHERE ag.id=? AND ag.provincia=?
+        LIMIT 1
         ''',
         (int(azienda_id), provincia),
     ).fetchone()
     if not row:
         raise LookupError('Azienda generazione non trovata')
-    risposta_val = 1 if risposta else 0
+    pod = row['pod'] if row else None
+    resolved_lcl = (str(lcl).strip() if lcl else '') or (row['lcl'] if row else '')
+    now = _now_ts()
+
     with conn:
-        conn.execute(
-            '''
-            UPDATE lettere_aziende_generazione
-            SET risposta=?, risposta_ts=?, risposta_by=?, note=COALESCE(?, note)
-            WHERE id=?
-            ''',
-            (
-                risposta_val,
-                _now_ts() if risposta_val else None,
-                user if risposta_val else None,
-                note,
-                int(azienda_id),
-            ),
-        )
-    return {'id': int(azienda_id), 'risposta': bool(risposta_val), 'note': note}
+        if risposta is not None and note is not None:
+            risposta_val = 1 if risposta else 0
+            conn.execute(
+                '''
+                UPDATE lettere_aziende_generazione
+                SET risposta=?, risposta_ts=?, risposta_by=?, note=?
+                WHERE id=?
+                ''',
+                (
+                    risposta_val,
+                    now if risposta_val else None,
+                    user if risposta_val else None,
+                    note,
+                    int(azienda_id),
+                ),
+            )
+        elif risposta is not None:
+            risposta_val = 1 if risposta else 0
+            conn.execute(
+                '''
+                UPDATE lettere_aziende_generazione
+                SET risposta=?, risposta_ts=?, risposta_by=?
+                WHERE id=?
+                ''',
+                (
+                    risposta_val,
+                    now if risposta_val else None,
+                    user if risposta_val else None,
+                    int(azienda_id),
+                ),
+            )
+        elif note is not None:
+            conn.execute(
+                '''
+                UPDATE lettere_aziende_generazione
+                SET note=?
+                WHERE id=?
+                ''',
+                (
+                    note,
+                    int(azienda_id),
+                ),
+            )
+
+    if pod and note is not None:
+        try:
+            _sync_contatto_su_filone(pod, note=note, user=user, lcl=resolved_lcl, provincia=provincia)
+        except Exception:
+            pass
+
+    return {
+        'id': int(azienda_id),
+        'risposta': bool(risposta) if risposta is not None else None,
+        'note': note,
+    }
 
 
 def get_azienda(azienda_id, provincia=None):
     provincia = (provincia or _provincia_attiva()).upper()
+    disabled_lcls = _get_disabled_lcls(provincia)
+    dis_sql = ', '.join(f"'{re.sub(r'[^A-Za-z0-9_-]', '', x)}'" for x in disabled_lcls if x) or "''"
     conn = db.get_conn()
     row = conn.execute(
-        '''
+        f'''
         SELECT
             ag.*,
             g.file_name,
@@ -912,41 +989,14 @@ def get_azienda(azienda_id, provincia=None):
             lr.eneltel,
             lr.lcl,
             lr.posizione_mis,
-            (
-                SELECT f.codice_ante
-                FROM filone f
-                WHERE UPPER(TRIM(COALESCE(f.pod, '')))=UPPER(TRIM(COALESCE(ag.pod, '')))
-                ORDER BY f.sheets_row
-                LIMIT 1
-            ) AS codice_ante,
-            (
-                SELECT f.matricola_ante
-                FROM filone f
-                WHERE UPPER(TRIM(COALESCE(f.pod, '')))=UPPER(TRIM(COALESCE(ag.pod, '')))
-                ORDER BY f.sheets_row
-                LIMIT 1
-            ) AS matricola_ante,
-            (
-                SELECT f.note_appuntamento
-                FROM filone f
-                WHERE UPPER(TRIM(COALESCE(f.pod, '')))=UPPER(TRIM(COALESCE(ag.pod, '')))
-                ORDER BY f.sheets_row
-                LIMIT 1
-            ) AS note_appuntamento
+            COALESCE(NULLIF(f.codice_ante, ''), '') AS codice_ante,
+            COALESCE(NULLIF(f.matricola_ante, ''), '') AS matricola_ante,
+            COALESCE(NULLIF(ag.note, ''), NULLIF(f.note_appuntamento, ''), '') AS note_appuntamento,
+            COALESCE(NULLIF(f.data_pianificata, ''), '') AS data_pian_filone
         FROM lettere_aziende_generazione ag
         JOIN lettere_generazioni g ON g.id=ag.generazione_id
         LEFT JOIN lettere_contatti c
           ON c.provincia=ag.provincia AND c.contact_key=ag.contact_key
-        LEFT JOIN (
-            SELECT
-                UPPER(TRIM(COALESCE(pod, ''))) AS pod,
-                MAX(telefono) AS telefono,
-                MAX(email) AS email,
-                MAX(note_appuntamento) AS note_appuntamento
-            FROM filone
-            WHERE TRIM(COALESCE(pod, ''))!=''
-            GROUP BY 1
-        ) f ON f.pod=UPPER(TRIM(COALESCE(ag.pod, '')))
         LEFT JOIN lettere_righe lr ON lr.id=(
             SELECT lr2.id
             FROM lettere_righe lr2
@@ -966,6 +1016,46 @@ def get_azienda(azienda_id, provincia=None):
               )
             ORDER BY lr2.id
             LIMIT 1
+        )
+        LEFT JOIN filone f ON f.rowid = COALESCE(
+            (
+                SELECT f1.rowid FROM filone f1
+                WHERE f1.pod = UPPER(TRIM(COALESCE(ag.pod, lr.pod, '')))
+                  AND f1.lcl = lr.lcl
+                  AND TRIM(COALESCE(lr.lcl, '')) != ''
+                ORDER BY f1.sheets_row DESC
+                LIMIT 1
+            ),
+            (
+                SELECT fe1.rowid FROM filone fe1
+                WHERE fe1.eneltel_key = LTRIM(COALESCE(lr.eneltel, ''), '0')
+                  AND fe1.lcl = lr.lcl
+                  AND TRIM(COALESCE(lr.lcl, '')) != ''
+                  AND TRIM(COALESCE(lr.eneltel, '')) != ''
+                ORDER BY fe1.sheets_row DESC
+                LIMIT 1
+            ),
+            (
+                SELECT f2.rowid FROM filone f2
+                WHERE f2.pod = UPPER(TRIM(COALESCE(ag.pod, lr.pod, '')))
+                  AND UPPER(TRIM(f2.lcl)) NOT IN ({dis_sql})
+                ORDER BY f2.sheets_row DESC
+                LIMIT 1
+            ),
+            (
+                SELECT fe2.rowid FROM filone fe2
+                WHERE fe2.eneltel_key = LTRIM(COALESCE(lr.eneltel, ''), '0')
+                  AND TRIM(COALESCE(lr.eneltel, '')) != ''
+                  AND UPPER(TRIM(fe2.lcl)) NOT IN ({dis_sql})
+                ORDER BY fe2.sheets_row DESC
+                LIMIT 1
+            ),
+            (
+                SELECT f3.rowid FROM filone f3
+                WHERE f3.pod = UPPER(TRIM(COALESCE(ag.pod, lr.pod, '')))
+                ORDER BY f3.sheets_row DESC
+                LIMIT 1
+            )
         )
         WHERE ag.id=? AND ag.provincia=?
         ''',
@@ -1084,6 +1174,15 @@ def statistiche_feedback(provincia=None):
         'SELECT COUNT(*) FROM lettere_generazioni WHERE provincia=?',
         (provincia,),
     )
+    totale_privati = scalar(
+        '''
+        SELECT COUNT(*)
+        FROM lettere_righe lr
+        JOIN lettere_generazioni g ON g.id=lr.generazione_id
+        WHERE g.provincia=? AND COALESCE(lr.is_azienda, 0)=0
+        ''',
+        (provincia,),
+    )
 
     trend_rows = conn.execute(
         '''
@@ -1103,6 +1202,7 @@ def statistiche_feedback(provincia=None):
     return {
         'generazioni': generazioni,
         'aziende': totale_aziende,
+        'privati': totale_privati,
         'contattabili': contattabili,
         'contattate': contattate,
         'risposte': risposte,
@@ -1115,3 +1215,221 @@ def statistiche_feedback(provincia=None):
         if contattate else 0,
         'trend': [dict(r) for r in trend_rows],
     }
+
+
+def list_privati(generazione_id=None, search='', limit=2000, provincia=None):
+    """Lista utenti privati per le generazioni lettere.
+
+    Estrae le righe con is_azienda = 0 (o COALESCE(is_azienda, 0) = 0),
+    arricchite con i dati aggiornati del filone locale (telefono, email,
+    note appuntamento, codice/matricola, posizione) e categorizzate per
+    tipo di telefono (cellulare, fisso, senza_telefono) tramite classifica_contatti.
+    """
+    from moduli.distinte_manager import classifica_contatti
+
+    provincia = (provincia or _provincia_attiva()).upper()
+    conn = db.get_conn()
+    where = ['g.provincia=?', 'COALESCE(lr.is_azienda, 0)=0']
+    params = [provincia]
+
+    if generazione_id:
+        where.append('lr.generazione_id=?')
+        params.append(int(generazione_id))
+
+    q = _clean(search).strip()
+    if q:
+        like = f'%{q.lower()}%'
+        where.append(
+            '''
+            (
+                LOWER(COALESCE(lr.nominativo, '')) LIKE ?
+                OR LOWER(COALESCE(lr.pod, '')) LIKE ?
+                OR LOWER(COALESCE(lr.comune, '')) LIKE ?
+                OR LOWER(COALESCE(lr.via, '')) LIKE ?
+                OR LOWER(COALESCE(lr.telefono, '')) LIKE ?
+                OR LOWER(COALESCE(f.telefono, '')) LIKE ?
+            )
+            '''
+        )
+        params.extend([like, like, like, like, like, like])
+
+    disabled_lcls = _get_disabled_lcls(provincia)
+    dis_sql = ', '.join(f"'{re.sub(r'[^A-Za-z0-9_-]', '', x)}'" for x in disabled_lcls if x) or "''"
+
+    params.append(int(limit))
+
+    query = f'''
+        SELECT
+            lr.*,
+            g.file_name,
+            g.periodo_da,
+            g.periodo_a,
+            COALESCE(NULLIF(f.telefono, ''), '') AS telefono_filone,
+            COALESCE(NULLIF(f.email, ''), '') AS email_filone,
+            COALESCE(NULLIF(f.note_appuntamento, ''), '') AS note_filone,
+            COALESCE(NULLIF(f.data_pianificata, ''), '') AS data_pian_filone,
+            COALESCE(NULLIF(f.codice_ante, ''), '') AS codice_ante,
+            COALESCE(NULLIF(f.matricola_ante, ''), '') AS matricola_ante,
+            COALESCE(NULLIF(f.tipo_misuratore, ''), '') AS tipo_misuratore_filone,
+            COALESCE(NULLIF(f.posizione_misuratore, ''), '') AS posizione_misuratore_filone,
+            COALESCE(NULLIF(c.telefono, ''), NULLIF(lr.telefono, ''), NULLIF(f.telefono, ''), '') AS telefono_effettivo,
+            COALESCE(NULLIF(c.email, ''), NULLIF(lr.email, ''), NULLIF(f.email, ''), '') AS email_effettiva,
+            COALESCE(NULLIF(lr.via, ''), NULLIF(f.indirizzo, ''), '') AS via_effettiva,
+            COALESCE(NULLIF(lr.civico, ''), NULLIF(f.civico, ''), '') AS civico_effettivo
+        FROM lettere_righe lr
+        JOIN lettere_generazioni g ON g.id=lr.generazione_id
+        LEFT JOIN filone f ON f.rowid = COALESCE(
+            (
+                SELECT f1.rowid FROM filone f1
+                WHERE f1.pod = UPPER(TRIM(lr.pod))
+                  AND f1.lcl = lr.lcl
+                  AND TRIM(COALESCE(lr.lcl, '')) != ''
+                ORDER BY f1.sheets_row DESC
+                LIMIT 1
+            ),
+            (
+                SELECT fe1.rowid FROM filone fe1
+                WHERE fe1.eneltel_key = LTRIM(COALESCE(lr.eneltel, ''), '0')
+                  AND fe1.lcl = lr.lcl
+                  AND TRIM(COALESCE(lr.lcl, '')) != ''
+                  AND TRIM(COALESCE(lr.eneltel, '')) != ''
+                ORDER BY fe1.sheets_row DESC
+                LIMIT 1
+            ),
+            (
+                SELECT f2.rowid FROM filone f2
+                WHERE f2.pod = UPPER(TRIM(lr.pod))
+                  AND UPPER(TRIM(f2.lcl)) NOT IN ({dis_sql})
+                ORDER BY f2.sheets_row DESC
+                LIMIT 1
+            ),
+            (
+                SELECT fe2.rowid FROM filone fe2
+                WHERE fe2.eneltel_key = LTRIM(COALESCE(lr.eneltel, ''), '0')
+                  AND TRIM(COALESCE(lr.eneltel, '')) != ''
+                  AND UPPER(TRIM(fe2.lcl)) NOT IN ({dis_sql})
+                ORDER BY fe2.sheets_row DESC
+                LIMIT 1
+            ),
+            (
+                SELECT f3.rowid FROM filone f3
+                WHERE f3.pod = UPPER(TRIM(lr.pod))
+                ORDER BY f3.sheets_row DESC
+                LIMIT 1
+            )
+        )
+        LEFT JOIN lettere_contatti c
+          ON c.provincia=g.provincia AND c.contact_key='POD:' || UPPER(TRIM(COALESCE(lr.pod, '')))
+        WHERE {' AND '.join(where)}
+        ORDER BY
+            COALESCE(NULLIF(g.periodo_a, ''), NULLIF(g.periodo_da, ''), '0000-00-00') DESC,
+            lr.generazione_id DESC,
+            lr.row_num ASC,
+            lr.id ASC
+        LIMIT ?
+    '''
+
+    rows = conn.execute(query, params).fetchall()
+
+    lavori = []
+    dati_filone = {}
+    for r in rows:
+        pod = _clean(r['pod']).upper()
+        matricola_ante = _clean(r['matricola_ante'])
+        codice_ante = _clean(r['codice_ante'])
+        matricola_completa = ' / '.join(filter(None, [codice_ante, matricola_ante]))
+        tel_filone = _clean(r['telefono_filone'])
+        email_filone = _clean(r['email_filone'])
+        note_filone = _clean(r['note_filone'])
+        nom = _clean(r['nominativo'])
+        via = _clean(r['via_effettiva']) or _clean(r['via'])
+        civico = _clean(r['civico_effettivo']) or _clean(r['civico'])
+        comune = _clean(r['comune'])
+        cap = _clean(r['cap'])
+        tel = _clean(r['telefono_effettivo']) or tel_filone
+        email = _clean(r['email_effettiva']) or email_filone
+        tipo_ce = _clean(r['tipo_misuratore_filone']) or _clean(r['tipo_misuratore'])
+        pos_ce = _clean(r['posizione_misuratore_filone']) or _clean(r['posizione_mis'])
+        data_pian_filone = _clean(r['data_pian_filone'])
+        data_lettera = _clean(r['data_pianificazione'])
+        data_pian = data_pian_filone or data_lettera
+
+        item = {
+            'lavoro': r['row_num'] or len(lavori) + 1,
+            'id': r['id'],
+            'generazione_id': r['generazione_id'],
+            'file_name': r['file_name'],
+            'periodo_da': r['periodo_da'],
+            'periodo_a': r['periodo_a'],
+            'pod': pod,
+            'eneltel': _clean(r['eneltel']),
+            'lcl': _clean(r['lcl']),
+            'nome': nom,
+            'nominativo': nom,
+            'indirizzo': via,
+            'via': via,
+            'civico': civico,
+            'comune': comune,
+            'cap': cap,
+            'data_intervento': data_lettera,
+            'data_lettera': data_lettera,
+            'ora_intervento': _clean(r['ora_pianificazione']),
+            'data_pian_filone': data_pian_filone,
+            'data_effettiva': data_pian,
+            'lettera': _clean(r['lettera']),
+            'operatore': _clean(r['operatore']),
+            'matricola_operatore': _clean(r['operatore']),
+            'posizione_mis': pos_ce,
+            'posizione_contatore': pos_ce,
+            'appuntamento': _clean(r['appuntamento']),
+            'tipologia_contatore': tipo_ce,
+            'tipo_misuratore': tipo_ce,
+            'telefono': tel,
+            'telefono_filone': tel_filone,
+            'email': email,
+            'email_filone': email_filone,
+            'note_filone': note_filone,
+            'note': note_filone,
+            'note_appuntamento': note_filone,
+            'matricola_filone': matricola_completa,
+            'pod_filone': pod,
+            'eneltel_filone': _clean(r['eneltel']),
+            'is_azienda': False,
+            'tipo_contatto': 'privato',
+        }
+        lavori.append(item)
+        if pod:
+            dati_filone[pod] = {
+                'pod': pod,
+                'telefono': tel_filone,
+                'nominativo': nom,
+                'indirizzo': via,
+                'civico': civico,
+                'comune': comune,
+                'note': note_filone,
+                'matricola': matricola_completa,
+            }
+
+    classificati = classifica_contatti(lavori, dati_filone)
+
+    contatti = []
+    for lavoro in classificati['cellulare']:
+        lavoro['tipo'] = 'cellulare'
+        contatti.append(lavoro)
+    for lavoro in classificati['fisso']:
+        lavoro['tipo'] = 'fisso'
+        contatti.append(lavoro)
+    for lavoro in classificati['senza_telefono']:
+        lavoro['tipo'] = 'senza_telefono'
+        contatti.append(lavoro)
+
+    contatti.sort(key=lambda x: (x.get('generazione_id') or 0, x.get('lavoro') or 999999))
+
+    return {
+        'contatti': contatti,
+        'totale': len(contatti),
+        'cellulare': len(classificati['cellulare']),
+        'fisso': len(classificati['fisso']),
+        'senza_telefono': len(classificati['senza_telefono']),
+    }
+

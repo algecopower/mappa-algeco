@@ -1045,7 +1045,7 @@ def record_local_change(eneltel, fields, *, base_values=None, user=None,
         existing = None
         if lcl is None or lcl == '':
             cur = conn.execute(
-                "SELECT * FROM filone WHERE eneltel_key=? ORDER BY sheets_row LIMIT 1",
+                "SELECT * FROM filone WHERE eneltel_key=? ORDER BY sheets_row DESC LIMIT 1",
                 (eneltel_key,),
             )
             existing = cur.fetchone()
@@ -1056,9 +1056,9 @@ def record_local_change(eneltel, fields, *, base_values=None, user=None,
             )
             existing = cur.fetchone()
             if existing is None:
-                # Fallback alla prima riga dell'eneltel
+                # Fallback alla riga più recente dell'eneltel
                 cur = conn.execute(
-                    "SELECT * FROM filone WHERE eneltel_key=? ORDER BY sheets_row LIMIT 1",
+                    "SELECT * FROM filone WHERE eneltel_key=? ORDER BY sheets_row DESC LIMIT 1",
                     (eneltel_key,),
                 )
                 existing = cur.fetchone()
@@ -1198,29 +1198,23 @@ def get_filone_row(eneltel, lcl=None):
 
 
 def find_eneltel_by_pod(pod):
-    """Lookup POD → eneltel_key (prima occorrenza). None se non trovato.
+    """Lookup POD → eneltel_key (occorrenza più recente). None se non trovato.
 
     Compatibilità con codice legacy: ritorna solo l'eneltel, non il LCL.
     Per disambiguare righe duplicate usare `find_filone_row_by_pod`.
     """
     if not pod:
         return None
-    pod_norm = str(pod).strip().upper()
-    conn = get_conn()
-    cur = conn.execute(
-        'SELECT eneltel_key FROM filone WHERE UPPER(TRIM(pod))=? ORDER BY sheets_row LIMIT 1',
-        (pod_norm,),
-    )
-    row = cur.fetchone()
-    return row['eneltel_key'] if row else None
+    res = find_filone_row_by_pod(pod)
+    return res[0] if res else None
 
 
-def find_filone_row_by_pod(pod, lcl=None):
+def find_filone_row_by_pod(pod, lcl=None, disabled_lcls=None):
     """Lookup POD (+ opzionale LCL) → (eneltel_key, lcl).
 
-    Se `lcl` è valorizzato: prova match esatto (POD, LCL). Se non trovato,
-    fallback alla prima riga con quel POD.
-    Se `lcl` è None/'': prima riga con quel POD.
+    Se `lcl` è valorizzato: prova match esatto (POD, LCL).
+    Se non trovato o `lcl` è None/'': cerca tra i record con quel POD,
+    privilegiando le LCL non disabilitate e la riga più recente (sheets_row DESC).
 
     Ritorna `(eneltel_key, lcl_della_riga_trovata)` o None.
     """
@@ -1228,19 +1222,38 @@ def find_filone_row_by_pod(pod, lcl=None):
         return None
     pod_norm = str(pod).strip().upper()
     conn = get_conn()
-    if lcl is not None and lcl != '':
+    if lcl is not None and str(lcl).strip() != '':
+        lcl_norm = str(lcl).strip().upper()
         cur = conn.execute(
             "SELECT eneltel_key, COALESCE(lcl,'') AS lcl FROM filone "
-            "WHERE UPPER(TRIM(pod))=? AND COALESCE(lcl,'')=? LIMIT 1",
-            (pod_norm, lcl),
+            "WHERE UPPER(TRIM(pod))=? AND UPPER(TRIM(COALESCE(lcl,'')))=? "
+            "ORDER BY sheets_row DESC LIMIT 1",
+            (pod_norm, lcl_norm),
         )
         row = cur.fetchone()
         if row:
             return (row['eneltel_key'], row['lcl'])
-        # Fallback: nessun match esatto, prendi prima riga POD
+        # Fallback: nessun match esatto sulla LCL richiesta
+
+    # Fallback 1: cerca tra le LCL non disabilitate, prendendo la più recente
+    if disabled_lcls:
+        dis_list = [str(x).strip().upper() for x in disabled_lcls if str(x).strip()]
+        if dis_list:
+            dis_placeholders = ', '.join(['?'] * len(dis_list))
+            cur = conn.execute(
+                f"SELECT eneltel_key, COALESCE(lcl,'') AS lcl FROM filone "
+                f"WHERE UPPER(TRIM(pod))=? AND UPPER(TRIM(COALESCE(lcl,''))) NOT IN ({dis_placeholders}) "
+                f"ORDER BY sheets_row DESC LIMIT 1",
+                [pod_norm] + dis_list,
+            )
+            row = cur.fetchone()
+            if row:
+                return (row['eneltel_key'], row['lcl'])
+
+    # Fallback 2: riga più recente per quel POD
     cur = conn.execute(
         "SELECT eneltel_key, COALESCE(lcl,'') AS lcl FROM filone "
-        "WHERE UPPER(TRIM(pod))=? ORDER BY sheets_row LIMIT 1",
+        "WHERE UPPER(TRIM(pod))=? ORDER BY sheets_row DESC LIMIT 1",
         (pod_norm,),
     )
     row = cur.fetchone()

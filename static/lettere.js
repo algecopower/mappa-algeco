@@ -1,7 +1,26 @@
 // -*- coding: utf-8 -*-
 let generazioni = [];
 let aziende = [];
+let privati = [];
 let selectedGenerazione = '';
+let currentMainView = 'aziende';
+let completedAziende = JSON.parse(localStorage.getItem('lettere_aziende_completed') || '{}');
+let completedPrivati = JSON.parse(localStorage.getItem('lettere_privati_completed') || '{}');
+
+function isAziendaCompleted(a) {
+    if (!a) return false;
+    return Boolean(a.risposta || completedAziende[a.id] || (a.pod && completedAziende[a.pod]));
+}
+
+let noteStatesPrivati = {};
+let erratiPrivati = JSON.parse(localStorage.getItem('lettere_privati_errati') || '{}');
+let privatiController = null;
+let currentSmsSettings = null;
+let bulkSmsAbortato = false;
+let bulkSmsContacts = [];
+let activeModalPrivato = null;
+let selectedPrivatiTmplId = '';
+
 let TEMPLATES = {};
 let FIELD_DEFS = {};
 let templateSettings = {};
@@ -15,6 +34,7 @@ let filterIncompleteOnly = false;
 
 const PAUSA_TRA_EMAIL_SEC = 5;
 const RESEARCH_AUTO_OPEN_KEY = 'lettere_research_auto_open';
+
 
 function esc(v) {
     return String(v ?? '').replace(/[&<>"']/g, c => ({
@@ -88,7 +108,7 @@ function propagateContactLocally(nominativo, comune, telefono, email, updatedKey
 
 async function loadAll() {
     await Promise.all([loadGenerazioni(), loadTemplates(), loadAllegati(), loadStats()]);
-    await loadAziende();
+    await Promise.all([loadAziende(), loadPrivati()]);
 }
 
 async function loadGenerazioni() {
@@ -110,13 +130,15 @@ async function loadTemplates() {
     TEMPLATES = data.templates || {};
 
     const select = document.getElementById('templateSelect');
-    select.innerHTML = '';
-    for (const [id, tmpl] of Object.entries(TEMPLATES)) {
-        if (tmpl.type !== 'email') continue;
-        const opt = document.createElement('option');
-        opt.value = id;
-        opt.textContent = tmpl.label || id;
-        select.appendChild(opt);
+    if (select) {
+        select.innerHTML = '';
+        for (const [id, tmpl] of Object.entries(TEMPLATES)) {
+            if (tmpl.type !== 'email') continue;
+            const opt = document.createElement('option');
+            opt.value = id;
+            opt.textContent = tmpl.label || id;
+            select.appendChild(opt);
+        }
     }
 }
 
@@ -132,15 +154,23 @@ async function loadAllegati() {
 }
 
 async function loadStats() {
-    const res = await fetch('/api/lettere/statistiche');
-    const data = await res.json();
-    const s = data.lettere || {};
-    document.getElementById('statsBox').innerHTML = `
-        <div class="kpi"><span>${s.generazioni || 0}</span><small>Generazioni</small></div>
-        <div class="kpi"><span>${s.aziende || 0}</span><small>Aziende</small></div>
-        <div class="kpi"><span>${s.copertura_contatti || 0}%</span><small>Con email/PEC</small></div>
-        <div class="kpi"><span>${s.tasso_feedback || 0}%</span><small>Feedback</small></div>
-    `;
+    try {
+        const res = await fetch('/api/lettere/statistiche');
+        const data = await res.json();
+        const s = data.lettere || {};
+        const statsBox = document.getElementById('statsBox');
+        if (statsBox) {
+            statsBox.innerHTML = `
+                <div class="kpi" id="kpiGenerazioni"><span>${s.generazioni || 0}</span><small>Generazioni</small></div>
+                <div class="kpi" id="kpiAziende"><span>${s.aziende || 0}</span><small>Aziende</small></div>
+                <div class="kpi" id="kpiPrivati"><span>${s.privati || 0}</span><small>Utenti Privati</small></div>
+                <div class="kpi" id="kpiEmailPec"><span>${s.copertura_contatti || 0}%</span><small>Con email/PEC</small></div>
+                <div class="kpi" id="kpiFeedback"><span>${s.tasso_feedback || 0}%</span><small>Feedback</small></div>
+            `;
+        }
+    } catch (e) {
+        console.error('Errore caricamento statistiche:', e);
+    }
 }
 
 function renderGenerazioni() {
@@ -168,7 +198,7 @@ function renderGenerazioni() {
 async function selectGenerazione(id) {
     selectedGenerazione = id || '';
     renderGenerazioni();
-    await loadAziende();
+    await Promise.all([loadAziende(), loadPrivati()]);
 }
 
 async function loadAziende() {
@@ -191,6 +221,14 @@ async function loadAziende() {
             return;
         }
         aziende = data.aziende || [];
+        aziende.forEach(a => {
+            if (a.risposta) {
+                completedAziende[a.id] = true;
+                if (a.pod) completedAziende[a.pod] = true;
+            }
+        });
+        const badgeAz = document.getElementById('badgeCountAziende');
+        if (badgeAz) badgeAz.textContent = aziende.length;
         renderAziende();
         updateBulkButton();
     } catch (e) {
@@ -601,6 +639,8 @@ function visibleAziende() {
         const note = (a.note_appuntamento || a.note || '').trim();
 
         if (filterRecapitoVal === 'incompleti' && !hasMissingContact(a)) return false;
+        if (filterRecapitoVal === 'completati' && !isAziendaCompleted(a)) return false;
+        if (filterRecapitoVal === 'da_fare' && isAziendaCompleted(a)) return false;
         if (filterRecapitoVal === 'solo_mail' && (!hasMail || hasPec)) return false;
         if (filterRecapitoVal === 'solo_pec' && (!hasPec || hasMail)) return false;
         if (filterRecapitoVal === 'monofase' && !tipo.includes('mono')) return false;
@@ -611,6 +651,7 @@ function visibleAziende() {
         if (filterRecapitoVal === 'con_email' && emails.length === 0) return false;
         if (filterRecapitoVal === 'senza_email' && emails.length > 0) return false;
         if (filterRecapitoVal === 'non_inviati' && (a.invii_ok || 0) > 0) return false;
+        if (filterRecapitoVal === 'date_modificate' && !checkCambioData(a.data_pianificazione, a.data_pian_filone).cambiato) return false;
 
         return true;
     });
@@ -637,16 +678,161 @@ function parseDateToISO(dateStr) {
     return dateStr;
 }
 
-function formatDateGroupHeader(dateStr) {
-    if (!dateStr) return 'Data non specificata';
-    let d, m, y;
-    if (dateStr.includes('/')) {
-        [d, m, y] = dateStr.split('/').map(Number);
-    } else {
-        [y, m, d] = dateStr.split('-').map(Number);
+function parseDateToYmd(str) {
+    if (!str) return null;
+    const s = String(str).trim();
+    if (!s) return null;
+    if (s.toUpperCase().includes('ANNULLAT')) return 'ANNULLATO';
+    const dmy = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+    if (dmy) {
+        return `${dmy[3]}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}`;
     }
-    const dt = new Date(y, m - 1, d);
-    return `${GIORNI_IT[dt.getDay()]} ${d} ${MESI_IT_LOWER[m - 1]} ${y}`;
+    const ymd = s.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})$/);
+    if (ymd) {
+        return `${ymd[1]}-${ymd[2].padStart(2, '0')}-${ymd[3].padStart(2, '0')}`;
+    }
+    return s;
+}
+
+function checkCambioData(dataLettera, dataFilone) {
+    if (!dataFilone || !String(dataFilone).trim()) return { cambiato: false };
+    const sFilone = String(dataFilone).trim();
+    const sLettera = String(dataLettera || '').trim();
+
+    if (sFilone.toUpperCase().includes('ANNULLAT')) {
+        return {
+            cambiato: true,
+            isAnnullato: true,
+            dataLettera: sLettera,
+            dataAttuale: 'ANNULLATO'
+        };
+    }
+
+    if (!sLettera) return { cambiato: false };
+
+    const normLettera = parseDateToYmd(sLettera);
+    const normFilone = parseDateToYmd(sFilone);
+
+    if (normFilone && normLettera && normFilone !== normLettera) {
+        return {
+            cambiato: true,
+            isAnnullato: false,
+            dataLettera: sLettera,
+            dataAttuale: sFilone
+        };
+    }
+    return { cambiato: false };
+}
+
+function renderDataInterventoHtml(dataLettera, dataFilone, ora) {
+    const info = checkCambioData(dataLettera, dataFilone);
+    const oraHtml = ora ? `<div class="meta-sub"><i class="fas fa-clock" style="font-size:0.72rem;"></i> ${esc(ora)}</div>` : '';
+
+    if (!info.cambiato) {
+        const d = dataLettera || dataFilone || '-';
+        return `
+            <div style="font-size:0.82rem;font-weight:600;"><i class="fas fa-calendar" style="font-size:0.75rem;color:var(--text-muted);"></i> ${esc(d)}</div>
+            ${oraHtml}
+        `;
+    }
+
+    if (info.isAnnullato) {
+        return `
+            <div style="margin-bottom:2px;"><span class="badge badge-annullato" title="Intervento contrassegnato come ANNULLATO nel database locale"><i class="fas fa-ban"></i> ANNULLATO</span></div>
+            <div class="meta-sub" style="font-size:0.72rem;color:var(--text-muted);">Lettera: <del>${esc(dataLettera)}</del></div>
+            ${oraHtml}
+        `;
+    }
+
+    return `
+        <div style="font-size:0.82rem;font-weight:700;color:var(--text-primary);">
+            <i class="fas fa-calendar-check" style="color:#f59e0b;font-size:0.75rem;"></i> ${esc(info.dataAttuale)}
+        </div>
+        <div style="margin-top:2px;">
+            <span class="badge badge-cambio-data" title="Data modificata nel gestionale: da ${esc(dataLettera)} a ${esc(info.dataAttuale)}">
+                <i class="fas fa-history"></i> Lettera: <del>${esc(dataLettera)}</del>
+            </span>
+        </div>
+        ${oraHtml}
+    `;
+}
+
+function renderDataInterventoCard(c) {
+    const dataLettera = c.data_lettera || c.data_intervento || '';
+    const dataFilone = c.data_pian_filone || '';
+    const ora = c.ora_intervento || '';
+    const oraSuffix = ora ? ` — ${esc(ora)}` : '';
+    const info = checkCambioData(dataLettera, dataFilone);
+
+    if (!info.cambiato) {
+        return `<div class="date"><i class="fas fa-calendar"></i> ${esc(dataLettera || dataFilone || '')} ${oraSuffix}</div>`;
+    }
+
+    if (info.isAnnullato) {
+        return `
+            <div class="date" style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;">
+                <span class="badge badge-annullato" title="Intervento contrassegnato come ANNULLATO nel database locale"><i class="fas fa-ban"></i> ANNULLATO</span>
+                <span style="font-size:0.75rem;color:var(--text-muted);">Lettera: <del>${esc(dataLettera)}</del></span>
+                ${ora ? `<span style="font-size:0.75rem;color:var(--text-muted);">${oraSuffix}</span>` : ''}
+            </div>
+        `;
+    }
+
+    return `
+        <div class="date" style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;">
+            <i class="fas fa-calendar-check" style="color:#f59e0b;"></i>
+            <strong>${esc(info.dataAttuale)}</strong>
+            ${ora ? `<span style="font-size:0.78rem;">${oraSuffix}</span>` : ''}
+            <span class="badge badge-cambio-data" title="Data modificata nel gestionale: da ${esc(dataLettera)} a ${esc(info.dataAttuale)}">
+                <i class="fas fa-history"></i> Lettera: <del>${esc(dataLettera)}</del>
+            </span>
+        </div>
+    `;
+}
+
+function groupContactsByDate(items, getDateFn, getNameFn) {
+    const groups = new Map();
+    for (const it of items) {
+        const dk = (getDateFn(it) || '').trim() || 'Senza data';
+        if (!groups.has(dk)) groups.set(dk, []);
+        groups.get(dk).push(it);
+    }
+    const sortedKeys = [...groups.keys()].sort((a, b) => {
+        if (a === 'Senza data' && b === 'Senza data') return 0;
+        if (a === 'Senza data') return 1;
+        if (b === 'Senza data') return -1;
+        const isoA = parseDateToISO(a);
+        const isoB = parseDateToISO(b);
+        return isoA < isoB ? -1 : isoA > isoB ? 1 : 0;
+    });
+    for (const key of sortedKeys) {
+        groups.get(key).sort((a, b) =>
+            (getNameFn(a) || '').localeCompare(getNameFn(b) || '', 'it', { sensitivity: 'base' })
+        );
+    }
+    return { groups, sortedKeys };
+}
+
+function formatDateGroupHeader(dateStr) {
+    if (!dateStr || dateStr === 'Senza data') return 'Data non specificata';
+    try {
+        let d, m, y;
+        if (dateStr.includes('/')) {
+            const parts = dateStr.split('/').map(Number);
+            d = parts[0]; m = parts[1]; y = parts[2];
+        } else if (dateStr.includes('-')) {
+            const parts = dateStr.split('-').map(Number);
+            y = parts[0]; m = parts[1]; d = parts[2];
+        } else {
+            return dateStr;
+        }
+        if (!d || !m || !y || isNaN(d) || isNaN(m) || isNaN(y)) return dateStr;
+        const dt = new Date(y, m - 1, d);
+        if (isNaN(dt.getTime())) return dateStr;
+        return `${GIORNI_IT[dt.getDay()]} ${d} ${MESI_IT_LOWER[m - 1]} ${y}`;
+    } catch {
+        return dateStr;
+    }
 }
 
 function toggleDateGroup(dateStr) {
@@ -655,70 +841,131 @@ function toggleDateGroup(dateStr) {
     } else {
         collapsedDates.add(dateStr);
     }
+    if (currentMainView === 'privati') {
+        renderPrivati();
+    } else {
+        renderAziende();
+    }
+}
+
+let aziendeViewMode = localStorage.getItem('lettere_aziende_view_mode') || 'table';
+
+function setAziendeViewMode(mode) {
+    aziendeViewMode = mode;
+    localStorage.setItem('lettere_aziende_view_mode', mode);
+    document.getElementById('btnAziendeViewTable')?.classList.toggle('active', mode === 'table');
+    document.getElementById('btnAziendeViewCards')?.classList.toggle('active', mode === 'cards');
     renderAziende();
 }
 
 function renderAziende() {
+    const tableWrap = document.getElementById('aziendeTableWrap');
+    const grid = document.getElementById('aziendeGrid');
+    document.getElementById('btnAziendeViewTable')?.classList.toggle('active', aziendeViewMode === 'table');
+    document.getElementById('btnAziendeViewCards')?.classList.toggle('active', aziendeViewMode === 'cards');
+
     const visible = visibleAziende();
     const incompleteCount = aziende.filter(hasMissingContact).length;
+    const daFareCount = aziende.filter(a => !isAziendaCompleted(a)).length;
     let info = `${visible.length} aziende`;
     if (filterRecapitoVal === 'incompleti') {
         info += ' senza recapiti completi';
-    } else if (incompleteCount) {
-        info += ` · ${incompleteCount} da completare`;
+    } else if (filterRecapitoVal === 'da_fare') {
+        info += ` · ${daFareCount} da fare`;
+    } else if (filterRecapitoVal === 'completati') {
+        info += ` · ${aziende.length - daFareCount} completate`;
+    } else {
+        if (daFareCount) info += ` · ${daFareCount} da fare`;
+        if (incompleteCount) info += ` (${incompleteCount} recapiti mancanti)`;
     }
     if (selectedGenerazione) {
         info += ' nella generazione selezionata';
     }
-    document.getElementById('resultInfo').textContent = info;
-    const body = document.getElementById('aziendeBody');
-    if (!visible.length) {
-        body.innerHTML = '<tr><td colspan="6" class="empty">Nessuna azienda trovata per il filtro selezionato</td></tr>';
-        return;
-    }
+    const resInfo = document.getElementById('resultInfo');
+    if (resInfo) resInfo.textContent = info;
 
-    const groups = new Map();
-    for (const a of visible) {
-        const dk = a.data_pianificazione || '';
-        if (!groups.has(dk)) groups.set(dk, []);
-        groups.get(dk).push(a);
-    }
-    const sortedKeys = [...groups.keys()].sort((a, b) => {
-        if (!a && !b) return 0;
-        if (!a) return 1;
-        if (!b) return -1;
-        const isoA = parseDateToISO(a);
-        const isoB = parseDateToISO(b);
-        return isoA < isoB ? -1 : isoA > isoB ? 1 : 0;
-    });
-    for (const key of sortedKeys) {
-        groups.get(key).sort((a, b) =>
-            (a.nominativo || '').localeCompare(b.nominativo || '', 'it', { sensitivity: 'base' })
-        );
-    }
+    const { groups, sortedKeys } = groupContactsByDate(
+        visible,
+        a => a.data_pianificazione,
+        a => a.nominativo
+    );
 
-    let html = '';
-    for (const dk of sortedKeys) {
-        const items = groups.get(dk);
-        const collapsed = collapsedDates.has(dk);
-        const incInGroup = items.filter(hasMissingContact).length;
-        const label = formatDateGroupHeader(dk);
-        html += `
-            <tr class="date-group-header-row" onclick="toggleDateGroup('${esc(dk)}')">
-                <td colspan="6">
-                    <div class="date-group-header">
-                        <i class="fas fa-chevron-${collapsed ? 'right' : 'down'}"></i>
-                        <span class="date-group-label">${esc(label)}</span>
-                        <span class="date-group-count">${items.length} aziende${incInGroup ? ` · ${incInGroup} da completare` : ''}</span>
+    if (aziendeViewMode === 'table') {
+        if (grid) grid.style.display = 'none';
+        if (tableWrap) tableWrap.style.display = 'block';
+
+        const body = document.getElementById('aziendeBody');
+        if (!body) return;
+
+        if (!visible.length) {
+            body.innerHTML = '<tr><td colspan="6" class="empty">Nessuna azienda trovata per il filtro selezionato</td></tr>';
+            return;
+        }
+
+        let html = '';
+        for (const dk of sortedKeys) {
+            const items = groups.get(dk);
+            const collapsed = collapsedDates.has(dk);
+            const daFareInGroup = items.filter(a => !isAziendaCompleted(a)).length;
+            const incInGroup = items.filter(hasMissingContact).length;
+            const label = formatDateGroupHeader(dk);
+            html += `
+                <tr class="date-group-header-row" onclick="toggleDateGroup('${esc(dk)}')">
+                    <td colspan="6">
+                        <div class="date-group-header">
+                            <i class="fas fa-chevron-${collapsed ? 'right' : 'down'}"></i>
+                            <span class="date-group-label">${esc(label)}</span>
+                            <span class="date-group-count">${items.length} aziende${daFareInGroup ? ` · ${daFareInGroup} da fare` : ' · completate'}${incInGroup ? ` (${incInGroup} inc.)` : ''}</span>
+                        </div>
+                    </td>
+                </tr>
+            `;
+            if (!collapsed) {
+                html += items.map(a => renderAziendaRow(a)).join('');
+            }
+        }
+        body.innerHTML = html;
+    } else {
+        if (tableWrap) tableWrap.style.display = 'none';
+        if (grid) {
+            grid.style.display = 'block';
+
+            if (!visible.length) {
+                grid.innerHTML = `
+                    <div class="empty-state" style="padding:40px 20px;text-align:center;color:var(--text-muted);">
+                        <i class="fas fa-filter" style="font-size:2rem;margin-bottom:10px;display:block;"></i>
+                        <h3>Nessuna azienda trovata</h3>
+                        <p>Prova a modificare i filtri o il termine di ricerca</p>
                     </div>
-                </td>
-            </tr>
-        `;
-        if (!collapsed) {
-            html += items.map(a => renderAziendaRow(a)).join('');
+                `;
+                return;
+            }
+
+            let cardsHtml = '';
+            for (const dk of sortedKeys) {
+                const items = groups.get(dk);
+                const collapsed = collapsedDates.has(dk);
+                const daFareInGroup = items.filter(a => !isAziendaCompleted(a)).length;
+                const incInGroup = items.filter(hasMissingContact).length;
+                const label = formatDateGroupHeader(dk);
+                cardsHtml += `
+                    <div class="date-group-card-block">
+                        <div class="date-group-header-card" onclick="toggleDateGroup('${esc(dk)}')">
+                            <i class="fas fa-chevron-${collapsed ? 'right' : 'down'}"></i>
+                            <span class="date-group-label">${esc(label)}</span>
+                            <span class="date-group-count">${items.length} aziende${daFareInGroup ? ` · ${daFareInGroup} da fare` : ' · completate'}${incInGroup ? ` (${incInGroup} inc.)` : ''}</span>
+                        </div>
+                        ${!collapsed ? `
+                            <div class="contacts-grid">
+                                ${items.map(a => renderAziendaCard(a)).join('')}
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            }
+            grid.innerHTML = cardsHtml;
         }
     }
-    body.innerHTML = html;
 }
 
 let selectedAziendeIds = new Set();
@@ -735,12 +982,15 @@ function renderSearchShortcuts(a) {
 
 function renderAziendaRow(a) {
     const checked = selectedAziendeIds.has(Number(a.id));
+    const isCompleted = isAziendaCompleted(a);
     const emails = splitEmails(a.email);
     const missing = hasMissingContact(a);
+    const note = (a.note || a.note_filone || '').trim();
     const rowClass = [
+        isCompleted ? 'completed' : '',
         missing ? 'incomplete-row' : '',
         checked ? 'selected' : '',
-        a.risposta ? 'row-risposta' : '',
+        isCompleted ? 'row-risposta' : '',
         a.invii_ok > 0 ? 'row-inviata' : ''
     ].filter(Boolean).join(' ');
 
@@ -756,26 +1006,32 @@ function renderAziendaRow(a) {
             <td class="azienda-cell">
                 <div class="azienda-name">
                     ${esc(a.nominativo || 'Senza nominativo')}
+                    ${a.nominativo ? `
+                        <button type="button" class="btn-mini" onclick="copiaNominativoAzienda(${a.id}, event)" title="Copia nominativo" style="background:transparent;border:none;color:var(--text-muted);cursor:pointer;padding:0 3px;">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    ` : ''}
                     ${missing ? '<span class="badge da-completare" title="Recapiti mancanti">Da completare</span>' : ''}
                 </div>
                 <div class="azienda-sub">
-                    <span>${esc(a.pod || '')}</span> ·
+                    <span><b>${esc(a.pod || '')}</b></span> ·
                     <span>${esc(a.comune || '')}</span>
                     ${a.via ? `· <span>${esc(a.via)} ${esc(a.civico || '')}</span>` : ''}
                 </div>
                 ${renderSearchShortcuts(a)}
             </td>
             <td class="intervento-cell">
-                <div>${esc(a.data_pianificazione || '-')}</div>
-                <div class="mini">${esc(a.ora_pianificazione || '')} ${a.operatore ? '· ' + esc(a.operatore) : ''}</div>
+                ${renderDataInterventoHtml(a.data_pianificazione, a.data_pian_filone, (a.ora_pianificazione || '') + (a.operatore ? ' · ' + a.operatore : ''))}
             </td>
             <td class="tel-cell" data-label="Telefono">
-                <input class="tel-input edit-input" value="${esc(a.telefono || '')}" placeholder="Tel..."
+                <input class="tel-input edit-input ${a.telefono ? 'has-val' : ''}" value="${esc(a.telefono || '')}" placeholder="Tel..."
+                       onkeydown="if(event.key==='Enter'){event.preventDefault(); saveInlineContact(${a.id}, 'telefono', this.value);}"
                        onblur="saveInlineContact(${a.id}, 'telefono', this.value)">
             </td>
             <td class="email-cell" data-label="Email / PEC">
-                <input class="email-input edit-input" value="${esc(a.email || '')}"
+                <input class="email-input edit-input ${a.email ? 'has-val' : ''}" value="${esc(a.email || '')}"
                        placeholder="mail@dominio.it / pec@pec.it"
+                       onkeydown="if(event.key==='Enter'){event.preventDefault(); saveInlineContact(${a.id}, 'email', this.value);}"
                        onblur="saveInlineContact(${a.id}, 'email', this.value)">
                 <div class="email-badges">
                     ${emails.length ? emails.map(e => `<span class="badge ${e.pec ? 'pec' : ''}">${e.pec ? 'PEC' : 'MAIL'}</span>`).join('') : ((a.email || '').trim() ? `<span class="badge" style="background:var(--surface-raised, #334155);color:var(--text-muted);font-size:0.65rem;">${esc(a.email)}</span>` : '')}
@@ -784,16 +1040,303 @@ function renderAziendaRow(a) {
             <td class="invii-cell">
                 <div class="invii-status">${inviiLabel}</div>
                 <div class="risposta-row">
-                    <label class="risposta-label">
-                        <input type="checkbox" class="risposta-check" ${a.risposta ? 'checked' : ''}
-                                onchange="saveRisposta(${a.id}, this.checked)">
-                        <span>Risposta</span>
+                    <label class="risposta-label" title="Contrassegna come completata / risposta ricevuta">
+                        <input type="checkbox" class="risposta-check" ${isCompleted ? 'checked' : ''}
+                                onchange="toggleCompletedAzienda(${a.id})">
+                        <span>Fatto</span>
                     </label>
-                    <input class="note-input" value="${esc(a.note || '')}" placeholder="Nota risposta"
-                           onblur="saveRisposta(${a.id}, undefined, this.value)">
+                    <div style="display:flex;align-items:center;gap:4px;flex:1;position:relative;">
+                        <input class="note-input ${note ? 'has-note' : ''}" id="noteTable_azienda_${a.id}"
+                               value="${esc(note)}" placeholder="Nota..."
+                               onkeydown="if(event.key==='Enter'){event.preventDefault(); salvaNotaAzienda(${a.id}, this.value);}"
+                               onblur="salvaNotaAzienda(${a.id}, this.value)">
+                        <div class="btn-add-note" onclick="toggleNoteDropdownAzienda(${a.id})" style="padding:4px 7px;font-size:0.75rem;" title="Aggiungi nota rapida">
+                            <i class="fas fa-plus"></i>
+                            <div class="note-dropdown" id="noteDropdown_azienda_${a.id}">
+                                <div class="note-dropdown-item" onclick="aggiungiNotaAzienda(${a.id}, 'mandata mail')"><i class="fas fa-envelope" style="color: #6366f1"></i> Mandata mail</div>
+                                <div class="note-dropdown-item" onclick="aggiungiNotaAzienda(${a.id}, 'mandato wa')"><i class="fab fa-whatsapp" style="color: #25d366"></i> Mandato WA</div>
+                                <div class="note-dropdown-item" onclick="aggiungiNotaAzienda(${a.id}, 'mandato sms')"><i class="fas fa-sms" style="color: #10b981"></i> Mandato SMS</div>
+                                <div class="note-dropdown-item" onclick="aggiungiNotaAzienda(${a.id}, 'nr')"><i class="fas fa-phone-slash" style="color: #ef4444"></i> NR</div>
+                                <div class="note-dropdown-item" onclick="aggiungiNotaAzienda(${a.id}, 'chiamare')"><i class="fas fa-phone" style="color: #3b82f6"></i> Chiamare</div>
+                                <div class="note-dropdown-item" onclick="aggiungiNotaAzienda(${a.id}, 'confermato')"><i class="fas fa-check-circle" style="color: #10b981"></i> Confermato</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div style="margin-top:5px;">
+                    <button type="button" class="btn-mini" onclick="apriAziendaMessageModal(${a.id})" title="Apri Template Messaggio (Mail / WA / SMS)" style="padding:3px 8px;font-size:0.75rem;border-radius:4px;background:rgba(59,130,246,0.15);color:#60a5fa;border:1px solid rgba(59,130,246,0.3);cursor:pointer;display:inline-flex;align-items:center;gap:4px;">
+                        <i class="fas fa-paper-plane"></i> Template
+                    </button>
                 </div>
             </td>
         </tr>
+    `;
+}
+
+function toggleNoteDropdownAzienda(id) {
+    const el = document.getElementById(`noteDropdown_azienda_${id}`) || document.getElementById(`noteDropdown_card_azienda_${id}`);
+    if (el) {
+        const isOpen = el.classList.contains('show');
+        document.querySelectorAll('.note-dropdown.show').forEach(d => d.classList.remove('show'));
+        if (!isOpen) el.classList.add('show');
+    }
+}
+
+async function salvaNotaAzienda(id, nota) {
+    const a = aziende.find(x => Number(x.id) === Number(id));
+    if (!a) return;
+    const cleanNota = String(nota || '').trim();
+    a.note = cleanNota;
+
+    const inputTable = document.getElementById(`noteTable_azienda_${id}`);
+    if (inputTable) {
+        inputTable.value = cleanNota;
+        inputTable.classList.toggle('has-note', Boolean(cleanNota));
+    }
+    const inputCard = document.getElementById(`noteDisplay_azienda_${id}`);
+    if (inputCard) {
+        inputCard.value = cleanNota;
+        inputCard.classList.toggle('has-note', Boolean(cleanNota));
+    }
+
+    try {
+        const res = await fetch(`/api/lettere/aziende/${id}/risposta`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ note: cleanNota, lcl: a.lcl || '' })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error || 'Errore salvataggio nota');
+        showToast('Nota salvata');
+    } catch (e) {
+        showToast(e.message, true);
+    }
+}
+
+async function aggiungiNotaAzienda(id, testo) {
+    document.querySelectorAll('.note-dropdown.show').forEach(d => d.classList.remove('show'));
+    const a = aziende.find(x => Number(x.id) === Number(id));
+    if (!a) return;
+    const existing = (a.note || '').trim();
+    const nuovaNota = existing ? `${existing} // ${testo}` : testo;
+    await salvaNotaAzienda(id, nuovaNota);
+}
+
+async function toggleCompletedAzienda(id) {
+    const a = aziende.find(x => Number(x.id) === Number(id));
+    if (!a) return;
+    const nextState = !isAziendaCompleted(a);
+    a.risposta = nextState ? 1 : 0;
+    completedAziende[a.id] = nextState;
+    if (a.pod) completedAziende[a.pod] = nextState;
+    localStorage.setItem('lettere_aziende_completed', JSON.stringify(completedAziende));
+
+    renderAziende();
+    loadStats();
+
+    try {
+        const res = await fetch(`/api/lettere/aziende/${id}/risposta`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ risposta: nextState, lcl: a.lcl || '' })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error || 'Errore salvataggio stato');
+        showToast(nextState ? 'Azienda completata' : 'Azienda rimessa da fare');
+    } catch (e) {
+        showToast(e.message, true);
+    }
+}
+
+function copiaNominativoAzienda(id, ev) {
+    if (ev) ev.stopPropagation();
+    const a = aziende.find(x => Number(x.id) === Number(id));
+    if (!a || !a.nominativo) return;
+    navigator.clipboard.writeText(a.nominativo)
+        .then(() => showToast(`Copiato: ${a.nominativo}`))
+        .catch(() => showToast('Errore copia negli appunti', true));
+}
+
+function apriAziendaMessageModal(id) {
+    const a = aziende.find(x => Number(x.id) === Number(id));
+    if (!a) {
+        showToast('Azienda non trovata', true);
+        return;
+    }
+    const c = contattoDaAzienda(a);
+    if (window.MessageTemplateModal) {
+        window.MessageTemplateModal.open({
+            contact: c,
+            smsEndpoint: '/api/lettere/invia-singolo-sms',
+            onSmsSent: async (p) => {
+                const dataIntervento = c.data_pian_filone || c.data_lettera || c.data_intervento || '';
+                const notaInvio = `mandato SMS per ${dataIntervento}`;
+                await saveRisposta(a.id, undefined, notaInvio);
+            },
+            onWaOpened: async (p) => {
+                await saveRisposta(a.id, undefined, 'mandato wa');
+            },
+            onMailOpened: async (p) => {
+                await saveRisposta(a.id, undefined, 'mandata mail');
+            }
+        });
+    } else {
+        showToast('Modulo template non ancora caricato', true);
+    }
+}
+
+function renderAziendaCard(a) {
+    const checked = selectedAziendeIds.has(Number(a.id));
+    const isCompleted = isAziendaCompleted(a);
+    const emails = splitEmails(a.email);
+    const missing = hasMissingContact(a);
+    const note = (a.note || a.note_filone || '').trim();
+    const tipoCe = (a.tipo_misuratore || '').trim();
+    const tipoStr = tipoCe.toLowerCase();
+    let tipoBadge = '';
+    if (tipoStr.includes('semidirett')) {
+        tipoBadge = '<span class="badge" style="background:#8b5cf6;font-size:0.65rem;color:white;">SEMIDIRETTA</span>';
+    } else if (tipoStr.includes('tri')) {
+        tipoBadge = '<span class="badge" style="background:#3b82f6;font-size:0.65rem;color:white;">TRIFASE</span>';
+    } else if (tipoStr.includes('mono')) {
+        tipoBadge = '<span class="badge" style="background:#10b981;font-size:0.65rem;color:white;">MONOFASE</span>';
+    }
+
+    const inviiLabel = a.invii_ok > 0
+        ? `<span class="badge inviata" title="Inviata ${fmtTs(a.last_sent_ts)}"><i class="fas fa-check"></i> Inviata (${a.invii_ok})</span>`
+        : '<span class="badge non-inviata">Non inviata</span>';
+
+    const cardClass = [
+        'contact-card',
+        'azienda-card',
+        isCompleted ? 'completed' : '',
+        missing ? 'incomplete-row' : '',
+        checked ? 'selected' : '',
+        isCompleted ? 'row-risposta' : '',
+        a.invii_ok > 0 ? 'row-inviata' : ''
+    ].filter(Boolean).join(' ');
+
+    const cambioData = checkCambioData(a.data_pianificazione, a.data_pian_filone);
+    let dataInterventoHtml = '';
+    if (!cambioData.cambiato) {
+        dataInterventoHtml = `<div class="date"><i class="fas fa-calendar"></i> ${esc(a.data_pianificazione || '-')} ${a.ora_pianificazione ? '— ' + esc(a.ora_pianificazione) : ''}</div>`;
+    } else if (cambioData.isAnnullato) {
+        dataInterventoHtml = `
+            <div class="date" style="display:flex;align-items:center;flex-wrap:gap;gap:6px;">
+                <span class="badge badge-annullato" title="Intervento contrassegnato come ANNULLATO nel database locale"><i class="fas fa-ban"></i> ANNULLATO</span>
+                <span style="font-size:0.75rem;color:var(--text-muted);">Lettera: <del>${esc(a.data_pianificazione)}</del></span>
+            </div>
+        `;
+    } else {
+        dataInterventoHtml = `
+            <div class="date" style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;">
+                <i class="fas fa-calendar-check" style="color:#f59e0b;"></i>
+                <strong>${esc(cambioData.dataAttuale)}</strong>
+                ${a.ora_pianificazione ? `<span style="font-size:0.78rem;">— ${esc(a.ora_pianificazione)}</span>` : ''}
+                <span class="badge badge-cambio-data" title="Data modificata nel gestionale: da ${esc(a.data_pianificazione)} a ${esc(cambioData.dataAttuale)}">
+                    <i class="fas fa-history"></i> Lettera: <del>${esc(a.data_pianificazione)}</del>
+                </span>
+            </div>
+        `;
+    }
+
+    return `
+        <div class="${cardClass}" data-id="${a.id}">
+            <div class="contact-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                <label style="display:inline-flex;align-items:center;gap:6px;font-size:0.8rem;font-weight:700;color:var(--text-muted);cursor:pointer;user-select:none;">
+                    <input type="checkbox" class="row-check" data-id="${a.id}" ${checked ? 'checked' : ''} onchange="onRowCheckChange(this)">
+                    <span>Seleziona</span>
+                </label>
+                <div style="display:flex;align-items:center;gap:6px;">
+                    ${tipoBadge}
+                    ${inviiLabel}
+                </div>
+            </div>
+
+            <div class="contact-name-row" style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
+                <div style="flex:1;">
+                    <div class="contact-name" style="font-size:0.98rem;font-weight:700;">
+                        ${esc(a.nominativo || 'Senza nominativo')}
+                        ${missing ? '<span class="badge da-completare" style="margin-left:6px;font-size:0.65rem;" title="Recapiti mancanti">Da completare</span>' : ''}
+                    </div>
+                    <div class="meta-sub" style="margin-top:2px;">
+                        <span>${esc(a.comune || '')}</span>
+                        ${a.via ? `· <span>${esc(a.via)} ${esc(a.civico || '')}</span>` : ''}
+                    </div>
+                </div>
+                ${a.nominativo ? `
+                    <button class="btn-copy-name" onclick="copiaNominativoAzienda(${a.id}, event)" title="Copia nominativo">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                ` : ''}
+            </div>
+
+            <div class="contact-details">
+                <div><i class="fas fa-barcode"></i> POD: <b>${esc(a.pod || '')}</b></div>
+                ${dataInterventoHtml}
+                ${a.operatore ? `<div><i class="fas fa-user-cog"></i> Operatore: <b>${esc(a.operatore)}</b></div>` : ''}
+                ${(a.codice_ante || a.matricola_ante) ? `<div><i class="fas fa-tachometer-alt"></i> Misuratore: ${esc([a.codice_ante, a.matricola_ante].filter(Boolean).join(' / '))}</div>` : ''}
+                ${a.posizione_mis ? `<div><i class="fas fa-map-pin"></i> Posizione: ${esc(a.posizione_mis)}</div>` : ''}
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:8px;padding-top:8px;border-top:1px solid var(--border,#334155);">
+                <div>
+                    <label style="font-size:0.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;">Telefono</label>
+                    <input class="tel-input edit-input ${a.telefono ? 'has-val' : ''}" style="width:100%;margin-top:2px;" value="${esc(a.telefono || '')}" placeholder="Telefono azienda..."
+                           onkeydown="if(event.key==='Enter'){event.preventDefault(); saveInlineContact(${a.id}, 'telefono', this.value);}"
+                           onblur="saveInlineContact(${a.id}, 'telefono', this.value)">
+                </div>
+                <div>
+                    <label style="font-size:0.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;">Email / PEC</label>
+                    <input class="email-input edit-input ${a.email ? 'has-val' : ''}" style="width:100%;margin-top:2px;" value="${esc(a.email || '')}"
+                           placeholder="mail@dominio.it / pec@pec.it"
+                           onkeydown="if(event.key==='Enter'){event.preventDefault(); saveInlineContact(${a.id}, 'email', this.value);}"
+                           onblur="saveInlineContact(${a.id}, 'email', this.value)">
+                    <div class="email-badges" style="margin-top:4px;">
+                        ${emails.length ? emails.map(e => `<span class="badge ${e.pec ? 'pec' : ''}">${e.pec ? 'PEC' : 'MAIL'}</span>`).join('') : ((a.email || '').trim() ? `<span class="badge" style="background:var(--surface-raised, #334155);color:var(--text-muted);font-size:0.65rem;">${esc(a.email)}</span>` : '')}
+                    </div>
+                </div>
+                <div>
+                    <label style="font-size:0.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;display:flex;align-items:center;justify-content:space-between;">
+                        <span>Stato e Note</span>
+                        <label class="risposta-label" style="font-size:0.75rem;cursor:pointer;user-select:none;" title="Contrassegna come completata">
+                            <input type="checkbox" class="risposta-check" ${isCompleted ? 'checked' : ''}
+                                   onchange="toggleCompletedAzienda(${a.id})">
+                            <span>Fatto</span>
+                        </label>
+                    </label>
+                    <div style="display:flex;align-items:center;gap:4px;margin-top:2px;position:relative;">
+                        <input class="note-input edit-input ${note ? 'has-note' : ''}" id="noteDisplay_azienda_${a.id}"
+                               style="width:100%;" value="${esc(note)}" placeholder="Nota..."
+                               onkeydown="if(event.key==='Enter'){event.preventDefault(); salvaNotaAzienda(${a.id}, this.value);}"
+                               onblur="salvaNotaAzienda(${a.id}, this.value)">
+                        <div class="btn-add-note" onclick="toggleNoteDropdownAzienda(${a.id})" style="padding:4px 7px;font-size:0.75rem;" title="Aggiungi nota rapida">
+                            <i class="fas fa-plus"></i>
+                            <div class="note-dropdown" id="noteDropdown_card_azienda_${a.id}">
+                                <div class="note-dropdown-item" onclick="aggiungiNotaAzienda(${a.id}, 'mandata mail')"><i class="fas fa-envelope" style="color: #6366f1"></i> Mandata mail</div>
+                                <div class="note-dropdown-item" onclick="aggiungiNotaAzienda(${a.id}, 'mandato wa')"><i class="fab fa-whatsapp" style="color: #25d366"></i> Mandato WA</div>
+                                <div class="note-dropdown-item" onclick="aggiungiNotaAzienda(${a.id}, 'mandato sms')"><i class="fas fa-sms" style="color: #10b981"></i> Mandato SMS</div>
+                                <div class="note-dropdown-item" onclick="aggiungiNotaAzienda(${a.id}, 'nr')"><i class="fas fa-phone-slash" style="color: #ef4444"></i> NR</div>
+                                <div class="note-dropdown-item" onclick="aggiungiNotaAzienda(${a.id}, 'chiamare')"><i class="fas fa-phone" style="color: #3b82f6"></i> Chiamare</div>
+                                <div class="note-dropdown-item" onclick="aggiungiNotaAzienda(${a.id}, 'confermato')"><i class="fas fa-check-circle" style="color: #10b981"></i> Confermato</div>
+                            </div>
+                        </div>
+                    </div>
+                    ${(a.note_filone && a.note_filone !== a.note) ? `
+                        <div class="meta-sub" style="font-size:0.75rem;color:var(--text-muted);margin-top:4px;">
+                            <i class="fas fa-sticky-note"></i> Filone: ${esc(a.note_filone)}
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+
+            <div class="contact-actions" style="margin-top:6px;display:flex;gap:8px;">
+                <button type="button" class="btn-soft" onclick="apriAziendaMessageModal(${a.id})" style="flex:1;font-weight:700;padding:6px 10px;font-size:0.82rem;display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:6px;color:#3b82f6;border-color:rgba(59,130,246,0.35);" title="Invia o componi con Template Messaggi">
+                    <i class="fas fa-paper-plane"></i> Template
+                </button>
+                ${renderSearchShortcuts(a)}
+            </div>
+        </div>
     `;
 }
 
@@ -804,8 +1347,13 @@ function onRowCheckChange(cb) {
     } else {
         selectedAziendeIds.delete(id);
     }
-    const tr = cb.closest('tr');
-    if (tr) tr.classList.toggle('selected', cb.checked);
+    document.querySelectorAll(`.row-check[data-id="${id}"]`).forEach(input => {
+        input.checked = cb.checked;
+        const tr = input.closest('tr');
+        if (tr) tr.classList.toggle('selected', cb.checked);
+        const card = input.closest('.contact-card');
+        if (card) card.classList.toggle('selected', cb.checked);
+    });
     updateBulkButton();
 }
 
@@ -814,10 +1362,13 @@ async function saveInlineContact(id, field, value) {
     if (!row) return;
     if ((row[field] || '') === (value || '').trim()) return;
     try {
-        await fetchApi(`/api/lettere/aziende/${id}/contatto`, {
+        const res = await fetch(`/api/lettere/aziende/${id}/contatto`, {
             method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ [field]: value.trim() })
         });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error || 'Errore salvataggio contatto');
         row[field] = value.trim();
         renderAziende();
         showToast('Contatto salvato');
@@ -827,21 +1378,14 @@ async function saveInlineContact(id, field, value) {
 }
 
 async function saveRisposta(id, checked, noteValue) {
-    const row = aziende.find(a => Number(a.id) === Number(id));
-    if (!row) return;
-    const risposta = checked !== undefined ? checked : row.risposta;
-    const note = noteValue !== undefined ? noteValue : row.note;
-    try {
-        await fetchApi(`/api/lettere/aziende/${id}/risposta`, {
-            method: 'POST',
-            body: JSON.stringify({ risposta: checked, note })
-        });
-        if (checked !== undefined) row.risposta = checked ? 1 : 0;
-        if (noteValue !== undefined) row.note = noteValue;
-        renderAziende();
-        showToast('Risposta aggiornata');
-    } catch (e) {
-        showToast(e.message, true);
+    if (checked !== undefined) {
+        const a = aziende.find(x => Number(x.id) === Number(id));
+        if (a && isAziendaCompleted(a) !== Boolean(checked)) {
+            await toggleCompletedAzienda(id);
+        }
+    }
+    if (noteValue !== undefined) {
+        await salvaNotaAzienda(id, noteValue);
     }
 }
 
@@ -863,14 +1407,26 @@ function toggleSelectAll(checked) {
         cb.checked = selectedAziendeIds.has(id);
         const tr = cb.closest('tr');
         if (tr) tr.classList.toggle('selected', cb.checked);
+        const card = cb.closest('.contact-card');
+        if (card) card.classList.toggle('selected', cb.checked);
     });
+    const selAll = document.getElementById('selectAll');
+    if (selAll) selAll.checked = checked;
     updateBulkButton();
 }
 
 function updateBulkButton() {
     const count = selectedAziende().filter(a => splitEmails(a.email).length).length;
+    const totalSelected = selectedAziende().length;
     const bulkBtn = document.getElementById('bulkOpenBtn');
-    if (bulkBtn) bulkBtn.disabled = count === 0;
+    if (bulkBtn) {
+        bulkBtn.disabled = count === 0;
+        if (totalSelected > 0) {
+            bulkBtn.innerHTML = `<i class="fas fa-paper-plane"></i> Invio bulk email (${totalSelected})`;
+        } else {
+            bulkBtn.innerHTML = `<i class="fas fa-paper-plane"></i> Invio bulk email`;
+        }
+    }
 }
 
 function getDefaultAllegati(tipo) {
@@ -1037,13 +1593,18 @@ function toggleBulkSelectAll(checked) {
 function contattoDaAzienda(a, emailDest) {
     const matricola = [a.codice_ante, a.matricola_ante].filter(Boolean).join(' / ');
     return {
+        id: a.id,
         pod: a.pod || '',
         email: emailDest || a.email || '',
+        telefono: a.telefono || '',
+        telefono_filone: a.telefono || '',
         nome: a.nominativo || '',
         indirizzo: a.via || '',
         civico: a.civico || '',
         comune: a.comune || '',
         data_intervento: a.data_pianificazione || '',
+        data_lettera: a.data_pianificazione || '',
+        data_pian_filone: a.data_pian_filone || '',
         pod_filone: a.pod || '',
         eneltel_filone: a.eneltel || '',
         matricola_filone: matricola,
@@ -1434,10 +1995,1368 @@ async function sendBulk() {
     await runner.start();
 }
 
+/* ==========================================================================
+   GESTIONE UTENTI PRIVATI (Viste, Card, Filtri, Appuntamenti, Bulk SMS)
+   ========================================================================== */
+
+function switchMainView(view) {
+    currentMainView = view;
+    const tabAz = document.getElementById('tabViewAziende');
+    const tabPr = document.getElementById('tabViewPrivati');
+    const secAz = document.getElementById('sectionAziende');
+    const secPr = document.getElementById('sectionPrivati');
+
+    if (tabAz) tabAz.classList.toggle('active', view === 'aziende');
+    if (tabPr) tabPr.classList.toggle('active', view === 'privati');
+    if (secAz) secAz.style.display = view === 'aziende' ? 'block' : 'none';
+    if (secPr) secPr.style.display = view === 'privati' ? 'block' : 'none';
+
+    if (view === 'privati') {
+        if (!privati.length) {
+            loadPrivati();
+        } else {
+            renderPrivati();
+        }
+    } else {
+        renderAziende();
+    }
+}
+
+async function loadPrivati() {
+    if (privatiController) privatiController.abort();
+    privatiController = new AbortController();
+    const grid = document.getElementById('privatiGrid');
+    if (grid && (!privati || !privati.length)) {
+        grid.innerHTML = '<div class="empty-state"><i class="fas fa-spinner fa-spin"></i><h3>Caricamento utenti privati...</h3></div>';
+    }
+    const params = new URLSearchParams();
+    if (selectedGenerazione) params.set('generazione_id', selectedGenerazione);
+    params.set('limit', '5000');
+
+    try {
+        const res = await fetch(`/api/lettere/privati?${params.toString()}`, {
+            signal: privatiController.signal
+        });
+        const data = await res.json();
+        if (!data.success) {
+            showToast(data.error || 'Errore caricamento privati', true);
+            return;
+        }
+        privati = data.contatti || [];
+        const badgePr = document.getElementById('badgeCountPrivati');
+        if (badgePr) badgePr.textContent = data.totale || privati.length;
+
+        // Inizializza noteStates dai contatti
+        for (const c of privati) {
+            if (c.pod && c.note_filone && !noteStatesPrivati[c.pod]) {
+                noteStatesPrivati[c.pod] = c.note_filone;
+            }
+        }
+
+        renderPrivati();
+    } catch (e) {
+        if (e.name !== 'AbortError') {
+            showToast(e.message || 'Errore caricamento privati', true);
+        }
+    }
+}
+
+let privatiSearchDebounce = null;
+function onPrivatiSearchChange() {
+    clearTimeout(privatiSearchDebounce);
+    privatiSearchDebounce = setTimeout(renderPrivati, 200);
+}
+
+let privatiViewMode = localStorage.getItem('lettere_privati_view_mode') || 'table';
+
+function setPrivatiViewMode(mode) {
+    privatiViewMode = mode;
+    localStorage.setItem('lettere_privati_view_mode', mode);
+    document.getElementById('btnPrivatiViewTable')?.classList.toggle('active', mode === 'table');
+    document.getElementById('btnPrivatiViewCards')?.classList.toggle('active', mode === 'cards');
+    renderPrivati();
+}
+
+function toggleFilterSoloModificati() {
+    const cb = document.getElementById('filterPrivatiSoloModificati');
+    if (cb) {
+        cb.checked = !cb.checked;
+        renderPrivati();
+    }
+}
+
+let selectedPrivatiPods = new Set();
+
+function getFilteredPrivati() {
+    const showCell = document.getElementById('filterPrivatiCellulare')?.checked ?? true;
+    const showFisso = document.getElementById('filterPrivatiFisso')?.checked ?? true;
+    const showNoPhone = document.getElementById('filterPrivatiNoPhone')?.checked ?? true;
+    const showCompleted = document.getElementById('filterPrivatiCompleted')?.checked ?? true;
+    const showNotCompleted = document.getElementById('filterPrivatiNotCompleted')?.checked ?? true;
+    const showSoloModificati = document.getElementById('filterPrivatiSoloModificati')?.checked || false;
+    const q = (document.getElementById('searchPrivatiInput')?.value || '').toLowerCase().trim();
+
+    return (privati || []).filter(c => {
+        if (c.tipo === 'cellulare' && !showCell) return false;
+        if (c.tipo === 'fisso' && !showFisso) return false;
+        if (c.tipo === 'senza_telefono' && !showNoPhone) return false;
+
+        const isCompleted = completedPrivati[c.pod] || false;
+        if (isCompleted && !showCompleted) return false;
+        if (!isCompleted && !showNotCompleted) return false;
+
+        if (showSoloModificati && !checkCambioData(c.data_lettera || c.data_intervento, c.data_pian_filone).cambiato) {
+            return false;
+        }
+
+        if (q) {
+            const searchable = `${c.nome || ''} ${c.pod || ''} ${c.comune || ''} ${c.indirizzo || ''} ${c.telefono || ''} ${c.telefono_filone || ''}`.toLowerCase();
+            if (!searchable.includes(q)) return false;
+        }
+        return true;
+    });
+}
+
+function updatePrivatiBulkSmsButton() {
+    const btn = document.getElementById('privatiBulkSmsBtn');
+    if (!btn) return;
+    const numSelected = selectedPrivatiPods.size;
+    if (numSelected > 0) {
+        const selCell = (privati || []).filter(c => selectedPrivatiPods.has(c.pod) && Boolean(estraiMigliorCellularePrivato(c)));
+        btn.disabled = selCell.length === 0;
+        btn.innerHTML = `<i class="fas fa-sms"></i> Invio Multiplo SMS (${numSelected} sel · ${selCell.length} cell)`;
+        btn.title = `Invia SMS a ${selCell.length} contatti selezionati con cellulare`;
+    } else {
+        const cellDisponibili = (privati || []).filter(c => {
+            if (c.tipo === 'cellulare' && (c.telefono || '').trim()) return true;
+            if (c.numeri_alternativi && c.numeri_alternativi.some(n => n.tipo === 'cellulare' && (n.numero || '').trim())) return true;
+            return false;
+        });
+        btn.disabled = cellDisponibili.length === 0;
+        btn.innerHTML = `<i class="fas fa-sms"></i> Invio Multiplo SMS`;
+        btn.title = cellDisponibili.length > 0
+            ? `${cellDisponibili.length} utenti privati con cellulare per invio SMS`
+            : 'Nessun utente privato con cellulare';
+    }
+}
+
+function toggleSelectAllPrivati(checked) {
+    const visible = getFilteredPrivati();
+    if (checked) {
+        visible.forEach(c => selectedPrivatiPods.add(c.pod));
+    } else {
+        visible.forEach(c => selectedPrivatiPods.delete(c.pod));
+    }
+    document.querySelectorAll('.privati-row-check').forEach(cb => {
+        const pod = cb.getAttribute('data-pod');
+        if (pod) cb.checked = selectedPrivatiPods.has(pod);
+    });
+    document.querySelectorAll('tr[data-pod]').forEach(tr => {
+        const pod = tr.getAttribute('data-pod');
+        tr.classList.toggle('selected', selectedPrivatiPods.has(pod));
+    });
+    document.querySelectorAll('.contact-card[data-pod]').forEach(card => {
+        const pod = card.getAttribute('data-pod');
+        card.classList.toggle('selected', selectedPrivatiPods.has(pod));
+    });
+    updatePrivatiBulkSmsButton();
+}
+
+function onPrivatiRowCheckChange(el) {
+    const pod = el.getAttribute('data-pod');
+    if (!pod) return;
+    if (el.checked) {
+        selectedPrivatiPods.add(pod);
+    } else {
+        selectedPrivatiPods.delete(pod);
+    }
+    document.querySelectorAll(`.privati-row-check[data-pod="${CSS.escape(pod)}"]`).forEach(cb => {
+        cb.checked = el.checked;
+    });
+    document.querySelectorAll(`tr[data-pod="${CSS.escape(pod)}"]`).forEach(tr => {
+        tr.classList.toggle('selected', el.checked);
+    });
+    document.querySelectorAll(`.contact-card[data-pod="${CSS.escape(pod)}"]`).forEach(card => {
+        card.classList.toggle('selected', el.checked);
+    });
+    const selectAll = document.getElementById('selectAllPrivati');
+    if (selectAll) {
+        const visible = getFilteredPrivati();
+        selectAll.checked = visible.length > 0 && visible.every(c => selectedPrivatiPods.has(c.pod));
+    }
+    updatePrivatiBulkSmsButton();
+}
+
+function renderPrivati() {
+    const grid = document.getElementById('privatiGrid');
+    const tableWrap = document.getElementById('privatiTableWrap');
+    if (!grid && !tableWrap) return;
+
+    document.getElementById('btnPrivatiViewTable')?.classList.toggle('active', privatiViewMode === 'table');
+    document.getElementById('btnPrivatiViewCards')?.classList.toggle('active', privatiViewMode === 'cards');
+
+    const filtered = getFilteredPrivati();
+
+    // Conteggi
+    const countCell = (privati || []).filter(c => c.tipo === 'cellulare').length;
+    const countFisso = (privati || []).filter(c => c.tipo === 'fisso').length;
+    const countNoPhone = (privati || []).filter(c => c.tipo === 'senza_telefono').length;
+    const countComp = (privati || []).filter(c => completedPrivati[c.pod]).length;
+    const countRipianificati = (privati || []).filter(c => checkCambioData(c.data_lettera || c.data_intervento, c.data_pian_filone).cambiato).length;
+
+    const elCell = document.getElementById('privatiCountCellulare');
+    const elFisso = document.getElementById('privatiCountFisso');
+    const elNoPhone = document.getElementById('privatiCountNoPhone');
+    const elComp = document.getElementById('privatiCountCompleted');
+    const elRipianificati = document.getElementById('privatiCountRipianificati');
+    const elRipianificatiBox = document.getElementById('privatiStatRipianificatiBox');
+
+    if (elCell) elCell.textContent = countCell;
+    if (elFisso) elFisso.textContent = countFisso;
+    if (elNoPhone) elNoPhone.textContent = countNoPhone;
+    if (elComp) elComp.textContent = `${countComp} / ${(privati || []).length}`;
+    if (elRipianificati) elRipianificati.textContent = countRipianificati;
+    if (elRipianificatiBox) {
+        elRipianificatiBox.style.display = countRipianificati > 0 ? 'inline-flex' : 'none';
+    }
+
+    updatePrivatiBulkSmsButton();
+
+    const { groups, sortedKeys } = groupContactsByDate(
+        filtered,
+        c => c.data_lettera || c.data_intervento,
+        c => c.nome
+    );
+
+    if (privatiViewMode === 'table') {
+        if (grid) grid.style.display = 'none';
+        if (tableWrap) tableWrap.style.display = 'block';
+
+        const tbody = document.getElementById('privatiTableBody');
+        if (!tbody) return;
+
+        if (!filtered.length) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="6" class="empty" style="padding: 30px; text-align: center; color: var(--text-muted);">
+                        <i class="fas fa-filter" style="font-size: 1.5rem; margin-bottom: 8px; display: block;"></i>
+                        Nessun utente privato trovato con i filtri correnti
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        let html = '';
+        for (const dk of sortedKeys) {
+            const items = groups.get(dk);
+            const collapsed = collapsedDates.has(dk);
+            const daFareInGroup = items.filter(c => !completedPrivati[c.pod]).length;
+            const label = formatDateGroupHeader(dk);
+            html += `
+                <tr class="date-group-header-row" onclick="toggleDateGroup('${esc(dk)}')">
+                    <td colspan="6">
+                        <div class="date-group-header">
+                            <i class="fas fa-chevron-${collapsed ? 'right' : 'down'}"></i>
+                            <span class="date-group-label">${esc(label)}</span>
+                            <span class="date-group-count">${items.length} utenti${daFareInGroup ? ` · ${daFareInGroup} da fare` : ''}</span>
+                        </div>
+                    </td>
+                </tr>
+            `;
+            if (!collapsed) {
+                html += items.map(c => renderPrivatoRow(c)).join('');
+            }
+        }
+        tbody.innerHTML = html;
+
+        const selectAll = document.getElementById('selectAllPrivati');
+        if (selectAll) {
+            selectAll.checked = filtered.length > 0 && filtered.every(c => selectedPrivatiPods.has(c.pod));
+        }
+    } else {
+        if (tableWrap) tableWrap.style.display = 'none';
+        if (grid) {
+            grid.style.display = 'block';
+
+            if (!filtered.length) {
+                grid.innerHTML = `
+                    <div class="empty-state" style="padding:40px 20px;text-align:center;color:var(--text-muted);">
+                        <i class="fas fa-filter" style="font-size:2rem;margin-bottom:10px;display:block;"></i>
+                        <h3>Nessun utente privato trovato</h3>
+                        <p>Prova a modificare i filtri o il termine di ricerca</p>
+                    </div>
+                `;
+                return;
+            }
+
+            let cardsHtml = '';
+            for (const dk of sortedKeys) {
+                const items = groups.get(dk);
+                const collapsed = collapsedDates.has(dk);
+                const daFareInGroup = items.filter(c => !completedPrivati[c.pod]).length;
+                const label = formatDateGroupHeader(dk);
+                cardsHtml += `
+                    <div class="date-group-card-block">
+                        <div class="date-group-header-card" onclick="toggleDateGroup('${esc(dk)}')">
+                            <i class="fas fa-chevron-${collapsed ? 'right' : 'down'}"></i>
+                            <span class="date-group-label">${esc(label)}</span>
+                            <span class="date-group-count">${items.length} utenti${daFareInGroup ? ` · ${daFareInGroup} da fare` : ''}</span>
+                        </div>
+                        ${!collapsed ? `
+                            <div class="contacts-grid">
+                                ${items.map(c => renderPrivatoCard(c)).join('')}
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            }
+            grid.innerHTML = cardsHtml;
+        }
+    }
+}
+
+function renderPrivatoRow(c) {
+    const isCompleted = completedPrivati[c.pod] || false;
+    const isSelected = selectedPrivatiPods.has(c.pod);
+    const note = noteStatesPrivati[c.pod] || c.note_filone || '';
+    const nomeContatto = c.nome || 'Nome non disponibile';
+    const tipoCe = (c.tipologia_contatore || c.tipo_misuratore || '').trim();
+    const tipoStr = tipoCe.toLowerCase();
+    let tipoBadge = '';
+    if (tipoStr.includes('semidirett')) {
+        tipoBadge = '<span class="badge" style="background:#8b5cf6;font-size:0.65rem;color:white;">SEMIDIRETTA</span>';
+    } else if (tipoStr.includes('tri')) {
+        tipoBadge = '<span class="badge" style="background:#3b82f6;font-size:0.65rem;color:white;">TRIFASE</span>';
+    } else if (tipoStr.includes('mono')) {
+        tipoBadge = '<span class="badge" style="background:#10b981;font-size:0.65rem;color:white;">MONOFASE</span>';
+    }
+
+    const rowClass = [
+        isCompleted ? 'completed' : '',
+        isSelected ? 'selected' : '',
+        checkCambioData(c.data_lettera || c.data_intervento, c.data_pian_filone).cambiato ? 'row-cambio-data' : ''
+    ].filter(Boolean).join(' ');
+
+    return `
+        <tr class="${rowClass}" data-pod="${esc(c.pod)}">
+            <td class="checkbox-cell" style="text-align:center;">
+                <input type="checkbox" class="privati-row-check" data-pod="${esc(c.pod)}" ${isSelected ? 'checked' : ''} onchange="onPrivatiRowCheckChange(this)">
+            </td>
+            <td class="azienda-cell">
+                <div class="azienda-name">
+                    ${c.lavoro ? `<span class="lavoro-num" style="font-size:0.75rem;font-weight:700;color:var(--text-muted);margin-right:4px;">#${esc(c.lavoro)}</span>` : ''}
+                    <span style="font-weight:700;">${esc(nomeContatto)}</span>
+                    ${c.nome ? `
+                        <button type="button" class="btn-mini" onclick="copiaNominativoPrivato('${esc(c.pod)}', event)" title="Copia nominativo" style="background:transparent;border:none;color:var(--text-muted);cursor:pointer;padding:0 3px;">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    ` : ''}
+                    <span class="type-badge ${c.tipo}" style="font-size:0.68rem;padding:2px 6px;">
+                        ${c.tipo === 'cellulare' ? '<i class="fas fa-mobile-alt"></i> Cell' :
+                          c.tipo === 'fisso' ? '<i class="fas fa-phone"></i> Fisso' :
+                          '<i class="fas fa-phone-slash"></i> No Tel'}
+                    </span>
+                    ${tipoBadge}
+                </div>
+                <div class="azienda-sub">
+                    <span><b>${esc(c.pod || '')}</b></span> ·
+                    <span>${esc(c.comune || '')}</span>
+                    ${c.indirizzo ? `· <span>${esc(c.indirizzo)} ${esc(c.civico || '')}</span>` : ''}
+                    ${c.posizione_contatore ? `· <span title="Posizione contatore" style="color:var(--text-muted);"><i class="fas fa-map-pin" style="font-size:0.68rem;"></i> ${esc(c.posizione_contatore)}</span>` : ''}
+                </div>
+            </td>
+            <td class="intervento-cell">
+                ${renderDataInterventoHtml(c.data_lettera || c.data_intervento, c.data_pian_filone, c.ora_intervento)}
+            </td>
+            <td class="tel-cell" data-label="Telefono">
+                <input type="text" class="tel-input edit-input ${c.telefono_filone ? 'has-val' : ''}" id="phoneTable_privato_${esc(c.pod)}"
+                    value="${esc(c.telefono_filone || '')}" placeholder="Tel filone..."
+                    onkeydown="if(event.key==='Enter'){event.preventDefault(); salvaTelefonoPrivato('${esc(c.pod)}', this.value);}"
+                    onblur="salvaTelefonoPrivato('${esc(c.pod)}', this.value)">
+                ${(c.telefono && c.telefono.trim() && c.telefono.trim() !== (c.telefono_filone || '').trim()) ? `
+                    <div style="margin-top:3px;">
+                        <button type="button" class="btn-mini" onclick="aggiungiTelFilonePrivato('${esc(c.pod)}', '${esc(c.telefono)}')" style="font-size:0.7rem;padding:2px 6px;background:rgba(59,130,246,0.15);color:#60a5fa;border:1px solid rgba(59,130,246,0.3);border-radius:4px;cursor:pointer;" title="Aggiungi numero lettera al filone">
+                            + ${esc(c.telefono)}
+                        </button>
+                    </div>
+                ` : ''}
+            </td>
+            <td class="email-cell" data-label="Email">
+                <input type="text" class="email-input edit-input ${c.email_filone ? 'has-val' : ''}" id="emailTable_privato_${esc(c.pod)}"
+                    value="${esc(c.email_filone || '')}" placeholder="Email filone..."
+                    onkeydown="if(event.key==='Enter'){event.preventDefault(); salvaEmailPrivato('${esc(c.pod)}', this.value);}"
+                    onblur="salvaEmailPrivato('${esc(c.pod)}', this.value)">
+                ${c.email_filone ? '<div class="email-badges"><span class="badge">MAIL</span></div>' : ''}
+            </td>
+            <td class="invii-cell">
+                <div class="risposta-row">
+                    <label class="risposta-label">
+                        <input type="checkbox" ${isCompleted ? 'checked' : ''} onchange="toggleCompletedPrivato('${esc(c.pod)}')">
+                        <span>Fatto</span>
+                    </label>
+                    <div style="display:flex;align-items:center;gap:4px;flex:1;position:relative;">
+                        <input type="text" class="note-input ${note ? 'has-note' : ''}" id="noteTable_privato_${esc(c.pod)}"
+                            value="${esc(note)}" placeholder="Nota..."
+                            onkeydown="if(event.key==='Enter'){event.preventDefault(); salvaNotaPrivato('${esc(c.pod)}', this.value);}"
+                            onblur="salvaNotaPrivato('${esc(c.pod)}', this.value)">
+                        <div class="btn-add-note" onclick="toggleNoteDropdownPrivato('${esc(c.pod)}')" style="padding:4px 7px;font-size:0.75rem;" title="Aggiungi nota rapida">
+                            <i class="fas fa-plus"></i>
+                            <div class="note-dropdown" id="noteDropdown_privato_${esc(c.pod)}">
+                                <div class="note-dropdown-item" onclick="aggiungiNotaPrivato('${esc(c.pod)}', 'mandato sms')"><i class="fas fa-sms" style="color: #10b981"></i> Mandato SMS</div>
+                                <div class="note-dropdown-item" onclick="aggiungiNotaPrivato('${esc(c.pod)}', 'mandato wa')"><i class="fab fa-whatsapp" style="color: #25d366"></i> Mandato WA</div>
+                                <div class="note-dropdown-item" onclick="aggiungiNotaPrivato('${esc(c.pod)}', 'nr')"><i class="fas fa-phone-slash" style="color: #ef4444"></i> NR</div>
+                                <div class="note-dropdown-item" onclick="aggiungiNotaPrivato('${esc(c.pod)}', 'chiamare')"><i class="fas fa-phone" style="color: #3b82f6"></i> Chiamare</div>
+                                <div class="note-dropdown-item" onclick="aggiungiNotaPrivato('${esc(c.pod)}', 'numero errato')"><i class="fas fa-times-circle" style="color: #ef4444"></i> Num errato</div>
+                                <div class="note-dropdown-item" onclick="aggiungiNotaPrivato('${esc(c.pod)}', 'mandata mail')"><i class="fas fa-envelope" style="color: #6366f1"></i> Mandata mail</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div style="margin-top:5px;">
+                    <button type="button" class="btn-mini ${c.tipo === 'cellulare' ? 'btn-wa' : ''}" onclick="apriPrivatiMessageModal('${esc(c.pod)}')" title="Apri Template Messaggio" style="padding:3px 8px;font-size:0.75rem;border-radius:4px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;${c.tipo === 'cellulare' ? 'background:rgba(16,185,129,0.15);color:#10b981;border:1px solid rgba(16,185,129,0.3);' : 'background:rgba(59,130,246,0.15);color:#60a5fa;border:1px solid rgba(59,130,246,0.3);'}">
+                        <i class="${c.tipo === 'cellulare' ? 'fab fa-whatsapp' : 'fas fa-paper-plane'}"></i> Template
+                    </button>
+                </div>
+            </td>
+        </tr>
+    `;
+}
+
+function renderPrivatoCard(c) {
+    const isCompleted = completedPrivati[c.pod] || false;
+    const isSelected = selectedPrivatiPods.has(c.pod);
+    const note = noteStatesPrivati[c.pod] || c.note_filone || '';
+    const nomeContatto = c.nome || 'Nome non disponibile';
+    const isErrato = erratiPrivati[c.pod] || false;
+    const telDisplay = c.telefono || c.telefono_filone || '';
+
+    return `
+    <div class="contact-card ${c.tipo} ${isCompleted ? 'completed' : ''} ${isSelected ? 'selected' : ''}" data-pod="${esc(c.pod)}">
+        <div class="contact-header">
+            <div style="display:flex;align-items:center;gap:8px;">
+                <input type="checkbox" class="privati-row-check" data-pod="${esc(c.pod)}" ${isSelected ? 'checked' : ''} onchange="onPrivatiRowCheckChange(this)" title="Seleziona per invio multiplo SMS">
+                <span class="lavoro-num">Lavoro ${esc(c.lavoro)}</span>
+            </div>
+            <span class="type-badge ${c.tipo}">
+                ${c.tipo === 'cellulare' ? '<i class="fas fa-mobile-alt"></i> Cellulare' :
+                  c.tipo === 'fisso' ? '<i class="fas fa-phone"></i> Fisso' :
+                  '<i class="fas fa-phone-slash"></i> No Tel'}
+            </span>
+        </div>
+
+        <div class="contact-name-row">
+            <div class="contact-name">${esc(nomeContatto)}</div>
+            ${c.nome ? `
+                <button class="btn-copy-name" onclick="copiaNominativoPrivato('${esc(c.pod)}', event)" title="Copia nominativo">
+                    <i class="fas fa-copy"></i>
+                </button>
+            ` : ''}
+        </div>
+
+        <div class="contact-details">
+            ${telDisplay ? `
+                <div class="phone ${isErrato ? 'phone-invalid' : ''}" id="phoneDisplay_privato_${esc(c.pod)}">
+                    <i class="fas fa-phone"></i> ${esc(telDisplay)}
+                    ${(c.telefono && !c.telefono_filone) ? `
+                        <button class="btn-add-to-filone" onclick="event.stopPropagation(); aggiungiTelFilonePrivato('${esc(c.pod)}', '${esc(c.telefono)}')" title="Aggiungi questo numero al filone">
+                            <i class="fas fa-plus-circle"></i> Aggiungi al filone
+                        </button>
+                    ` : ''}
+                </div>
+            ` : ''}
+            <div><i class="fas fa-map-marker-alt"></i> ${esc(c.indirizzo || '')} ${esc(c.civico || '')}</div>
+            <div><i class="fas fa-city"></i> ${esc(c.cap || '')} ${esc(c.comune || '')}</div>
+            ${renderDataInterventoCard(c)}
+            <div><i class="fas fa-barcode"></i> POD: ${esc(c.pod || '')}</div>
+            ${c.tipologia_contatore ? `<div><i class="fas fa-tachometer-alt"></i> Tipo: ${esc(c.tipologia_contatore)}</div>` : ''}
+            ${c.posizione_contatore ? `<div><i class="fas fa-map-pin"></i> Posizione: ${esc(c.posizione_contatore)}</div>` : ''}
+        </div>
+
+        <div class="contact-actions">
+            <button class="btn-soft" onclick="apriPrivatiMessageModal('${esc(c.pod)}')" style="width:100%;font-weight:700;padding:6px 12px;font-size:0.84rem;display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:6px;${c.tipo === 'cellulare' ? 'color:#10b981;border-color:rgba(16,185,129,0.4);' : ''}">
+                <i class="${c.tipo === 'cellulare' ? 'fab fa-whatsapp' : 'fas fa-paper-plane'}"></i>
+                Template WA / SMS / Mail
+            </button>
+            ${c.tipo === 'senza_telefono' && c.numeri_alternativi && c.numeri_alternativi.length > 0 ? `
+                <div class="numeri-alternativi-box">
+                    <div class="numeri-alternativi-header">
+                        <i class="fas fa-lightbulb"></i> Numeri trovati in altri campi:
+                    </div>
+                    ${c.numeri_alternativi.map(n => `
+                        <div class="numero-alternativo">
+                            <span class="numero-fonte">${
+                                n.fonte === 'filone' ? 'Tel. Filone' :
+                                n.fonte === 'nominativo_filone' ? 'Nel nome (Filone)' :
+                                n.fonte === 'nominativo_distinta' ? 'Nel nome' :
+                                n.fonte === 'indirizzo_filone' ? 'Indirizzo (Filone)' :
+                                n.fonte === 'comune_filone' ? 'Comune (Filone)' :
+                                n.fonte === 'note_filone' ? 'Note (Filone)' : n.fonte
+                            }</span>
+                            <span class="numero-valore ${n.tipo}">${esc(n.numero)}</span>
+                            <span class="numero-tipo-badge ${n.tipo}"><i class="fas ${n.tipo === 'cellulare' ? 'fa-mobile-alt' : 'fa-phone'}"></i></span>
+                            ${n.tipo === 'cellulare' ? `
+                                <button type="button" class="btn-mini btn-whatsapp" onclick="event.stopPropagation(); apriPrivatiMessageModal('${esc(c.pod)}', '${esc(n.numero)}', 'cellulare')" title="Invia messaggio a questo numero">
+                                    <i class="fab fa-whatsapp"></i>
+                                </button>
+                            ` : ''}
+                        </div>
+                    `).join('')}
+                </div>
+            ` : ''}
+        </div>
+
+        <div class="phone-edit-row" title="Modifica Telefono sul filone (premi Invio per salvare)">
+            <i class="fas fa-phone phone-icon"></i>
+            <input type="text" class="phone-edit-input ${c.telefono_filone ? 'has-phone' : ''}" id="phoneEdit_privato_${esc(c.pod)}"
+                value="${esc(c.telefono_filone || '')}" placeholder="Nessun telefono sul filone"
+                onkeydown="if(event.key==='Enter'){event.preventDefault(); salvaTelefonoPrivato('${esc(c.pod)}', this.value);}"
+                onblur="salvaTelefonoPrivato('${esc(c.pod)}', this.value)">
+        </div>
+
+        <div class="phone-edit-row" title="Modifica Email sul filone (premi Invio per salvare)">
+            <i class="fas fa-envelope phone-icon" style="color: var(--accent, #3b82f6);"></i>
+            <input type="text" class="phone-edit-input ${c.email_filone ? 'has-phone' : ''}" id="emailEdit_privato_${esc(c.pod)}"
+                value="${esc(c.email_filone || '')}" placeholder="Nessuna email sul filone"
+                onkeydown="if(event.key==='Enter'){event.preventDefault(); salvaEmailPrivato('${esc(c.pod)}', this.value);}"
+                onblur="salvaEmailPrivato('${esc(c.pod)}', this.value)">
+        </div>
+
+        <div class="checkbox-wrapper">
+            <input type="checkbox" id="completed_privato_${esc(c.pod)}"
+                ${isCompleted ? 'checked' : ''}
+                onchange="toggleCompletedPrivato('${esc(c.pod)}')">
+            <label for="completed_privato_${esc(c.pod)}">Completato</label>
+        </div>
+
+        <div class="note-actions">
+            <input type="text" class="note-display ${note ? 'has-note' : ''}" id="noteDisplay_privato_${esc(c.pod)}"
+                value="${esc(note)}" placeholder="Nessuna nota (premi Invio per salvare)"
+                onkeydown="if(event.key==='Enter'){event.preventDefault(); salvaNotaPrivato('${esc(c.pod)}', this.value);}"
+                onblur="salvaNotaPrivato('${esc(c.pod)}', this.value)">
+            <div class="btn-add-note" onclick="toggleNoteDropdownPrivato('${esc(c.pod)}')">
+                <i class="fas fa-plus"></i> Nota
+                <div class="note-dropdown" id="noteDropdown_privato_${esc(c.pod)}">
+                    <div class="note-dropdown-item" onclick="aggiungiNotaPrivato('${esc(c.pod)}', 'mandato sms')">
+                        <i class="fas fa-sms" style="color: #10b981"></i> Mandato SMS
+                    </div>
+                    <div class="note-dropdown-item" onclick="aggiungiNotaPrivato('${esc(c.pod)}', 'mandato wa')">
+                        <i class="fab fa-whatsapp" style="color: #25d366"></i> Mandato WA
+                    </div>
+                    <div class="note-dropdown-item" onclick="aggiungiNotaPrivato('${esc(c.pod)}', 'nr')">
+                        <i class="fas fa-phone-slash" style="color: var(--danger, #ef4444)"></i> Non risponde
+                    </div>
+                    <div class="note-dropdown-item" onclick="aggiungiNotaPrivato('${esc(c.pod)}', 'chiamare')">
+                        <i class="fas fa-phone" style="color: var(--info, #3b82f6)"></i> Chiamare
+                    </div>
+                    <div class="note-dropdown-item" onclick="aggiungiNotaPrivato('${esc(c.pod)}', 'numero errato')">
+                        <i class="fas fa-times-circle" style="color: #ef4444"></i> ❌ Numero errato
+                    </div>
+                    <div class="note-dropdown-item" onclick="aggiungiNotaPrivato('${esc(c.pod)}', 'mandata mail')">
+                        <i class="fas fa-envelope" style="color: var(--accent, #6366f1)"></i> Mandata mail
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="appuntamento-section">
+            <div class="appuntamento-title">
+                <i class="fas fa-calendar-alt"></i> Modifica Data / Fissa Appuntamento
+            </div>
+            <div class="appuntamento-date-row">
+                <span class="appuntamento-date-label">Data:</span>
+                <input type="date" class="appuntamento-date-input" id="appDate_privato_${esc(c.pod)}"
+                    value="${formatDateForInput(c.data_pian_filone || c.data_lettera || c.data_intervento)}">
+                <button type="button" class="btn-salva-data" onclick="salvaDataPrivato('${esc(c.pod)}')">
+                    <i class="fas fa-save"></i> Salva data
+                </button>
+            </div>
+            <div class="appuntamento-row">
+                <span class="appuntamento-date-label">Orario:</span>
+                <div class="appuntamento-time-group">
+                    <input type="time" class="appuntamento-time-input" id="appStart_privato_${esc(c.pod)}" value="09:00">
+                    <span>-</span>
+                    <input type="time" class="appuntamento-time-input" id="appEnd_privato_${esc(c.pod)}" placeholder="--:--">
+                </div>
+                <button type="button" class="btn-appuntamento btn-fissa" onclick="fissaAppuntamentoPrivato('${esc(c.pod)}')">
+                    <i class="fas fa-check"></i> Fissa
+                </button>
+                <button type="button" class="btn-appuntamento btn-rimuovi" id="btnRimuoviApp_privato_${esc(c.pod)}" onclick="rimuoviAppuntamentoPrivato('${esc(c.pod)}')" style="${(c.note_filone || '').toUpperCase().includes('APP') ? '' : 'display: none;'}">
+                    <i class="fas fa-trash"></i> Rimuovi
+                </button>
+            </div>
+            <div class="appuntamento-quick-btns">
+                <span style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">Regola rapida:</span>
+                <button type="button" class="btn-quick-time" onclick="regolaOrarioPrivato('${esc(c.pod)}', 10)">+10m</button>
+                <button type="button" class="btn-quick-time" onclick="regolaOrarioPrivato('${esc(c.pod)}', 15)">+15m</button>
+                <button type="button" class="btn-quick-time" onclick="regolaOrarioPrivato('${esc(c.pod)}', 30)">+30m</button>
+            </div>
+        </div>
+    </div>
+    `;
+}
+
+function formatDateForInput(dateStr) {
+    if (!dateStr) return '';
+    const clean = String(dateStr).trim();
+    const parts = clean.split('/');
+    if (parts.length === 3) {
+        return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+    }
+    return clean;
+}
+
+function formatDateToItalian(dateStr) {
+    if (!dateStr) return '';
+    const clean = String(dateStr).trim();
+    const parts = clean.split('-');
+    if (parts.length === 3) {
+        return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    return clean;
+}
+
+function toggleCompletedPrivato(pod) {
+    completedPrivati[pod] = !completedPrivati[pod];
+    localStorage.setItem('lettere_privati_completed', JSON.stringify(completedPrivati));
+    renderPrivati();
+}
+
+function copiaNominativoPrivato(pod, ev) {
+    if (ev) ev.stopPropagation();
+    const c = privati.find(x => x.pod === pod);
+    if (!c || !c.nome) return;
+    navigator.clipboard.writeText(c.nome)
+        .then(() => showToast(`Copiato: ${c.nome}`))
+        .catch(() => showToast('Errore copia negli appunti', true));
+}
+
+function toggleNoteDropdownPrivato(pod) {
+    const el = document.getElementById(`noteDropdown_privato_${pod}`);
+    if (el) {
+        const isOpen = el.classList.contains('show');
+        document.querySelectorAll('.note-dropdown.show').forEach(d => d.classList.remove('show'));
+        if (!isOpen) el.classList.add('show');
+    }
+}
+
+async function aggiungiNotaPrivato(pod, testo) {
+    document.querySelectorAll('.note-dropdown.show').forEach(d => d.classList.remove('show'));
+    const inputCard = document.getElementById(`noteDisplay_privato_${pod}`);
+    const inputTable = document.getElementById(`noteTable_privato_${pod}`);
+    if (testo === 'numero errato') {
+        erratiPrivati[pod] = true;
+        localStorage.setItem('lettere_privati_errati', JSON.stringify(erratiPrivati));
+    }
+    let current = noteStatesPrivati[pod] || (inputCard ? inputCard.value : (inputTable ? inputTable.value : ''));
+    let nuovaNota = current ? `${current} // ${testo}` : testo;
+    if (inputCard) inputCard.value = nuovaNota;
+    if (inputTable) inputTable.value = nuovaNota;
+    await salvaNotaPrivato(pod, nuovaNota);
+}
+
+async function salvaNotaPrivato(pod, nota) {
+    const cleanNota = String(nota || '').trim();
+    noteStatesPrivati[pod] = cleanNota;
+    const c = privati.find(x => x.pod === pod);
+    if (c) {
+        c.note_filone = cleanNota;
+        c.note = cleanNota;
+        c.note_appuntamento = cleanNota;
+    }
+
+    const inputCard = document.getElementById(`noteDisplay_privato_${pod}`);
+    if (inputCard) inputCard.value = cleanNota;
+    const inputTable = document.getElementById(`noteTable_privato_${pod}`);
+    if (inputTable) inputTable.value = cleanNota;
+
+    try {
+        const res = await fetch('/api/lettere/salva-nota', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pod, lcl: c ? (c.lcl || '') : '', nota: cleanNota, sovrascrivere: true })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast('Nota salvata sul filone');
+        } else {
+            showToast(data.error || 'Errore salvataggio nota', true);
+        }
+    } catch (e) {
+        showToast(e.message || 'Errore salvataggio nota', true);
+    }
+}
+
+async function salvaTelefonoPrivato(pod, telefono) {
+    const cleanTel = String(telefono || '').trim();
+    const c = privati.find(x => x.pod === pod);
+    if (c) {
+        if (c.telefono_filone === cleanTel) return;
+        c.telefono_filone = cleanTel;
+    }
+
+    const inputCard = document.getElementById(`phoneEdit_privato_${pod}`);
+    if (inputCard) inputCard.value = cleanTel;
+    const inputTable = document.getElementById(`phoneTable_privato_${pod}`);
+    if (inputTable) inputTable.value = cleanTel;
+
+    try {
+        const res = await fetch('/api/lettere/salva-telefono', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pod, lcl: c ? (c.lcl || '') : '', telefono: cleanTel })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast('Telefono salvato sul filone');
+        } else {
+            showToast(data.error || 'Errore salvataggio telefono', true);
+        }
+    } catch (e) {
+        showToast(e.message || 'Errore salvataggio telefono', true);
+    }
+}
+
+async function salvaEmailPrivato(pod, email) {
+    const cleanEmail = String(email || '').trim();
+    const c = privati.find(x => x.pod === pod);
+    if (c) {
+        if (c.email_filone === cleanEmail) return;
+        c.email_filone = cleanEmail;
+    }
+
+    const inputCard = document.getElementById(`emailEdit_privato_${pod}`);
+    if (inputCard) inputCard.value = cleanEmail;
+    const inputTable = document.getElementById(`emailTable_privato_${pod}`);
+    if (inputTable) inputTable.value = cleanEmail;
+
+    try {
+        const res = await fetch('/api/lettere/salva-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pod, lcl: c ? (c.lcl || '') : '', email: cleanEmail })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast('Email salvata sul filone');
+        } else {
+            showToast(data.error || 'Errore salvataggio email', true);
+        }
+    } catch (e) {
+        showToast(e.message || 'Errore salvataggio email', true);
+    }
+}
+
+async function aggiungiTelFilonePrivato(pod, tel) {
+    const inputCard = document.getElementById(`phoneEdit_privato_${pod}`);
+    if (inputCard) inputCard.value = tel;
+    const inputTable = document.getElementById(`phoneTable_privato_${pod}`);
+    if (inputTable) inputTable.value = tel;
+    await salvaTelefonoPrivato(pod, tel);
+}
+
+async function salvaDataPrivato(pod) {
+    const dateInput = document.getElementById(`appDate_privato_${pod}`);
+    if (!dateInput || !dateInput.value) {
+        showToast('Seleziona una data valida', true);
+        return;
+    }
+    const dataItaliana = formatDateToItalian(dateInput.value);
+    try {
+        const res = await fetch('/api/lettere/aggiorna-data', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pod, data: dataItaliana })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast(`Data aggiornata: ${dataItaliana}`);
+            const c = privati.find(x => x.pod === pod);
+            if (c) {
+                c.data_pian_filone = dataItaliana;
+                renderPrivati();
+            }
+        } else {
+            showToast(data.error || 'Errore aggiornamento data', true);
+        }
+    } catch (e) {
+        showToast(e.message || 'Errore aggiornamento data', true);
+    }
+}
+
+async function fissaAppuntamentoPrivato(pod) {
+    const start = document.getElementById(`appStart_privato_${pod}`)?.value || '';
+    const end = document.getElementById(`appEnd_privato_${pod}`)?.value || '';
+    const orario = end ? `${start}-${end}` : start;
+    const dateVal = document.getElementById(`appDate_privato_${pod}`)?.value || '';
+    const dataItaliana = formatDateToItalian(dateVal);
+
+    if (!orario) {
+        showToast('Inserisci un orario per l\'appuntamento', true);
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/lettere/appuntamento', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                pod,
+                orario,
+                data_appuntamento: dataItaliana
+            })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast(data.message || 'Appuntamento impostato');
+            const btnRim = document.getElementById(`btnRimuoviApp_privato_${pod}`);
+            if (btnRim) btnRim.style.display = 'inline-flex';
+            if (data.nota) {
+                noteStatesPrivati[pod] = data.nota;
+                const noteCard = document.getElementById(`noteDisplay_privato_${pod}`);
+                if (noteCard) noteCard.value = data.nota;
+                const noteTable = document.getElementById(`noteTable_privato_${pod}`);
+                if (noteTable) noteTable.value = data.nota;
+            }
+        } else {
+            showToast(data.error || 'Errore appuntamento', true);
+        }
+    } catch (e) {
+        showToast(e.message || 'Errore impostazione appuntamento', true);
+    }
+}
+
+async function rimuoviAppuntamentoPrivato(pod) {
+    if (!confirm('Rimuovere l\'appuntamento da questo contatore?')) return;
+    try {
+        const res = await fetch('/api/lettere/rimuovi-appuntamento', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pod })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast('Appuntamento rimosso');
+            const btnRim = document.getElementById(`btnRimuoviApp_privato_${pod}`);
+            if (btnRim) btnRim.style.display = 'none';
+            if (data.nota !== undefined) {
+                noteStatesPrivati[pod] = data.nota;
+                const noteCard = document.getElementById(`noteDisplay_privato_${pod}`);
+                if (noteCard) noteCard.value = data.nota;
+                const noteTable = document.getElementById(`noteTable_privato_${pod}`);
+                if (noteTable) noteTable.value = data.nota;
+            }
+        } else {
+            showToast(data.error || 'Errore rimozione appuntamento', true);
+        }
+    } catch (e) {
+        showToast(e.message || 'Errore rimozione appuntamento', true);
+    }
+}
+
+function regolaOrarioPrivato(pod, deltaMinuti) {
+    const startInput = document.getElementById(`appStart_privato_${pod}`);
+    const endInput = document.getElementById(`appEnd_privato_${pod}`);
+    if (!startInput) return;
+    let [h, m] = (startInput.value || '09:00').split(':').map(Number);
+    let totMin = h * 60 + m + deltaMinuti;
+    if (totMin < 0) totMin = 0;
+    if (totMin >= 24 * 60) totMin = 24 * 60 - 1;
+    const nh = String(Math.floor(totMin / 60)).padStart(2, '0');
+    const nm = String(totMin % 60).padStart(2, '0');
+    startInput.value = `${nh}:${nm}`;
+    if (endInput && !endInput.value) {
+        let totEnd = totMin + 120;
+        if (totEnd >= 24 * 60) totEnd = 24 * 60 - 1;
+        const neh = String(Math.floor(totEnd / 60)).padStart(2, '0');
+        const nem = String(totEnd % 60).padStart(2, '0');
+        endInput.value = `${neh}:${nem}`;
+    }
+}
+
+/* ==========================================================================
+   MODALE ANTEPRIMA SINGOLO MESSAGGIO / TEMPLATE PER PRIVATI (CENTRALIZZATO)
+   ========================================================================== */
+function apriPrivatiMessageModal(pod, telOverride, tipoOverride) {
+    const c = privati.find(x => x.pod === pod);
+    if (!c) {
+        showToast('Contatto non trovato', true);
+        return;
+    }
+    if (window.MessageTemplateModal) {
+        window.MessageTemplateModal.open({
+            contact: c,
+            telOverride: telOverride,
+            tipoOverride: tipoOverride,
+            smsEndpoint: '/api/lettere/invia-singolo-sms',
+            onSmsSent: async (p) => {
+                const dataIntervento = c.data_pian_filone || c.data_intervento || '';
+                const notaInvio = `mandato SMS per ${dataIntervento}`;
+                await salvaNotaPrivato(p, notaInvio);
+            },
+            onWaOpened: async (p) => {
+                await salvaNotaPrivato(p, 'mandato wa');
+            },
+            onMailOpened: async (p) => {
+                await salvaNotaPrivato(p, 'mandata mail');
+            }
+        });
+    } else {
+        showToast('Modulo template non ancora caricato', true);
+    }
+}
+
+/* ==========================================================================
+   MODALE INVIO MULTIPLO SMS A UTENTI PRIVATI
+   ========================================================================== */
+function estraiMigliorCellularePrivato(c) {
+    if (c.tipo === 'cellulare' && (c.telefono || '').trim()) {
+        return c.telefono.trim();
+    }
+    if (c.numeri_alternativi && c.numeri_alternativi.length > 0) {
+        const alt = c.numeri_alternativi.find(n => n.tipo === 'cellulare' && (n.numero || '').trim());
+        if (alt) return alt.numero.trim();
+    }
+    return (c.telefono || c.telefono_filone || '').trim();
+}
+
+async function apriPrivatiBulkSmsModal() {
+    if (!privati || !privati.length) {
+        showToast('Nessun utente privato disponibile', true);
+        return;
+    }
+
+    if (selectedPrivatiPods.size > 0) {
+        bulkSmsContacts = privati.filter(c => selectedPrivatiPods.has(c.pod) && Boolean(estraiMigliorCellularePrivato(c)));
+        if (!bulkSmsContacts.length) {
+            showToast('Nessuno dei contatti selezionati ha un numero di cellulare', true);
+            return;
+        }
+    } else {
+        bulkSmsContacts = privati.filter(c => {
+            if (c.tipo === 'cellulare' && (c.telefono || '').trim()) return true;
+            if (c.numeri_alternativi && c.numeri_alternativi.some(n => n.tipo === 'cellulare' && (n.numero || '').trim())) return true;
+            return false;
+        });
+
+        if (!bulkSmsContacts.length) {
+            showToast('Nessun contatto con numero cellulare disponibile', true);
+            return;
+        }
+    }
+
+    const select = document.getElementById('privatiBulkSmsTemplateSelect');
+    if (select) {
+        select.innerHTML = '';
+        let selectedTmplId = '';
+        for (const [id, tmpl] of Object.entries(TEMPLATES || {})) {
+            if (tmpl.type === 'sms' || tmpl.type === 'whatsapp') {
+                const opt = document.createElement('option');
+                opt.value = id;
+                const isSms = tmpl.type === 'sms';
+                opt.textContent = (isSms ? '📱 ' : '💬 ') + (tmpl.label || id);
+                select.appendChild(opt);
+                if (!selectedTmplId && (id === 'sms_preavviso' || id === 'wa_conferma')) {
+                    selectedTmplId = id;
+                }
+            }
+        }
+        const optCustom = document.createElement('option');
+        optCustom.value = 'custom';
+        optCustom.textContent = '✏️ Testo personalizzato...';
+        select.appendChild(optCustom);
+
+        if (selectedTmplId) select.value = selectedTmplId;
+        else if (select.options.length > 0) select.selectedIndex = 0;
+    }
+
+    onPrivatiBulkSmsTemplateChange();
+    await caricaStatoPrivatiSmsGateway();
+    popolaPrivatiBulkSmsContactsList(bulkSmsContacts);
+
+    const progressEl = document.getElementById('privatiBulkSmsProgress');
+    if (progressEl) progressEl.style.display = 'none';
+    const sendBtn = document.getElementById('privatiBulkSmsSendBtn');
+    if (sendBtn) {
+        sendBtn.innerHTML = '<i class="fas fa-sms"></i> Invia SMS Selezionati';
+        sendBtn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+        sendBtn.onclick = inviaPrivatiSmsBulk;
+    }
+
+    const modal = document.getElementById('privatiBulkSmsModal');
+    if (modal) modal.classList.add('active');
+}
+
+function chiudiPrivatiBulkSmsModal() {
+    const modal = document.getElementById('privatiBulkSmsModal');
+    if (modal) modal.classList.remove('active');
+}
+
+async function caricaStatoPrivatiSmsGateway() {
+    const statusDiv = document.getElementById('privatiBulkSmsStatusText');
+    const delayInput = document.getElementById('privatiBulkSmsDelaySec');
+    const sendBtn = document.getElementById('privatiBulkSmsSendBtn');
+
+    try {
+        const resp = await fetch('/api/lettere/sms-settings');
+        const data = await resp.json();
+        if (data.ok) {
+            currentSmsSettings = data;
+            const enabled = data.enabled !== false;
+            const configured = Boolean(data.endpoint_url);
+            const isReady = enabled && configured;
+
+            if (data.rate_limit_delay && delayInput) {
+                delayInput.value = data.rate_limit_delay;
+            }
+
+            if (!isReady) {
+                if (statusDiv) {
+                    statusDiv.innerHTML = `
+                        <span style="color:#f59e0b;font-weight:700;"><i class="fas fa-exclamation-triangle"></i> Gateway SMS non configurato o disabilitato</span>
+                        <button type="button" class="btn-preset" onclick="apriDistinteSmsConfigModal()" style="font-size:0.75rem;padding:3px 8px;margin-left:10px;">Configura Ora</button>
+                    `;
+                }
+                if (sendBtn) {
+                    sendBtn.disabled = true;
+                    sendBtn.style.opacity = '0.6';
+                    sendBtn.title = 'Configura il gateway SMS prima di inviare i messaggi';
+                }
+                return;
+            }
+
+            if (sendBtn) {
+                sendBtn.disabled = false;
+                sendBtn.style.opacity = '1';
+                sendBtn.title = '';
+            }
+            if (statusDiv) {
+                const prov = data.provider || 'android_sms_gateway';
+                statusDiv.innerHTML = `
+                    <span class="badge" style="background:#2563eb;color:white;font-weight:600;padding:3px 8px;border-radius:4px;">
+                        <i class="fas ${prov === 'android_sms_gateway' ? 'fa-mobile-alt' : 'fa-network-wired'}"></i>
+                        ${prov === 'android_sms_gateway' ? 'Android SIM Gateway' : 'Webhook Gateway'}
+                    </span>
+                    <span style="color:var(--text-muted);font-size:0.8rem;margin-left:6px;">Gateway pronto all'invio</span>
+                `;
+            }
+        }
+    } catch (e) {
+        if (statusDiv) statusDiv.innerHTML = `<span style="color:#ef4444;"><i class="fas fa-times-circle"></i> Errore verifica SMS Gateway</span>`;
+    }
+}
+
+function onPrivatiBulkSmsTemplateChange() {
+    const select = document.getElementById('privatiBulkSmsTemplateSelect');
+    const tmplId = select ? select.value : '';
+    const textarea = document.getElementById('privatiBulkSmsMessageText');
+    if (!textarea) return;
+
+    if (tmplId === 'custom') {
+        textarea.focus();
+        return;
+    }
+
+    const tmpl = (TEMPLATES || {})[tmplId];
+    if (tmpl && tmpl.body) {
+        let body = tmpl.body
+            .replace(/<br\s*[\/]?>/gi, '\n')
+            .replace(/<\/p>/gi, '\n\n')
+            .replace(/<[^>]+>/gi, '')
+            .replace(/\*([^*]+)\*/g, '$1');
+        textarea.value = body.trim();
+    }
+    aggiornaPrivatiSmsCharCounter();
+}
+
+function aggiornaPrivatiSmsCharCounter() {
+    const text = document.getElementById('privatiBulkSmsMessageText')?.value || '';
+    const len = text.length;
+
+    const gsm7Regex = /^[@£$¥èéùìòÇ\r\nØø\u001fÅåΔ_ΦΓΛΩΠΨΣΘΞ^{}\\[~\]|€ÆæßÉ !"#%&'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà]*$/;
+    const isGsm7 = gsm7Regex.test(text);
+
+    let parts = 0;
+    let maxSingle = isGsm7 ? 160 : 70;
+    let maxConcat = isGsm7 ? 153 : 67;
+
+    if (len === 0) {
+        parts = 0;
+    } else if (len <= maxSingle) {
+        parts = 1;
+    } else {
+        parts = Math.ceil(len / maxConcat);
+    }
+
+    const counterEl = document.getElementById('privatiBulkSmsCharCount');
+    const encEl = document.getElementById('privatiBulkSmsEncodingNote');
+    if (counterEl) {
+        counterEl.textContent = `${len} car | ${parts} SMS (${isGsm7 ? 'GSM-7' : 'Unicode'})`;
+        counterEl.style.color = parts <= 1 ? '#10b981' : (parts === 2 ? '#f59e0b' : '#ef4444');
+    }
+    if (encEl) {
+        encEl.textContent = isGsm7
+            ? `GSM-7 (160 car/SMS, max ${maxConcat} per concatenato)`
+            : `⚠️ Unicode (emoji/caratteri speciali: max 70 car/SMS)`;
+        encEl.style.color = isGsm7 ? 'var(--text-muted)' : '#f59e0b';
+    }
+}
+
+function popolaPrivatiBulkSmsContactsList(contattiCell) {
+    const list = document.getElementById('privatiBulkSmsContactsList');
+    if (!list) return;
+
+    if (!contattiCell || !contattiCell.length) {
+        list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted)">Nessun contatto cellulare disponibile.</div>';
+        const cntEl = document.getElementById('privatiBulkSmsCount');
+        if (cntEl) cntEl.textContent = '0 contatti';
+        return;
+    }
+
+    list.innerHTML = contattiCell.map((c, i) => {
+        const tel = estraiMigliorCellularePrivato(c);
+        const tipoCe = (c.tipologia_contatore || c.tipo_misuratore || '').trim();
+        const tipoStr = tipoCe.toLowerCase();
+        let tipoBadge = '';
+        if (tipoStr.includes('semidirett')) {
+            tipoBadge = `<span class="badge" style="background:#8b5cf6;font-size:0.65rem;color:white;">SEMIDIRETTA</span>`;
+        } else if (tipoStr.includes('tri')) {
+            tipoBadge = `<span class="badge" style="background:#3b82f6;font-size:0.65rem;color:white;">TRIFASE</span>`;
+        } else if (tipoStr.includes('mono')) {
+            tipoBadge = `<span class="badge" style="background:#10b981;font-size:0.65rem;color:white;">MONOFASE</span>`;
+        }
+
+        const nota = noteStatesPrivati[c.pod] || c.note_filone || '';
+        const notaHtml = nota ? `
+            <div style="color:#f59e0b;font-size:0.78rem;display:flex;align-items:center;gap:5px;margin-top:2px;">
+                <i class="fas fa-sticky-note"></i> <span>${esc(nota)}</span>
+            </div>
+        ` : '';
+
+        return `
+        <div class="bulk-contact-item" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border-bottom:1px solid var(--border);">
+            <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;">
+                <input type="checkbox" class="privati-bulk-sms-check" data-pod="${esc(c.pod)}" data-tel="${esc(tel)}" data-nome="${esc(c.nome || '')}" data-tipoce="${esc(tipoCe)}" data-hasnote="${Boolean(nota)}" data-idx="${i}" checked onchange="aggiornaPrivatiSmsConteggi()">
+                <div style="min-width:0;flex:1;">
+                    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                        <strong style="font-size:0.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(c.nome || 'N/D')}</strong>
+                        ${tipoBadge}
+                    </div>
+                    <div style="font-size:0.75rem;color:var(--text-muted);">
+                        ${esc(c.comune || '')} ${esc(c.indirizzo || '')} ${esc(c.civico || '')}
+                    </div>
+                    ${notaHtml}
+                </div>
+            </div>
+            <div style="text-align:right;">
+                <span style="font-family:monospace;font-size:0.85rem;font-weight:700;color:#10b981;">
+                    <i class="fas fa-phone-alt" style="font-size:0.75rem;"></i> ${esc(tel)}
+                </span>
+                <div style="font-size:0.75rem;color:var(--text-muted);">${esc(c.pod || '')}</div>
+            </div>
+        </div>
+        `;
+    }).join('');
+
+    const countEl = document.getElementById('privatiBulkSmsCount');
+    if (countEl) countEl.textContent = `${contattiCell.length} contatti`;
+    aggiornaPrivatiSmsConteggi();
+}
+
+function togglePrivatiBulkSmsSelectAll(checked) {
+    document.querySelectorAll('.privati-bulk-sms-check').forEach(cb => {
+        cb.checked = checked;
+        const item = cb.closest('.bulk-contact-item');
+        if (item) item.style.opacity = checked ? '' : '0.45';
+    });
+    aggiornaPrivatiSmsConteggi();
+}
+
+function applyPrivatiSmsPreset(preset) {
+    document.querySelectorAll('#privatiSmsPresets .btn-preset').forEach(b => b.classList.remove('active'));
+    const activeBtn = document.getElementById(`privatiSmsPreset_${preset}`);
+    if (activeBtn) activeBtn.classList.add('active');
+
+    const checks = document.querySelectorAll('.privati-bulk-sms-check');
+    checks.forEach(cb => {
+        const tipo = (cb.dataset.tipoce || '').toLowerCase();
+        const hasNote = cb.dataset.hasnote === 'true';
+
+        if (preset === 'tutti') cb.checked = true;
+        else if (preset === 'monofase') cb.checked = tipo.includes('mono');
+        else if (preset === 'trifase') cb.checked = tipo.includes('tri') && !tipo.includes('semidirett');
+        else if (preset === 'con_note') cb.checked = hasNote;
+        else if (preset === 'senza_note') cb.checked = !hasNote;
+
+        const item = cb.closest('.bulk-contact-item');
+        if (item) item.style.opacity = cb.checked ? '' : '0.45';
+    });
+    aggiornaPrivatiSmsConteggi();
+}
+
+function aggiornaPrivatiSmsConteggi() {
+    const checks = document.querySelectorAll('.privati-bulk-sms-check');
+    const checked = document.querySelectorAll('.privati-bulk-sms-check:checked');
+    const total = checks.length;
+    const checkedCount = checked.length;
+    const allCb = document.getElementById('privatiBulkSmsSelectAll');
+    if (allCb) allCb.checked = checkedCount === total && total > 0;
+    const cntEl = document.getElementById('privatiBulkSmsCount');
+    if (cntEl) cntEl.textContent = `${checkedCount} di ${total} selezionati`;
+}
+
+async function inviaPrivatiSmsBulk() {
+    const checkedBoxes = Array.from(document.querySelectorAll('.privati-bulk-sms-check:checked'));
+    if (!checkedBoxes.length) {
+        showToast('Seleziona almeno un destinatario', true);
+        return;
+    }
+
+    const rawText = document.getElementById('privatiBulkSmsMessageText')?.value.trim();
+    if (!rawText) {
+        showToast('Inserisci il testo del messaggio SMS', true);
+        return;
+    }
+
+    const delaySec = Math.max(1, parseInt(document.getElementById('privatiBulkSmsDelaySec')?.value) || 4);
+    const tempoStimatoSec = checkedBoxes.length * delaySec;
+    const tempoStimatoMin = Math.ceil(tempoStimatoSec / 60);
+
+    if (!confirm(`Stai per inviare SMS a ${checkedBoxes.length} destinatari.\n\nPausa anti-flood: ${delaySec}s tra ogni invio.\nTempo stimato: ~${tempoStimatoMin} min.\n\nVuoi procedere?`)) {
+        return;
+    }
+
+    bulkSmsAbortato = false;
+    const progressEl = document.getElementById('privatiBulkSmsProgress');
+    const progressFill = document.getElementById('privatiBulkSmsProgressFill');
+    const progressText = document.getElementById('privatiBulkSmsProgressText');
+    const logEl = document.getElementById('privatiBulkSmsLog');
+    const sendBtn = document.getElementById('privatiBulkSmsSendBtn');
+
+    if (progressEl) progressEl.style.display = 'block';
+    if (logEl) logEl.innerHTML = '';
+    if (sendBtn) {
+        sendBtn.innerHTML = '<i class="fas fa-stop"></i> Interrompi';
+        sendBtn.style.background = '#ef4444';
+        sendBtn.onclick = () => { bulkSmsAbortato = true; };
+    }
+
+    let inviati = 0;
+    let errori = 0;
+
+    const pk = (window.provincia || 'TORINO').toUpperCase();
+    const provSettings = (templateSettings.province && templateSettings.province[pk]) || {};
+    const telTecnico = provSettings.telefono || templateSettings.telefono_tecnico || '011 025 2702';
+    const emailTecnico = provSettings.email || templateSettings.email_tecnico || 'info@algecopower.it';
+
+    for (let i = 0; i < checkedBoxes.length; i++) {
+        if (bulkSmsAbortato) {
+            if (logEl) {
+                logEl.innerHTML += `<div style="color:#f59e0b;padding:3px 0;"><i class="fas fa-hand-paper"></i> <strong>Invio interrotto dall'operatore dopo ${inviati} messaggi.</strong></div>`;
+                logEl.scrollTop = logEl.scrollHeight;
+            }
+            break;
+        }
+
+        const cb = checkedBoxes[i];
+        const pod = cb.dataset.pod;
+        const tel = cb.dataset.tel;
+        const c = privati.find(x => x.pod === pod) || {};
+        const nome = c.nome || cb.dataset.nome || 'Cliente';
+
+        const dataIntervento = c.data_pian_filone || c.data_intervento || '';
+        const comune = c.comune || '';
+        const indirizzo = `${c.indirizzo || c.via || ''} ${c.civico || ''}`.trim();
+        const operatore = c.operatore || c.matricola_operatore || '';
+
+        const msgText = rawText
+            .replace(/{nome}/g, nome)
+            .replace(/{data}/g, dataIntervento)
+            .replace(/{comune}/g, comune)
+            .replace(/{indirizzo}/g, indirizzo)
+            .replace(/{pod}/g, pod)
+            .replace(/{nome_operatore}/g, operatore)
+            .replace(/{telefono_tecnico}/g, telTecnico)
+            .replace(/{email_tecnico}/g, emailTecnico);
+
+        if (progressText) {
+            progressText.textContent = `${i + 1} / ${checkedBoxes.length} — Invio a ${nome} (${tel})...`;
+        }
+        if (progressFill) {
+            progressFill.style.width = `${Math.round(((i + 1) / checkedBoxes.length) * 100)}%`;
+        }
+
+        try {
+            const resp = await fetch('/api/lettere/invia-singolo-sms', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    pod,
+                    telefono: tel,
+                    testo: msgText,
+                    nome,
+                    data_pian_filone: dataIntervento
+                })
+            });
+            const res = await resp.json();
+
+            if (res.ok) {
+                inviati++;
+                const parts = res.parts || res.parti_sms || 1;
+                if (logEl) {
+                    logEl.innerHTML += `<div style="color:#10b981;padding:2px 0;"><i class="fas fa-check-circle"></i> <strong>[SMS]</strong> Inviato a <b>${esc(nome)}</b> (${esc(tel)}) — ${parts} SMS</div>`;
+                }
+                // Registra nota locale
+                const notaInvio = `mandato SMS per ${dataIntervento}`;
+                noteStatesPrivati[pod] = notaInvio;
+                if (c) c.note_filone = notaInvio;
+                const noteInput = document.getElementById(`noteDisplay_privato_${pod}`);
+                if (noteInput) noteInput.value = notaInvio;
+            } else {
+                errori++;
+                if (logEl) {
+                    logEl.innerHTML += `<div style="color:#ef4444;padding:2px 0;"><i class="fas fa-times-circle"></i> <strong>[ERRORE]</strong> <b>${esc(nome)}</b> (${esc(tel)}): ${esc(res.error || res.errore || 'Errore di invio')}</div>`;
+                }
+            }
+        } catch (e) {
+            errori++;
+            if (logEl) {
+                logEl.innerHTML += `<div style="color:#ef4444;padding:2px 0;"><i class="fas fa-times-circle"></i> <strong>[ERRORE DI RETE]</strong> <b>${esc(nome)}</b>: ${esc(e.message)}</div>`;
+            }
+        }
+
+        if (logEl) logEl.scrollTop = logEl.scrollHeight;
+
+        if (i < checkedBoxes.length - 1 && !bulkSmsAbortato) {
+            let sLeft = delaySec;
+            while (sLeft > 0 && !bulkSmsAbortato) {
+                if (progressText) {
+                    progressText.textContent = `${i + 1} / ${checkedBoxes.length} — Attesa anti-flood (${sLeft}s)...`;
+                }
+                await new Promise(r => setTimeout(r, 1000));
+                sLeft--;
+            }
+        }
+    }
+
+    if (sendBtn) {
+        sendBtn.innerHTML = '<i class="fas fa-sms"></i> Invia SMS Selezionati';
+        sendBtn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+        sendBtn.onclick = inviaPrivatiSmsBulk;
+    }
+
+    showToast(`Invio SMS completato: ${inviati} inviati${errori ? ', ' + errori + ' errori' : ''}`, Boolean(errori));
+    renderPrivati();
+}
+
 document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('searchInput').addEventListener('keydown', e => {
+    document.getElementById('searchInput')?.addEventListener('keydown', e => {
         if (e.key === 'Enter') loadAziende();
     });
+    document.getElementById('searchPrivatiInput')?.addEventListener('keydown', e => {
+        if (e.key === 'Enter') renderPrivati();
+    });
+
     const autoOpenEl = document.getElementById('researchAutoOpen');
     if (autoOpenEl) {
         const saved = localStorage.getItem(RESEARCH_AUTO_OPEN_KEY);
@@ -1450,11 +3369,24 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     document.addEventListener('keydown', e => {
         if (e.key !== 'Escape') return;
-        if (document.getElementById('researchModal').classList.contains('active')) {
+        if (document.getElementById('researchModal')?.classList.contains('active')) {
             closeContactResearch();
-        } else if (document.getElementById('bulkModal').classList.contains('active')) {
+        } else if (document.getElementById('bulkModal')?.classList.contains('active')) {
             closeBulkModal();
+        } else if (document.getElementById('privatiBulkSmsModal')?.classList.contains('active')) {
+            chiudiPrivatiBulkSmsModal();
+        } else if (document.getElementById('privatiMessageModal')?.classList.contains('active')) {
+            chiudiPrivatiMessageModal();
+        }
+    });
+    document.addEventListener('click', e => {
+        if (!e.target.closest('.btn-add-note')) {
+            document.querySelectorAll('.note-dropdown.show, .note-dropdown[style*="display: block"]').forEach(d => {
+                d.classList.remove('show');
+                d.style.display = 'none';
+            });
         }
     });
     loadAll().catch(e => showToast(e.message, true));
 });
+

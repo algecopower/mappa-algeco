@@ -99,6 +99,30 @@ def api_lettere_aziende():
         return jsonify({'error': str(e)}), 500
 
 
+@bp.route('/api/lettere/privati', methods=['GET'])
+@login_required
+def api_lettere_privati():
+    """Lista utenti privati nelle lettere categorizzati per tipo di telefono."""
+    try:
+        gen_id = request.args.get('generazione_id') or None
+        q = request.args.get('q', '')
+        limit = min(max(int(request.args.get('limit', 2000)), 1), 10000)
+        risultato = lettere_store.list_privati(
+            generazione_id=gen_id,
+            search=q,
+            limit=limit,
+        )
+        return jsonify({
+            'success': True,
+            'provincia': PROVINCIA_ATTIVA,
+            **risultato,
+        })
+    except Exception as e:
+        logger.exception("[Lettere] Errore lista privati")
+        return jsonify({'error': str(e)}), 500
+
+
+
 @bp.route('/api/lettere/contatti/<path:contact_key>', methods=['PUT'])
 @login_required
 def api_lettere_update_contatto(contact_key):
@@ -143,23 +167,52 @@ def api_lettere_update_contatti_by_name():
         return jsonify({'error': str(e)}), 500
 
 
-@bp.route('/api/lettere/aziende/<int:azienda_id>/risposta', methods=['PUT'])
+@bp.route('/api/lettere/aziende/<int:azienda_id>/risposta', methods=['PUT', 'POST'])
 @login_required
 def api_lettere_risposta(azienda_id):
-    """Aggiorna spunta di risposta per una azienda in una generazione."""
+    """Aggiorna spunta di risposta / completamento e/o note per una azienda in una generazione."""
     try:
         data = request.get_json() or {}
+        risposta_in = data.get('risposta')
+        risposta_val = bool(risposta_in) if ('risposta' in data and risposta_in is not None) else None
+        note_val = data.get('note') if 'note' in data else None
+        lcl_val = data.get('lcl') if 'lcl' in data else None
         out = lettere_store.set_risposta(
             azienda_id,
-            bool(data.get('risposta')),
-            note=data.get('note') if 'note' in data else None,
+            risposta_val,
+            note=note_val,
             user=_get_username(),
+            lcl=lcl_val,
         )
         return jsonify({'success': True, **out})
     except LookupError as e:
         return jsonify({'error': str(e)}), 404
     except Exception as e:
         logger.exception("[Lettere] Errore update risposta")
+        return jsonify({'error': str(e)}), 500
+
+
+@bp.route('/api/lettere/aziende/<int:azienda_id>/contatto', methods=['POST', 'PUT'])
+@login_required
+def api_lettere_update_azienda_contatto(azienda_id):
+    """Aggiorna telefono o email per una specifica azienda."""
+    try:
+        data = request.get_json() or {}
+        azienda = lettere_store.get_azienda(azienda_id)
+        telefono = data.get('telefono') if 'telefono' in data else None
+        email = data.get('email') if 'email' in data else None
+
+        result = lettere_store.update_contatto(
+            azienda['contact_key'],
+            telefono=telefono,
+            email=email,
+            user=_get_username(),
+        )
+        return jsonify({'success': True, **result})
+    except LookupError as e:
+        return jsonify({'error': str(e)}), 404
+    except Exception as e:
+        logger.exception("[Lettere] Errore update contatto azienda")
         return jsonify({'error': str(e)}), 500
 
 

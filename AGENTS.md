@@ -13,7 +13,7 @@ Codice condiviso:
 
 - `moduli/` — logica di dominio (DB, mappa, percorsi, auth, calendario, importer Excel, ecc.). `moduli/db.py` è il cuore del DB locale; `moduli/shared.py` mantiene l'API storica delle scritture (nomi legacy `safe_batch_update_by_name`, `get_worksheet`, ...) instradando tutto al DB. `moduli/sync_engine.py` è uno stub post-disconnessione.
 - `routes/` — blueprint Flask montati da `server.py` (un file per area: contatori, distinte, calendario, dashboard, sync, ecc.).
-- `tools/` — CLI di servizio (`dump_db.py`, `archive_audit_log.py`, `cleanup_done_pendings.py`, `build_indir_db.py`, `confronta_percorsi.py`). Tutti girano con il venv: `/opt/mappa-algeco/venv/bin/python tools/<x>.py`.
+- `tools/` — CLI di servizio (`dump_db.py`, `archive_audit_log.py`, `cleanup_done_pendings.py`, `confronta_percorsi.py`). Tutti girano con il venv: `/opt/mappa-algeco/venv/bin/python tools/<x>.py`.
 - `config.py` — switch provincia + tutti i path. Carica `data/provinces.json` (sovrascrivibile da `data/{prov}/settings.json` per i parametri esposti in UI admin).
 - `data/{provincia}/state.db` — SQLite (WAL), unica fonte di verità. Schema v2 con PK composta `(eneltel_key, lcl)`.
 - `templates/`, `static/` — UI per-provincia; `templates_router/` — UI admin del router.
@@ -48,7 +48,7 @@ Produzione: `systemctl restart mappa-algeco-router` (i backend per provincia rip
 
 - Python 3.12, 4-space indent, header `# -*- coding: utf-8 -*-` su ogni `.py` (commenti e docstring in italiano).
 - Ruff è configurato in [pyproject.toml](pyproject.toml): target `py312`, line length 100, regole `F`, `E9`, `W6`. Non c'è formatter configurato: segui lo stile dei file vicini.
-- File e simboli in `snake_case`; moduli sotto `moduli/` raggruppati per dominio (`excel_importer`, `verifica_indirizzi`, …), non per layer.
+- File e simboli in `snake_case`; moduli sotto `moduli/` raggruppati per dominio (`excel_importer`, `percorso`, …), non per layer.
 - Nessuna nuova dipendenza senza aggiornare [requirements.txt](requirements.txt).
 - File con segreti sono già in `.gitignore` (`users.json`, `.flask_secret_key`, `data/smtp_settings.json`) — non committarli mai. `credenziali.json` è obsoleto (era per gspread) ma resta in `.gitignore` per precauzione.
 

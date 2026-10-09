@@ -111,9 +111,6 @@ $PY tools/cleanup_done_pendings.py --apply
 $PY tools/archive_audit_log.py
 $PY tools/archive_audit_log.py --apply
 
-# Costruisce il DB di indirizzi normalizzati (usato da verifica_indirizzi)
-$PY tools/build_indir_db.py
-
 # Confronto offline tra due percorsi pre-calcolati (debug)
 $PY tools/confronta_percorsi.py
 ```

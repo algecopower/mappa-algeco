@@ -13,9 +13,8 @@
     <link rel="stylesheet" href="/static/tour.css">
     <link rel="stylesheet" href="/static/mappa.css?v={{ timestamp }}-gestionale-grid-v26">
     <style>
-        /* CSS dinamico (sidebar gestionale + UI verifica indirizzi) */
+        /* CSS dinamico (sidebar gestionale) */
         {{ css_gestionale|safe }}
-        {{ css_verifica_indirizzi|safe }}
     </style>
     <script src="/static/csrf.js"></script>
     <script src="/static/ui-modal.js"></script>
@@ -479,25 +478,6 @@
                                     </div>
                                 </div>
                                 <p class="gestionale-card-desc">Inserimento rapido dei sigilli applicati e matricole dei nuovi contatori installati sul campo.</p>
-                            </div>
-                        </div>
-
-                        <!-- Verifica Indirizzi -->
-                        <div class="gestionale-card" data-action="verifica-indirizzi" data-tags="verifica indirizzi anagrafe nazionale vie civici normalizzazione validazione" onclick="apriDaGestionale('verifica-indirizzi')">
-                            <div class="gestionale-card-icon icon-cyan">
-                                <i data-lucide="map-pinned"></i>
-                            </div>
-                            <div class="gestionale-card-content">
-                                <div class="gestionale-card-top">
-                                    <h4 class="gestionale-card-title">Verifica Indirizzi</h4>
-                                    <div class="gestionale-card-top-right">
-                                        <span class="gestionale-card-badge badge-modal">Finestra Modale</span>
-                                        <button type="button" class="gestionale-card-fav" onclick="toggleFavoritoGestionale(event, 'verifica-indirizzi')" title="Aggiungi ai preferiti">
-                                            <i data-lucide="star"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                                <p class="gestionale-card-desc">Confronta e valida toponimi e numeri civici con il database dell'anagrafe nazionale italiana.</p>
                             </div>
                         </div>
 
@@ -1189,14 +1169,12 @@
     <script src="/static/print_label_layout.js?v={{ timestamp }}-print-labels-v24"></script>
     <script src="/static/mappa.js?v={{ timestamp }}-gestionale-grid-v26"></script>
     <script>
-        // JS dinamico (sidebar gestionale + UI verifica indirizzi)
+        // JS dinamico (sidebar gestionale)
         {{ js_gestionale|safe }}
-        {{ js_verifica_indirizzi|safe }}
     </script>
     
     <!-- Modali Gestionale -->
     {{ html_gestionale|safe }}
-    {{ html_verifica_indirizzi|safe }}
 <script src="/static/bacheca.js?v=2"></script>
 <script src="/static/tour.js"></script>
 <script>

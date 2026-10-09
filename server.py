@@ -633,7 +633,6 @@ from routes.dashboard import bp as dashboard_bp
 from routes.report import bp as report_bp
 from routes.lettere import bp as lettere_bp
 from routes.access_points import bp as access_points_bp
-from routes.verifica_indirizzi import bp as verifica_indirizzi_bp
 from routes.comuni import bp as comuni_bp
 from routes.appuntamenti import bp as appuntamenti_bp
 from routes.mail import bp as mail_bp
@@ -649,7 +648,6 @@ app.register_blueprint(dashboard_bp)
 app.register_blueprint(report_bp)
 app.register_blueprint(lettere_bp)
 app.register_blueprint(access_points_bp)
-app.register_blueprint(verifica_indirizzi_bp)
 app.register_blueprint(comuni_bp)
 app.register_blueprint(appuntamenti_bp)
 app.register_blueprint(mail_bp)

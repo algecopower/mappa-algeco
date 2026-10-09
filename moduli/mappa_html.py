@@ -47,11 +47,6 @@ except ImportError:
     LCL_DISABILITATI = []
 
 from .percorso import ordina_percorso
-from .verifica_indirizzi_ui import (
-    genera_css_verifica_indirizzi,
-    genera_js_verifica_indirizzi,
-    genera_html_verifica_indirizzi,
-)
 from .gestionale import (
     genera_css_gestionale,
     genera_js_gestionale,
@@ -587,9 +582,6 @@ def genera_html_completo(lcl_list, timestamp=None):
         operatori_dict_json=json.dumps(operatori_dict_attivi, ensure_ascii=False),
         lcl_options_html=lcl_options_html,
         css_gestionale=genera_css_gestionale(),
-        css_verifica_indirizzi=genera_css_verifica_indirizzi(),
         js_gestionale=genera_js_gestionale(),
-        js_verifica_indirizzi=genera_js_verifica_indirizzi(),
         html_gestionale=genera_html_gestionale(),
-        html_verifica_indirizzi=genera_html_verifica_indirizzi(),
     )

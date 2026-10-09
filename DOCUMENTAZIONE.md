@@ -503,8 +503,6 @@ Dipendenze esterne:
 │   ├── safe_json.py             # Read/write JSON robusto
 │   ├── shared.py                # API legacy gspread → DB
 │   ├── sync_engine.py           # STUB no-op (post-disconnessione)
-│   ├── verifica_indirizzi.py    # Geocoding + normalizzazione
-│   ├── verifica_indirizzi_ui.py
 │   └── zone_geografiche.py      # Clustering DBSCAN delle zone
 │
 ├── routes/                      # Blueprint Flask
@@ -517,14 +515,12 @@ Dipendenze esterne:
 │   ├── postit.py                # Post-it
 │   ├── report.py                # Generazione report Excel
 │   ├── sigilli.py               # API sigilli
-│   ├── sync.py                  # Trigger sync manuale + SSE
-│   └── verifica_indirizzi.py
+│   └── sync.py                  # Trigger sync manuale + SSE
 │
 ├── tools/                       # CLI di servizio
 │   ├── dump_db.py               # Diagnostica DB
 │   ├── archive_audit_log.py     # Archiviazione mensile audit
 │   ├── cleanup_done_pendings.py # Cleanup mensile pending done
-│   ├── build_indir_db.py        # Costruzione DB indirizzi
 │   └── confronta_percorsi.py    # Confronto offline percorsi
 │
 ├── templates/                   # HTML per-provincia (Jinja2)
@@ -733,10 +729,6 @@ Auth Flask con sessioni. Password PBKDF2-SHA256 (100k iterazioni). Storage: `use
 ### `moduli/backup.py`
 
 Backup periodico del DB (`VACUUM INTO backup/{prov}/state_YYYY-MM-DD.db`, rotation ultimi 7).
-
-### `moduli/verifica_indirizzi.py`
-
-Geocoding + normalizzazione indirizzi. Usa un DB locale di indirizzi pre-costruito da `tools/build_indir_db.py`.
 
 ### `moduli/rilevamento_aziende.py`
 

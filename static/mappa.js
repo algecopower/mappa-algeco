@@ -2147,9 +2147,6 @@ function apriDaGestionale(action) {
         case 'sigilli':
             setTimeout(() => apriVistaSigilli(), 120);
             break;
-        case 'verifica-indirizzi':
-            setTimeout(() => apriModalVerificaIndirizzi(), 120);
-            break;
         case 'filone':
             window.open('/filone', '_blank', 'noopener');
             break;

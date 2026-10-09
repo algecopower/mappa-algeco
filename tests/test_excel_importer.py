@@ -188,7 +188,8 @@ def test_import_xlsx_commenti_non_apre_workbook_pesante(db_isolato, tmp_path, mo
     )
 
     assert result['success'] is True
-    assert read_only_values == [True, True]
+    assert len(read_only_values) >= 1
+    assert all(v is True for v in read_only_values)
 
 
 def test_import_csv_scarta_righe_con_chiavi_implausibili(db_isolato, tmp_path):
@@ -464,3 +465,61 @@ def test_import_csv_non_sovrascrive_riga_modificata_dopo_export(db_isolato, tmp_
     assert result['success'] is True
     assert result['rows_db_vince'] == 1
     assert db.get_filone_row('50146375', lcl='6600104200')['nominativo'] == 'Valore DB recente'
+
+
+def test_import_xlsx_multi_sheet_auto_detect(db_isolato, tmp_path):
+    """Se il foglio attivo non ha Eneltel (es. Report), trova automaticamente il foglio dati."""
+    openpyxl = pytest.importorskip('openpyxl')
+    from moduli import excel_importer
+
+    path = tmp_path / 'multi.xlsx'
+    wb = openpyxl.Workbook()
+    ws_report = wb.active
+    ws_report.title = 'Report'
+    ws_report.append(['Colonna A', 'Colonna B', 'Totale'])
+    ws_report.append(['Dato 1', 'Dato 2', 100])
+
+    ws_data = wb.create_sheet(title='PIEMONTE')
+    ws_data.append(['Eneltel', 'LCL', 'NOMINATIVO', 'Comune'])
+    ws_data.append(['11223344', '6600104200', 'Test Auto Sheet', 'Torino'])
+
+    wb.save(path)
+
+    result = excel_importer.import_excel(str(path), export_ts='2026-06-01 10:00:00')
+    assert result['success'] is True
+    assert result['sheet_name'] == 'PIEMONTE'
+    assert result['rows_nuove'] == 1
+
+
+def test_import_xlsx_con_banner_e_righe_vuote(db_isolato, tmp_path):
+    """Gestisce banner iniziale e righe vuote prima della riga intestazione."""
+    openpyxl = pytest.importorskip('openpyxl')
+    from moduli import excel_importer
+
+    path = tmp_path / 'banner.xlsx'
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.append([])  # Riga vuota
+    ws.append(['ESTRAZIONE DEL 09/10/2026 - CONFIDENZIALE'])  # Banner
+    ws.append([])  # Altra riga vuota
+    ws.append(['Eneltel', 'LCL', 'NOMINATIVO', 'Comune'])
+    ws.append(['99887766', '6600104200', 'Test Banner', 'Moncalieri'])
+
+    wb.save(path)
+
+    result = excel_importer.import_excel(str(path), export_ts='2026-06-01 10:00:00')
+    assert result['success'] is True
+    assert result['rows_nuove'] == 1
+
+
+def test_import_cell_to_str_date():
+    from datetime import date
+    from moduli.excel_importer import _cell_to_str, _parse_export_ts
+
+    d = date(2026, 6, 18)
+    assert _cell_to_str(d) == '18/06/2026'
+
+    # Supporto ISO datetime senza secondi
+    ts = _parse_export_ts('2026-05-21T14:30')
+    assert ts > 0
+

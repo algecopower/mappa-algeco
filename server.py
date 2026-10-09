@@ -588,7 +588,17 @@ from config import (
 )
 
 app = Flask(__name__, static_folder='static')
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # Limite upload: 16 MB
+app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # Limite upload: 100 MB
+
+
+@app.errorhandler(413)
+def error_payload_too_large(e):
+    return jsonify({
+        'success': False,
+        'message': 'File troppo grande per il server (supera il limite di 100MB). Riduci le dimensioni o esporta in CSV.',
+        'error': '413 Request Entity Too Large',
+    }), 413
+
 
 # CORS: limita le origini consentite (localhost + dominio Cloudflare)
 def _cors_origins_da_province():

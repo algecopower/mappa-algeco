@@ -22,7 +22,7 @@ import logging
 import os
 import time
 from collections import Counter
-from datetime import datetime
+from datetime import date, datetime
 
 from . import db as _db
 from .safe_json import json_read  # noqa  (potrebbe servire per cache future)
@@ -35,7 +35,7 @@ def _parse_export_ts(export_ts):
 
     Accetta:
       - int/float (epoch s) → ritornato così com'è (int)
-      - str 'YYYY-MM-DD HH:MM:SS' o 'YYYY-MM-DD' o 'YYYY-MM-DDTHH:MM:SS'
+      - str 'YYYY-MM-DD HH:MM:SS' o 'YYYY-MM-DD' o 'YYYY-MM-DDTHH:MM:SS' o 'YYYY-MM-DDTHH:MM'
       - None → usa now() (assume export appena fatto)
     """
     if export_ts is None:
@@ -43,7 +43,13 @@ def _parse_export_ts(export_ts):
     if isinstance(export_ts, (int, float)):
         return int(export_ts)
     s = str(export_ts).strip()
-    for fmt in ('%Y-%m-%dT%H:%M:%S', '%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M', '%Y-%m-%d'):
+    for fmt in (
+        '%Y-%m-%dT%H:%M:%S',
+        '%Y-%m-%d %H:%M:%S',
+        '%Y-%m-%dT%H:%M',
+        '%Y-%m-%d %H:%M',
+        '%Y-%m-%d',
+    ):
         try:
             return int(datetime.strptime(s, fmt).timestamp())
         except ValueError:
@@ -52,7 +58,7 @@ def _parse_export_ts(export_ts):
 
 
 def _cell_to_str(v):
-    """Converte una cella Excel in stringa pulita (gestisce datetime, float, None)."""
+    """Converte una cella Excel in stringa pulita (gestisce datetime, date, float, None)."""
     if v is None:
         return ''
     if isinstance(v, datetime):
@@ -60,6 +66,8 @@ def _cell_to_str(v):
         if v.hour == 0 and v.minute == 0 and v.second == 0:
             return v.strftime('%d/%m/%Y')
         return v.strftime('%d/%m/%Y %H:%M:%S')
+    if isinstance(v, date):
+        return v.strftime('%d/%m/%Y')
     if isinstance(v, float) and v.is_integer():
         return str(int(v))
     return str(v).strip()
@@ -190,11 +198,13 @@ def _normalize_for_db(value, chiave_interna):
     return s
 
 
-def parse_excel(file_path, sheet_name=None):
-    """Apre un .xlsx e ritorna (headers, rows).
+def parse_excel(file_path, sheet_name=None, return_meta=False):
+    """Apre un .xlsx e ritorna (headers, rows) o (headers, rows, sheet_name, physical_to_logical).
 
-    headers: list[str] dalla riga 1.
-    rows: list[list[str]] — solo righe non vuote.
+    Supporta:
+      - Selezione automatica del foglio contenente la colonna 'Eneltel' se non specificato
+      - Rilevamento automatico della riga di intestazione (gestione righe vuote o banner)
+      - Mappatura precisa tra riga fisica Excel e riga logica per commenti cella
     """
     try:
         import openpyxl
@@ -204,28 +214,106 @@ def parse_excel(file_path, sheet_name=None):
         )
 
     wb = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
-    ws = wb[sheet_name] if sheet_name else wb.active
-    if ws is None:
+    if not wb.sheetnames:
+        wb.close()
         raise ValueError("Nessun foglio trovato nel file Excel")
 
-    raw_rows = list(ws.iter_rows(values_only=True))
-    if not raw_rows:
-        return ([], [])
+    target_sheet = None
+    if sheet_name:
+        if sheet_name in wb.sheetnames:
+            target_sheet = sheet_name
+        else:
+            lower_map = {s.lower(): s for s in wb.sheetnames}
+            if sheet_name.lower() in lower_map:
+                target_sheet = lower_map[sheet_name.lower()]
+            else:
+                available = ', '.join(f"'{s}'" for s in wb.sheetnames)
+                wb.close()
+                raise ValueError(
+                    f"Foglio '{sheet_name}' non trovato nel file Excel. "
+                    f"Fogli disponibili: {available}"
+                )
 
-    headers = [_cell_to_str(c) for c in raw_rows[0]]
-    rows = []
-    for r in raw_rows[1:]:
-        if r is None:
+    if not target_sheet:
+        active_title = wb.active.title if wb.active else wb.sheetnames[0]
+        candidate_sheets = [active_title] + [s for s in wb.sheetnames if s != active_title]
+        found_sheet = None
+        for sname in candidate_sheets:
+            try:
+                ws_check = wb[sname]
+                for row in ws_check.iter_rows(max_row=15, values_only=True):
+                    if any('eneltel' in str(c or '').strip().lower() for c in row):
+                        found_sheet = sname
+                        break
+                if found_sheet:
+                    break
+            except Exception:
+                continue
+
+        if found_sheet:
+            target_sheet = found_sheet
+            if target_sheet != active_title:
+                logger.info(
+                    f"[excel-import] Foglio '{target_sheet}' auto-selezionato "
+                    f"(il foglio predefinito '{active_title}' non conteneva 'Eneltel')"
+                )
+        else:
+            target_sheet = active_title
+
+    ws = wb[target_sheet]
+
+    # Prima passata rapida sulle prime 15 righe per determinare la riga fisica degli header
+    header_physical_row = None
+    for row in ws.iter_rows(max_row=15, values_only=False):
+        if not row:
             continue
-        row_vals = [_cell_to_str(c) for c in r]
+        row_vals = [_cell_to_str(c.value) for c in row]
         if all(v == '' for v in row_vals):
             continue
+        phys_r = row[0].row if hasattr(row[0], 'row') and row[0].row else None
+        if any('eneltel' in v.lower() for v in row_vals):
+            header_physical_row = phys_r
+            break
+        if header_physical_row is None and any(v != '' for v in row_vals):
+            header_physical_row = phys_r
+
+    headers = []
+    rows = []
+    physical_to_logical = {}
+    logical_row = 0
+
+    for row in ws.iter_rows(values_only=False):
+        if not row:
+            continue
+        row_vals = [_cell_to_str(c.value) for c in row]
+        if all(v == '' for v in row_vals):
+            continue
+
+        phys_row = row[0].row if hasattr(row[0], 'row') and row[0].row else None
+
+        if header_physical_row is not None and phys_row is not None and phys_row < header_physical_row:
+            continue
+
+        if not headers:
+            headers = row_vals
+            logical_row = 1
+            if phys_row is not None:
+                physical_to_logical[phys_row] = 1
+            continue
+
+        logical_row += 1
+        if phys_row is not None:
+            physical_to_logical[phys_row] = logical_row
         rows.append(row_vals)
+
     wb.close()
+
+    if return_meta:
+        return (headers, rows, target_sheet, physical_to_logical)
     return (headers, rows)
 
 
-def _extract_xlsx_cell_comments(file_path, sheet_name=None):
+def _extract_xlsx_cell_comments(file_path, sheet_name=None, headers=None, physical_to_logical=None):
     """Estrae i commenti strutturati delle celle da un .xlsx.
 
     Ritorna list[dict] con:
@@ -268,34 +356,11 @@ def _extract_xlsx_cell_comments(file_path, sheet_name=None):
             idx = idx * 26 + (ord(ch) - ord('A') + 1)
         return idx - 1, int(m.group(2))
 
-    def sheet_headers_and_rows():
-        try:
-            import openpyxl
-        except ImportError as e:
-            raise RuntimeError(
-                f"openpyxl non installato ({e}). pip install openpyxl"
-            )
-        wb = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
-        try:
-            ws = wb[sheet_name] if sheet_name else wb.active
-            headers = []
-            physical_to_logical = {}
-            logical_row = 0
-            for row in ws.iter_rows(values_only=False):
-                if not row:
-                    continue
-                values = [_cell_to_str(cell.value) for cell in row]
-                if all(v == '' for v in values):
-                    continue
-                logical_row += 1
-                physical_to_logical[row[0].row] = logical_row
-                if logical_row == 1:
-                    headers = values
-            return headers, physical_to_logical
-        finally:
-            wb.close()
+    if headers is None or physical_to_logical is None:
+        headers, _, sheet_name, physical_to_logical = parse_excel(
+            file_path, sheet_name=sheet_name, return_meta=True
+        )
 
-    headers, physical_to_logical = sheet_headers_and_rows()
     if not headers:
         return []
 
@@ -417,14 +482,19 @@ def parse_csv(file_path):
     return (parsed[0], parsed[1:])
 
 
-def parse_tabular_file(file_path, sheet_name=None):
-    """Legge .csv o .xlsx e ritorna (headers, rows, file_format)."""
+def parse_tabular_file(file_path, sheet_name=None, return_meta=False):
+    """Legge .csv o .xlsx e ritorna (headers, rows, file_format) oppure se return_meta=True
+    (headers, rows, file_format, actual_sheet, physical_to_logical)."""
     ext = os.path.splitext(file_path)[1].lower()
     if ext == '.csv':
         headers, rows = parse_csv(file_path)
+        if return_meta:
+            return headers, rows, 'csv', None, {}
         return headers, rows, 'csv'
     if ext == '.xlsx':
-        headers, rows = parse_excel(file_path, sheet_name=sheet_name)
+        headers, rows, actual_sheet, p2l = parse_excel(file_path, sheet_name=sheet_name, return_meta=True)
+        if return_meta:
+            return headers, rows, 'xlsx', actual_sheet, p2l
         return headers, rows, 'xlsx'
     raise ValueError("Formato file non supportato: usa .csv o .xlsx")
 
@@ -557,52 +627,21 @@ def import_excel(file_path, *, export_ts=None, sheet_name=None, dry_run=False, u
         user: nome utente che ha caricato il file (per audit).
 
     Returns:
-        dict summary {
-            'success': bool,
-            'export_ts': int,
-            'export_ts_iso': str,
-            'headers_excel': list[str],
-            'header_mapping': {nome_excel: chiave_interna | None},
-            'rows_excel': int,
-            'rows_nuove': int,
-            'rows_aggiornate': int,
-            'rows_db_vince': int,           # righe il cui DB è più recente
-            'rows_skip_no_eneltel': int,    # righe Excel senza eneltel valido
-            'rows_skip_invalid_key': int,   # righe con chiavi/valori strutturali impossibili
-            'celle_modificate': int,
-            'eneltel_solo_db': int,         # in DB ma NON in Excel (non cancellati)
-            'dry_run': bool,
-            'sample_db_vince': list[str],   # primi eneltel saltati per DB più recente
-            'sample_invalid_rows': list[dict],
-            'errori': list[str],
-        }
+        dict summary
     """
     export_ts_int = _parse_export_ts(export_ts)
-    headers_xlsx, rows_xlsx, file_format = parse_tabular_file(
-        file_path, sheet_name=sheet_name,
+    headers_xlsx, rows_xlsx, file_format, actual_sheet, p2l = parse_tabular_file(
+        file_path, sheet_name=sheet_name, return_meta=True,
     )
 
     if not headers_xlsx:
+        fogli_info = f" (foglio: '{actual_sheet}')" if actual_sheet else ""
         return {
-            'success': False, 'errori': ['Excel vuoto / nessuna intestazione'],
+            'success': False, 'errori': [f"Excel vuoto / nessuna intestazione{fogli_info}"],
             'rows_excel': 0,
         }
 
-    # 1. Identifica colonna Eneltel (obbligatoria)
-    eneltel_idx = _find_col_idx(headers_xlsx, ['Eneltel', 'ENELTEL', 'eneltel'])
-    if eneltel_idx is None:
-        return {
-            'success': False,
-            'errori': [f"Colonna Eneltel non trovata. Headers presenti: {headers_xlsx[:30]}"],
-            'rows_excel': len(rows_xlsx),
-        }
-
-    # 2. LCL opzionale (per Pavia: multi-LCL per stesso eneltel)
-    lcl_idx = _find_col_idx(headers_xlsx, ['LCL', 'lcl'])
-    required_row_indices = _structural_col_indices(headers_xlsx) if file_format == 'csv' else []
-    expected_row_cols = len(headers_xlsx) if file_format == 'csv' else None
-
-    # 3. Header mapping: per ogni colonna Excel, cerca la chiave interna nel DB
+    # 1. Header mapping: per ogni colonna Excel, cerca la chiave interna nel DB
     header_mapping = {}
     conn = _db.get_conn()
     for h in headers_xlsx:
@@ -610,12 +649,34 @@ def import_excel(file_path, *, export_ts=None, sheet_name=None, dry_run=False, u
             continue
         header_mapping[h] = _db.column_to_internal_key(conn, h)
 
+    # 2. Identifica colonna Eneltel (obbligatoria)
+    eneltel_idx = _find_col_idx(headers_xlsx, ['Eneltel', 'ENELTEL', 'eneltel'])
+    if eneltel_idx is None:
+        for col_name, ch_int in header_mapping.items():
+            if ch_int == 'eneltel':
+                eneltel_idx = _find_col_idx(headers_xlsx, [col_name])
+                break
+
+    if eneltel_idx is None:
+        sheet_info = f" nel foglio '{actual_sheet}'" if actual_sheet else ""
+        return {
+            'success': False,
+            'errori': [f"Colonna Eneltel non trovata{sheet_info}. Headers presenti: {headers_xlsx[:30]}"],
+            'rows_excel': len(rows_xlsx),
+        }
+
+    # 3. LCL opzionale (per Pavia: multi-LCL per stesso eneltel)
+    lcl_idx = _find_col_idx(headers_xlsx, ['LCL', 'lcl'])
+    required_row_indices = _structural_col_indices(headers_xlsx) if file_format == 'csv' else []
+    expected_row_cols = len(headers_xlsx) if file_format == 'csv' else None
+
     summary = {
         'success': True,
         'export_ts': export_ts_int,
         'export_ts_iso': datetime.fromtimestamp(export_ts_int).strftime('%Y-%m-%d %H:%M:%S'),
         'headers_excel': headers_xlsx,
         'file_format': file_format,
+        'sheet_name': actual_sheet,
         'header_mapping': header_mapping,
         'rows_excel': len(rows_xlsx),
         'rows_nuove': 0,
@@ -638,7 +699,9 @@ def import_excel(file_path, *, export_ts=None, sheet_name=None, dry_run=False, u
     comments_by_excel_row = {}
     if file_format == 'xlsx':
         try:
-            for item in _extract_xlsx_cell_comments(file_path, sheet_name=sheet_name):
+            for item in _extract_xlsx_cell_comments(
+                file_path, sheet_name=actual_sheet, headers=headers_xlsx, physical_to_logical=p2l
+            ):
                 comments_by_excel_row.setdefault(item['row'], []).append(
                     (item['col_name'], item['text'])
                 )

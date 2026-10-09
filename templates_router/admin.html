@@ -1153,7 +1153,12 @@
       <div class="form-group">
         <label>File CSV o Excel</label>
         <input name="file" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
-        <div class="help">Consigliato CSV; accettati anche file Excel moderni (.xlsx). Limite suggerito ~50MB.</div>
+        <div class="help">Consigliato CSV; accettati anche file Excel moderni (.xlsx). Limite massimo 100MB.</div>
+      </div>
+      <div class="form-group">
+        <label>Foglio Excel (opzionale per file .xlsx)</label>
+        <input name="sheet_name" type="text" placeholder="Lascia vuoto per rilevamento automatico" style="width:100%;">
+        <div class="help">Se il file Excel ha più fogli e desideri specificarne uno preciso, scrivi il nome esatto (es. <code>DB</code> o <code>Foglio1</code>). Se lasciato vuoto, il programma cerca automaticamente il foglio con la colonna Eneltel.</div>
       </div>
       <div class="form-group">
         <label>Data e ora dell'export</label>
@@ -2710,7 +2715,13 @@ async function submitImportExcel(ev) {
   const dryRun = document.querySelector('[name=dry_run]').checked;
   // Converti datetime-local "2026-05-21T14:30" → "2026-05-21 14:30:00"
   const tsRaw = fd.get('export_ts');
-  if (tsRaw) fd.set('export_ts', tsRaw.replace('T', ' ') + ':00');
+  if (tsRaw) {
+    let formattedTs = tsRaw.replace('T', ' ');
+    if (formattedTs.split(':').length === 2) {
+      formattedTs += ':00';
+    }
+    fd.set('export_ts', formattedTs);
+  }
   fd.set('dry_run', dryRun ? 'true' : 'false');
 
   // Conferma se NON è dry-run
@@ -2773,7 +2784,7 @@ function rendiImportResult(data, wasDryRun) {
     if (data.ruolo) extra.push(`ruolo: ${data.ruolo}`);
     if (data._http_status) extra.push(`HTTP ${data._http_status}`);
     const extraHtml = extra.length ? `<div style="font-size:11px;opacity:0.8;margin-top:6px;">${extra.map(escapeHtml).join(' · ')}</div>` : '';
-    out.innerHTML = `<div class="alert-banner" style="background:#fee;border-color:#f99;color:#900;">❌ Import fallito:<br>${escapeHtml(errMsg)}${extraHtml}</div>`;
+    out.innerHTML = `<div class="alert-banner" style="background:#fee;border-color:#f99;color:#900;white-space:pre-wrap;">❌ Import fallito:<br>${escapeHtml(errMsg)}${extraHtml}</div>`;
     return;
   }
   const badge = wasDryRun

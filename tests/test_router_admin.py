@@ -89,3 +89,39 @@ def test_router_serves_static_assets():
     assert res.status_code == 200
     assert 'SmsGatewayModal' in res.get_data(as_text=True)
 
+
+def test_router_import_excel_handles_non_json_and_backend_status(monkeypatch):
+    """Il router cattura risposte non-JSON del backend e le converte in JSON pulito."""
+    import router
+    from io import BytesIO
+
+    client = router.app.test_client()
+
+    # Senza auth ritorna 401
+    res = client.post(
+        '/api/provinces/TORINO/import-excel',
+        headers={'Host': 'admin.mappa-algeco.com'},
+        data={},
+    )
+    assert res.status_code == 401
+
+    # Con backend non in esecuzione (simulato)
+    monkeypatch.setattr(router, '_admin_check', lambda: None)
+    monkeypatch.setattr(router, '_admin_csrf_check', lambda: None)
+    monkeypatch.setattr(router.pm, 'stato', lambda: {'TORINO': 'stopped'})
+    res = client.post(
+        '/api/provinces/TORINO/import-excel',
+        headers={'Host': 'admin.mappa-algeco.com'},
+        data={'file': (BytesIO(b'dummy'), 'test.xlsx')},
+    )
+    assert res.status_code == 503
+    data = res.get_json()
+    assert data['success'] is False
+    assert 'stopped' in data['stato']
+
+
+def test_router_max_content_length_413():
+    """Il router ha MAX_CONTENT_LENGTH impostato a 100MB."""
+    import router
+    assert router.app.config['MAX_CONTENT_LENGTH'] == 100 * 1024 * 1024
+

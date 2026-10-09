@@ -72,6 +72,16 @@ logging.basicConfig(
 log = logging.getLogger('router')
 
 app = Flask(__name__)
+app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024
+
+
+@app.errorhandler(413)
+def request_entity_too_large(error):
+    return jsonify({
+        'success': False,
+        'error': 'File troppo grande (limite massimo 100 MB)',
+        'message': 'File troppo grande (limite massimo 100 MB)',
+    }), 413
 
 
 # ============================================================================
@@ -1072,18 +1082,25 @@ def _admin_import_excel(slug):
     try:
         province = carica_province()
     except Exception as e:
-        return jsonify({'error': f'lettura provinces.json: {e}'}), 500
+        return jsonify({'success': False, 'error': f'lettura provinces.json: {e}'}), 500
     slug = slug.upper()
     if slug not in province:
-        return jsonify({'error': f'provincia {slug} non trovata'}), 404
+        return jsonify({'success': False, 'error': f'provincia {slug} non trovata'}), 404
     cfg = province[slug]
     if pm.stato().get(slug) != 'running':
-        return jsonify({'error': f'backend {slug} non in esecuzione',
+        return jsonify({'success': False,
+                        'error': f'backend {slug} non in esecuzione',
                         'stato': pm.stato().get(slug, 'stopped')}), 503
 
     f = request.files.get('file')
     if not f or not f.filename:
         return jsonify({'success': False, 'message': 'File mancante'}), 400
+
+    try:
+        if hasattr(f.stream, 'seek'):
+            f.stream.seek(0)
+    except Exception:
+        pass
 
     # Inoltra il multipart al backend
     files = {'file': (f.filename, f.stream, f.mimetype or 'application/octet-stream')}
@@ -1100,9 +1117,25 @@ def _admin_import_excel(slug):
         # Timeout largo: parse Excel + merge possono richiedere 30-60s
         r = requests.post(url, headers=headers, files=files, data=data, timeout=300)
     except requests.RequestException as e:
-        return jsonify({'error': f'backend non raggiungibile: {e}'}), 502
+        return jsonify({'success': False, 'error': f'backend non raggiungibile: {e}'}), 502
+
+    # Se il backend ha restituito HTML (ad es. errore Werkzeug 413/500),
+    # convertiamo in JSON coerente per l'interfaccia client
+    content_type = r.headers.get('Content-Type', '')
+    if 'application/json' not in content_type:
+        try:
+            parsed = r.json()
+            return jsonify(parsed), r.status_code
+        except Exception:
+            msg = f'Risposta anomala dal backend (HTTP {r.status_code})'
+            if r.status_code == 413:
+                msg = 'File troppo grande per il backend (limite 100 MB)'
+            elif r.status_code in (504, 408):
+                msg = "Timeout durante l'elaborazione del file sul backend"
+            return jsonify({'success': False, 'error': msg, 'message': msg}), r.status_code
+
     return (r.text, r.status_code,
-            {'Content-Type': r.headers.get('Content-Type', 'application/json')})
+            {'Content-Type': 'application/json'})
 
 
 # ============================================================================

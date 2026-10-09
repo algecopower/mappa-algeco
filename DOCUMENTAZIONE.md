@@ -472,50 +472,58 @@ Dipendenze esterne:
 │   │   ├── state.db             # DB SQLite (WAL)
 │   │   ├── mappa_data.json      # JSON per la mappa (aggiornato a ogni refresh)
 │   │   ├── config.json          # Config statica per il frontend
-│   │   ├── settings.json        # Override settings (da UI admin)
-│   │   ├── cell_log.json
-│   │   ├── shadow_reports/      # (legacy, vuota post-disconnessione)
-│   │   └── span_reports/        # Report anomalie span (Torino)
+│   │   └── settings.json        # Override settings (da UI admin)
 │   └── pavia/
 │       └── (idem)
 │
 ├── moduli/                      # Logica di dominio
 │   ├── __init__.py
+│   ├── access_points.py         # Risoluzione civici e access road OSRM
+│   ├── appuntamenti_core.py     # Parsing e normalizzazione appuntamenti
 │   ├── auth.py                  # Auth Flask + sessioni
 │   ├── backup.py                # Backup periodico DB + JSON
+│   ├── bulk_contatori_email.py  # Preparazione e invio email massive
 │   ├── cache.py                 # Cache persistente distanze OSRM
 │   ├── calendario.py            # Calendario zone/comuni
 │   ├── comuni_db.py             # DB normalizzato comuni
+│   ├── comuni_manager.py        # Gestione anagrafica comuni e PEC
 │   ├── data_loader.py           # DB → DataFrame (con cache + hash)
 │   ├── db.py                    # Schema SQLite, record_local_change, upsert
 │   ├── distanze.py              # OSRM Table/Route
 │   ├── distinte_manager.py      # Parser PDF distinte + WhatsApp
 │   ├── excel_importer.py        # Import FILONE Excel/CSV (merge sicuro)
-│   ├── fasce_orarie.py          # Assegnazione fasce
-│   ├── fasce_orarie_legacy.py   # Compat (vecchia API)
+│   ├── fasce_orarie.py          # Assegnazione fasce orarie
 │   ├── gestionale.py            # CSS/JS/HTML del gestionale embeddato
+│   ├── lettere.py               # Archivio lettere clienti e rubrica
+│   ├── mail_manager.py          # Invio email, parsing allegati e outbox
 │   ├── mappa_data_patcher.py    # Patch in-place mappa_data.json (soft edit)
 │   ├── mappa_html.py            # Generazione mappa HTML completa
-│   ├── outbox.py                # Coda email
+│   ├── outbox.py                # Coda email / modifiche
 │   ├── percorso.py              # TSP via OSRM Trip
-│   ├── postit.py                # Note utente (post-it sulla mappa)
 │   ├── rilevamento_aziende.py   # Detect aziende/condomini dagli indirizzi
 │   ├── safe_json.py             # Read/write JSON robusto
-│   ├── shared.py                # API legacy gspread → DB
+│   ├── shared.py                # API legacy compatibilità gspread → DB
+│   ├── sms_gateway.py           # Integrazione SMS Gateway Android
+│   ├── smtp.py                  # Configurazione e test server SMTP
 │   ├── sync_engine.py           # STUB no-op (post-disconnessione)
+│   ├── workflow.py              # Gestione step workflow
 │   └── zone_geografiche.py      # Clustering DBSCAN delle zone
 │
 ├── routes/                      # Blueprint Flask
 │   ├── access_points.py         # Access points / punti di interesse
-│   ├── bacheca.py               # Bacheca avvisi
-│   ├── calendario.py            # Calendario zone
-│   ├── contatori.py             # CRUD contatori + sigilli + matricole
-│   ├── dashboard.py             # Dashboard admin
-│   ├── distinte.py              # Gestione distinte
-│   ├── postit.py                # Post-it
+│   ├── appuntamenti.py          # Gestione Appuntamenti (vista dedicata)
+│   ├── bacheca.py               # Bacheca avvisi e promemoria
+│   ├── calendario.py            # Calendario zone e attività
+│   ├── comuni.py                # Anagrafica comuni e contatti
+│   ├── contatori.py             # CRUD contatori + filone + ricerca
+│   ├── dashboard.py             # Dashboard e metriche
+│   ├── distinte.py              # Gestione distinte e messaggi
+│   ├── lettere.py               # Gestione lettere e contatti
+│   ├── mail.py                  # Invio email e log outbox
 │   ├── report.py                # Generazione report Excel
 │   ├── sigilli.py               # API sigilli
-│   └── sync.py                  # Trigger sync manuale + SSE
+│   ├── sync.py                  # Trigger sync manuale + SSE
+│   └── templates.py             # Gestione template messaggi
 │
 ├── tools/                       # CLI di servizio
 │   ├── dump_db.py               # Diagnostica DB

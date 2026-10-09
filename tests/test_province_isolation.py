@@ -99,31 +99,6 @@ def test_boxbeat_excel_isolation(tmp_path, monkeypatch):
     assert not any(x['pod'] == "IT001ETO12345" for x in bb_pv.get(oggi, []))
 
 
-def test_postit_isolation(tmp_path, monkeypatch):
-    """Verifica che i post-it siano isolati per provincia."""
-    import moduli.postit as postit
-
-    monkeypatch.setattr(postit, 'SCRIPT_DIR', str(tmp_path))
-
-    n_to = postit.crea_postit(
-        testo="Nota urgente Torino",
-        provincia="TORINO"
-    )
-    n_pv = postit.crea_postit(
-        testo="Nota urgente Pavia",
-        provincia="PAVIA"
-    )
-
-    notes_to = postit.get_postit(provincia="TORINO")
-    notes_pv = postit.get_postit(provincia="PAVIA")
-
-    assert any(n['id'] == n_to['id'] for n in notes_to)
-    assert not any(n['id'] == n_pv['id'] for n in notes_to)
-
-    assert any(n['id'] == n_pv['id'] for n in notes_pv)
-    assert not any(n['id'] == n_to['id'] for n in notes_pv)
-
-
 def test_workflow_isolation(tmp_path, monkeypatch):
     """Verifica che i workflow siano isolati per provincia."""
     import moduli.workflow as wf

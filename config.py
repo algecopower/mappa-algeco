@@ -388,19 +388,6 @@ INTERVALLO_SYNC_SECONDI = 300  # 5 minuti - fallback polling client se SSE down
 # verità. I dati esterni entrano via import Excel manuale.
 DB_PATH = os.path.join('data', PROVINCIA_ATTIVA.lower(), 'state.db')
 
-# Worker asincrono che drena pending_writes verso Sheets
-# 30s = compromesso tra latenza per chi guarda Sheets direttamente e quota 429.
-# Le scritture in raffica vengono coalesce per (eneltel,col) → la quota
-# Read/min (60) e Write/min (60) sono protette anche con bursti utente.
-DRAIN_INTERVAL_SECONDI = 30
-DRAIN_BATCH_SIZE = 400  # max celle per chiamata batch_update (limite Sheets ~500)
-DRAIN_THROTTLE_SECONDI = 2  # min interval tra due batch_update (rate-limit Sheets)
-
-# Policy per conflitti rilevati durante il pull
-# 'local_wins' → la modifica locale pending sovrascriverà il valore remoto (default)
-# 'remote_wins'→ il valore remoto viene applicato e il pending viene scartato (audit)
-# 'manual'    → blocca la riga finché un admin non risolve via UI
-CONFLICT_POLICY = 'local_wins'
 
 # --- TILE MAPPA (CARTO) ---
 # Dal 2026 CARTO richiede una API key gratuita per le basemap raster (carto.com/basemaps/apikey).

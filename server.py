@@ -42,9 +42,6 @@ os.chdir(SCRIPT_DIR)
 # URL server OSRM locale
 OSRM_SERVER = "http://localhost:5000"
 
-# File HTML delle mappe
-MAPPA_TORINO = os.path.join(SCRIPT_DIR, 'templates', 'mappa_torino.html')
-MAPPA_PAVIA = os.path.join(SCRIPT_DIR, 'templates', 'mappa_pavia.html')
 
 # ============================================================================
 # CONFIGURAZIONE CLOUDFLARE (per --pubblico)
@@ -340,18 +337,6 @@ if not IS_CHILD_PROCESS:
         print("   ❌ OSRM non ha risposto in tempo")
         return False
     
-    def pulisci_mappe_precedenti():
-        eliminati = []
-        for mappa in [MAPPA_TORINO, MAPPA_PAVIA]:
-            if os.path.exists(mappa):
-                try:
-                    os.remove(mappa)
-                    eliminati.append(os.path.basename(mappa))
-                except Exception as e:
-                    print(f"⚠️ Impossibile eliminare {mappa}: {e}")
-        if eliminati:
-            print(f"   🗑️ Mappe eliminate: {', '.join(eliminati)}")
-    
     def avvia_server_flask(provincia, porta):
         env = os.environ.copy()
         env['PROVINCIA'] = provincia.upper()
@@ -454,10 +439,6 @@ if not IS_CHILD_PROCESS:
                 sys.exit(1)
             if not verifica_tunnel_configurato():
                 sys.exit(1)
-        
-        # Pulisci mappe
-        print("\n📄 Preparazione mappe...")
-        pulisci_mappe_precedenti()
         
         # Verifica OSRM
         if not args.skip_osrm_check:
@@ -2896,10 +2877,6 @@ _last_report = None
 _last_risultato_zone = None
 
 
-def _shadow_db_pull():
-    """No-op storico: il programma non legge più da Google Sheets."""
-    return
-
 
 def _do_sincronizza_dati():
     """Logica effettiva di sincronizzazione (chiamare solo con _sync_lock acquisito).
@@ -2931,9 +2908,7 @@ def _do_sincronizza_dati():
         if not dati_sono_cambiati():
             elapsed = time_module.time() - start_loop
             logger.info(f"[SYNC] ⚡ Dati invariati, skip elaborazione ({elapsed:.1f}s)")
-            # Anche su no-change: pull_once aggiorna last_remote_pull_ts e
-            # riconcilia eventuali cambi locali pending arrivati nel frattempo.
-            _shadow_db_pull()
+
             sse_notify_all('sync_complete', {'source': 'no_changes'})
             return True
 
@@ -2947,7 +2922,7 @@ def _do_sincronizza_dati():
             elapsed = time_module.time() - start_loop
             logger.info(f"✅ Light sync completato in {elapsed:.1f}s")
 
-            _shadow_db_pull()
+
             sse_notify_all('sync_complete', {'source': 'light_sync'})
             return True
 
@@ -2989,9 +2964,7 @@ def _do_sincronizza_dati():
         except Exception as e_backup:
             logger.warning(f"[BACKUP] ⚠️ Errore nel backup periodico: {e_backup}")
 
-        # Sync DB locale (Fase 1 shadow): popola/aggiorna SQLite in parallelo
-        # al flusso principale. Errori qui NON devono bloccare il sync.
-        _shadow_db_pull()
+
 
         # Notifica tutti i client SSE che ci sono nuovi dati
         sse_notify_all('sync_complete', {'source': 'full_sync'})

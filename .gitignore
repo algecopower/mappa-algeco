@@ -45,6 +45,7 @@ data/*/shadow_reports/
 data/*/span_reports/
 
 # File temporanei o di output operativo
+*.xlsx
 data/*.xlsx
 data/*/*.xlsx
 data/*.json.migrated
@@ -54,6 +55,8 @@ data/calendario.json
 data/*/calendario.json
 data/*/boxbeat_excel.json
 data/*/postit.json
+data/*/cell_log.json
+data/*/.tmp_*
 data/*/user_workflows.json
 data/*/promemoria_settings.json
 data/*/distinte_templates.json

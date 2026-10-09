@@ -883,7 +883,7 @@ def carica_dati_db_locale(force=False):
     # (es. groupby, copy, mappa_data.json). Sicuro: la API esposta
     # (str/iloc/loc) si comporta allo stesso modo.
     # ================================================================
-    for col in df.select_dtypes(include=['object']).columns:
+    for col in df.select_dtypes(include=['object', 'string']).columns:
         try:
             nunique = df[col].nunique(dropna=False)
             # Convertiamo a category solo se ratio < 50% (alta ripetitività)

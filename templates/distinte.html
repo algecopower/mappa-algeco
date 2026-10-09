@@ -3756,7 +3756,7 @@
                 erratiStates[pod] = true;
                 saveStates();
                 
-                // Applica " ERRATO" + strikethrough nella colonna telefono su Sheets
+                // Applica " ERRATO" + strikethrough nella colonna telefono sul filone
                 try {
                     const stResp = await fetch('/api/distinte/segna-errato', {
                         method: 'POST',
@@ -3765,7 +3765,7 @@
                     });
                     const stData = await stResp.json();
                     if (stData.success) {
-                        showToast('Numero segnato come ERRATO su Sheets');
+                        showToast('Numero segnato come ERRATO sul filone');
                     } else {
                         showToast('Errore: ' + (stData.error || ''), 'error');
                     }

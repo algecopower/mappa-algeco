@@ -100,3 +100,62 @@ def test_caricamento_riconosce_nome_e_matricola_come_stesso_operatore(
 
     assert len(df) == 2
     assert df['TEC_K'].tolist() == ['AE101392', 'AE101392']
+
+
+def test_caricamento_deduplica_contatori_su_piu_lcl(monkeypatch):
+    from moduli import access_points, db
+
+    headers = [
+        'Eneltel',
+        'LCL',
+        'DATA PIAN',
+        'Operatore',
+        'Latitudine',
+        'Longitudine',
+    ]
+    rows = [
+        {
+            'Eneltel': '50777529',
+            'LCL': '6600110809',
+            'DATA PIAN': '14/10/2026',
+            'Operatore': 'AG05928',
+            'Latitudine': '45.1',
+            'Longitudine': '7.1',
+        },
+        {
+            'Eneltel': '50777529',
+            'LCL': '6600111342',
+            'DATA PIAN': '14/10/2026',
+            'Operatore': 'AG05928',
+            'Latitudine': '45.1',
+            'Longitudine': '7.1',
+        },
+    ]
+
+    monkeypatch.setattr(
+        db,
+        'dump_filone_as_rows',
+        lambda **kwargs: (headers, rows),
+    )
+
+    def aggiungi_access_points(df, **kwargs):
+        df['Lat_access'] = df['Lat']
+        df['Lon_access'] = df['Lon']
+        df['access_source'] = 'test'
+        df['access_road'] = None
+
+    monkeypatch.setattr(access_points, 'arricchisci_dataframe', aggiungi_access_points)
+    monkeypatch.setattr(data_loader, 'DATA_INIZIO', None)
+    monkeypatch.setattr(data_loader, 'DATA_FINE', None)
+    monkeypatch.setattr(data_loader, 'LCL_DISABILITATI', [])
+    data_loader.invalidate_data_cache()
+
+    try:
+        df = data_loader.carica_dati_db_locale(force=True)
+    finally:
+        data_loader.invalidate_data_cache()
+
+    assert len(df) == 1
+    assert df.iloc[0]['Eneltel_Key'] == '50777529'
+    assert df.iloc[0]['LCL'] == '6600111342'
+

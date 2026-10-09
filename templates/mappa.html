@@ -187,6 +187,16 @@
                         <div class="operatore-multi-dropdown" id="operatoreMultiDropdown"></div>
                     </div>
                 </div>
+                <!-- Spunta Badge Orari (visibile in tutte le visualizzazioni a singolo marker) -->
+                <div class="single-marker-options-row" id="singleMarkerOptionsRow" style="display: none;">
+                    <label class="orari-toggle-label" for="toggleOrariBadges" title="Mostra i badge orari per tutte le tappe sulla mappa (gli appuntamenti restano evidenziati)">
+                        <input type="checkbox" id="toggleOrariBadges" onchange="onToggleOrariBadges(this.checked)">
+                        <span class="orari-toggle-text">
+                            <span class="orari-toggle-icon">🕒</span>
+                            <span>Badge orari per tutti</span>
+                        </span>
+                    </label>
+                </div>
                 <!-- Filtro date dropdown per vista principale (Zone / Comuni) -->
                 <div class="search-row" id="dataFilterRow" style="margin-top: 10px;">
                     <div class="search-box">
@@ -278,6 +288,10 @@
                 <span class="btn-fit-icon">🎯</span>
                 <span class="btn-fit-text">Adatta vista</span>
             </button>
+            <label class="map-badge-orari-toggle" id="mapBadgeOrariToggle" style="display: none;" title="Mostra i badge orari per tutte le tappe sulla mappa">
+                <input type="checkbox" id="mapToggleOrariBadges" onchange="onToggleOrariBadges(this.checked)">
+                <span>🕒 Orari</span>
+            </label>
         </div>
 
         <!-- Floating Fit Button (per mobile / schermi compatti) -->

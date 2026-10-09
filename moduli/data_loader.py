@@ -721,6 +721,41 @@ def carica_dati_db_locale(force=False):
     df['ORA_APPUNTAMENTO'] = df.apply(assegna_orario_finale, axis=1)
 
     # ================================================================
+    # DEDUPLICAZIONE DIFENSIVA PER ENELTEL_KEY
+    # ================================================================
+    # Un contatore fisico non può comparire più volte contemporaneamente
+    # nell'operatività (es. transizione tra lotti LCL dove il vecchio lotto
+    # non è ancora stato archiviato). Manteniamo una sola riga dando priorità a:
+    # 1) presenza di data pianificata valida
+    # 2) presenza di operatore assegnato
+    # 3) presenza di appuntamento
+    # 4) codice LCL più recente/alto
+    if 'Eneltel_Key' in df.columns:
+        duplicati = df.duplicated(subset=['Eneltel_Key'], keep=False)
+        num_duplicati = duplicati.sum()
+        if num_duplicati > 0:
+            logger.warning(
+                f"   ⚠️ Rilevati {num_duplicati} record con Eneltel_Key duplicato tra LCL attive. "
+                f"Deduplicazione in corso..."
+            )
+            has_data = (df['DATA_K'] != 'DATA_MANCANTE') & (df['DATA_K'].astype(str).str.strip() != '')
+            has_op = (df['TEC_K'] != 'TUTTI') & (df['TEC_K'].astype(str).str.strip() != '')
+            has_app = df['IS_APPUNTAMENTO'].fillna(False).astype(bool) if 'IS_APPUNTAMENTO' in df.columns else False
+            df_temp = df.assign(
+                _rank_data=has_data.astype(int),
+                _rank_op=has_op.astype(int),
+                _rank_app=has_app.astype(int) if hasattr(has_app, 'astype') else 0,
+                _rank_lcl=df['LCL'].astype(str) if 'LCL' in df.columns else ''
+            )
+            df = df_temp.sort_values(
+                by=['_rank_data', '_rank_op', '_rank_lcl', '_rank_app'],
+                ascending=[False, False, False, False]
+            ).drop_duplicates(subset=['Eneltel_Key'], keep='first').drop(
+                columns=['_rank_data', '_rank_op', '_rank_lcl', '_rank_app']
+            )
+            logger.info(f"   🛡️ Deduplicazione completata: rimaste {len(df)} righe univoche")
+
+    # ================================================================
     # FILTRI
     # ================================================================
     

@@ -42,6 +42,12 @@
     "porta": 5001,
     "operatori_disabilitati": [
       "AG63397"
+    ],
+    "lcl_disabilitati": [
+      "6600101316",
+      "6600106010",
+      "6600101286",
+      "6600110809"
     ]
   },
   "PAVIA": {

@@ -1968,56 +1968,251 @@ body {
     100% { box-shadow: 0 0 0 0 rgba(233, 69, 96, 0); }
 }
 
-/* Badge orario compatto sopra ciascun marker appuntamento */
+/* Micro-badge orario compatto sui marker (anti-collisione, appuntamenti in risalto) */
 .marker-time-badge {
     position: absolute;
     bottom: 100%;
     left: 50%;
     transform: translateX(-50%);
-    margin-bottom: 6px;
-    background: rgba(15, 23, 42, 0.94);
-    color: #fef08a;
-    border: 1px solid rgba(245, 158, 11, 0.75);
-    padding: 2px 7px;
-    border-radius: 6px;
-    font-size: 10.5px;
+    margin-bottom: 2px;
+    background: #0f172a;
+    color: #e2e8f0;
+    border: 1px solid rgba(148, 163, 184, 0.45);
+    padding: 1px 3.5px;
+    border-radius: 4px;
+    font-size: 9px;
     font-weight: 700;
     font-family: inherit;
-    letter-spacing: 0.2px;
+    letter-spacing: 0.1px;
     white-space: nowrap;
-    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.45);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
     pointer-events: auto;
     cursor: pointer;
-    z-index: 1000;
+    z-index: 100;
     display: flex;
     align-items: center;
-    gap: 4px;
-    line-height: 1.2;
-    transition: transform 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+    gap: 2.5px;
+    line-height: 1.15;
+    user-select: none;
+    transition: transform 0.12s ease, opacity 0.12s ease, background 0.12s ease;
 }
 
-.marker-time-badge:hover {
-    transform: translateX(-50%) scale(1.08);
-    background: #0f172a;
-    border-color: #fbbf24;
-    color: #ffffff;
-    z-index: 1010;
-}
-
-.marker-time-badge::after {
-    content: '';
-    position: absolute;
+/* Posizioni alternative applicate dal motore anti-collisione per evitare sovrapposizioni */
+.marker-time-badge.badge-pos-bottom {
+    bottom: auto;
     top: 100%;
     left: 50%;
     transform: translateX(-50%);
-    border-width: 4px;
-    border-style: solid;
-    border-color: rgba(245, 158, 11, 0.9) transparent transparent transparent;
+    margin-top: 2px;
+    margin-bottom: 0;
+}
+
+.marker-time-badge.badge-pos-right {
+    bottom: auto;
+    top: 50%;
+    left: 100%;
+    right: auto;
+    transform: translateY(-50%);
+    margin-left: 3px;
+    margin-bottom: 0;
+}
+
+.marker-time-badge.badge-pos-left {
+    bottom: auto;
+    top: 50%;
+    left: auto;
+    right: 100%;
+    transform: translateY(-50%);
+    margin-right: 3px;
+    margin-bottom: 0;
+}
+
+/* Badge nascosto per collisione eccessiva a zoom basso (riappare allo zoom o al passaggio del mouse) */
+.marker-time-badge.badge-hidden {
+    display: none !important;
+}
+
+/* All'hover del marker, il badge orario è SEMPRE visibile in primo piano */
+.marker-contatore:hover .marker-time-badge,
+.leaflet-marker-icon:hover .marker-time-badge {
+    display: flex !important;
+    z-index: 99999 !important;
+    transform: translateX(-50%) scale(1.18) !important;
+    background: #0f172a !important;
+    border-color: #38bdf8 !important;
+    color: #ffffff !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.75) !important;
+}
+
+.marker-contatore:hover .marker-time-badge.badge-pos-bottom,
+.leaflet-marker-icon:hover .marker-time-badge.badge-pos-bottom {
+    transform: translateX(-50%) scale(1.18) !important;
+}
+
+.marker-contatore:hover .marker-time-badge.badge-pos-right,
+.leaflet-marker-icon:hover .marker-time-badge.badge-pos-right {
+    transform: translateY(-50%) scale(1.18) !important;
+}
+
+.marker-contatore:hover .marker-time-badge.badge-pos-left,
+.leaflet-marker-icon:hover .marker-time-badge.badge-pos-left {
+    transform: translateY(-50%) scale(1.18) !important;
 }
 
 .marker-time-badge-icon {
-    font-size: 10px;
-    opacity: 0.9;
+    font-size: 9px;
+    line-height: 1;
+}
+
+.marker-time-badge-text {
+    line-height: 1.15;
+}
+
+/* Evidenziazione speciale per marker appuntamento (priorità alta, sempre visibile) */
+.marker-time-badge.is-appuntamento {
+    background: #0f172a;
+    color: #fef08a;
+    border: 1.5px solid #f59e0b;
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.5), 0 2px 6px rgba(0, 0, 0, 0.45);
+    font-weight: 800;
+    font-size: 9.5px;
+    padding: 1.5px 5px;
+    border-radius: 5px;
+    z-index: 500;
+}
+
+.marker-time-badge.is-appuntamento:hover,
+.marker-contatore:hover .marker-time-badge.is-appuntamento,
+.leaflet-marker-icon:hover .marker-time-badge.is-appuntamento {
+    border-color: #fbbf24 !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 14px rgba(245, 158, 11, 0.8), 0 3px 8px rgba(0, 0, 0, 0.6) !important;
+    z-index: 99999 !important;
+}
+
+/* Stili controlli e spunte per badge orari */
+.single-marker-options-row {
+    display: flex;
+    align-items: center;
+    margin-top: 6px;
+    margin-bottom: 4px;
+    padding: 5px 12px;
+    background: rgba(30, 41, 59, 0.4);
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 12px;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.single-marker-options-row:hover {
+    background: rgba(30, 41, 59, 0.65);
+    border-color: rgba(148, 163, 184, 0.4);
+}
+
+.single-marker-options-row.active {
+    background: rgba(14, 165, 233, 0.14);
+    border-color: rgba(14, 165, 233, 0.5);
+    box-shadow: 0 0 10px rgba(14, 165, 233, 0.15);
+}
+
+.orari-toggle-label {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    cursor: pointer;
+    gap: 8px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.orari-toggle-label input[type="checkbox"] {
+    accent-color: var(--accent, #e84c65);
+    width: 15px;
+    height: 15px;
+    cursor: pointer;
+    margin: 0;
+}
+
+.orari-toggle-text {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+}
+
+.orari-toggle-icon {
+    font-size: 13px;
+    display: inline-flex;
+    align-items: center;
+}
+
+/* Spunta badge orari nella barra zoom della mappa */
+.map-badge-orari-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 9px;
+    background: var(--surface-raised, rgba(30, 41, 59, 0.9));
+    border: 1px solid var(--border-color, rgba(148, 163, 184, 0.3));
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary, #cbd5e1);
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.2s ease;
+    margin-left: 6px;
+}
+
+.map-badge-orari-toggle:hover {
+    color: var(--text-primary, #ffffff);
+    border-color: var(--accent, #e84c65);
+    background: var(--bg-secondary, rgba(30, 41, 59, 1));
+}
+
+.map-badge-orari-toggle.active {
+    background: rgba(14, 165, 233, 0.2);
+    border-color: #0ea5e9;
+    color: #ffffff;
+}
+
+.map-badge-orari-toggle input[type="checkbox"] {
+    accent-color: #0ea5e9;
+    width: 13px;
+    height: 13px;
+    cursor: pointer;
+    margin: 0;
+}
+
+/* Spunta badge orari nell'header percorso operatore */
+.sort-header-badge-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: rgba(30, 41, 59, 0.6);
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.2s;
+}
+
+.sort-header-badge-toggle:hover {
+    border-color: rgba(148, 163, 184, 0.5);
+    color: var(--text-primary);
+}
+
+.sort-header-badge-toggle input[type="checkbox"] {
+    accent-color: #0ea5e9;
+    width: 13px;
+    height: 13px;
+    cursor: pointer;
+    margin: 0;
 }
 
 /* Toast (notifica flottante).

@@ -273,6 +273,10 @@ let currentOperatore = null;  // Per vista percorso completo operatore
 let currentLCL = '';
 let currentDataFiltro = '';
 let filterAppuntamentiOnly = false;  // Filtro solo appuntamenti
+let showOrariBadges = (function() {
+    try { return localStorage.getItem('showOrariBadges') === 'true'; } catch(e) { return false; }
+})();
+let lastSearchMatchContatori = null; // Cache per ridisegnare risultati di ricerca
 let filterSchedulabili = false;  // Filtro contatori schedulabili
 let schedFilterTipologia = '';   // Filtro tipologia schedulabili
 let schedFilterStato = 'tutti';  // Filtro stato: tutti, senza_data, data_passata
@@ -377,6 +381,10 @@ map.on('zoomend', function() {
     const zoom = map.getZoom();
     zoomSlider.value = zoom;
     zoomValue.textContent = zoom.toFixed(1) + 'x';
+    scheduleDeclutterOrariBadges();
+});
+map.on('moveend', function() {
+    scheduleDeclutterOrariBadges();
 });
 
 // ============================================================
@@ -761,7 +769,7 @@ function creaMarkerGruppo(gruppo, colore) {
     const allSchedulabili = gruppo.contatori.every(c => c._isSchedulabile);
     const someSchedulabili = gruppo.contatori.some(c => c._isSchedulabile);
     const pulseStyle = hasAppuntamento ? 'animation: pulse 2s infinite;' : '';
-    const groupBadgeHtml = (hasAppuntamento && (filterAppuntamentiOnly || primoContatore.is_appuntamento)) ? createGroupOrarioBadgeHtml(gruppo) : '';
+    const groupBadgeHtml = createGroupOrarioBadgeHtml(gruppo);
     
     let icon;
     if (allSchedulabili) {
@@ -805,7 +813,7 @@ function creaMarkerGruppo(gruppo, colore) {
     
     const marker = L.marker([gruppo.lat, gruppo.lon], { icon });
     
-    // Crea popup con binding degli eventi
+    // Crea popup con binding degli eventi (apertura solo al click)
     const popupContent = createMultiContatorePopup(gruppo, colore);
     const popup = L.popup({ maxWidth: 350, offset: [0, -14] }).setContent(popupContent);
     
@@ -822,10 +830,6 @@ function creaMarkerGruppo(gruppo, colore) {
             });
         });
     });
-
-    if (hasAppuntamento || filterAppuntamentiOnly) {
-        abilitaHoverPopup(marker);
-    }
     
     marker.contatore = primoContatore;
     marker.gruppo = gruppo;
@@ -834,112 +838,281 @@ function creaMarkerGruppo(gruppo, colore) {
 }
 
 // ============================================================
-// BADGE ORARIO & POPUP HOVER PER CONTATORI APPUNTAMENTO
+// BADGE ORARI SUI MARKER (ATTIVABILI TRAMITE SPUNTA)
 // ============================================================
-function createOrarioBadgeHtml(c) {
-    let orario = '';
-    if (c.ora_appuntamento && String(c.ora_appuntamento).trim()) {
-        orario = String(c.ora_appuntamento).trim();
-    } else if (c.orari_lettere && String(c.orari_lettere).trim()) {
-        orario = String(c.orari_lettere).trim();
-    } else {
-        orario = 'APP';
+function formatTimeBadgeText(raw, isApp = false) {
+    if (!raw) return '';
+    const str = String(raw).trim();
+    if (!str || /^(nan|none|null|<na>|nat)$/i.test(str)) return '';
+    
+    // Prova intervallo: es. "dalle 08:00 alle 11:00", "08:00-11:00", "14:00 - 17:00", "14-17"
+    const m = str.match(/(\d{1,2})[:.]?(\d{2})?\s*(?:[-–/]|alle|a)\s*(\d{1,2})[:.]?(\d{2})?/i);
+    if (m) {
+        const h1 = parseInt(m[1], 10);
+        const m1 = m[2] ? parseInt(m[2], 10) : 0;
+        const h2 = parseInt(m[3], 10);
+        const m2 = m[4] ? parseInt(m[4], 10) : 0;
+        
+        // Se orari esatti (00 minuti sia inizio che fine), usa formato ultra-compatto h1-h2 (es. 8-11, 14-17)
+        if (m1 === 0 && m2 === 0) {
+            return `${h1}-${h2}`;
+        }
+        // Se ci sono minuti (es. 15:30-16:30), mantieni orario preciso
+        const s1 = m1 > 0 ? `${h1}:${String(m1).padStart(2, '0')}` : `${h1}`;
+        const s2 = m2 > 0 ? `${h2}:${String(m2).padStart(2, '0')}` : `${h2}`;
+        return `${s1}-${s2}`;
     }
-    return `<div class="marker-time-badge" title="Appuntamento ore ${orario}">` +
-        `<span class="marker-time-badge-icon">⏱️</span>` +
+    
+    // Singolo orario: es. "ore 09:00", "14:30"
+    const single = str.match(/(\d{1,2})[:.](\d{2})/);
+    if (single) {
+        const h = parseInt(single[1], 10);
+        const min = parseInt(single[2], 10);
+        if (min === 0) return `${h}h`;
+        return `${h}:${String(min).padStart(2, '0')}`;
+    }
+    
+    return str;
+}
+
+function createOrarioBadgeHtml(c) {
+    if (!showOrariBadges) return '';
+    const isApp = Boolean(c.is_appuntamento);
+    const rawTime = isApp ? (c.ora_appuntamento || c.orari_lettere) : (c.orari_lettere || c.ora_appuntamento);
+    let orario = formatTimeBadgeText(rawTime, isApp);
+    if (!orario) {
+        if (isApp) {
+            orario = 'APP';
+        } else {
+            return '';
+        }
+    }
+    const appClass = isApp ? ' is-appuntamento' : '';
+    const title = isApp ? `Appuntamento ore ${orario}` : `Fascia oraria ${orario}`;
+    const iconHtml = isApp ? `<span class="marker-time-badge-icon">⏱️</span>` : '';
+    return `<div class="marker-time-badge${appClass}" title="${title}" data-eneltel="${c.eneltel || ''}">` +
+        iconHtml +
         `<span class="marker-time-badge-text">${orario}</span>` +
     `</div>`;
 }
 
 function createGroupOrarioBadgeHtml(gruppo) {
-    const appuntamenti = (gruppo.contatori || []).filter(c => c.is_appuntamento);
-    if (appuntamenti.length === 0) return '';
+    if (!showOrariBadges) return '';
+    const contatori = gruppo.contatori || [];
+    if (contatori.length === 0) return '';
     
-    let orarioText = '';
-    if (appuntamenti.length === 1) {
-        const c = appuntamenti[0];
-        orarioText = (c.ora_appuntamento && String(c.ora_appuntamento).trim()) || 
-                     (c.orari_lettere && String(c.orari_lettere).trim()) || 'APP';
-    } else {
-        const orari = appuntamenti
-            .map(c => (c.ora_appuntamento && String(c.ora_appuntamento).trim()) || (c.orari_lettere && String(c.orari_lettere).trim()))
-            .filter(Boolean);
-        if (orari.length > 0 && orari.length <= 2) {
-            orarioText = orari.join(' · ');
-        } else {
-            orarioText = `${appuntamenti.length} App.`;
-        }
+    const appuntamenti = contatori.filter(c => c.is_appuntamento);
+    const hasApp = appuntamenti.length > 0;
+    
+    // Se c'è almeno un appuntamento, diamo priorità assoluta all'appuntamento
+    if (hasApp) {
+        const appTimes = appuntamenti.map(c => formatTimeBadgeText(c.ora_appuntamento || c.orari_lettere, true)).filter(Boolean);
+        const uniqueAppTimes = [...new Set(appTimes)];
+        const appTimeText = uniqueAppTimes.length > 0 ? uniqueAppTimes[0] : 'APP';
+        const title = `Gruppo con ${appuntamenti.length} appuntamento/i: ${uniqueAppTimes.join(', ')}`;
+        return `<div class="marker-time-badge is-appuntamento" title="${title}">` +
+            `<span class="marker-time-badge-icon">⏱️</span>` +
+            `<span class="marker-time-badge-text">${appTimeText}</span>` +
+        `</div>`;
     }
     
-    return `<div class="marker-time-badge" title="Appuntamenti: ${orarioText}">` +
-        `<span class="marker-time-badge-icon">⏱️</span>` +
+    // Gruppo senza appuntamenti: raccogli orari lettere
+    const orariList = [];
+    contatori.forEach(c => {
+        const t = formatTimeBadgeText(c.orari_lettere || c.ora_appuntamento, false);
+        if (t) orariList.push(t);
+    });
+    
+    if (orariList.length === 0) return '';
+    
+    const uniqueOrari = [...new Set(orariList)];
+    let orarioText = uniqueOrari[0];
+    if (uniqueOrari.length > 1) {
+        orarioText = `${uniqueOrari[0]}*`;
+    }
+    
+    const title = `Orari contatori sovrapposti: ${uniqueOrari.join(', ')}`;
+    return `<div class="marker-time-badge" title="${title}">` +
         `<span class="marker-time-badge-text">${orarioText}</span>` +
     `</div>`;
 }
 
-function abilitaHoverPopup(marker) {
-    if (!marker) return;
-    let closeTimer = null;
-    let isPinnedByClick = false;
+// Motore Anti-Collisione e Decluttering per badge orari
+let _declutterTimer = null;
+function scheduleDeclutterOrariBadges() {
+    if (!showOrariBadges) return;
+    if (_declutterTimer) cancelAnimationFrame(_declutterTimer);
+    _declutterTimer = requestAnimationFrame(() => {
+        declutterOrariBadges();
+    });
+}
 
-    marker.on('click', function () {
-        isPinnedByClick = true;
-        if (closeTimer) {
-            clearTimeout(closeTimer);
-            closeTimer = null;
-        }
+function declutterOrariBadges() {
+    if (!showOrariBadges) return;
+    const badges = Array.from(document.querySelectorAll('.marker-time-badge'));
+    if (badges.length === 0) return;
+
+    const mapContainer = typeof map !== 'undefined' && map ? map.getContainer() : null;
+    if (!mapContainer) return;
+    const mapRect = mapContainer.getBoundingClientRect();
+
+    // 1. Resetta posizioni e visibilità di tutti i badge
+    badges.forEach(b => {
+        b.classList.remove('badge-hidden', 'badge-pos-bottom', 'badge-pos-right', 'badge-pos-left');
     });
 
-    marker.on('popupclose', function () {
-        isPinnedByClick = false;
-        if (closeTimer) {
-            clearTimeout(closeTimer);
-            closeTimer = null;
+    // 2. Raccogli i rettangoli di tutti i marker visibili per proteggere i numeri di tappa
+    const markerIcons = Array.from(document.querySelectorAll('.leaflet-marker-icon'));
+    const occupiedRects = [];
+
+    markerIcons.forEach(icon => {
+        const ir = icon.getBoundingClientRect();
+        if (ir.right < mapRect.left || ir.left > mapRect.right || ir.bottom < mapRect.top || ir.top > mapRect.bottom) {
+            return;
         }
+        occupiedRects.push({
+            left: ir.left + 1,
+            right: ir.right - 1,
+            top: ir.top + 1,
+            bottom: ir.bottom - 1,
+            isMarker: true,
+            iconEl: icon
+        });
     });
 
-    marker.on('mouseover', function () {
-        if (closeTimer) {
-            clearTimeout(closeTimer);
-            closeTimer = null;
+    function rectsOverlap(r1, r2, margin = 2) {
+        return !(
+            r1.right + margin <= r2.left ||
+            r1.left - margin >= r2.right ||
+            r1.bottom + margin <= r2.top ||
+            r1.top - margin >= r2.bottom
+        );
+    }
+
+    // 3. Prima passata: Appuntamenti (priorità assoluta, sempre visibili)
+    const appBadges = badges.filter(b => b.classList.contains('is-appuntamento'));
+    appBadges.forEach(badge => {
+        const r = badge.getBoundingClientRect();
+        occupiedRects.push({
+            left: r.left,
+            right: r.right,
+            top: r.top,
+            bottom: r.bottom,
+            isBadge: true
+        });
+    });
+
+    // 4. Seconda passata: Orari lettere (regolari) con tentativi posizioni (sopra, sotto, destra, sinistra)
+    const regBadges = badges.filter(b => !b.classList.contains('is-appuntamento'));
+    const testPositions = ['', 'badge-pos-bottom', 'badge-pos-right', 'badge-pos-left'];
+
+    regBadges.forEach(badge => {
+        const parentIcon = badge.closest('.leaflet-marker-icon');
+        const pr = parentIcon ? parentIcon.getBoundingClientRect() : null;
+
+        if (pr && (pr.right < mapRect.left || pr.left > mapRect.right || pr.bottom < mapRect.top || pr.top > mapRect.bottom)) {
+            return;
         }
-        if (!this.isPopupOpen()) {
-            const popup = this.getPopup();
-            if (popup) {
-                popup.options.autoPan = false;
-            }
-            this.openPopup();
-        }
-        const popup = this.getPopup();
-        if (popup) {
-            const el = popup.getElement();
-            if (el && !el._hoverBound) {
-                el._hoverBound = true;
-                el.addEventListener('mouseenter', () => {
-                    if (closeTimer) {
-                        clearTimeout(closeTimer);
-                        closeTimer = null;
-                    }
+
+        let placed = false;
+        for (const posClass of testPositions) {
+            badge.classList.remove('badge-pos-bottom', 'badge-pos-right', 'badge-pos-left');
+            if (posClass) badge.classList.add(posClass);
+
+            const br = badge.getBoundingClientRect();
+            if (br.width === 0 || br.height === 0) continue;
+
+            const collides = occupiedRects.some(occ => {
+                if (occ.isMarker && occ.iconEl === parentIcon) {
+                    return false;
+                }
+                return rectsOverlap(br, occ, 3);
+            });
+
+            if (!collides) {
+                occupiedRects.push({
+                    left: br.left,
+                    right: br.right,
+                    top: br.top,
+                    bottom: br.bottom,
+                    isBadge: true
                 });
-                el.addEventListener('mouseleave', () => {
-                    if (!isPinnedByClick) {
-                        closeTimer = setTimeout(() => {
-                            if (!isPinnedByClick) marker.closePopup();
-                        }, 250);
-                    }
-                });
+                placed = true;
+                break;
             }
         }
-    });
 
-    marker.on('mouseout', function () {
-        if (!isPinnedByClick) {
-            closeTimer = setTimeout(() => {
-                if (!isPinnedByClick) this.closePopup();
-            }, 250);
+        if (!placed) {
+            badge.classList.remove('badge-pos-bottom', 'badge-pos-right', 'badge-pos-left');
+            badge.classList.add('badge-hidden');
         }
     });
 }
+window.scheduleDeclutterOrariBadges = scheduleDeclutterOrariBadges;
+window.declutterOrariBadges = declutterOrariBadges;
+
+function abilitaHoverPopup(marker) {
+    // Pop-up info automatico all'hover rimosso: i pop-up si aprono esclusivamente al click del mouse
+}
+
+function onToggleOrariBadges(checked) {
+    showOrariBadges = Boolean(checked);
+    try {
+        localStorage.setItem('showOrariBadges', showOrariBadges ? 'true' : 'false');
+    } catch(e) {}
+    syncOrariBadgesCheckboxes();
+    
+    // Ridisegna la mappa senza perdere la vista / zoom
+    preserveMapView = true;
+    if (currentView === 'detail') {
+        ridisegnaVistaDettaglioSenzaSidebar();
+    } else if (currentView === 'tuttiOperatori' || currentView === 'multiOperatori') {
+        ridisegnaVistaOperatoriSenzaSidebar();
+    } else if (currentView === 'operatore') {
+        ridisegnaVistaSingoloOperatoreSenzaSidebar();
+    } else if (currentView === 'search-results' && Array.isArray(lastSearchMatchContatori)) {
+        mostraRisultatiRicerca(lastSearchMatchContatori);
+    }
+    setTimeout(scheduleDeclutterOrariBadges, 80);
+}
+window.onToggleOrariBadges = onToggleOrariBadges;
+
+function updateSingleMarkerControlsVisibility() {
+    const isSingleMarker = (
+        currentView === 'detail' ||
+        currentView === 'tuttiOperatori' ||
+        currentView === 'multiOperatori' ||
+        currentView === 'operatore' ||
+        currentView === 'search-results'
+    ) && !planningMode;
+
+    const row = document.getElementById('singleMarkerOptionsRow');
+    if (row) {
+        row.style.display = isSingleMarker ? 'flex' : 'none';
+        row.classList.toggle('active', showOrariBadges);
+    }
+    const mapToggle = document.getElementById('mapBadgeOrariToggle');
+    if (mapToggle) {
+        mapToggle.style.display = isSingleMarker ? 'inline-flex' : 'none';
+        mapToggle.classList.toggle('active', showOrariBadges);
+    }
+    syncOrariBadgesCheckboxes();
+}
+window.updateSingleMarkerControlsVisibility = updateSingleMarkerControlsVisibility;
+
+function syncOrariBadgesCheckboxes() {
+    const chk1 = document.getElementById('toggleOrariBadges');
+    if (chk1) chk1.checked = showOrariBadges;
+    const chk2 = document.getElementById('mapToggleOrariBadges');
+    if (chk2) chk2.checked = showOrariBadges;
+    const chk3 = document.getElementById('sidebarSortOrariBadges');
+    if (chk3) chk3.checked = showOrariBadges;
+    const row = document.getElementById('singleMarkerOptionsRow');
+    if (row) row.classList.toggle('active', showOrariBadges);
+    const mapToggle = document.getElementById('mapBadgeOrariToggle');
+    if (mapToggle) mapToggle.classList.toggle('active', showOrariBadges);
+}
+window.syncOrariBadgesCheckboxes = syncOrariBadgesCheckboxes;
 
 function onToggleFilterAppuntamenti(checked) {
     filterAppuntamentiOnly = Boolean(checked);
@@ -1817,6 +1990,7 @@ function mostraRisultatiVuoti() {
     document.getElementById('statZone').textContent = 0;
     document.getElementById('statContatori').textContent = 0;
     document.getElementById('statAppuntamenti').textContent = 0;
+    updateSingleMarkerControlsVisibility();
 }
 
 function checkUrlSearchParameters() {
@@ -4167,6 +4341,7 @@ function mostraPercorsoTuttiOperatori(data) {
     document.getElementById('statContatori').textContent = tuttiContatori.length;
     document.getElementById('statAppuntamenti').textContent = tuttiContatori.filter(c => c.is_appuntamento).length;
     aggiornaConteggioFiltroAppuntamenti();
+    updateSingleMarkerControlsVisibility();
 }
 
 function mostraPercorsoMultiOperatori(operatoriSelezionati, data) {
@@ -4244,6 +4419,7 @@ function mostraPercorsoMultiOperatori(operatoriSelezionati, data) {
     document.getElementById('statContatori').textContent = tuttiContatori.length;
     document.getElementById('statAppuntamenti').textContent = tuttiContatori.filter(c => c.is_appuntamento).length;
     aggiornaConteggioFiltroAppuntamenti();
+    updateSingleMarkerControlsVisibility();
 }
 
 function renderPercorsoTuttiOperatoriSidebar(percorsiPerOperatore, data) {
@@ -4379,7 +4555,7 @@ function renderPercorsoTuttiOperatoriMappa(percorsiPerOperatore, data) {
                     ? { lat: deposito.lat, lon: deposito.lon, isDeposito: true, num: 0 }
                     : { lat: lista[idx-1].lat, lon: lista[idx-1].lon, isDeposito: false, num: idx };
                 
-                const timeBadgeHtml = (isApp && filterAppuntamentiOnly) ? createOrarioBadgeHtml(c) : '';
+                const timeBadgeHtml = createOrarioBadgeHtml(c);
                 const icon = L.divIcon({
                     className: 'marker-contatore' + (isApp ? ' marker-appuntamento' : ''),
                     html: `<div style="background: ${colore}; width: 100%; height: 100%; border-radius: 50%; display: flex; align-items: center; justify-content: center; position: relative;">
@@ -4394,10 +4570,6 @@ function renderPercorsoTuttiOperatoriMappa(percorsiPerOperatore, data) {
                 const marker = L.marker([c.lat, c.lon], { icon })
                     .bindPopup(() => createContatorePopup(c, c.indiceTecnico + 1, colore, prevPoint), { offset: [0, -14] })
                     .addTo(map);
-                
-                if (isApp) {
-                    abilitaHoverPopup(marker);
-                }
                 
                 marker.contatore = c;
                 marker.numeroTappa = c.indiceTecnico + 1;
@@ -4459,6 +4631,7 @@ function renderPercorsoTuttiOperatoriMappa(percorsiPerOperatore, data) {
         const bounds = L.latLngBounds(allPoints);
         map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
     }
+    scheduleDeclutterOrariBadges();
 }
 
 function mostraPercorsoCompletoOperatore(operatore, data) {
@@ -4511,6 +4684,7 @@ function mostraPercorsoCompletoOperatore(operatore, data) {
     document.getElementById('statContatori').textContent = percorsoOrdinato.length;
     document.getElementById('statAppuntamenti').textContent = percorsoOrdinato.filter(c => c.is_appuntamento).length;
     aggiornaConteggioFiltroAppuntamenti();
+    updateSingleMarkerControlsVisibility();
 }
 
 function mostraPercorsoOperatoreConRicerca(operatore, data, searchQuery) {
@@ -4578,6 +4752,8 @@ function mostraPercorsoOperatoreConRicerca(operatore, data, searchQuery) {
     document.getElementById('statZone').textContent = new Set(percorsoOrdinato.map(c => c.comune)).size;
     document.getElementById('statContatori').textContent = percorsoOrdinato.length;
     document.getElementById('statAppuntamenti').textContent = percorsoOrdinato.filter(c => c.is_appuntamento).length;
+    aggiornaConteggioFiltroAppuntamenti();
+    updateSingleMarkerControlsVisibility();
 }
 
 function renderPercorsoOperatoreSidebar(lista, data, operatore) {
@@ -4852,7 +5028,7 @@ function renderPercorsoOperatoreMappa(lista, data, operatore) {
                     ? { lat: deposito.lat, lon: deposito.lon, isDeposito: true, num: 0 }
                     : { lat: listaDaUsare[idx-1].lat, lon: listaDaUsare[idx-1].lon, isDeposito: false, num: idx });
             
-            const timeBadgeHtml = (isApp && filterAppuntamentiOnly) ? createOrarioBadgeHtml(c) : '';
+            const timeBadgeHtml = createOrarioBadgeHtml(c);
             const icon = L.divIcon({
                 className: 'marker-contatore' + (isApp ? ' marker-appuntamento' : ''),
                 html: `<div style="background: ${colore}; width: 100%; height: 100%; border-radius: 50%; display: flex; align-items: center; justify-content: center; position: relative;">
@@ -4868,10 +5044,6 @@ function renderPercorsoOperatoreMappa(lista, data, operatore) {
                 .bindPopup(() => createContatorePopup(c, c.indiceTecnico + 1, colore, prevPoint), { offset: [0, -14] })
                 .addTo(map);
 
-            if (isApp) {
-                abilitaHoverPopup(marker);
-            }
-            
             marker.contatore = c;
             marker.numeroTappa = c.indiceTecnico + 1;
             marker.coloreTecnico = colore;
@@ -4937,6 +5109,7 @@ function renderPercorsoOperatoreMappa(lista, data, operatore) {
         const bounds = L.latLngBounds(allPoints);
         map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
     }
+    scheduleDeclutterOrariBadges();
 }
 
 // ============================================================
@@ -5061,6 +5234,7 @@ function mostraVistaZone(searchQuery = '') {
         document.getElementById('statZone').textContent = zoneFiltrate.length;
         document.getElementById('statContatori').textContent = totSched;
         document.getElementById('statAppuntamenti').textContent = 0;
+        updateSingleMarkerControlsVisibility();
         return;
     }
 
@@ -5083,6 +5257,7 @@ function mostraVistaZone(searchQuery = '') {
     document.getElementById('statAppuntamenti').textContent = zoneFiltrate.reduce((s, z) =>
         s + z.date.reduce((s2, d) => s2 + d.appuntamenti, 0), 0);
     aggiornaConteggioFiltroAppuntamenti();
+    updateSingleMarkerControlsVisibility();
 }
 
 function renderZoneSidebar(zoneFiltrate) {
@@ -5347,6 +5522,7 @@ function mostraRisultatiRicercaAvanzata(contatoriTrovati, query) {
     document.getElementById('statZone').textContent = Object.keys(perTecnico).length;
     document.getElementById('statContatori').textContent = totContatori;
     document.getElementById('statAppuntamenti').textContent = totApp;
+    updateSingleMarkerControlsVisibility();
 }
 
 function renderRisultatiRicercaMappa(contatoriTrovati) {
@@ -5572,6 +5748,7 @@ function mostraVistaComuni(searchQuery = '') {
     document.getElementById('statAppuntamenti').textContent = comuniList.reduce((s, c) =>
         s + c.date.reduce((s2, d) => s2 + d.appuntamenti, 0), 0);
     aggiornaConteggioFiltroAppuntamenti();
+    updateSingleMarkerControlsVisibility();
 }
 
 function renderComuniSidebar(comuniList) {
@@ -5841,6 +6018,7 @@ function apriDettaglioComune(comuneNome, data) {
     // Abilita navigazione date
     updateDateNavigation();
     aggiornaConteggioFiltroAppuntamenti();
+    updateSingleMarkerControlsVisibility();
 }
 
 // ============================================================
@@ -5925,6 +6103,7 @@ function apriDettaglio(zonaNome, data) {
     // Abilita navigazione date
     updateDateNavigation();
     aggiornaConteggioFiltroAppuntamenti();
+    updateSingleMarkerControlsVisibility();
 }
 
 function apriDettaglioConRicerca(zonaNome, data, searchQuery) {
@@ -5992,6 +6171,7 @@ function apriDettaglioConRicerca(zonaNome, data, searchQuery) {
     document.getElementById('statContatori').textContent = totContatori;
     document.getElementById('statAppuntamenti').textContent = totApp;
     aggiornaConteggioFiltroAppuntamenti();
+    updateSingleMarkerControlsVisibility();
 }
 
 // ================================================================
@@ -6088,18 +6268,24 @@ function _renderSortToggleHTML() {
     const isPercorso = mode !== 'orario';
     const isOrario = mode === 'orario';
     return `
-        <div class="sort-mode-toggle" title="Ordina la lista: percorso ottimizzato o per orario crescente"
-             onclick="event.stopPropagation();">
-            <button class="sort-mode-btn ${isPercorso ? 'active' : ''}"
-                    onclick="if(getPercorsoSortMode()==='orario') togglePercorsoSortMode();"
-                    title="Ordine ottimizzato (OSRM)">
-                🧭 Percorso
-            </button>
-            <button class="sort-mode-btn ${isOrario ? 'active' : ''}"
-                    onclick="if(getPercorsoSortMode()!=='orario') togglePercorsoSortMode();"
-                    title="Ordine per orario crescente (appuntamenti + lettere)">
-                🕒 Orario
-            </button>
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <label class="sort-header-badge-toggle" title="Mostra i badge orari per tutte le tappe sulla mappa">
+                <input type="checkbox" id="sidebarSortOrariBadges" ${showOrariBadges ? 'checked' : ''} onchange="onToggleOrariBadges(this.checked)">
+                <span>🕒 Orari</span>
+            </label>
+            <div class="sort-mode-toggle" title="Ordina la lista: percorso ottimizzato o per orario crescente"
+                 onclick="event.stopPropagation();">
+                <button class="sort-mode-btn ${isPercorso ? 'active' : ''}"
+                        onclick="if(getPercorsoSortMode()==='orario') togglePercorsoSortMode();"
+                        title="Ordine ottimizzato (OSRM)">
+                    🧭 Percorso
+                </button>
+                <button class="sort-mode-btn ${isOrario ? 'active' : ''}"
+                        onclick="if(getPercorsoSortMode()!=='orario') togglePercorsoSortMode();"
+                        title="Ordine per orario crescente (appuntamenti + lettere)">
+                    🕒 Orario
+                </button>
+            </div>
         </div>
     `;
 }
@@ -6350,7 +6536,7 @@ function renderDettaglioMappa(perTecnico, data) {
                 return; // skip to next gruppo
             }
             // Marker non-schedulabile
-            const timeBadgeHtml = (isApp && filterAppuntamentiOnly) ? createOrarioBadgeHtml(c) : '';
+            const timeBadgeHtml = createOrarioBadgeHtml(c);
             icon = L.divIcon({
                 className: 'marker-contatore' + (isApp ? ' marker-appuntamento' : ''),
                 html: `<div style="background: ${colore}; width: 100%; height: 100%; border-radius: 50%; display: flex; align-items: center; justify-content: center; position: relative;">
@@ -6365,10 +6551,6 @@ function renderDettaglioMappa(perTecnico, data) {
             const marker = L.marker([c.lat, c.lon], { icon })
                 .bindPopup(() => createContatorePopup(c, c.indiceTecnico + 1, colore), { offset: [0, -14] })
                 .addTo(map);
-
-            if (isApp) {
-                abilitaHoverPopup(marker);
-            }
 
             marker.contatore = c;
             marker.numeroTappa = c.indiceTecnico + 1;
@@ -6400,6 +6582,7 @@ function renderDettaglioMappa(perTecnico, data) {
     if (mostraRotteAttivo) {
         disegnaRotte();
     }
+    scheduleDeclutterOrariBadges();
 }
 
 // Calcola distanza in km tra due punti (Haversine)
@@ -6658,9 +6841,10 @@ function mostraRisultatiRicerca(contatoriMatch) {
         } else {
             // Marker singolo
             const c = primoContatore;
+            const timeBadgeHtml = createOrarioBadgeHtml(c);
             const icon = L.divIcon({
                 className: 'marker-contatore' + (c.is_appuntamento ? ' marker-appuntamento' : ''),
-                html: `<div style="background: #e94560; width: 100%; height: 100%; border-radius: 50%; display: flex; align-items: center; justify-content: center;">${c.indiceTecnico + 1}</div>`,
+                html: `<div style="background: #e94560; width: 100%; height: 100%; border-radius: 50%; display: flex; align-items: center; justify-content: center; position: relative;">${c.indiceTecnico + 1}${timeBadgeHtml}</div>`,
                 iconSize: [24, 24],
                 iconAnchor: [12, 12]
             });
@@ -6677,6 +6861,8 @@ function mostraRisultatiRicerca(contatoriMatch) {
         }
     });
     
+    lastSearchMatchContatori = contatoriMatch;
+
     if (contatoriMatch.length > 0) {
         const bounds = L.latLngBounds(contatoriMatch.map(c => [c.lat, c.lon]));
         map.fitBounds(bounds, { padding: [50, 50] });
@@ -6685,6 +6871,8 @@ function mostraRisultatiRicerca(contatoriMatch) {
     document.getElementById('statZone').textContent = '-';
     document.getElementById('statContatori').textContent = contatoriMatch.length;
     document.getElementById('statAppuntamenti').textContent = contatoriMatch.filter(c => c.is_appuntamento).length;
+    updateSingleMarkerControlsVisibility();
+    scheduleDeclutterOrariBadges();
 }
 
 function vaiAContatore(lat, lon, id) {
@@ -10238,6 +10426,7 @@ let _planCardsBatchTimer = null;
 function enterPlanningMode(opts) {
     planningMode = true;
     document.getElementById('sidebar').classList.add('planning-mode');
+    updateSingleMarkerControlsVisibility();
     // Pulisci la mappa dai marker/rotte della vista precedente (date, zone, ecc.)
     clearMap();
     // Reset filters
@@ -11279,6 +11468,7 @@ if (!hasUrlQuery) {
     mostraVistaZone();
 }
 updatePrintButtonVisibility();
+updateSingleMarkerControlsVisibility();
 
 // Prova a caricare dati via fetch in background (se non file://)
 // Se riesce e i dati sono diversi, aggiorna la vista

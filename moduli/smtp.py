@@ -95,6 +95,16 @@ def load_smtp_settings(prov=None):
     return {}
 
 
+def get_safe_smtp_settings(prov=None):
+    """Carica le impostazioni SMTP censurando la password per la visualizzazione API/UI."""
+    prov_norm = (prov or PROVINCIA_ATTIVA).lower()
+    settings = dict(load_smtp_settings(prov_norm) or {})
+    settings['password_set'] = bool(settings.get('password'))
+    settings['password'] = ''
+    settings['provincia'] = prov_norm.upper()
+    return settings
+
+
 def save_smtp_settings(data, prov=None):
     """Salva le impostazioni SMTP per la provincia specificata (o PROVINCIA_ATTIVA)."""
     prov = (prov or PROVINCIA_ATTIVA).lower()

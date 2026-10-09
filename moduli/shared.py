@@ -557,12 +557,6 @@ def _route_to_db_primary(items, *, anchor_col=None, anchor_normalize='upper'):
             n_written -= len(fields)
             n_skipped += len(fields)
 
-    # Risveglia il drainer per scrivere su Sheets ~ASAP
-    try:
-        from . import sync_engine as _se
-        _se.trigger_drain_now()
-    except Exception:
-        pass
 
     # Forza il prossimo sync_loop a riprocessare il DataFrame e rigenerare
     # mappa_data.json. Necessario perché c'è una race fra drainer e sync_loop:
@@ -958,12 +952,6 @@ def _imposta_appuntamento_db_primary(row, orario, nota_app, *, data_app='',
         lcl=lcl,
     )
 
-    # Risveglia drainer
-    try:
-        from . import sync_engine as _se
-        _se.trigger_drain_now()
-    except Exception:
-        pass
 
     # Auto-crea promemoria boxbeat (riusa logica esistente)
     try:
@@ -1032,11 +1020,6 @@ def _rimuovi_appuntamento_db_primary(row, *, nota_corrente=None, lcl=None):
         lcl=lcl,
     )
 
-    try:
-        from . import sync_engine as _se
-        _se.trigger_drain_now()
-    except Exception:
-        pass
 
     _callbacks['trigger_sync_after_edit']()
     return {'nuova_nota': nuova_nota}

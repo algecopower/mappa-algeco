@@ -848,10 +848,16 @@ def sse_stream():
 
 
 # ============================================================================
-# GOOGLE SHEETS + HELPER  fonte unica: moduli/shared.py
+# HELPER & SERVIZI  (SMTP, SMS, shared)
 # ============================================================================
-from moduli.smtp import load_smtp_settings, save_smtp_settings, test_smtp_connection, test_send_email
-from moduli.sms_gateway import load_sms_settings, save_sms_settings, test_sms_gateway
+from moduli.smtp import (
+    load_smtp_settings, save_smtp_settings, test_smtp_connection, test_send_email,
+    get_safe_smtp_settings,
+)
+from moduli.sms_gateway import (
+    load_sms_settings, save_sms_settings, test_sms_gateway,
+    get_safe_sms_settings,
+)
 from moduli.shared import (
     get_worksheet, get_headers,
     _api_error,
@@ -1423,13 +1429,7 @@ def update_admin_lcls():
 @admin_required
 def admin_get_smtp_settings():
     try:
-        settings = load_smtp_settings(PROVINCIA_ATTIVA)
-        if settings.get('password'):
-            settings['password_set'] = True
-            settings['password'] = ''
-        else:
-            settings['password_set'] = False
-        return jsonify(settings)
+        return jsonify(get_safe_smtp_settings(PROVINCIA_ATTIVA))
     except Exception as e:
         logger.exception('[admin] errore /api/admin/smtp-settings GET')
         return jsonify({'error': str(e)}), 500
@@ -1495,11 +1495,7 @@ def admin_test_smtp_email():
 @login_required
 def api_get_smtp_settings():
     try:
-        settings = dict(load_smtp_settings(PROVINCIA_ATTIVA) or {})
-        settings['password_set'] = bool(settings.get('password'))
-        settings['password'] = ''
-        settings['provincia'] = PROVINCIA_ATTIVA
-        return jsonify(settings)
+        return jsonify(get_safe_smtp_settings(PROVINCIA_ATTIVA))
     except Exception as e:
         logger.exception('errore /api/smtp-settings GET')
         return jsonify({'error': str(e)}), 500
@@ -1556,18 +1552,7 @@ def api_test_smtp_email():
 @admin_required
 def admin_get_sms_settings():
     try:
-        settings = load_sms_settings(PROVINCIA_ATTIVA)
-        if settings.get('password'):
-            settings['password_set'] = True
-            settings['password'] = ''
-        else:
-            settings['password_set'] = False
-        if settings.get('api_key'):
-            settings['api_key_set'] = True
-            settings['api_key'] = ''
-        else:
-            settings['api_key_set'] = False
-        return jsonify(settings)
+        return jsonify(get_safe_sms_settings(PROVINCIA_ATTIVA))
     except Exception as e:
         logger.exception('[admin] errore /api/admin/sms-settings GET')
         return jsonify({'error': str(e)}), 500
@@ -1931,10 +1916,8 @@ def api_admin_db_action():
         action = (body.get('action') or '').strip()
 
         if action == 'drain':
-            from moduli import sync_engine as _se
-            _se.trigger_drain_now()
             return jsonify({'success': True, 'action': action,
-                            'message': 'Drainer risvegliato; controlla i log nei prossimi 30s.'})
+                            'message': 'Google Sheets è disconnesso (21/05/2026). I dati risiedono nel DB locale.'})
 
         if action == 'sync':
             # Risveglia il sync_loop completo

@@ -130,6 +130,26 @@ def load_sms_settings(prov: str | None = None) -> dict[str, Any]:
     return defaults
 
 
+def get_safe_sms_settings(prov: str | None = None) -> dict[str, Any]:
+    """Restituisce le impostazioni SMS censurando password e chiavi segrete per l'esposizione API."""
+    settings = load_sms_settings(prov)
+    return {
+        'ok': True,
+        'enabled': bool(settings.get('enabled')),
+        'configured': bool(settings.get('endpoint_url')),
+        'provider': settings.get('provider', 'android_sms_gateway'),
+        'endpoint_url': settings.get('endpoint_url', ''),
+        'auth_type': settings.get('auth_type', 'none'),
+        'username': settings.get('username', ''),
+        'password_set': bool(settings.get('password')),
+        'api_key_set': bool(settings.get('api_key')),
+        'header_name': settings.get('header_name', 'X-API-Key'),
+        'rate_limit_delay': int(settings.get('rate_limit_delay', 4)),
+        'rate_limit_delay_seconds': int(settings.get('rate_limit_delay_seconds', settings.get('rate_limit_delay', 4))),
+        'timeout_seconds': int(settings.get('timeout_seconds', 15)),
+    }
+
+
 def save_sms_settings(data: dict[str, Any], prov: str | None = None) -> bool:
     """
     Salva le impostazioni del Gateway SMS nel file globale e/o per-provincia.

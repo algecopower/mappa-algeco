@@ -31,12 +31,14 @@ from moduli.shared import (
 from moduli.smtp import (
     load_smtp_settings,
     save_smtp_settings,
+    get_safe_smtp_settings,
     test_smtp_connection as core_test_smtp,
     test_send_email as core_test_send_email,
 )
 from moduli.sms_gateway import (
     load_sms_settings,
     save_sms_settings,
+    get_safe_sms_settings,
     send_sms,
     test_sms_gateway,
 )
@@ -420,12 +422,7 @@ def api_upload_allegato():
 def api_distinte_get_smtp_settings():
     """Restituisce le impostazioni SMTP per la provincia corrente."""
     try:
-        settings = dict(load_smtp_settings(PROVINCIA_ATTIVA) or {})
-        has_pwd = bool(settings.get('password'))
-        settings['password_set'] = has_pwd
-        settings['password'] = ''
-        settings['provincia'] = PROVINCIA_ATTIVA
-        return jsonify(settings)
+        return jsonify(get_safe_smtp_settings(PROVINCIA_ATTIVA))
     except Exception as e:
         logger.exception("[distinte] Errore lettura smtp-settings")
         return jsonify({'error': str(e)}), 500
@@ -527,23 +524,7 @@ def invia_singola_email():
 def api_distinte_sms_settings():
     """Restituisce la configurazione completa del gateway SMS per la provincia corrente."""
     try:
-        settings = load_sms_settings(PROVINCIA_ATTIVA)
-        has_pwd = bool(settings.get('password'))
-        has_key = bool(settings.get('api_key'))
-        return jsonify({
-            'ok': True,
-            'enabled': bool(settings.get('enabled')),
-            'configured': bool(settings.get('endpoint_url')),
-            'provider': settings.get('provider', 'android_sms_gateway'),
-            'endpoint_url': settings.get('endpoint_url', ''),
-            'auth_type': settings.get('auth_type', 'none'),
-            'username': settings.get('username', ''),
-            'password_set': has_pwd,
-            'api_key_set': has_key,
-            'header_name': settings.get('header_name', 'X-API-Key'),
-            'rate_limit_delay': int(settings.get('rate_limit_delay', 4)),
-            'timeout_seconds': int(settings.get('timeout_seconds', 15)),
-        })
+        return jsonify(get_safe_sms_settings(PROVINCIA_ATTIVA))
     except Exception as e:
         logger.error(f"[SMS] Errore lettura config distinte: {e}")
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -1088,11 +1069,6 @@ def salva_nota_distinte():
                     ''',
                     (nuova_nota, pod),
                 )
-        try:
-            from moduli import sync_engine as _se
-            _se.trigger_drain_now()
-        except Exception:
-            pass
         return jsonify({'success': True, 'nota': nuova_nota})
 
     except Exception as e:

@@ -1927,11 +1927,16 @@ async function saveTemplateFromModal() {
     }
 
     try {
-        await fetch('/api/mail/templates', {
+        const res = await fetch('/api/mail/templates', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
             body: JSON.stringify({ id: id || undefined, title: title, type: type, subject: subject, body: body })
         });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+            alert("Errore salvataggio template: " + (data.error || res.statusText));
+            return;
+        }
         resetTplForm();
         await loadTemplates();
         renderTemplatesManageList(type === 'template' ? 'templates' : 'snippets');

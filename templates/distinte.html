@@ -5861,6 +5861,7 @@ Rispondi con un JSON array in questo formato esatto:
         
         function execRteCmd(command, value = null) {
             document.execCommand(command, false, value);
+            updateEditorData();
         }
 
         function buildRteToolbar() {
@@ -5882,6 +5883,7 @@ Rispondi con un JSON array in questo formato esatto:
         let editorTemplates = null;
         let editorFields = null;
         let editorSettings = null;
+        let editorSnippets = null;
         let editorCurrentKey = null;
 
         async function openTemplateEditor() {
@@ -5892,6 +5894,7 @@ Rispondi con un JSON array in questo formato esatto:
 
                 editorSettings = data.settings || {};
                 editorFields = data.fields || {};
+                editorSnippets = data.snippets || {};
                 
                 // Manteniamo l'ordine parseando direttamente
                 editorTemplates = JSON.parse(JSON.stringify(data.templates || {}));
@@ -5913,7 +5916,7 @@ Rispondi con un JSON array in questo formato esatto:
             const listEl = document.getElementById('editorList');
             listEl.innerHTML = '';
             
-            const keys = Object.keys(editorTemplates);
+            const keys = Object.keys(editorTemplates || {});
             keys.forEach((key, index) => {
                 const t = editorTemplates[key];
                 
@@ -5924,6 +5927,7 @@ Rispondi con un JSON array in questo formato esatto:
                 titleSpan.className = 'item-title';
                 titleSpan.innerHTML = `<i class="${t.icon || 'fas fa-comment'}"></i> ${escapeHtml(t.label || key)}`;
                 titleSpan.onclick = () => {
+                    updateEditorData();
                     editorCurrentKey = key;
                     renderEditorList();
                     renderEditorForm();
@@ -6086,7 +6090,7 @@ Rispondi con un JSON array in questo formato esatto:
                     <label>Corpo del Messaggio</label>
                     <div class="rte-container">
                         ${buildRteToolbar()}
-                        <div class="rte-editor" id="ed_body" contenteditable="true" data-placeholder="Scrivi qui il messaggio..." oninput="updateEditorData()">${(t.body || '').replace(/\n/g, '<br>')}</div>
+                        <div class="rte-editor" id="ed_body" contenteditable="true" data-placeholder="Scrivi qui il messaggio..." oninput="updateEditorData()" onblur="updateEditorData()" ondrop="setTimeout(updateEditorData, 50)">${(t.body || '').replace(/\n/g, '<br>')}</div>
                     </div>
                     <small style="color:var(--text-muted)">Puoi inserire le variabili abilitate trascinandole (Drag & Drop) direttamente nel testo, oppure scrivendole tra parentesi graffe, es: {nome}</small>
                 </div>
@@ -6096,12 +6100,15 @@ Rispondi con un JSON array in questo formato esatto:
         }
 
         function updateEditorData() {
-            if (!editorCurrentKey || !editorTemplates[editorCurrentKey]) return;
+            if (!editorCurrentKey || !editorTemplates || !editorTemplates[editorCurrentKey]) return;
             const t = editorTemplates[editorCurrentKey];
             
-            t.label = document.getElementById('ed_label').value;
-            t.type = document.getElementById('ed_type').value;
-            t.icon = document.getElementById('ed_icon').value;
+            const labelEl = document.getElementById('ed_label');
+            if (labelEl) t.label = labelEl.value;
+            const typeEl = document.getElementById('ed_type');
+            if (typeEl) t.type = typeEl.value;
+            const iconEl = document.getElementById('ed_icon');
+            if (iconEl) t.icon = iconEl.value;
             
             if (t.type === 'email') {
                 const subj = document.getElementById('ed_subject');
@@ -6110,25 +6117,31 @@ Rispondi con un JSON array in questo formato esatto:
                 delete t.subject;
             }
             
-            const rawBody = document.getElementById('ed_body').innerHTML;
-            if (t.type === 'whatsapp' || t.type === 'sms' || String(editorCurrentKey).startsWith('wa_')) {
-                t.body = htmlToPlainText(rawBody);
-            } else {
-                t.body = rawBody;
+            const bodyEl = document.getElementById('ed_body');
+            if (bodyEl) {
+                const rawBody = bodyEl.innerHTML;
+                if (t.type === 'whatsapp' || t.type === 'sms' || String(editorCurrentKey).startsWith('wa_')) {
+                    t.body = htmlToPlainText(rawBody);
+                } else {
+                    t.body = rawBody;
+                }
             }
             
             const checkboxes = document.querySelectorAll('#editorContent .editor-checkbox-item input[type="checkbox"]');
-            const selectedFields = [];
-            checkboxes.forEach(cb => {
-                if (cb.checked) selectedFields.push(cb.value);
-            });
-            t.fields = selectedFields;
+            if (checkboxes.length > 0) {
+                const selectedFields = [];
+                checkboxes.forEach(cb => {
+                    if (cb.checked) selectedFields.push(cb.value);
+                });
+                t.fields = selectedFields;
+            }
             
             renderEditorList(); // solo per aggiornare la testata nella lista se cambia l'icona o l'etichetta
         }
 
         async function saveTemplatesToBackend() {
             try {
+                updateEditorData();
                 const btn = document.querySelector('#templateEditorModal .modal-footer .btn-primary');
                 btn.disabled = true;
                 btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvataggio...';
@@ -6136,7 +6149,8 @@ Rispondi con un JSON array in questo formato esatto:
                 const finalData = {
                     settings: editorSettings,
                     fields: editorFields,
-                    templates: editorTemplates
+                    templates: editorTemplates,
+                    snippets: editorSnippets || {}
                 };
                 
                 const resp = await fetch('/api/distinte/templates', {
@@ -6153,6 +6167,9 @@ Rispondi con un JSON array in questo formato esatto:
                 
                 // Ricarica templates lato client
                 await caricaTemplates();
+                if (window.MessageTemplateModal && typeof window.MessageTemplateModal.reloadTemplates === 'function') {
+                    await window.MessageTemplateModal.reloadTemplates();
+                }
                 // Ridisegna preview se un contatto e' aperto
                 if (typeof currentTemplatePod !== "undefined" && currentTemplatePod) {
                    showMessage(currentTemplatePod);

@@ -241,7 +241,7 @@ function switchEditorMode(mode) {
     const htmlEditor = document.getElementById('htmlEditor');
 
     const currentItem = AppState.items.find(i => String(i.id) === String(AppState.selectedId) || String(i.key) === String(AppState.selectedId));
-    const isWaOrSnippet = currentItem && (currentItem.category === 'whatsapp' || String(currentItem.key).startsWith('wa_') || currentItem.type === 'snippet');
+    const isWaOrSnippet = (currentItem && (currentItem.category === 'whatsapp' || String(currentItem.key).startsWith('wa_') || currentItem.type === 'snippet')) || (document.getElementById('templateType')?.value === 'snippet');
 
     if (mode === 'visual') {
         // Passa da HTML a Visuale
@@ -339,11 +339,10 @@ function insertAtCursorInput(input, text) {
 async function saveTemplate() {
     const id = document.getElementById('currentId').value;
     const currentItem = AppState.items.find(i => String(i.id) === String(id) || String(i.key) === String(id));
-    const isWaOrSnippet = (currentItem && (currentItem.category === 'whatsapp' || String(currentItem.key).startsWith('wa_') || currentItem.type === 'snippet')) || type === 'snippet';
-
     const title = document.getElementById('templateTitle').value.trim();
     const type = document.getElementById('templateType').value;
     const subject = document.getElementById('templateSubject').value.trim();
+    const isWaOrSnippet = (currentItem && (currentItem.category === 'whatsapp' || String(currentItem.key).startsWith('wa_') || currentItem.type === 'snippet')) || type === 'snippet';
     
     // Recupera il corpo sincronizzato
     let body = '';
@@ -373,7 +372,7 @@ async function saveTemplate() {
             id: id || undefined,
             title: title,
             type: type,
-            category: currentItem ? currentItem.category : undefined,
+            category: currentItem ? currentItem.category : (type === 'snippet' ? 'frasario' : 'generale'),
             subject: subject,
             body: body
         };

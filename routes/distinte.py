@@ -81,21 +81,35 @@ _ALLEGATI_DIR = os.path.join(_ROOT_DIR, 'data', 'allegati')
 
 
 def _load_templates_data():
-    """Carica i template: prima cerca data/{provincia}/distinte_templates.json, fallback su default."""
+    """Carica i template: base da data/distinte_templates.json unita con override data/{provincia}/distinte_templates.json."""
+    default_file = os.path.join(_ROOT_DIR, 'data', 'distinte_templates.json')
+    base_data = json_read(default_file, default=None) or {}
     prov_file = os.path.join(_ROOT_DIR, 'data', PROVINCIA_ATTIVA.lower(), 'distinte_templates.json')
     if os.path.exists(prov_file):
-        d = json_read(prov_file, default=None)
-        if d:
-            return d
-    default_file = os.path.join(_ROOT_DIR, 'data', 'distinte_templates.json')
-    return json_read(default_file, default=None)
+        prov_data = json_read(prov_file, default=None) or {}
+        merged = dict(base_data)
+        merged.update(prov_data)
+        for subkey in ('templates', 'snippets'):
+            if subkey in base_data or subkey in prov_data:
+                m_sub = dict(base_data.get(subkey, {}))
+                m_sub.update(prov_data.get(subkey, {}))
+                merged[subkey] = m_sub
+        return merged
+    return base_data
 
 
 def _save_templates_data(data):
     """Salva i template modificati nella cartella della provincia attiva."""
     prov_file = os.path.join(_ROOT_DIR, 'data', PROVINCIA_ATTIVA.lower(), 'distinte_templates.json')
     os.makedirs(os.path.dirname(prov_file), exist_ok=True)
-    return json_write(prov_file, data, indent=4)
+    existing = _load_templates_data() or {}
+    merged = dict(existing)
+    merged.update(data)
+    for key in ('settings', 'fields', 'templates', 'snippets'):
+        if key in data and isinstance(data[key], dict):
+            merged[key] = dict(existing.get(key, {}))
+            merged[key].update(data[key])
+    return json_write(prov_file, merged, indent=4)
 
 
 # Mappa allegati di default per provincia

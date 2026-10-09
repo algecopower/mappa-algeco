@@ -1574,9 +1574,24 @@ def list_templates_and_snippets(prov=None):
         items.append(d)
         
     try:
+        base_file = os.path.join(_ROOT_DIR, 'data', 'distinte_templates.json')
+        base_data = json_read(base_file, default={}) or {}
+        
         prov_tpl_file = os.path.join(_ROOT_DIR, 'data', p, 'distinte_templates.json')
-        tpl_path = prov_tpl_file if os.path.exists(prov_tpl_file) else os.path.join(_ROOT_DIR, 'data', 'distinte_templates.json')
-        data = json_read(tpl_path, default={})
+        if os.path.exists(prov_tpl_file):
+            prov_data = json_read(prov_tpl_file, default={}) or {}
+            merged_templates = dict(base_data.get('templates', {}))
+            merged_templates.update(prov_data.get('templates', {}))
+            merged_snippets = dict(base_data.get('snippets', {}))
+            merged_snippets.update(prov_data.get('snippets', {}))
+            data = {
+                'templates': merged_templates,
+                'snippets': merged_snippets,
+                'settings': prov_data.get('settings') or base_data.get('settings', {}),
+                'fields': prov_data.get('fields') or base_data.get('fields', {})
+            }
+        else:
+            data = base_data
         
         # 1. Carica templates completi
         for k, v in data.get('templates', {}).items():
@@ -1601,7 +1616,7 @@ def list_templates_and_snippets(prov=None):
         # 2. Carica frasario / snippets
         for k, v in data.get('snippets', {}).items():
             title = v.get('title') or k.replace('_', ' ').title()
-            if not any(i['title'] == title for i in items):
+            if not any(i['title'] == title or i.get('key') == k for i in items):
                 items.append({
                     'id': f"snip_{k}",
                     'key': k,
@@ -1657,13 +1672,14 @@ def save_template_or_snippet(data, prov=None):
         prov_file = os.path.join(_ROOT_DIR, 'data', p, 'distinte_templates.json')
         base_file = os.path.join(_ROOT_DIR, 'data', 'distinte_templates.json')
         target_file = prov_file if os.path.exists(prov_file) else base_file
-        tpl_data = json_read(target_file, default={})
+        tpl_data = json_read(target_file, default={}) or {}
         if 'templates' not in tpl_data:
             tpl_data['templates'] = {}
         if k not in tpl_data['templates']:
-            tpl_data['templates'][k] = {}
+            base_data = json_read(base_file, default={}) or {}
+            tpl_data['templates'][k] = dict(base_data.get('templates', {}).get(k, {}))
         tpl_data['templates'][k]['label'] = title
-        if subject:
+        if subject is not None and item_type == 'template':
             tpl_data['templates'][k]['subject'] = subject
         # Se è template WhatsApp, garantisci che non contenga tag HTML
         if k.startswith('wa_') or tpl_data['templates'][k].get('type') == 'whatsapp':
@@ -1681,11 +1697,12 @@ def save_template_or_snippet(data, prov=None):
         prov_file = os.path.join(_ROOT_DIR, 'data', p, 'distinte_templates.json')
         base_file = os.path.join(_ROOT_DIR, 'data', 'distinte_templates.json')
         target_file = prov_file if os.path.exists(prov_file) else base_file
-        tpl_data = json_read(target_file, default={})
+        tpl_data = json_read(target_file, default={}) or {}
         if 'snippets' not in tpl_data:
             tpl_data['snippets'] = {}
         if k not in tpl_data['snippets']:
-            tpl_data['snippets'][k] = {}
+            base_data = json_read(base_file, default={}) or {}
+            tpl_data['snippets'][k] = dict(base_data.get('snippets', {}).get(k, {}))
         tpl_data['snippets'][k]['title'] = title
         tpl_data['snippets'][k]['body'] = html_to_plain_text(body)
         os.makedirs(os.path.dirname(prov_file), exist_ok=True)

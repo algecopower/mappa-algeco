@@ -27,8 +27,8 @@ def templates_page():
 def api_templates_all():
     """Ritorna tutti i template, snippet, impostazioni e definizioni campi."""
     try:
-        items = mail_manager.list_templates_and_snippets()
-        settings = mail_manager.get_template_settings()
+        items = mail_manager.list_templates_and_snippets(prov=PROVINCIA_ATTIVA)
+        settings = mail_manager.get_template_settings(prov=PROVINCIA_ATTIVA)
         
         # Definizioni campi disponibili per l'inserimento
         fields = [
@@ -65,7 +65,7 @@ def api_templates_save():
     """Salva o aggiorna un template o uno snippet."""
     try:
         data = request.get_json() or {}
-        res = mail_manager.save_template_or_snippet(data)
+        res = mail_manager.save_template_or_snippet(data, prov=PROVINCIA_ATTIVA)
         return jsonify(res)
     except Exception as e:
         logger.exception("[TEMPLATES-API] Errore salvataggio template")
@@ -77,7 +77,7 @@ def api_templates_save():
 def api_templates_delete(item_id):
     """Elimina un template/snippet."""
     try:
-        mail_manager.delete_template_or_snippet(item_id)
+        mail_manager.delete_template_or_snippet(item_id, prov=PROVINCIA_ATTIVA)
         return jsonify({'success': True})
     except Exception as e:
         logger.exception("[TEMPLATES-API] Errore eliminazione template")
@@ -90,7 +90,7 @@ def api_templates_settings_save():
     """Salva le impostazioni della firma e recapiti."""
     try:
         data = request.get_json() or {}
-        res = mail_manager.save_template_settings(data)
+        res = mail_manager.save_template_settings(data, prov=PROVINCIA_ATTIVA)
         return jsonify(res)
     except Exception as e:
         logger.exception("[TEMPLATES-API] Errore salvataggio impostazioni template")

@@ -268,3 +268,89 @@ def test_all_templates_all_provinces_copy_and_newlines():
             assert 'Moncalieri.La' not in plain, f"Provincia {prov}, template {tid} ha frasi incollate!"
 
 
+def test_save_template_preserves_attributes_and_updates_correctly(tmp_path, monkeypatch):
+    """Verifica che salvando una modifica a un template di sistema, gli attributi base siano preservati."""
+    monkeypatch.setattr(mail_manager, '_ROOT_DIR', str(tmp_path))
+    os.makedirs(str(tmp_path / 'data' / 'torino'), exist_ok=True)
+    real_base = str(tmp_path / 'data' / 'distinte_templates.json')
+    json_write(real_base, {
+        'templates': {
+            'email_semplificata': {
+                'label': 'Email Semplificata',
+                'type': 'email',
+                'icon': 'fas fa-envelope',
+                'subject': 'Vecchio Oggetto',
+                'body': 'Vecchio Corpo',
+                'fields': ['nome', 'pod']
+            }
+        },
+        'snippets': {
+            'snip_test': {
+                'title': 'Snippet Test',
+                'body': 'Testo snippet base'
+            }
+        }
+    }, indent=4)
+
+    # Modifica solo subject e body
+    payload = {
+        'id': 'sys_email_semplificata',
+        'title': 'Email Semplificata Modificata',
+        'type': 'template',
+        'category': 'distinte',
+        'subject': 'Nuovo Oggetto Aggiornato',
+        'body': 'Nuovo Corpo Aggiornato'
+    }
+    res = mail_manager.save_template_or_snippet(payload, prov='torino')
+    assert res['success'] is True
+
+    # Ricarica
+    items = mail_manager.list_templates_and_snippets(prov='torino')
+    tpl = next((i for i in items if i['id'] == 'sys_email_semplificata'), None)
+    assert tpl is not None
+    assert tpl['title'] == 'Email Semplificata Modificata'
+    assert tpl['subject'] == 'Nuovo Oggetto Aggiornato'
+    assert tpl['body'] == 'Nuovo Corpo Aggiornato'
+    assert tpl['icon'] == 'fas fa-envelope'
+    assert tpl['type'] == 'template'
+
+
+def test_distinte_save_and_load_merges_snippets(tmp_path, monkeypatch):
+    """Verifica che salvando i template da distinte, snippets e fields base non vengano persi."""
+    from routes import distinte as dist_routes
+    monkeypatch.setattr(dist_routes, '_ROOT_DIR', str(tmp_path))
+    monkeypatch.setattr(dist_routes, 'PROVINCIA_ATTIVA', 'TORINO')
+
+    os.makedirs(str(tmp_path / 'data' / 'torino'), exist_ok=True)
+    real_base = str(tmp_path / 'data' / 'distinte_templates.json')
+    json_write(real_base, {
+        'templates': {
+            'email_test': {'label': 'Test', 'body': 'Corpo'}
+        },
+        'snippets': {
+            'orari_apertura': {'title': 'Orari Apertura', 'body': 'Orari'}
+        },
+        'fields': {
+            'nome': {'label': 'Nome'}
+        }
+    }, indent=4)
+
+    # Salvataggio tipico dal modal distinte (invia solo templates, fields, settings)
+    save_payload = {
+        'templates': {
+            'email_test': {'label': 'Test Modificato', 'body': 'Corpo Nuovo'}
+        },
+        'fields': {
+            'nome': {'label': 'Nome'}
+        }
+    }
+    dist_routes._save_templates_data(save_payload)
+
+    # Ricarica: snippets devono essere preservati!
+    loaded = dist_routes._load_templates_data()
+    assert 'snippets' in loaded
+    assert 'orari_apertura' in loaded['snippets']
+    assert loaded['templates']['email_test']['label'] == 'Test Modificato'
+
+
+

@@ -1117,7 +1117,11 @@ async function aggiungiNotaAzienda(id, testo) {
     document.querySelectorAll('.note-dropdown.show').forEach(d => d.classList.remove('show'));
     const a = aziende.find(x => Number(x.id) === Number(id));
     if (!a) return;
-    const existing = (a.note || '').trim();
+    const existing = (a.note || a.note_filone || a.note_appuntamento || '').trim();
+    if (existing && existing.includes(testo)) {
+        showToast('Nota già presente');
+        return;
+    }
     const nuovaNota = existing ? `${existing} // ${testo}` : testo;
     await salvaNotaAzienda(id, nuovaNota);
 }
@@ -1171,13 +1175,13 @@ function apriAziendaMessageModal(id) {
             onSmsSent: async (p) => {
                 const dataIntervento = c.data_pian_filone || c.data_lettera || c.data_intervento || '';
                 const notaInvio = `mandato SMS per ${dataIntervento}`;
-                await saveRisposta(a.id, undefined, notaInvio);
+                await aggiungiNotaAzienda(a.id, notaInvio);
             },
             onWaOpened: async (p) => {
-                await saveRisposta(a.id, undefined, 'mandato wa');
+                await aggiungiNotaAzienda(a.id, 'mandato wa');
             },
             onMailOpened: async (p) => {
-                await saveRisposta(a.id, undefined, 'mandata mail');
+                await aggiungiNotaAzienda(a.id, 'mandata mail');
             }
         });
     } else {
@@ -2048,8 +2052,8 @@ async function loadPrivati() {
 
         // Inizializza noteStates dai contatti
         for (const c of privati) {
-            if (c.pod && c.note_filone && !noteStatesPrivati[c.pod]) {
-                noteStatesPrivati[c.pod] = c.note_filone;
+            if (c.pod) {
+                noteStatesPrivati[c.pod] = c.note_filone || c.note || c.note_appuntamento || '';
             }
         }
 
@@ -2648,7 +2652,12 @@ async function aggiungiNotaPrivato(pod, testo) {
         erratiPrivati[pod] = true;
         localStorage.setItem('lettere_privati_errati', JSON.stringify(erratiPrivati));
     }
-    let current = noteStatesPrivati[pod] || (inputCard ? inputCard.value : (inputTable ? inputTable.value : ''));
+    const c = privati.find(x => x.pod === pod);
+    let current = (noteStatesPrivati[pod] || (c ? (c.note_filone || c.note || c.note_appuntamento || '') : '') || (inputCard ? inputCard.value : (inputTable ? inputTable.value : '')) || '').trim();
+    if (current && current.includes(testo)) {
+        showToast('Nota già presente');
+        return;
+    }
     let nuovaNota = current ? `${current} // ${testo}` : testo;
     if (inputCard) inputCard.value = nuovaNota;
     if (inputTable) inputTable.value = nuovaNota;
@@ -2674,7 +2683,13 @@ async function salvaNotaPrivato(pod, nota) {
         const res = await fetch('/api/lettere/salva-nota', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ pod, lcl: c ? (c.lcl || '') : '', nota: cleanNota, sovrascrivere: true })
+            body: JSON.stringify({
+                pod,
+                lcl: c ? (c.lcl || '') : '',
+                eneltel: c ? (c.eneltel || c.eneltel_filone || '') : '',
+                nota: cleanNota,
+                sovrascrivere: true
+            })
         });
         const data = await res.json();
         if (data.success) {
@@ -2892,13 +2907,13 @@ function apriPrivatiMessageModal(pod, telOverride, tipoOverride) {
             onSmsSent: async (p) => {
                 const dataIntervento = c.data_pian_filone || c.data_intervento || '';
                 const notaInvio = `mandato SMS per ${dataIntervento}`;
-                await salvaNotaPrivato(p, notaInvio);
+                await aggiungiNotaPrivato(p, notaInvio);
             },
             onWaOpened: async (p) => {
-                await salvaNotaPrivato(p, 'mandato wa');
+                await aggiungiNotaPrivato(p, 'mandato wa');
             },
             onMailOpened: async (p) => {
-                await salvaNotaPrivato(p, 'mandata mail');
+                await aggiungiNotaPrivato(p, 'mandata mail');
             }
         });
     } else {
@@ -3292,6 +3307,8 @@ async function inviaPrivatiSmsBulk() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     pod,
+                    lcl: c ? (c.lcl || '') : '',
+                    eneltel: c ? (c.eneltel || c.eneltel_filone || '') : '',
                     telefono: tel,
                     testo: msgText,
                     nome,
@@ -3306,12 +3323,20 @@ async function inviaPrivatiSmsBulk() {
                 if (logEl) {
                     logEl.innerHTML += `<div style="color:#10b981;padding:2px 0;"><i class="fas fa-check-circle"></i> <strong>[SMS]</strong> Inviato a <b>${esc(nome)}</b> (${esc(tel)}) — ${parts} SMS</div>`;
                 }
-                // Registra nota locale
+                // Registra nota locale preservando note esistenti
+                const existing = (c ? (c.note_filone || c.note || '') : '') || noteStatesPrivati[pod] || '';
                 const notaInvio = `mandato SMS per ${dataIntervento}`;
-                noteStatesPrivati[pod] = notaInvio;
-                if (c) c.note_filone = notaInvio;
+                const notaFinale = existing ? (existing.includes(notaInvio) ? existing : `${existing} // ${notaInvio}`) : notaInvio;
+                noteStatesPrivati[pod] = notaFinale;
+                if (c) {
+                    c.note_filone = notaFinale;
+                    c.note = notaFinale;
+                    c.note_appuntamento = notaFinale;
+                }
                 const noteInput = document.getElementById(`noteDisplay_privato_${pod}`);
-                if (noteInput) noteInput.value = notaInvio;
+                if (noteInput) noteInput.value = notaFinale;
+                const noteTable = document.getElementById(`noteTable_privato_${pod}`);
+                if (noteTable) noteTable.value = notaFinale;
             } else {
                 errori++;
                 if (logEl) {

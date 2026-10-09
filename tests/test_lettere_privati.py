@@ -557,6 +557,213 @@ def test_lettere_ignora_lcl_disabilitato_nel_fallback(tmp_path, db_isolato, monk
     assert c['note_filone'] == 'nota attiva'
 
 
+def test_azienda_note_sync_multi_meter(db_isolato, tmp_path):
+    """Verifica che una nota assegnata a un'azienda si sincronizzi su TUTTI i contatori dell'azienda nel filone."""
+    from moduli import lettere
+
+    conn = db_isolato.get_conn()
+    with conn:
+        db_isolato.upsert_filone_row(
+            conn,
+            eneltel_key='1001',
+            lcl='LCL1',
+            sheets_row=10,
+            typed_values={
+                'pod': 'IT001E11111111',
+                'nominativo': 'ACME SPA',
+                'comune': 'Torino',
+                'note_appuntamento': '',
+            },
+            extra_values={},
+            row_hash='h1',
+            source='bootstrap',
+        )
+        db_isolato.upsert_filone_row(
+            conn,
+            eneltel_key='1002',
+            lcl='LCL1',
+            sheets_row=11,
+            typed_values={
+                'pod': 'IT001E22222222',
+                'nominativo': 'ACME SPA',
+                'comune': 'Torino',
+                'note_appuntamento': '',
+            },
+            extra_values={},
+            row_hash='h2',
+            source='bootstrap',
+        )
+
+    file_path = tmp_path / 'aziende_multi.xlsx'
+    file_path.write_bytes(b'test')
+    righe = [
+        {
+            'source_sheet': 'TRIFASE',
+            'row_num': 2,
+            'pod': 'IT001E11111111',
+            'eneltel': '1001',
+            'lcl': 'LCL1',
+            'nominativo': 'ACME SPA',
+            'via': 'Via Roma',
+            'civico': '1',
+            'comune': 'Torino',
+            'provincia': 'TO',
+            'is_azienda': True,
+        },
+        {
+            'source_sheet': 'TRIFASE',
+            'row_num': 3,
+            'pod': 'IT001E22222222',
+            'eneltel': '1002',
+            'lcl': 'LCL1',
+            'nominativo': 'ACME SPA',
+            'via': 'Via Roma',
+            'civico': '1',
+            'comune': 'Torino',
+            'provincia': 'TO',
+            'is_azienda': True,
+        },
+    ]
+    info = lettere.registra_generazione(
+        str(file_path),
+        '2026-10-01',
+        '2026-10-15',
+        righe,
+        provincia='TORINO',
+        user='tester',
+    )
+
+    aziende = lettere.list_aziende(generazione_id=info['generazione_id'], provincia='TORINO')
+    assert len(aziende) >= 1
+    az_id = aziende[0]['id']
+
+    lettere.set_risposta(az_id, True, note='APP 15/10 ORE 10:00', user='tester', provincia='TORINO')
+
+    row1 = db_isolato.get_filone_row('1001', lcl='LCL1')
+    row2 = db_isolato.get_filone_row('1002', lcl='LCL1')
+    assert row1['note_appuntamento'] == 'APP 15/10 ORE 10:00'
+    assert row2['note_appuntamento'] == 'APP 15/10 ORE 10:00'
+
+
+def test_list_aziende_reconcile_notes_filone_priority(db_isolato, tmp_path):
+    """Verifica che note_appuntamento su filone abbia priorità e si riconcili con la snapshot."""
+    from moduli import lettere
+
+    conn = db_isolato.get_conn()
+    with conn:
+        db_isolato.upsert_filone_row(
+            conn,
+            eneltel_key='3001',
+            lcl='LCL1',
+            sheets_row=30,
+            typed_values={
+                'pod': 'IT001E33333333',
+                'nominativo': 'BETA SRL',
+                'comune': 'Torino',
+                'note_appuntamento': 'APP 20/10 ORE 14:00 // mandata mail 01/09',
+            },
+            extra_values={},
+            row_hash='h3',
+            source='bootstrap',
+        )
+
+    file_path = tmp_path / 'aziende_reconcile.xlsx'
+    file_path.write_bytes(b'test')
+    righe = [
+        {
+            'source_sheet': 'TRIFASE',
+            'row_num': 2,
+            'pod': 'IT001E33333333',
+            'eneltel': '3001',
+            'lcl': 'LCL1',
+            'nominativo': 'BETA SRL',
+            'via': 'Via Po',
+            'civico': '10',
+            'comune': 'Torino',
+            'provincia': 'TO',
+            'is_azienda': True,
+        }
+    ]
+    info = lettere.registra_generazione(
+        str(file_path),
+        '2026-10-01',
+        '2026-10-15',
+        righe,
+        provincia='TORINO',
+        user='tester',
+    )
+
+    # Forziamo una nota vecchia nella tabella snapshot lettere_aziende_generazione
+    conn = db_isolato.get_conn()
+    with conn:
+        conn.execute(
+            "UPDATE lettere_aziende_generazione SET note='mandata mail 01/09' WHERE pod='IT001E33333333'"
+        )
+
+    az = lettere.list_aziende(generazione_id=info['generazione_id'], provincia='TORINO')[0]
+    # La nota restituita deve essere quella completa e aggiornata da filone
+    assert az['note'] == 'APP 20/10 ORE 14:00 // mandata mail 01/09'
+    assert az['note_appuntamento'] == 'APP 20/10 ORE 14:00 // mandata mail 01/09'
+    assert az['note_filone'] == 'APP 20/10 ORE 14:00 // mandata mail 01/09'
+
+    dettaglio = lettere.get_azienda(az['id'], provincia='TORINO')
+    assert dettaglio['note'] == 'APP 20/10 ORE 14:00 // mandata mail 01/09'
+
+
+def test_salva_nota_endpoint_eneltel_fallback(db_isolato):
+    """Verifica che /api/lettere/salva-nota gestisca il fallback con solo eneltel."""
+    from flask import Flask
+    from routes.lettere import bp as lettere_bp
+    from routes.distinte import bp as distinte_bp
+
+    app = Flask(__name__)
+    app.config['TESTING'] = True
+    app.config['SECRET_KEY'] = 'test-secret'
+    app.register_blueprint(lettere_bp)
+    app.register_blueprint(distinte_bp)
+
+    conn = db_isolato.get_conn()
+    with conn:
+        db_isolato.upsert_filone_row(
+            conn,
+            eneltel_key='4001',
+            lcl='LCL1',
+            sheets_row=40,
+            typed_values={
+                'pod': 'IT001E44444444',
+                'note_appuntamento': 'vecchia nota',
+            },
+            extra_values={},
+            row_hash='h4',
+            source='bootstrap',
+        )
+
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess['logged_in'] = True
+        sess['user'] = 'tester'
+        sess['role'] = 'admin'
+
+    resp = client.post(
+        '/api/lettere/salva-nota',
+        json={
+            'pod': '',
+            'eneltel': '4001',
+            'lcl': 'LCL1',
+            'nota': 'nuova nota eneltel',
+            'sovrascrivere': True,
+        },
+    )
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data['success'] is True
+    assert data['nota'] == 'nuova nota eneltel'
+
+    row = db_isolato.get_filone_row('4001', lcl='LCL1')
+    assert row['note_appuntamento'] == 'nuova nota eneltel'
+
+
+
 
 
 

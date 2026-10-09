@@ -84,35 +84,58 @@ def build_nota_invio(tipo: str, data_intervento: str | None = None, data_oggi: d
     return f"{oggi_str} {azione}"
 
 
-def registra_nota_su_db(pod: str, nota: str, user: str = '', origin: str = 'bulk_send') -> bool:
+def registra_nota_su_db(pod: str, nota: str, user: str = '', origin: str = 'bulk_send', lcl: str = '', eneltel: str = '') -> bool:
     """
     Scrive/premette la nota nel campo note_appuntamento del filone sul DB locale.
     Se la nota non è già presente, la concatena all'inizio con ' // '.
     """
-    if not pod or not nota:
+    if not pod and not eneltel:
+        return False
+    if not nota:
         return False
     try:
         from moduli import db as _db
-        from moduli.shared import _get_colonna_note
-        ek = _db.find_eneltel_by_pod(pod)
-        if not ek:
+        from moduli.lettere import _get_disabled_lcls, _column_name_for_internal
+        disabled = _get_disabled_lcls()
+        found = None
+        if pod and pod != '?':
+            found = _db.find_filone_row_by_pod(pod, lcl=lcl, disabled_lcls=disabled)
+        if not found and eneltel:
+            found = _db.find_filone_row_by_eneltel(eneltel, lcl=lcl, disabled_lcls=disabled)
+        if not found:
             return False
-        local = _db.get_filone_row(ek) or {}
+
+        ek, resolved_lcl = found
+        local = _db.get_filone_row(ek, lcl=resolved_lcl) or {}
         nota_attuale = (local.get('note_appuntamento') or '').strip()
         if nota in nota_attuale:
-            return True  # già presente
-        
-        nuova_nota = f"{nota} // {nota_attuale}" if nota_attuale else nota
-        col_note = _get_colonna_note()
-        _db.record_local_change(
-            ek, {col_note: nuova_nota},
-            origin=origin,
-            user=user,
-            initial_state='pending',
-        )
+            nuova_nota = nota_attuale
+        else:
+            nuova_nota = f"{nota} // {nota_attuale}" if nota_attuale else nota
+            conn = _db.get_conn()
+            col_note = _column_name_for_internal(conn, 'note_appuntamento', None)
+            _db.record_local_change(
+                ek, {col_note: nuova_nota},
+                origin=origin,
+                user=user,
+                initial_state='pending',
+                lcl=resolved_lcl,
+            )
+
+        if pod and pod != '?':
+            conn = _db.get_conn()
+            with conn:
+                conn.execute(
+                    '''
+                    UPDATE lettere_aziende_generazione
+                    SET note=?
+                    WHERE UPPER(TRIM(pod))=UPPER(TRIM(?))
+                    ''',
+                    (nuova_nota, pod),
+                )
         return True
     except Exception as e:
-        logger.warning(f"[NOTA_DB] Errore salvataggio nota per {pod}: {e}")
+        logger.warning(f"[NOTA_DB] Errore salvataggio nota per {pod or eneltel}: {e}")
         return False
 
 
@@ -622,9 +645,11 @@ def send_contatori_email(
     for c_item in contatori_list:
         c_pod = c_item.get('pod') or c_item.get('pod_filone') or primary_pod
         c_data = c_item.get('data_intervento') or c_item.get('data_pian_filone') or c_item.get('data_pianificazione') or contatto.get('data_intervento') or contatto.get('data_pian_filone')
-        if c_pod and c_pod != '?':
+        c_lcl = c_item.get('lcl') or contatto.get('lcl') or ''
+        c_eneltel = c_item.get('eneltel') or c_item.get('eneltel_filone') or contatto.get('eneltel') or ''
+        if (c_pod and c_pod != '?') or c_eneltel:
             nota_invio = build_nota_invio('mail', data_intervento=c_data)
-            registra_nota_su_db(c_pod, nota_invio, user=username, origin=f'{context}_invia_email')
+            registra_nota_su_db(c_pod, nota_invio, user=username, origin=f'{context}_invia_email', lcl=c_lcl, eneltel=c_eneltel)
 
     # Registra in Audit Log
     try:

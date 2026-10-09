@@ -9,12 +9,15 @@ telefono/email del filone locale.
 """
 import hashlib
 import json
+import logging
 import os
 import re
 import time
 from typing import Iterable
 
 from . import db
+
+logger = logging.getLogger(__name__)
 
 
 _PEC_RE = re.compile(
@@ -102,7 +105,7 @@ def split_emails(campo):
     return out
 
 
-def _column_name_for_internal(conn, chiave_interna, fallback):
+def _column_name_for_internal(conn, chiave_interna, fallback=None):
     row = conn.execute(
         '''
         SELECT column_name
@@ -113,7 +116,17 @@ def _column_name_for_internal(conn, chiave_interna, fallback):
         ''',
         (chiave_interna,),
     ).fetchone()
-    return row['column_name'] if row else fallback
+    if row and row['column_name']:
+        return row['column_name']
+    if fallback is not None:
+        return fallback
+    if chiave_interna == 'note_appuntamento':
+        try:
+            from moduli.shared import _get_colonna_note
+            return _get_colonna_note()
+        except Exception:
+            return 'note_appuntamento'
+    return chiave_interna
 
 
 def _get_disabled_lcls(provincia=None):
@@ -130,14 +143,18 @@ def _get_disabled_lcls(provincia=None):
         return set()
 
 
-def _sync_contatto_su_filone(pod, telefono=None, email=None, note=None, user=None, lcl=None, provincia=None):
-    """Aggiorna telefono/email/note sul filone locale se il POD esiste."""
+def _sync_contatto_su_filone(pod, telefono=None, email=None, note=None, user=None, lcl=None, provincia=None, eneltel=None):
+    """Aggiorna telefono/email/note sul filone locale se il POD o l'Eneltel esiste."""
     disabled = _get_disabled_lcls(provincia)
-    found = db.find_filone_row_by_pod(pod, lcl=lcl, disabled_lcls=disabled)
+    found = None
+    if pod:
+        found = db.find_filone_row_by_pod(pod, lcl=lcl, disabled_lcls=disabled)
+    if not found and eneltel:
+        found = db.find_filone_row_by_eneltel(eneltel, lcl=lcl, disabled_lcls=disabled)
     if not found:
-        return {'synced': False, 'reason': 'pod_not_found'}
+        return {'synced': False, 'reason': 'pod_or_eneltel_not_found'}
 
-    eneltel, resolved_lcl = found
+    resolved_eneltel, resolved_lcl = found
     conn = db.get_conn()
     fields = {}
     if telefono is not None:
@@ -145,18 +162,35 @@ def _sync_contatto_su_filone(pod, telefono=None, email=None, note=None, user=Non
     if email is not None:
         fields[_column_name_for_internal(conn, 'email', 'email')] = email
     if note is not None:
-        fields[_column_name_for_internal(conn, 'note_appuntamento', 'note_appuntamento')] = note
+        col_note = _column_name_for_internal(conn, 'note_appuntamento', None)
+        fields[col_note] = note
     if not fields:
         return {'synced': False, 'reason': 'empty_fields'}
 
     db.record_local_change(
-        eneltel,
+        resolved_eneltel,
         fields,
         user=user,
         origin='lettere_contatti',
         lcl=resolved_lcl,
     )
-    return {'synced': True, 'eneltel': eneltel, 'lcl': resolved_lcl, 'fields': list(fields)}
+    return {'synced': True, 'eneltel': resolved_eneltel, 'lcl': resolved_lcl, 'fields': list(fields)}
+
+
+def _reconcile_notes(ag_note, filone_note):
+    """Riconcilia la nota di ag con filone: filone è la fonte di verità."""
+    ag_n = (ag_note or '').strip()
+    f_n = (filone_note or '').strip()
+    if not ag_n:
+        return f_n
+    if not f_n:
+        return ag_n
+    if ag_n == f_n or ag_n in f_n:
+        return f_n
+    if f_n in ag_n:
+        return ag_n
+    return f"{f_n} // {ag_n}"
+
 
 
 def registra_generazione(
@@ -534,8 +568,8 @@ def list_aziende(generazione_id=None, search='', limit=500, provincia=None):
             COALESCE(NULLIF(c.email, ''), NULLIF(c_same.email, ''), NULLIF(lr.email, ''), f.email, f_same.email) AS email,
             COALESCE(NULLIF(lr.via, ''), NULLIF(f.indirizzo, '')) AS via,
             COALESCE(NULLIF(lr.civico, ''), NULLIF(f.civico, '')) AS civico,
-            COALESCE(NULLIF(ag.note, ''), NULLIF(f.note_appuntamento, ''), '') AS note_appuntamento,
-            COALESCE(NULLIF(f.note_appuntamento, ''), '') AS note_filone,
+            COALESCE(NULLIF(ag.note, ''), NULLIF(f.note_appuntamento, ''), NULLIF(f_same.note_appuntamento, ''), '') AS note_appuntamento,
+            COALESCE(NULLIF(f.note_appuntamento, ''), NULLIF(f_same.note_appuntamento, ''), '') AS note_filone,
             lr.cap,
             lr.eneltel,
             lr.lcl,
@@ -641,7 +675,15 @@ def list_aziende(generazione_id=None, search='', limit=500, provincia=None):
         ''',
         params,
     ).fetchall()
-    return [dict(r) for r in rows]
+    out = []
+    for r in rows:
+        d = dict(r)
+        eff_note = _reconcile_notes(d.get('note'), d.get('note_filone'))
+        d['note'] = eff_note
+        d['note_appuntamento'] = eff_note
+        d['note_filone'] = eff_note
+        out.append(d)
+    return out
 
 
 def sincronizza_contatti_da_filone(*, provincia=None, user='sync_filone'):
@@ -897,7 +939,7 @@ def set_risposta(azienda_id, risposta, note=None, user=None, provincia=None, lcl
     conn = db.get_conn()
     row = conn.execute(
         '''
-        SELECT ag.id, ag.pod, ag.generazione_id, lr.lcl
+        SELECT ag.id, ag.pod, ag.generazione_id, ag.contact_key, ag.nominativo, ag.comune, lr.lcl, lr.eneltel
         FROM lettere_aziende_generazione ag
         LEFT JOIN lettere_righe lr ON lr.generazione_id=ag.generazione_id AND lr.pod=ag.pod AND TRIM(COALESCE(ag.pod, ''))!=''
         WHERE ag.id=? AND ag.provincia=?
@@ -908,59 +950,86 @@ def set_risposta(azienda_id, risposta, note=None, user=None, provincia=None, lcl
     if not row:
         raise LookupError('Azienda generazione non trovata')
     pod = row['pod'] if row else None
+    gen_id = row['generazione_id']
+    contact_key_val = row['contact_key']
+    nominativo_val = row['nominativo']
+    comune_val = row['comune']
     resolved_lcl = (str(lcl).strip() if lcl else '') or (row['lcl'] if row else '')
     now = _now_ts()
 
     with conn:
+        ag_where = "id=?"
+        ag_params = [int(azienda_id)]
+        if nominativo_val:
+            ag_where = "id=? OR (generazione_id=? AND UPPER(TRIM(nominativo))=UPPER(TRIM(?)) AND (UPPER(TRIM(comune))=UPPER(TRIM(?)) OR TRIM(COALESCE(comune, ''))=''))"
+            ag_params = [int(azienda_id), gen_id, nominativo_val, comune_val or '']
+        elif contact_key_val:
+            ag_where = "id=? OR (generazione_id=? AND contact_key=?)"
+            ag_params = [int(azienda_id), gen_id, contact_key_val]
+
         if risposta is not None and note is not None:
             risposta_val = 1 if risposta else 0
             conn.execute(
-                '''
+                f'''
                 UPDATE lettere_aziende_generazione
                 SET risposta=?, risposta_ts=?, risposta_by=?, note=?
-                WHERE id=?
+                WHERE {ag_where}
                 ''',
-                (
-                    risposta_val,
-                    now if risposta_val else None,
-                    user if risposta_val else None,
-                    note,
-                    int(azienda_id),
-                ),
+                [risposta_val, now if risposta_val else None, user if risposta_val else None, note] + ag_params,
             )
         elif risposta is not None:
             risposta_val = 1 if risposta else 0
             conn.execute(
-                '''
+                f'''
                 UPDATE lettere_aziende_generazione
                 SET risposta=?, risposta_ts=?, risposta_by=?
-                WHERE id=?
+                WHERE {ag_where}
                 ''',
-                (
-                    risposta_val,
-                    now if risposta_val else None,
-                    user if risposta_val else None,
-                    int(azienda_id),
-                ),
+                [risposta_val, now if risposta_val else None, user if risposta_val else None] + ag_params,
             )
         elif note is not None:
             conn.execute(
-                '''
+                f'''
                 UPDATE lettere_aziende_generazione
                 SET note=?
-                WHERE id=?
+                WHERE {ag_where}
                 ''',
-                (
-                    note,
-                    int(azienda_id),
-                ),
+                [note] + ag_params,
             )
 
-    if pod and note is not None:
-        try:
-            _sync_contatto_su_filone(pod, note=note, user=user, lcl=resolved_lcl, provincia=provincia)
-        except Exception:
-            pass
+    if note is not None:
+        meters = []
+        if nominativo_val:
+            meters = conn.execute(
+                '''
+                SELECT DISTINCT pod, eneltel, lcl
+                FROM lettere_righe
+                WHERE generazione_id=?
+                  AND UPPER(TRIM(nominativo))=UPPER(TRIM(?))
+                  AND (UPPER(TRIM(comune))=UPPER(TRIM(?)) OR TRIM(COALESCE(comune, ''))='')
+                ''',
+                (gen_id, nominativo_val, comune_val or ''),
+            ).fetchall()
+        if not meters and pod:
+            meters = conn.execute(
+                '''
+                SELECT DISTINCT pod, eneltel, lcl
+                FROM lettere_righe
+                WHERE generazione_id=? AND UPPER(TRIM(pod))=UPPER(TRIM(?))
+                ''',
+                (gen_id, pod),
+            ).fetchall()
+        if not meters:
+            meters = [{'pod': pod, 'eneltel': row['eneltel'], 'lcl': resolved_lcl}]
+
+        for m in meters:
+            m_pod = m['pod'] or pod
+            m_eneltel = m['eneltel']
+            m_lcl = m['lcl'] or resolved_lcl
+            try:
+                _sync_contatto_su_filone(m_pod, note=note, user=user, lcl=m_lcl, provincia=provincia, eneltel=m_eneltel)
+            except Exception as ex:
+                logger.warning(f"[LETTERE] Errore sync nota su filone per POD {m_pod} / Eneltel {m_eneltel}: {ex}")
 
     return {
         'id': int(azienda_id),
@@ -981,18 +1050,19 @@ def get_azienda(azienda_id, provincia=None):
             g.file_name,
             g.periodo_da,
             g.periodo_a,
-            COALESCE(NULLIF(c.telefono, ''), NULLIF(lr.telefono, ''), f.telefono) AS telefono,
-            COALESCE(NULLIF(c.email, ''), NULLIF(lr.email, ''), f.email) AS email,
+            COALESCE(NULLIF(c.telefono, ''), NULLIF(lr.telefono, ''), f.telefono, f_same.telefono) AS telefono,
+            COALESCE(NULLIF(c.email, ''), NULLIF(lr.email, ''), f.email, f_same.email) AS email,
             lr.via,
             lr.civico,
             lr.cap,
             lr.eneltel,
             lr.lcl,
             lr.posizione_mis,
-            COALESCE(NULLIF(f.codice_ante, ''), '') AS codice_ante,
-            COALESCE(NULLIF(f.matricola_ante, ''), '') AS matricola_ante,
-            COALESCE(NULLIF(ag.note, ''), NULLIF(f.note_appuntamento, ''), '') AS note_appuntamento,
-            COALESCE(NULLIF(f.data_pianificata, ''), '') AS data_pian_filone
+            COALESCE(NULLIF(f.codice_ante, ''), NULLIF(f_same.codice_ante, ''), '') AS codice_ante,
+            COALESCE(NULLIF(f.matricola_ante, ''), NULLIF(f_same.matricola_ante, ''), '') AS matricola_ante,
+            COALESCE(NULLIF(ag.note, ''), NULLIF(f.note_appuntamento, ''), NULLIF(f_same.note_appuntamento, ''), '') AS note_appuntamento,
+            COALESCE(NULLIF(f.note_appuntamento, ''), NULLIF(f_same.note_appuntamento, ''), '') AS note_filone,
+            COALESCE(NULLIF(f.data_pianificata, ''), NULLIF(f_same.data_pianificata, ''), '') AS data_pian_filone
         FROM lettere_aziende_generazione ag
         JOIN lettere_generazioni g ON g.id=ag.generazione_id
         LEFT JOIN lettere_contatti c
@@ -1057,11 +1127,33 @@ def get_azienda(azienda_id, provincia=None):
                 LIMIT 1
             )
         )
+        LEFT JOIN (
+            SELECT
+                UPPER(TRIM(COALESCE(nominativo, ''))) AS nom_norm,
+                UPPER(TRIM(COALESCE(comune, ''))) AS com_norm,
+                MAX(NULLIF(telefono, '')) AS telefono,
+                MAX(NULLIF(email, '')) AS email,
+                MAX(NULLIF(note_appuntamento, '')) AS note_appuntamento,
+                MAX(NULLIF(codice_ante, '')) AS codice_ante,
+                MAX(NULLIF(matricola_ante, '')) AS matricola_ante,
+                MAX(NULLIF(data_pianificata, '')) AS data_pianificata
+            FROM filone
+            WHERE TRIM(COALESCE(nominativo, ''))!=''
+            GROUP BY 1, 2
+        ) f_same ON f_same.nom_norm=UPPER(TRIM(COALESCE(ag.nominativo, '')))
+                AND (f_same.com_norm=UPPER(TRIM(COALESCE(ag.comune, ''))) OR f_same.com_norm='' OR TRIM(COALESCE(ag.comune, ''))='')
         WHERE ag.id=? AND ag.provincia=?
         ''',
         (int(azienda_id), provincia),
     ).fetchone()
-    return dict(row) if row else None
+    if not row:
+        return None
+    d = dict(row)
+    eff_note = _reconcile_notes(d.get('note'), d.get('note_filone'))
+    d['note'] = eff_note
+    d['note_appuntamento'] = eff_note
+    d['note_filone'] = eff_note
+    return d
 
 
 def registra_invio(

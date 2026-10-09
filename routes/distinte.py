@@ -25,7 +25,7 @@ from moduli.bulk_contatori_email import (
 from moduli.shared import (
     get_worksheet, get_header_map, find_row_by_pod,
     build_pod_row_map, safe_batch_update_by_name, _imposta_appuntamento_su_filone, _rimuovi_appuntamento_da_filone,
-    _api_error, _get_colonna_note, _trova_indice_multi, _resolve_anchor_col_name,
+    _api_error, _trova_indice_multi, _resolve_anchor_col_name,
     _callbacks, _get_username,
 )
 from moduli.smtp import (
@@ -638,10 +638,13 @@ def invia_singolo_sms():
         username = _get_username()
         c_data = contatto.get('data_intervento') or contatto.get('data_pian_filone')
 
+        c_lcl = (contatto.get('lcl') or data.get('lcl') or '').strip()
+        c_eneltel = (contatto.get('eneltel') or data.get('eneltel') or '').strip()
+
         # Registra nota sul DB locale (es. "18/08 mandato SMS per 25/08")
-        if pod and pod != '?':
+        if (pod and pod != '?') or c_eneltel:
             nota_invio = build_nota_invio('sms', data_intervento=c_data)
-            registra_nota_su_db(pod, nota_invio, user=username, origin='distinte_invia_sms')
+            registra_nota_su_db(pod, nota_invio, user=username, origin='distinte_invia_sms', lcl=c_lcl, eneltel=c_eneltel)
 
         # Audit log su db locale se disponibile
         try:
@@ -1032,22 +1035,27 @@ def salva_nota_distinte():
     quella giusta.
     """
     try:
-        data = request.json
+        data = request.json or {}
         pod = data.get('pod', '').strip().upper()
+        eneltel = data.get('eneltel', '').strip()
         nota = data.get('nota', '').strip()
         sovrascrivere = data.get('sovrascrivere', True)  # Default: sovrascrive
         lcl = data.get('lcl', '').strip()
 
-        if not pod:
-            return jsonify({'error': 'POD mancante'}), 400
+        if not pod and not eneltel:
+            return jsonify({'error': 'POD o Eneltel mancante'}), 400
 
         # DB-only: no chiamate Sheets nel path di scrittura. Il drainer pusha.
         from moduli import db as _db
-        from moduli.lettere import _get_disabled_lcls
+        from moduli.lettere import _get_disabled_lcls, _column_name_for_internal
         disabled = _get_disabled_lcls()
-        found = _db.find_filone_row_by_pod(pod, lcl=lcl, disabled_lcls=disabled)
+        found = None
+        if pod:
+            found = _db.find_filone_row_by_pod(pod, lcl=lcl, disabled_lcls=disabled)
+        if not found and eneltel:
+            found = _db.find_filone_row_by_eneltel(eneltel, lcl=lcl, disabled_lcls=disabled)
         if not found:
-            return jsonify({'error': f'POD {pod} non trovato'}), 404
+            return jsonify({'error': f'Contatore {pod or eneltel} non trovato'}), 404
         ek, resolved_lcl = found
         local = _db.get_filone_row(ek, lcl=resolved_lcl) or {}
         nota_attuale = local.get('note_appuntamento') or ''
@@ -1062,13 +1070,24 @@ def salva_nota_distinte():
         else:
             nuova_nota = nota_attuale
 
-        col_note_name = _get_colonna_note()  # nome colonna sul foglio
+        conn = _db.get_conn()
+        col_note_name = _column_name_for_internal(conn, 'note_appuntamento', None)
         _db.record_local_change(
             ek, {col_note_name: nuova_nota},
             origin='distinte_salva_nota',
             initial_state='pending',
             lcl=resolved_lcl,
         )
+        if pod:
+            with conn:
+                conn.execute(
+                    '''
+                    UPDATE lettere_aziende_generazione
+                    SET note=?
+                    WHERE UPPER(TRIM(pod))=UPPER(TRIM(?))
+                    ''',
+                    (nuova_nota, pod),
+                )
         try:
             from moduli import sync_engine as _se
             _se.trigger_drain_now()

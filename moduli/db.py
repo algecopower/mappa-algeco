@@ -905,8 +905,13 @@ def _build_internal_lookup():
     for chiave, info in MAPPATURA_COLONNE_DEFAULT.items():
         for nome in info.get('nomi_default', []):
             lookup[nome.strip().lower()] = chiave
+        lookup.setdefault(chiave.strip().lower(), chiave)
     # Eneltel non è in COLONNE_NOTE ma deve essere riconosciuto
     lookup.setdefault('eneltel', 'eneltel')
+
+    # Anche tutte le chiavi COLONNE_NOTE devono mappare a se stesse
+    for col in COLONNE_NOTE:
+        lookup.setdefault(col.strip().lower(), col)
 
     # Override utente (vince sui default)
     for chiave, nome in (MAPPATURA_COLONNE or {}).items():
@@ -1255,6 +1260,59 @@ def find_filone_row_by_pod(pod, lcl=None, disabled_lcls=None):
         "SELECT eneltel_key, COALESCE(lcl,'') AS lcl FROM filone "
         "WHERE UPPER(TRIM(pod))=? ORDER BY sheets_row DESC LIMIT 1",
         (pod_norm,),
+    )
+    row = cur.fetchone()
+    return (row['eneltel_key'], row['lcl']) if row else None
+
+
+def find_filone_row_by_eneltel(eneltel, lcl=None, disabled_lcls=None):
+    """Lookup Eneltel (+ opzionale LCL) → (eneltel_key, lcl).
+
+    Se `lcl` è valorizzato: prova match esatto (eneltel, LCL).
+    Se non trovato o `lcl` è None/'': cerca tra i record con quell'eneltel,
+    privilegiando le LCL non disabilitate e la riga più recente (sheets_row DESC).
+
+    Ritorna `(eneltel_key, lcl_della_riga_trovata)` o None.
+    """
+    if not eneltel:
+        return None
+    ek = normalize_eneltel(eneltel)
+    if not ek:
+        return None
+    conn = get_conn()
+    if lcl is not None and str(lcl).strip() != '':
+        lcl_norm = str(lcl).strip().upper()
+        cur = conn.execute(
+            "SELECT eneltel_key, COALESCE(lcl,'') AS lcl FROM filone "
+            "WHERE eneltel_key=? AND UPPER(TRIM(COALESCE(lcl,'')))=? "
+            "ORDER BY sheets_row DESC LIMIT 1",
+            (ek, lcl_norm),
+        )
+        row = cur.fetchone()
+        if row:
+            return (row['eneltel_key'], row['lcl'])
+        # Fallback: nessun match esatto sulla LCL richiesta
+
+    # Fallback 1: cerca tra le LCL non disabilitate, prendendo la più recente
+    if disabled_lcls:
+        dis_list = [str(x).strip().upper() for x in disabled_lcls if str(x).strip()]
+        if dis_list:
+            dis_placeholders = ', '.join(['?'] * len(dis_list))
+            cur = conn.execute(
+                f"SELECT eneltel_key, COALESCE(lcl,'') AS lcl FROM filone "
+                f"WHERE eneltel_key=? AND UPPER(TRIM(COALESCE(lcl,''))) NOT IN ({dis_placeholders}) "
+                f"ORDER BY sheets_row DESC LIMIT 1",
+                [ek] + dis_list,
+            )
+            row = cur.fetchone()
+            if row:
+                return (row['eneltel_key'], row['lcl'])
+
+    # Fallback 2: riga più recente per quel Eneltel
+    cur = conn.execute(
+        "SELECT eneltel_key, COALESCE(lcl,'') AS lcl FROM filone "
+        "WHERE eneltel_key=? ORDER BY sheets_row DESC LIMIT 1",
+        (ek,),
     )
     row = cur.fetchone()
     return (row['eneltel_key'], row['lcl']) if row else None

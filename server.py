@@ -379,7 +379,7 @@ if not IS_CHILD_PROCESS:
         return False
     
     def aspetta_mappa(provincia, timeout=120):
-        mappa_file = os.path.join(SCRIPT_DIR, 'templates', f'mappa_{provincia.lower()}.html')
+        mappa_file = os.path.join(SCRIPT_DIR, 'data', provincia.lower(), 'mappa_data.json')
         print(f"   ⏳ Attesa mappa {provincia}...")
         for i in range(timeout):
             if os.path.exists(mappa_file) and os.path.getsize(mappa_file) > 1000:
@@ -1104,15 +1104,15 @@ def get_settings():
     """Restituisce tutte le impostazioni configurabili + colonne filone."""
     import config
     
-    # Recupera le intestazioni colonne fresche dal foglio Google
+    # Recupera le intestazioni colonne fresche dal DB locale
     colonne_filone = []
     try:
-        # Forza refresh per avere sempre gli header aggiornati
-        get_worksheet(force_refresh=True)
+        from moduli.shared import force_refresh_headers
+        force_refresh_headers()
         h = get_headers()
         if h:
             colonne_filone = list(h)
-            logger.debug(f"📋 Colonne filone da sheets: {len(colonne_filone)}")
+            logger.debug(f"📋 Colonne filone da DB locale: {len(colonne_filone)}")
     except Exception as e:
         logger.warning(f"⚠️ get_headers() fallito: {e}")
     
@@ -1426,71 +1426,6 @@ def update_admin_lcls():
 
 
 @app.route('/api/admin/smtp-settings', methods=['GET'])
-@admin_required
-def admin_get_smtp_settings():
-    try:
-        return jsonify(get_safe_smtp_settings(PROVINCIA_ATTIVA))
-    except Exception as e:
-        logger.exception('[admin] errore /api/admin/smtp-settings GET')
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/admin/smtp-settings', methods=['PUT'])
-@admin_required
-def admin_save_smtp_settings():
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({'error': 'Nessun dato ricevuto'}), 400
-        save_smtp_settings(data, PROVINCIA_ATTIVA)
-        return jsonify({'ok': True})
-    except ValueError as e:
-        return jsonify({'error': str(e)}), 400
-    except Exception as e:
-        logger.exception('[admin] errore /api/admin/smtp-settings PUT')
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/admin/smtp-test', methods=['POST'])
-@admin_required
-def admin_test_smtp():
-    try:
-        data = request.get_json() or {}
-        settings = data.get('settings')
-        if not settings:
-            if 'host' in data or 'server' in data:
-                settings = data
-            else:
-                settings = load_smtp_settings(PROVINCIA_ATTIVA)
-        ok, msg = test_smtp_connection(settings)
-        return jsonify({'ok': ok, 'message': msg if ok else None, 'error': None if ok else msg})
-    except Exception as e:
-        logger.exception('[admin] errore /api/admin/smtp-test POST')
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-
-@app.route('/api/admin/smtp-test-email', methods=['POST'])
-@admin_required
-def admin_test_smtp_email():
-    try:
-        data = request.get_json() or {}
-        test_email = (data.get('email') or data.get('recipient') or data.get('test_email') or '').strip()
-        if not test_email:
-            return jsonify({'ok': False, 'error': 'Indirizzo email di test mancante'}), 400
-
-        settings = data.get('settings')
-        if not settings:
-            if 'host' in data or 'server' in data:
-                settings = data
-            else:
-                settings = load_smtp_settings(PROVINCIA_ATTIVA)
-
-        ok, msg = test_send_email(settings, test_email, prov=PROVINCIA_ATTIVA)
-        return jsonify({'ok': ok, 'message': msg if ok else None, 'error': None if ok else msg})
-    except Exception as e:
-        logger.exception('[admin] errore /api/admin/smtp-test-email POST')
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-
 @app.route('/api/smtp-settings', methods=['GET'])
 @login_required
 def api_get_smtp_settings():
@@ -1501,11 +1436,14 @@ def api_get_smtp_settings():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/admin/smtp-settings', methods=['PUT'])
 @app.route('/api/smtp-settings', methods=['PUT'])
 @login_required
 def api_save_smtp_settings():
     try:
         data = request.get_json() or {}
+        if not data:
+            return jsonify({'error': 'Nessun dato ricevuto'}), 400
         save_smtp_settings(data, PROVINCIA_ATTIVA)
         return jsonify({'ok': True, 'message': 'Impostazioni SMTP salvate con successo'})
     except ValueError as e:
@@ -1515,6 +1453,7 @@ def api_save_smtp_settings():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/admin/smtp-test', methods=['POST'])
 @app.route('/api/smtp-test', methods=['POST'])
 @login_required
 def api_test_smtp():
@@ -1524,12 +1463,14 @@ def api_test_smtp():
         if not settings or not settings.get('host'):
             settings = load_smtp_settings(PROVINCIA_ATTIVA)
         ok, msg = test_smtp_connection(settings)
-        return jsonify({'ok': ok, 'message': msg if ok else None, 'error': None if ok else msg}), (200 if ok else 400)
+        status_code = 200 if ok else (400 if request.path == '/api/smtp-test' else 200)
+        return jsonify({'ok': ok, 'message': msg if ok else None, 'error': None if ok else msg}), status_code
     except Exception as e:
         logger.exception('errore /api/smtp-test POST')
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/api/admin/smtp-test-email', methods=['POST'])
 @app.route('/api/smtp-test-email', methods=['POST'])
 @login_required
 def api_test_smtp_email():
@@ -1542,10 +1483,17 @@ def api_test_smtp_email():
         if not settings or not settings.get('host'):
             settings = load_smtp_settings(PROVINCIA_ATTIVA)
         ok, msg = test_send_email(settings, test_email, prov=PROVINCIA_ATTIVA)
-        return jsonify({'ok': ok, 'message': msg if ok else None, 'error': None if ok else msg}), (200 if ok else 400)
+        status_code = 200 if ok else (400 if request.path == '/api/smtp-test-email' else 200)
+        return jsonify({'ok': ok, 'message': msg if ok else None, 'error': None if ok else msg}), status_code
     except Exception as e:
         logger.exception('errore /api/smtp-test-email POST')
         return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+admin_get_smtp_settings = api_get_smtp_settings
+admin_save_smtp_settings = api_save_smtp_settings
+admin_test_smtp = api_test_smtp
+admin_test_smtp_email = api_test_smtp_email
 
 
 @app.route('/api/admin/sms-settings', methods=['GET'])

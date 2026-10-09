@@ -59,10 +59,7 @@ def _load_province_da_json():
 
     out = {}
     for slug, cfg in raw.items():
-        slug_upper = slug.upper()
-        cfg.setdefault('file_mappa',
-                       os.path.join('templates', f'mappa_{slug_upper.lower()}.html'))
-        out[slug_upper] = cfg
+        out[slug.upper()] = cfg
     return out
 
 
@@ -90,7 +87,6 @@ COLORI_TECNICI = _provincia['colori_operatori']
 OPERATORI_DICT = _provincia.get('operatori_dict', {})  # Per dropdown gestionale
 OPERATORI_DISABILITATI = _provincia.get('operatori_disabilitati', [])  # Matricole disabilitate (archivio storico)
 LCL_DISABILITATI = _provincia.get('lcl_disabilitati', [])  # Codici LCL disabilitati (archivio storico)
-FILE_MAPPA = _provincia['file_mappa']
 ORA_INIZIO_GIORNATA = _provincia.get('ora_inizio_giornata', 8 * 60)  # Default 8:00
 ORA_FINE_GIORNATA = _provincia.get('ora_fine_giornata', 17 * 60)  # Default 17:00
 USA_LOCALITA_COME_COMUNE = _provincia.get('usa_localita_come_comune', False)

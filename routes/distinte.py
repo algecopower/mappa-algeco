@@ -216,15 +216,6 @@ def save_distinte_templates():
         return jsonify({'error': str(e)}), 500
 
 
-
-
-
-
-
-
-
-
-
 def _get_default_allegati(provincia, tipologia_contatore=''):
     """Restituisce la lista di nomi file allegati di default per provincia e tipo contatore."""
     allegati = list(_ALLEGATI_DEFAULT.get(provincia.upper(), []))

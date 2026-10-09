@@ -1,8 +1,6 @@
 {
   "TORINO": {
     "nome": "Torino",
-    "id_foglio": "1ZYDay6FgMZqArPxTInumGzPpZ1aMJ3XxTF_vmxPgwXw",
-    "gid_scheda": 2061618218,
     "deposito": {
       "Nome": "DEPOSITO VOLPIANO",
       "Lat": 45.1964682,
@@ -35,7 +33,6 @@
       "ALECCI": "AE94428",
       "GUINDO": "AG05928"
     },
-    "file_mappa": "templates/mappa_torino.html",
     "ora_inizio_giornata": 540,
     "ora_fine_giornata": 1020,
     "sottodominio": "torino.mappa-algeco.com",
@@ -52,8 +49,6 @@
   },
   "PAVIA": {
     "nome": "Pavia",
-    "id_foglio": "1vyEooPBbmWf3D44NC-zRtZGjYMoUITOlGWX7fZf4wm0",
-    "gid_scheda": 198162274,
     "deposito": {
       "Nome": "DEPOSITO PAVIA",
       "Lat": 45.2221001,
@@ -98,7 +93,6 @@
       "SIDI": "AG18966",
       "TORTI": "AG69238"
     },
-    "file_mappa": "templates/mappa_pavia.html",
     "usa_localita_come_comune": true,
     "ora_inizio_giornata": 480,
     "ora_fine_giornata": 1020,
@@ -125,7 +119,6 @@
       "MARCO": "AG29392",
       "PIPPO": "AG12345"
     },
-    "file_mappa": "templates/mappa_lecco.html",
     "ora_inizio_giornata": 480,
     "ora_fine_giornata": 1020,
     "velocita_media_kmh": 35,

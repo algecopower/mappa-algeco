@@ -772,7 +772,11 @@ def find_row_by_eneltel(eneltel):
     Legge da DB locale: zero chiamate Sheets.
     """
     from . import db as _db
-    local = _db.get_filone_row(eneltel)
+    tup = _db.find_filone_row_by_eneltel(eneltel)
+    if not tup:
+        return None
+    ek, lcl = tup
+    local = _db.get_filone_row(ek, lcl=lcl)
     return local.get('sheets_row') if local else None
 
 
@@ -782,10 +786,11 @@ def find_row_by_pod(pod):
     Legge da DB locale: zero chiamate Sheets.
     """
     from . import db as _db
-    ek = _db.find_eneltel_by_pod(pod)
-    if not ek:
+    tup = _db.find_filone_row_by_pod(pod)
+    if not tup:
         return None
-    local = _db.get_filone_row(ek)
+    ek, lcl = tup
+    local = _db.get_filone_row(ek, lcl=lcl)
     return local.get('sheets_row') if local else None
 
 

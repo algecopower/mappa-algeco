@@ -3353,13 +3353,16 @@ async function inviaPrivatiSmsBulk() {
         if (logEl) logEl.scrollTop = logEl.scrollHeight;
 
         if (i < checkedBoxes.length - 1 && !bulkSmsAbortato) {
-            let sLeft = delaySec;
-            while (sLeft > 0 && !bulkSmsAbortato) {
+            const targetTime = Date.now() + (delaySec * 1000);
+            while (!bulkSmsAbortato) {
+                const remainingMs = targetTime - Date.now();
+                if (remainingMs <= 0) break;
+                const sLeft = Math.ceil(remainingMs / 1000);
                 if (progressText) {
                     progressText.textContent = `${i + 1} / ${checkedBoxes.length} — Attesa anti-flood (${sLeft}s)...`;
                 }
-                await new Promise(r => setTimeout(r, 1000));
-                sLeft--;
+                const waitMs = Math.min(1000, Math.max(100, remainingMs));
+                await new Promise(r => setTimeout(r, waitMs));
             }
         }
     }

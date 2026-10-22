@@ -1183,19 +1183,39 @@ def _read_extra(conn, eneltel_key, lcl, column_name):
 def get_filone_row(eneltel, lcl=None):
     """Ritorna la riga `filone` come dict, o None.
 
-    Se `lcl` è None: ritorna la "prima" riga associata all'eneltel
-    (backward-compat). Se è una stringa (incluso ''): match esatto.
+    Se `lcl` è None: ritorna la riga più rilevante associata all'eneltel
+    (privilegiando LCL non disabilitate, note compilate e sheets_row recente).
+    Se è una stringa (incluso ''): match esatto.
     """
     eneltel_key = normalize_eneltel(eneltel)
     conn = get_conn()
     if lcl is None:
+        try:
+            import config
+            disabled_lcls = getattr(config, 'LCL_DISABILITATI', [])
+        except Exception:
+            disabled_lcls = []
+        dis_list = [str(x).strip().upper() for x in disabled_lcls if str(x).strip()]
+        if dis_list:
+            dis_placeholders = ', '.join(['?'] * len(dis_list))
+            cur = conn.execute(
+                f"SELECT * FROM filone WHERE eneltel_key=? AND UPPER(TRIM(COALESCE(lcl,''))) NOT IN ({dis_placeholders}) "
+                f"ORDER BY (CASE WHEN note_appuntamento IS NOT NULL AND TRIM(note_appuntamento) != '' THEN 1 ELSE 0 END) DESC, "
+                f"sheets_row DESC LIMIT 1",
+                [eneltel_key] + dis_list,
+            )
+            row = cur.fetchone()
+            if row:
+                return dict(row)
         cur = conn.execute(
-            'SELECT * FROM filone WHERE eneltel_key=? ORDER BY sheets_row LIMIT 1',
+            "SELECT * FROM filone WHERE eneltel_key=? "
+            "ORDER BY (CASE WHEN note_appuntamento IS NOT NULL AND TRIM(note_appuntamento) != '' THEN 1 ELSE 0 END) DESC, "
+            "sheets_row DESC LIMIT 1",
             (eneltel_key,),
         )
     else:
         cur = conn.execute(
-            "SELECT * FROM filone WHERE eneltel_key=? AND COALESCE(lcl,'')=?",
+            "SELECT * FROM filone WHERE eneltel_key=? AND UPPER(TRIM(COALESCE(lcl,'')))=UPPER(TRIM(?))",
             (eneltel_key, lcl or ''),
         )
     row = cur.fetchone()
@@ -1219,7 +1239,7 @@ def find_filone_row_by_pod(pod, lcl=None, disabled_lcls=None):
 
     Se `lcl` è valorizzato: prova match esatto (POD, LCL).
     Se non trovato o `lcl` è None/'': cerca tra i record con quel POD,
-    privilegiando le LCL non disabilitate e la riga più recente (sheets_row DESC).
+    privilegiando le LCL non disabilitate e le righe con appuntamento/note.
 
     Ritorna `(eneltel_key, lcl_della_riga_trovata)` o None.
     """
@@ -1232,7 +1252,8 @@ def find_filone_row_by_pod(pod, lcl=None, disabled_lcls=None):
         cur = conn.execute(
             "SELECT eneltel_key, COALESCE(lcl,'') AS lcl FROM filone "
             "WHERE UPPER(TRIM(pod))=? AND UPPER(TRIM(COALESCE(lcl,'')))=? "
-            "ORDER BY sheets_row DESC LIMIT 1",
+            "ORDER BY (CASE WHEN note_appuntamento IS NOT NULL AND TRIM(note_appuntamento) != '' THEN 1 ELSE 0 END) DESC, "
+            "sheets_row DESC LIMIT 1",
             (pod_norm, lcl_norm),
         )
         row = cur.fetchone()
@@ -1240,7 +1261,14 @@ def find_filone_row_by_pod(pod, lcl=None, disabled_lcls=None):
             return (row['eneltel_key'], row['lcl'])
         # Fallback: nessun match esatto sulla LCL richiesta
 
-    # Fallback 1: cerca tra le LCL non disabilitate, prendendo la più recente
+    if disabled_lcls is None:
+        try:
+            import config
+            disabled_lcls = getattr(config, 'LCL_DISABILITATI', [])
+        except Exception:
+            disabled_lcls = []
+
+    # Fallback 1: cerca tra le LCL non disabilitate, prendendo quella con appuntamento / più recente
     if disabled_lcls:
         dis_list = [str(x).strip().upper() for x in disabled_lcls if str(x).strip()]
         if dis_list:
@@ -1248,17 +1276,21 @@ def find_filone_row_by_pod(pod, lcl=None, disabled_lcls=None):
             cur = conn.execute(
                 f"SELECT eneltel_key, COALESCE(lcl,'') AS lcl FROM filone "
                 f"WHERE UPPER(TRIM(pod))=? AND UPPER(TRIM(COALESCE(lcl,''))) NOT IN ({dis_placeholders}) "
-                f"ORDER BY sheets_row DESC LIMIT 1",
+                f"ORDER BY (CASE WHEN note_appuntamento IS NOT NULL AND TRIM(note_appuntamento) != '' THEN 1 ELSE 0 END) DESC, "
+                f"(CASE WHEN data_pianificata IS NOT NULL AND TRIM(data_pianificata) != '' AND TRIM(data_pianificata) != 'ANNULLATO' THEN 1 ELSE 0 END) DESC, "
+                f"sheets_row DESC LIMIT 1",
                 [pod_norm] + dis_list,
             )
             row = cur.fetchone()
             if row:
                 return (row['eneltel_key'], row['lcl'])
 
-    # Fallback 2: riga più recente per quel POD
+    # Fallback 2: riga più recente per quel POD (preferendo note)
     cur = conn.execute(
         "SELECT eneltel_key, COALESCE(lcl,'') AS lcl FROM filone "
-        "WHERE UPPER(TRIM(pod))=? ORDER BY sheets_row DESC LIMIT 1",
+        "WHERE UPPER(TRIM(pod))=? "
+        "ORDER BY (CASE WHEN note_appuntamento IS NOT NULL AND TRIM(note_appuntamento) != '' THEN 1 ELSE 0 END) DESC, "
+        "sheets_row DESC LIMIT 1",
         (pod_norm,),
     )
     row = cur.fetchone()
@@ -1270,7 +1302,7 @@ def find_filone_row_by_eneltel(eneltel, lcl=None, disabled_lcls=None):
 
     Se `lcl` è valorizzato: prova match esatto (eneltel, LCL).
     Se non trovato o `lcl` è None/'': cerca tra i record con quell'eneltel,
-    privilegiando le LCL non disabilitate e la riga più recente (sheets_row DESC).
+    privilegiando le LCL non disabilitate e le righe con appuntamento/note.
 
     Ritorna `(eneltel_key, lcl_della_riga_trovata)` o None.
     """
@@ -1285,13 +1317,21 @@ def find_filone_row_by_eneltel(eneltel, lcl=None, disabled_lcls=None):
         cur = conn.execute(
             "SELECT eneltel_key, COALESCE(lcl,'') AS lcl FROM filone "
             "WHERE eneltel_key=? AND UPPER(TRIM(COALESCE(lcl,'')))=? "
-            "ORDER BY sheets_row DESC LIMIT 1",
+            "ORDER BY (CASE WHEN note_appuntamento IS NOT NULL AND TRIM(note_appuntamento) != '' THEN 1 ELSE 0 END) DESC, "
+            "sheets_row DESC LIMIT 1",
             (ek, lcl_norm),
         )
         row = cur.fetchone()
         if row:
             return (row['eneltel_key'], row['lcl'])
         # Fallback: nessun match esatto sulla LCL richiesta
+
+    if disabled_lcls is None:
+        try:
+            import config
+            disabled_lcls = getattr(config, 'LCL_DISABILITATI', [])
+        except Exception:
+            disabled_lcls = []
 
     # Fallback 1: cerca tra le LCL non disabilitate, prendendo la più recente
     if disabled_lcls:
@@ -1301,7 +1341,9 @@ def find_filone_row_by_eneltel(eneltel, lcl=None, disabled_lcls=None):
             cur = conn.execute(
                 f"SELECT eneltel_key, COALESCE(lcl,'') AS lcl FROM filone "
                 f"WHERE eneltel_key=? AND UPPER(TRIM(COALESCE(lcl,''))) NOT IN ({dis_placeholders}) "
-                f"ORDER BY sheets_row DESC LIMIT 1",
+                f"ORDER BY (CASE WHEN note_appuntamento IS NOT NULL AND TRIM(note_appuntamento) != '' THEN 1 ELSE 0 END) DESC, "
+                f"(CASE WHEN data_pianificata IS NOT NULL AND TRIM(data_pianificata) != '' AND TRIM(data_pianificata) != 'ANNULLATO' THEN 1 ELSE 0 END) DESC, "
+                f"sheets_row DESC LIMIT 1",
                 [ek] + dis_list,
             )
             row = cur.fetchone()
@@ -1311,11 +1353,156 @@ def find_filone_row_by_eneltel(eneltel, lcl=None, disabled_lcls=None):
     # Fallback 2: riga più recente per quel Eneltel
     cur = conn.execute(
         "SELECT eneltel_key, COALESCE(lcl,'') AS lcl FROM filone "
-        "WHERE eneltel_key=? ORDER BY sheets_row DESC LIMIT 1",
+        "WHERE eneltel_key=? "
+        "ORDER BY (CASE WHEN note_appuntamento IS NOT NULL AND TRIM(note_appuntamento) != '' THEN 1 ELSE 0 END) DESC, "
+        "sheets_row DESC LIMIT 1",
         (ek,),
     )
     row = cur.fetchone()
     return (row['eneltel_key'], row['lcl']) if row else None
+
+
+def get_dati_filone_dict(pods=None):
+    """Ritorna una mappa {pod: dati_dict} con i dati attuali del filone per i POD richiesti.
+
+    Risolve intelligentemente i duplicati e le LCL storiche:
+    - Esclude o de-prioritizza le LCL disabilitate (archivio storico).
+    - Se esistono più righe per lo stesso POD, preserva note/appuntamenti compilati e date attive.
+    - Applica l'overlay di pending_writes in corso.
+    """
+    conn = get_conn()
+    try:
+        import config
+        disabled_lcls = set(str(x).strip().upper() for x in getattr(config, 'LCL_DISABILITATI', []) if str(x).strip())
+    except Exception:
+        disabled_lcls = set()
+
+    params = []
+    where_clauses = ['is_orphan = 0', "pod IS NOT NULL AND pod != ''"]
+
+    if pods:
+        cleaned_pods = list({str(p).strip().upper() for p in pods if str(p).strip()})
+        if cleaned_pods:
+            placeholders = ', '.join(['?'] * len(cleaned_pods))
+            where_clauses.append(f"UPPER(TRIM(pod)) IN ({placeholders})")
+            params.extend(cleaned_pods)
+
+    where_sql = ' AND '.join(where_clauses)
+    cur = conn.execute(f"SELECT * FROM filone WHERE {where_sql} ORDER BY sheets_row ASC", params)
+    rows = [dict(r) for r in cur.fetchall()]
+    if not rows:
+        return {}
+
+    # Pending writes overlay
+    keys_needed = {(r['eneltel_key'], (r.get('lcl') or '').strip().upper()) for r in rows}
+    pending_by_key = {}
+    if keys_needed:
+        cur = conn.execute(
+            "SELECT eneltel_key, COALESCE(lcl,'') AS lcl, column_name, new_value "
+            "FROM pending_writes WHERE state IN ('pending','in_flight')"
+        )
+        for pr in cur.fetchall():
+            k = (pr['eneltel_key'], pr['lcl'].strip().upper())
+            if k in keys_needed:
+                pending_by_key.setdefault(k, {})[pr['column_name']] = pr['new_value']
+
+    dati_filone = {}
+
+    for r in rows:
+        pod = (r.get('pod') or '').strip().upper()
+        if not pod:
+            continue
+
+        ek = r['eneltel_key']
+        lcl = (r.get('lcl') or '').strip()
+        is_disabled = lcl.upper() in disabled_lcls
+        row_pending = pending_by_key.get((ek, lcl.upper()), {})
+
+        def _val(col_db, col_header_aliases):
+            for h in col_header_aliases:
+                if h in row_pending:
+                    return row_pending[h]
+                h_lower = h.lower()
+                for pcol, pval in row_pending.items():
+                    if pcol.lower() == h_lower:
+                        return pval
+            return r.get(col_db) or ''
+
+        note_val = _val('note_appuntamento', ['NOTE APP', 'NOTE_APP', 'NOTE', 'Note', 'note_appuntamento'])
+        data_val = _val('data_pianificata', ['DATA PIAN', 'DATA_PIAN', 'Data PIAN', 'data_pianificata'])
+        tel_val = _val('telefono', ['telefono', 'TELEFONO', 'Telefono', 'TEL', 'Tel'])
+        email_val = _val('email', ['email', 'EMAIL', 'Email', 'Mail', 'MAIL'])
+        nom_val = _val('nominativo', ['NOMINATIVO', 'Nominativo', 'CLIENTE', 'Cliente'])
+        via_val = _val('indirizzo', ['Indirizzo', 'Via', 'VIA'])
+        civ_val = _val('civico', ['Num', 'NUM', 'civico', 'CIVICO'])
+        com_val = _val('comune', ['COMUNE', 'Comune'])
+        cod_ante = _val('codice_ante', ['Codice_Ante_Sostituzione', 'codice_ante'])
+        mat_ante = _val('matricola_ante', ['Matricola_Ante_Sostituzione', 'matricola_ante'])
+        tipologia = _val('tipo_misuratore', ['Tipo_Misuratore', 'TIPOLOGIA CE', 'tipo_misuratore'])
+        posizione = _val('posizione_misuratore', ['Posizione_Mis_Ante_Sost', 'Posizione_Ante_Mis', 'posizione_misuratore'])
+        mat_completa = ' / '.join(filter(None, [cod_ante.strip() if cod_ante else '', mat_ante.strip() if mat_ante else '']))
+
+        item = {
+            'pod': pod,
+            'eneltel': ek,
+            'lcl': lcl,
+            'is_disabled_lcl': is_disabled,
+            'data_pian': str(data_val or '').strip(),
+            'telefono': str(tel_val or '').strip(),
+            'email': str(email_val or '').strip(),
+            'nominativo': str(nom_val or '').strip(),
+            'indirizzo': str(via_val or '').strip(),
+            'civico': str(civ_val or '').strip(),
+            'comune': str(com_val or '').strip(),
+            'note': str(note_val or '').strip(),
+            'matricola': mat_completa,
+            'tipologia': str(tipologia or '').strip(),
+            'posizione': str(posizione or '').strip(),
+            'sheets_row': r.get('sheets_row') or 0,
+            'last_local_change_ts': r.get('last_local_change_ts') or 0,
+        }
+
+        if pod not in dati_filone:
+            dati_filone[pod] = item
+        else:
+            existing = dati_filone[pod]
+            # 1. Se existing è attiva e item è disabilitata -> skip item
+            if not existing['is_disabled_lcl'] and item['is_disabled_lcl']:
+                continue
+            # 2. Se existing è disabilitata e item è attiva -> sovrascrivi con item
+            if existing['is_disabled_lcl'] and not item['is_disabled_lcl']:
+                dati_filone[pod] = item
+                continue
+            # 3. Entrambe attive (o entrambe disabilitate):
+            # Priorità a chi ha note di appuntamento
+            ext_has_app = 'APP ' in existing['note'].upper() or existing['note'].upper().startswith('APP')
+            new_has_app = 'APP ' in item['note'].upper() or item['note'].upper().startswith('APP')
+            if ext_has_app and not new_has_app:
+                continue
+            if new_has_app and not ext_has_app:
+                dati_filone[pod] = item
+                continue
+            # Priorità a chi ha una nota non vuota
+            if existing['note'] and not item['note']:
+                continue
+            if item['note'] and not existing['note']:
+                dati_filone[pod] = item
+                continue
+            # Priorità a chi ha data pianificata valida
+            ext_has_date = bool(existing['data_pian'] and existing['data_pian'].upper() != 'ANNULLATO')
+            new_has_date = bool(item['data_pian'] and item['data_pian'].upper() != 'ANNULLATO')
+            if ext_has_date and not new_has_date:
+                continue
+            if new_has_date and not ext_has_date:
+                dati_filone[pod] = item
+                continue
+            # Tie breaker: data modifica più recente o sheets_row più alto
+            if (item['last_local_change_ts'] or 0) > (existing['last_local_change_ts'] or 0):
+                dati_filone[pod] = item
+            elif item['sheets_row'] > existing['sheets_row']:
+                dati_filone[pod] = item
+
+    return dati_filone
 
 
 def find_inactive_lcl_contatori(pod_list=None, eneltel_list=None, nominativo=None, disabled_lcls=None, limit=50):

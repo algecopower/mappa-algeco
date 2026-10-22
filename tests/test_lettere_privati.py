@@ -763,6 +763,84 @@ def test_salva_nota_endpoint_eneltel_fallback(db_isolato):
     assert row['note_appuntamento'] == 'nuova nota eneltel'
 
 
+def test_lettere_sync_priorita_lcl_attivo_e_appuntamento(db_isolato, monkeypatch):
+    """
+    Verifica che list_privati e list_aziende rilevino la data aggiornata (23/10)
+    e l'appuntamento attivo anche se la lettera era stata generata con un vecchio LCL storico disabilitato.
+    """
+    from moduli import lettere
+    import config
+
+    monkeypatch.setattr(config, 'LCL_DISABILITATI', ['LCL_DISABILITATO'], raising=False)
+
+    conn = db_isolato.get_conn()
+    with conn:
+        # Riga attiva filone (LCL_ATTIVO) con appuntamento e data 23/10
+        db_isolato.upsert_filone_row(
+            conn,
+            eneltel_key='5001',
+            lcl='LCL_ATTIVO',
+            sheets_row=10,
+            typed_values={
+                'pod': 'IT001E55555555',
+                'data_pianificata': '23/10/2026',
+                'note_appuntamento': "APP 23/10/2026\tdalle 14:00 alle 15:30",
+                'telefono': '3335555555',
+            },
+            extra_values={},
+            row_hash='h_attivo',
+            source='bootstrap',
+        )
+        # Riga storica disabilitata filone (LCL_DISABILITATO) con 16/10 e note vuote
+        db_isolato.upsert_filone_row(
+            conn,
+            eneltel_key='5002',
+            lcl='LCL_DISABILITATO',
+            sheets_row=20,
+            typed_values={
+                'pod': 'IT001E55555555',
+                'data_pianificata': '16/10/2026',
+                'note_appuntamento': '',
+                'telefono': '',
+            },
+            extra_values={},
+            row_hash='h_disabilitato',
+            source='bootstrap',
+        )
+
+    # Genera lettera con il vecchio LCL storico
+    righe = [{
+        'pod': 'IT001E55555555',
+        'eneltel': '5002',
+        'lcl': 'LCL_DISABILITATO',
+        'nominativo': 'MARIO BIANCHI',
+        'comune': 'TORINO',
+        'via': 'VIA ROMA',
+        'civico': '1',
+        'cap': '10100',
+        'is_azienda': False,
+        'data_lettera': '16/10/2026',
+    }]
+    info = lettere.registra_generazione(
+        'test_generazione.xlsx',
+        '2026-10-01',
+        '2026-10-31',
+        righe,
+        provincia='TORINO',
+        user='tester',
+    )
+
+    # Verifica privati
+    privati_res = lettere.list_privati(generazione_id=info['generazione_id'], provincia='TORINO')
+    contatti = privati_res['contatti']
+    assert len(contatti) == 1
+    c = contatti[0]
+    assert c['pod'] == 'IT001E55555555'
+    assert c['data_pian_filone'] == '23/10/2026'
+    assert 'APP 23/10/2026' in c['note_filone']
+
+
+
 
 
 

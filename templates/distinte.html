@@ -2448,6 +2448,20 @@
                 <select class="bulk-template-select" id="bulkTemplateSelect" onchange="aggiornaBulkPreview()">
                 </select>
 
+                <!-- Anti-Spam Delay Setting -->
+                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;padding:8px 12px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:6px;font-size:0.85rem;">
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <i class="fas fa-user-shield" style="color:var(--accent);"></i>
+                        <label for="bulkEmailDelayMode" style="font-weight:600;margin:0;">Pausa anti-spam tra email:</label>
+                    </div>
+                    <select id="bulkEmailDelayMode" style="padding:4px 8px;border-radius:6px;background:var(--input-bg, #0f172a);color:var(--text);border:1px solid var(--border);font-size:0.85rem;">
+                        <option value="15-25" selected>Umana / Consigliata (15-25s casuali)</option>
+                        <option value="10-18">Veloce (10-18s casuali)</option>
+                        <option value="30-50">Prudente / PEC (30-50s casuali)</option>
+                        <option value="60-120">Conservativa classica (60-120s casuali)</option>
+                    </select>
+                </div>
+
                 <!-- Filters -->
                 <div class="bulk-filter-row">
                     <label class="bulk-select-all" style="margin:0;display:flex;align-items:center;gap:6px;">
@@ -3387,18 +3401,19 @@
                 TEMPLATES = {};
                 for (const [id, tmpl] of Object.entries(data.templates || {})) {
                     TEMPLATES[id] = {
+                        ...tmpl,
                         id: id,
                         label: tmpl.label,
                         icon: tmpl.icon,
                         type: tmpl.type,
                         fields: tmpl.fields,
                         info: tmpl.info || null,
+                        body: tmpl.body,
+                        conditionals: tmpl.conditionals,
                         generate: (c, f, pEmail, pTel, pKey) => resolveTemplate(tmpl.body, f, tmpl.conditionals),
+                        generateSubject: (c, f, pEmail, pTel, pKey) => tmpl.subject ? resolveTemplate(tmpl.subject, f) : `Sostituzione contatore - ${(c && c.nome) || ''}`,
+                        subject: (c, f, pEmail, pTel, pKey) => tmpl.subject ? resolveTemplate(tmpl.subject, f) : `Sostituzione contatore - ${(c && c.nome) || ''}`,
                     };
-                    if (tmpl.subject) {
-                        const subjTmpl = tmpl.subject;
-                        TEMPLATES[id].subject = (c, f, pEmail, pTel, pKey) => resolveTemplate(subjTmpl, f);
-                    }
                 }
                 console.log('[Templates] Caricati dal JSON centralizzato');
             } catch (err) {
@@ -3686,6 +3701,28 @@
             const contatto = contatti.find(c => c.pod === pod);
             if (!contatto) return '';
             return formatDataBreveNota(contatto.data_pian_filone || contatto.data_intervento || '');
+        }
+
+        function registraNotaInvioLocale(pod, tipo, dataPian) {
+            if (!pod || pod === '?') return;
+            const oggi = new Date();
+            const gg = String(oggi.getDate()).padStart(2, '0');
+            const mm = String(oggi.getMonth() + 1).padStart(2, '0');
+            const dataPianFmt = formatDataBreveNota(dataPian);
+            const azione = tipo === 'sms' ? 'mandato SMS' : 'mandata mail';
+            const testoNota = dataPianFmt ? `${gg}/${mm} ${azione} per ${dataPianFmt}` : `${gg}/${mm} ${azione}`;
+            
+            const existing = (noteStates[pod] || '').trim();
+            if (!existing.includes(testoNota)) {
+                const nuovaNota = existing ? `${testoNota} // ${existing}` : testoNota;
+                noteStates[pod] = nuovaNota;
+                saveStates();
+                const noteDisplay = document.getElementById(`noteDisplay_${pod}`);
+                if (noteDisplay) {
+                    noteDisplay.value = nuovaNota;
+                    noteDisplay.title = nuovaNota;
+                }
+            }
         }
 
         // Inizializza note da filone (sempre dal filone, è la fonte di verità)
@@ -4385,6 +4422,9 @@
             }
         }
 
+        let currentBulkBaseContacts = [];
+        let bulkEmailRows = [];
+
         function apriBulkEmailModal() {
             caricaStatoSmtpDistinte();
             if (!contatti || contatti.length === 0) {
@@ -4404,6 +4444,8 @@
                 return;
             }
 
+            currentBulkBaseContacts = contattiValidi;
+
             // Popola template select (solo email)
             const select = document.getElementById('bulkTemplateSelect');
             select.innerHTML = '';
@@ -4418,13 +4460,20 @@
 
             // Al cambio del template, ripopola i contatti compatibili
             select.onchange = () => {
-                popolaBulkContactsList(contattiValidi);
+                aggiornaBulkPreview();
+                popolaBulkContactsList(currentBulkBaseContacts);
             };
 
             // Popola la lista iniziale
             popolaBulkContactsList(contattiValidi);
 
             document.getElementById('bulkEmailModal').classList.add('active');
+        }
+
+        function onBulkContactCheckChange(cb) {
+            const item = cb.closest('.bulk-contact-item');
+            if (item) item.style.opacity = cb.checked ? '' : '0.45';
+            aggiornaDistinteBulkConteggi();
         }
 
         function popolaBulkContactsList(baseContacts) {
@@ -4449,6 +4498,8 @@
                     }
                 }
             }
+
+            bulkEmailRows = righe;
 
             const numPec = righe.filter(r => r.pec).length;
             const numNormali = righe.filter(r => !r.pec).length;
@@ -4482,7 +4533,7 @@
                     const destHtml = `<div class="bulk-contact-email">${escapeHtml(r.email)}${r.pec ? '<span class="pec-badge">PEC</span>' : '<span class="pec-badge" style="background:var(--info)">MAIL</span>'}</div>`;
                     return `
                     <div class="bulk-contact-item ${r.pec ? 'is-pec' : ''}" data-is-pec="${r.pec}">
-                        <input type="checkbox" class="bulk-contact-check" data-pod="${r.pod}" data-email="${escapeHtml(r.email)}" data-pec="${r.pec}" data-tipo="${r.tipo}" data-tipoce="${escapeHtml(tipoCe)}" data-hasnote="${Boolean(r.nota)}" data-idx="${i}" ${r.pec ? '' : 'checked'}>
+                        <input type="checkbox" class="bulk-contact-check" data-pod="${r.pod}" data-email="${escapeHtml(r.email)}" data-pec="${r.pec}" data-tipo="${r.tipo}" data-tipoce="${escapeHtml(tipoCe)}" data-hasnote="${Boolean(r.nota)}" data-idx="${i}" onchange="onBulkContactCheckChange(this)" ${r.pec ? '' : 'checked'}>
                         <div class="bulk-contact-main">
                             <div class="bulk-contact-name" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
                                 <strong>${escapeHtml(r.nome)}</strong>
@@ -4515,7 +4566,8 @@
             // Reset preview state
             document.getElementById('bulkPreviewSection').style.display = 'none';
             document.getElementById('bulkContactsList').style.display = '';
-            document.querySelector('.bulk-filter-row').style.display = '';
+            const filterRow = document.querySelector('#bulkEmailModal .bulk-filter-row');
+            if (filterRow) filterRow.style.display = '';
             document.getElementById('bulkPreviewBtn').style.display = righe.length > 0 ? '' : 'none';
             document.getElementById('bulkSendBtn').style.display = 'none';
             bulkPreviews = [];
@@ -4523,6 +4575,7 @@
 
         function chiudiBulkEmailModal() {
             document.getElementById('bulkEmailModal').classList.remove('active');
+            chiudiAnteprima();
         }
 
         function applyDistinteBulkPreset(preset) {
@@ -4530,7 +4583,7 @@
             const activeBtn = document.getElementById(`distPreset_${preset}`);
             if (activeBtn) activeBtn.classList.add('active');
 
-            const checks = document.querySelectorAll('.bulk-contact-check');
+            const checks = document.querySelectorAll('#bulkEmailModal .bulk-contact-check');
             checks.forEach(cb => {
                 const isPec = cb.dataset.pec === 'true';
                 const tipo = (cb.dataset.tipoce || '').toLowerCase();
@@ -4560,7 +4613,7 @@
         }
 
         function toggleBulkSelectAll(checked) {
-            document.querySelectorAll('.bulk-contact-check').forEach(cb => {
+            document.querySelectorAll('#bulkEmailModal .bulk-contact-check').forEach(cb => {
                 cb.checked = checked;
                 const item = cb.closest('.bulk-contact-item');
                 if (item) item.style.opacity = checked ? '' : '0.45';
@@ -4572,8 +4625,8 @@
         }
 
         function aggiornaDistinteBulkConteggi() {
-            const checks = document.querySelectorAll('.bulk-contact-check');
-            const checked = document.querySelectorAll('.bulk-contact-check:checked');
+            const checks = document.querySelectorAll('#bulkEmailModal .bulk-contact-check');
+            const checked = document.querySelectorAll('#bulkEmailModal .bulk-contact-check:checked');
             const total = checks.length;
             const checkedCount = checked.length;
             const allCb = document.getElementById('bulkSelectAll');
@@ -4639,6 +4692,12 @@
                 return;
             }
 
+            const checkboxes = document.querySelectorAll('#bulkEmailModal .bulk-contact-check:checked');
+            if (checkboxes.length === 0) {
+                showToast('Seleziona almeno un contatto', 'error');
+                return;
+            }
+
             const pk = (provincia || window.provincia || (window.BulkEmailPreview && BulkEmailPreview.getDetectedProvince()) || 'TORINO').toUpperCase();
             const provSettings = (templateSettings.province && templateSettings.province[pk]) || {};
             const emailTecnico = provSettings.email || templateSettings['email_' + pk.toLowerCase()] || templateSettings.email_tecnico || `tecnico_${pk.toLowerCase()}@algecopower.it`;
@@ -4649,7 +4708,9 @@
             checkboxes.forEach(cb => {
                 const pod = cb.dataset.pod;
                 const destAddr = cb.dataset.email;
-                const contatto = contatti.find(c => c.pod === pod);
+                const idx = parseInt(cb.dataset.idx, 10);
+                const riga = (bulkEmailRows && bulkEmailRows[idx]) || null;
+                const contatto = (riga && riga.contatto) || contatti.find(c => String(c.pod) === String(pod));
                 if (!contatto || !destAddr) return;
 
                 const contattoData = {
@@ -4679,7 +4740,7 @@
             });
 
             if (selectedRaw.length === 0) {
-                showToast('Nessun contatto valido', 'error');
+                showToast('Nessun contatto valido selezionato', 'error');
                 return;
             }
 
@@ -4727,8 +4788,8 @@
 
             // Toggle visibility: hide contacts list + filters, show preview
             document.getElementById('bulkContactsList').style.display = 'none';
-            document.querySelector('.bulk-filter-row').style.display = 'none';
-            document.querySelector('.bulk-select-all')?.closest?.('.bulk-filter-row')?.previousElementSibling?.style && null;
+            const filterRow = document.querySelector('#bulkEmailModal .bulk-filter-row');
+            if (filterRow) filterRow.style.display = 'none';
             document.getElementById('bulkPreviewSection').style.display = 'block';
             document.getElementById('previewCount').textContent = bulkPreviews.length;
 
@@ -4874,6 +4935,8 @@
             const isEditing = editorContainer.style.display === 'block';
             if (isEditing) {
                 // Switch back to rendered view — re-render with edits
+                bulkPreviews[idx].bodyHtml = editor.innerHTML;
+                bulkPreviews[idx].edited = true;
                 rendered.innerHTML = buildMessageHtml(editor.innerHTML);
                 rendered.style.display = '';
                 editorContainer.style.display = 'none';
@@ -4889,20 +4952,31 @@
 
         function onPreviewBodyEdit(idx) {
             segnaModificata(idx);
+            const editor = document.getElementById(`previewBody${idx}`);
+            if (editor && bulkPreviews[idx]) {
+                bulkPreviews[idx].bodyHtml = editor.innerHTML;
+            }
         }
 
         function segnaModificata(idx) {
-            bulkPreviews[idx].edited = true;
+            if (bulkPreviews[idx]) {
+                bulkPreviews[idx].edited = true;
+                const subjInput = document.getElementById(`previewSubject${idx}`);
+                if (subjInput) bulkPreviews[idx].subject = subjInput.value;
+            }
             const badge = document.getElementById(`previewBadge${idx}`);
-            badge.style.display = '';
-            badge.classList.add('edited');
+            if (badge) {
+                badge.style.display = '';
+                badge.classList.add('edited');
+            }
         }
 
         function chiudiAnteprima() {
             // Torna alla vista selezione contatti
             document.getElementById('bulkPreviewSection').style.display = 'none';
             document.getElementById('bulkContactsList').style.display = '';
-            document.querySelector('.bulk-filter-row').style.display = '';
+            const filterRow = document.querySelector('#bulkEmailModal .bulk-filter-row');
+            if (filterRow) filterRow.style.display = '';
 
             // Toggle buttons: show Anteprima, hide Invia
             document.getElementById('bulkPreviewBtn').style.display = '';
@@ -4930,7 +5004,9 @@
             const selezionati = bulkPreviews.map((p, i) => {
                 const subjectEl = document.getElementById(`previewSubject${i}`);
                 const bodyEl = document.getElementById(`previewBody${i}`);
-                const bodyHtml = bodyEl ? (bodyEl.value !== undefined ? bodyEl.value : bodyEl.innerHTML) : p.bodyHtml;
+                const bodyContainer = document.getElementById(`previewBodyContainer${i}`);
+                const isEditing = bodyContainer && bodyContainer.style.display === 'block';
+                const bodyHtml = (bodyEl && isEditing) ? bodyEl.innerHTML : p.bodyHtml;
                 return {
                     ...p.contatto,
                     contatori: p.contatori || [p.contatto],
@@ -4970,9 +5046,20 @@
             let inviati = 0, errori = 0;
             const podsInviati = new Set();
 
+            const delayMode = document.getElementById('bulkEmailDelayMode')?.value || '15-25';
+            let pauseRange = [15, 25];
+            if (delayMode.includes('-')) {
+                const parts = delayMode.split('-').map(Number);
+                if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+                    pauseRange = parts;
+                }
+            } else if (!isNaN(Number(delayMode))) {
+                pauseRange = Number(delayMode);
+            }
+
             const runner = BulkEmailPreview.createBulkRunner({
                 items: selezionati,
-                pauseBetweenSec: [60, 120],
+                pauseBetweenSec: pauseRange,
                 sendItemFn: async (c) => {
                     const resp = await fetch('/api/distinte/invia-singola-email', {
                         method: 'POST',
@@ -4995,7 +5082,12 @@
                 },
                 onItemSuccess: (c, idx, res) => {
                     inviati++;
-                    (c.contatori || [c]).forEach(ct => { if (ct && ct.pod) podsInviati.add(ct.pod); });
+                    (c.contatori || [c]).forEach(ct => {
+                        if (ct && ct.pod) {
+                            podsInviati.add(ct.pod);
+                            registraNotaInvioLocale(ct.pod, 'mail', ct.data_intervento || ct.data_pian_filone);
+                        }
+                    });
                     const contText = (c.contatori && c.contatori.length > 1) ? ` (${c.contatori.length} contatori)` : '';
                     logEl.innerHTML += `<div class="result-ok"><i class="fas fa-check"></i> ${escapeHtml(c.pod)} → ${escapeHtml(c.email)}${contText}</div>`;
                     logEl.scrollTop = logEl.scrollHeight;
@@ -5023,6 +5115,9 @@
 
                     if (nSent > 0) {
                         showToast(`${nSent} email processate con successo!`);
+                        if (typeof renderContacts === 'function') {
+                            renderContacts();
+                        }
                     }
                     if (aborted) {
                         logEl.innerHTML += `<div style="color:var(--warning);"><i class="fas fa-hand-paper"></i> Invio interrotto dall'utente dopo ${nSent} invii</div>`;
@@ -5454,81 +5549,99 @@
             const telefonoTecnico = provSettings.telefono || templateSettings['telefono_' + pk.toLowerCase()] || templateSettings.telefono_tecnico || '011 025 2702';
             const emailTecnico = provSettings.email || templateSettings['email_' + pk.toLowerCase()] || templateSettings.email_tecnico || `tecnico_${pk.toLowerCase()}@algecopower.it`;
 
-            for (let i = 0; i < checkedBoxes.length; i++) {
-                if (bulkSmsAbortato) {
-                    logEl.innerHTML += `<div style="color:#f59e0b;padding:3px 0;"><i class="fas fa-hand-paper"></i> <strong>Invio interrotto dall'operatore dopo ${inviati} messaggi.</strong></div>`;
-                    logEl.scrollTop = logEl.scrollHeight;
-                    break;
+            function _beforeUnloadSms(e) {
+                if (!bulkSmsAbortato) {
+                    const msg = 'Un invio SMS massivo è in corso. Se lasci la pagina, l\'invio verrà interrotto.';
+                    e.preventDefault();
+                    e.returnValue = msg;
+                    return msg;
                 }
+            }
+            window.addEventListener('beforeunload', _beforeUnloadSms);
 
-                const cb = checkedBoxes[i];
-                const pod = cb.dataset.pod;
-                const tel = cb.dataset.tel;
-                const contatto = contatti.find(c => c.pod === pod) || {};
-                const nome = contatto.nome || cb.dataset.nome || 'Cliente';
+            try {
+                for (let i = 0; i < checkedBoxes.length; i++) {
+                    if (bulkSmsAbortato) {
+                        logEl.innerHTML += `<div style="color:#f59e0b;padding:3px 0;"><i class="fas fa-hand-paper"></i> <strong>Invio interrotto dall'operatore dopo ${inviati} messaggi.</strong></div>`;
+                        logEl.scrollTop = logEl.scrollHeight;
+                        break;
+                    }
 
-                // Risolvi i segnaposto nel testo del messaggio
-                const dataIntervento = contatto.data_pian_filone || contatto.data_intervento || '';
-                const comune = contatto.comune || '';
-                const indirizzo = `${contatto.indirizzo || ''} ${contatto.civico || ''}`.trim();
-                const nomeOp = contatto.nome_operatore || contatto.operatore || '';
-                const telOp = contatto.telefono_operatore || '';
+                    const cb = checkedBoxes[i];
+                    const pod = cb.dataset.pod;
+                    const tel = cb.dataset.tel;
+                    const contatto = contatti.find(c => c.pod === pod) || {};
+                    const nome = contatto.nome || cb.dataset.nome || 'Cliente';
 
-                let msgText = rawText
-                    .replace(/{nome}/g, nome)
-                    .replace(/{data}/g, dataIntervento)
-                    .replace(/{comune}/g, comune)
-                    .replace(/{indirizzo}/g, indirizzo)
-                    .replace(/{pod}/g, pod)
-                    .replace(/{telefono_tecnico}/g, telefonoTecnico)
-                    .replace(/{email_tecnico}/g, emailTecnico)
-                    .replace(/{nome_operatore}/g, nomeOp)
-                    .replace(/{telefono_operatore}/g, telOp);
+                    // Risolvi i segnaposto nel testo del messaggio
+                    const dataIntervento = contatto.data_pian_filone || contatto.data_intervento || '';
+                    const comune = contatto.comune || '';
+                    const indirizzo = `${contatto.indirizzo || ''} ${contatto.civico || ''}`.trim();
+                    const nomeOp = contatto.nome_operatore || contatto.operatore || '';
+                    const telOp = contatto.telefono_operatore || '';
 
-                document.getElementById('bulkSmsProgressText').textContent =
-                    `${i + 1} / ${checkedBoxes.length} — Invio a ${nome} (${tel})...`;
-                document.getElementById('bulkSmsProgressFill').style.width =
-                    `${Math.round(((i + 1) / checkedBoxes.length) * 100)}%`;
+                    let msgText = rawText
+                        .replace(/{nome}/g, nome)
+                        .replace(/{data}/g, dataIntervento)
+                        .replace(/{comune}/g, comune)
+                        .replace(/{indirizzo}/g, indirizzo)
+                        .replace(/{pod}/g, pod)
+                        .replace(/{telefono_tecnico}/g, telefonoTecnico)
+                        .replace(/{email_tecnico}/g, emailTecnico)
+                        .replace(/{nome_operatore}/g, nomeOp)
+                        .replace(/{telefono_operatore}/g, telOp);
 
-                try {
-                    const resp = await fetch('/api/distinte/invia-singolo-sms', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            pod: pod,
-                            telefono: tel,
-                            testo: msgText,
-                            nome: nome
-                        })
-                    });
-                    const res = await resp.json();
+                    document.getElementById('bulkSmsProgressText').textContent =
+                        `${i + 1} / ${checkedBoxes.length} — Invio a ${nome} (${tel})...`;
+                    document.getElementById('bulkSmsProgressFill').style.width =
+                        `${Math.round(((i + 1) / checkedBoxes.length) * 100)}%`;
 
-                    if (res.ok) {
-                        inviati++;
-                        podsAggiornati.add(pod);
-                        const parts = res.parti_sms || 1;
-                        logEl.innerHTML += `<div style="color:#10b981;padding:2px 0;"><i class="fas fa-check-circle"></i> <strong>[SMS]</strong> Inviato a <b>${escapeHtml(nome)}</b> (${escapeHtml(tel)}) — ${parts} SMS</div>`;
-                    } else {
+                    try {
+                        const resp = await fetch('/api/distinte/invia-singolo-sms', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                pod: pod,
+                                telefono: tel,
+                                testo: msgText,
+                                nome: nome
+                            })
+                        });
+                        const res = await resp.json();
+
+                        if (res.ok) {
+                            inviati++;
+                            podsAggiornati.add(pod);
+                            registraNotaInvioLocale(pod, 'sms', dataIntervento);
+                            const parts = res.parti_sms || 1;
+                            logEl.innerHTML += `<div style="color:#10b981;padding:2px 0;"><i class="fas fa-check-circle"></i> <strong>[SMS]</strong> Inviato a <b>${escapeHtml(nome)}</b> (${escapeHtml(tel)}) — ${parts} SMS</div>`;
+                        } else {
+                            errori++;
+                            logEl.innerHTML += `<div style="color:#ef4444;padding:2px 0;"><i class="fas fa-times-circle"></i> <strong>[ERRORE]</strong> <b>${escapeHtml(nome)}</b> (${escapeHtml(tel)}): ${escapeHtml(res.error || 'Errore di invio')}</div>`;
+                        }
+                    } catch (e) {
                         errori++;
-                        logEl.innerHTML += `<div style="color:#ef4444;padding:2px 0;"><i class="fas fa-times-circle"></i> <strong>[ERRORE]</strong> <b>${escapeHtml(nome)}</b> (${escapeHtml(tel)}): ${escapeHtml(res.error || 'Errore di invio')}</div>`;
+                        logEl.innerHTML += `<div style="color:#ef4444;padding:2px 0;"><i class="fas fa-times-circle"></i> <strong>[ERRORE DI RETE]</strong> <b>${escapeHtml(nome)}</b>: ${escapeHtml(e.message)}</div>`;
                     }
-                } catch (e) {
-                    errori++;
-                    logEl.innerHTML += `<div style="color:#ef4444;padding:2px 0;"><i class="fas fa-times-circle"></i> <strong>[ERRORE DI RETE]</strong> <b>${escapeHtml(nome)}</b>: ${escapeHtml(e.message)}</div>`;
-                }
 
-                logEl.scrollTop = logEl.scrollHeight;
+                    logEl.scrollTop = logEl.scrollHeight;
 
-                // Pausa anti-flood tra invii
-                if (i < checkedBoxes.length - 1 && !bulkSmsAbortato) {
-                    let sLeft = delaySec;
-                    while (sLeft > 0 && !bulkSmsAbortato) {
-                        document.getElementById('bulkSmsProgressText').textContent =
-                            `${i + 1} / ${checkedBoxes.length} — In attesa anti-flood (${sLeft}s)...`;
-                        await new Promise(r => setTimeout(r, 1000));
-                        sLeft--;
+                    // Pausa anti-flood tra invii
+                    if (i < checkedBoxes.length - 1 && !bulkSmsAbortato) {
+                        const targetTime = Date.now() + (delaySec * 1000);
+                        while (!bulkSmsAbortato) {
+                            const remainingMs = targetTime - Date.now();
+                            if (remainingMs <= 0) break;
+                            const sLeft = Math.ceil(remainingMs / 1000);
+                            document.getElementById('bulkSmsProgressText').textContent =
+                                `${i + 1} / ${checkedBoxes.length} — In attesa anti-flood (${sLeft}s)...`;
+                            const waitMs = Math.min(1000, Math.max(100, remainingMs));
+                            await new Promise(r => setTimeout(r, waitMs));
+                        }
                     }
                 }
+            } finally {
+                window.removeEventListener('beforeunload', _beforeUnloadSms);
             }
 
             // Riepilogo finale
@@ -5547,7 +5660,9 @@
                 showToast(`${inviati} messaggi processati con successo!`);
                 // Aggiorna visivamente le card dei contatti per mostrare la nuova nota
                 setTimeout(() => {
-                    renderContatti();
+                    if (typeof renderContacts === 'function') {
+                        renderContacts();
+                    }
                 }, 500);
             }
         }

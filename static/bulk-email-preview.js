@@ -117,7 +117,11 @@
 
             if (n <= 1) {
                 const bodyText = tmpl.generate ? tmpl.generate(first, fields, emailTecnico) : this.resolveTemplate(tmpl.body, fields, tmpl.conditionals, emailTecnico);
-                const subject = tmpl.generateSubject ? tmpl.generateSubject(first, fields, emailTecnico) : (tmpl.subject ? this.resolveTemplate(tmpl.subject, fields, null, emailTecnico) : `Sostituzione contatore - ${nomeAzienda}`);
+                const subject = tmpl.generateSubject
+                    ? tmpl.generateSubject(first, fields, emailTecnico)
+                    : (typeof tmpl.subject === 'function'
+                        ? tmpl.subject(first, fields, emailTecnico)
+                        : (tmpl.subject ? this.resolveTemplate(tmpl.subject, fields, null, emailTecnico) : `Sostituzione contatore - ${nomeAzienda}`));
                 return {
                     subject: subject,
                     bodyText: bodyText,
@@ -126,7 +130,9 @@
             }
 
             // N >= 2: Pluralizza il corpo base
-            let rawBody = this.resolveTemplate(tmpl.body, fields, tmpl.conditionals, emailTecnico);
+            let rawBody = tmpl.generate
+                ? tmpl.generate(first, fields, emailTecnico)
+                : this.resolveTemplate(tmpl.body, fields, tmpl.conditionals, emailTecnico);
             let pluralBody = this.pluralizeText(rawBody);
 
             if (n === 2) {
@@ -260,7 +266,10 @@
          * Risolve un template sostituendo segnaposto {campo}, condizionali {key}, {email_tecnico} e {telefono_tecnico}.
          */
         resolveTemplate: function (bodyStr, fields, conditionals, emailTecnico, telefonoTecnico, provKey) {
-            let result = bodyStr || '';
+            if (typeof bodyStr === 'function') {
+                return bodyStr({}, fields || {}, emailTecnico, telefonoTecnico, provKey);
+            }
+            let result = String(bodyStr || '');
             if (conditionals) {
                 for (const [key, cond] of Object.entries(conditionals)) {
                     const fieldVal = (fields && fields[cond.field]) || '';
@@ -809,6 +818,15 @@
                 });
             }
 
+            function _beforeUnloadHandler(e) {
+                if (isRunning && !aborted) {
+                    const msg = 'Un invio massivo è in corso. Se lasci la pagina, l\'invio verrà interrotto.';
+                    e.preventDefault();
+                    e.returnValue = msg;
+                    return msg;
+                }
+            }
+
             const runner = {
                 abort: function () {
                     aborted = true;
@@ -824,67 +842,102 @@
                     nErrors = 0;
 
                     const total = items.length;
+                    const originalTitle = (typeof document !== 'undefined') ? document.title : '';
 
-                    for (let i = 0; i < total; i++) {
-                        if (aborted) {
-                            break;
-                        }
+                    if (typeof window !== 'undefined') {
+                        window.addEventListener('beforeunload', _beforeUnloadHandler);
+                    }
 
-                        const item = items[i];
-                        const pct = Math.round(((i + 1) / total) * 100);
-                        onProgress({
-                            index: i,
-                            total: total,
-                            percent: pct,
-                            item: item,
-                            statusText: `${i + 1} / ${total}`
-                        });
+                    try {
+                        for (let i = 0; i < total; i++) {
+                            if (aborted) {
+                                break;
+                            }
 
-                        let res = null;
-                        try {
-                            res = await sendItemFn(item, i);
-                        } catch (sendErr) {
-                            res = { ok: false, success: false, error: sendErr.message || 'Errore di connessione/rete' };
-                        }
+                            const item = items[i];
+                            const pct = Math.round(((i + 1) / total) * 100);
 
-                        // Se errore SMTP, offri configurazione al volo
-                        if (res && (!res.ok && !res.success)) {
-                            const retried = await _handleSmtpErrorOnTheFly(item, i, res);
-                            if (retried) {
-                                try {
-                                    res = await sendItemFn(item, i);
-                                } catch (retryErr) {
-                                    res = { ok: false, success: false, error: retryErr.message || 'Errore di rete' };
+                            if (typeof document !== 'undefined') {
+                                document.title = `⏳ (${i + 1}/${total}) Invio email...`;
+                            }
+
+                            onProgress({
+                                index: i,
+                                total: total,
+                                percent: pct,
+                                item: item,
+                                statusText: `${i + 1} / ${total}`
+                            });
+
+                            let res = null;
+                            try {
+                                res = await sendItemFn(item, i);
+                            } catch (sendErr) {
+                                res = { ok: false, success: false, error: sendErr.message || 'Errore di connessione/rete' };
+                            }
+
+                            // Se errore SMTP, offri configurazione al volo
+                            if (res && (!res.ok && !res.success)) {
+                                const retried = await _handleSmtpErrorOnTheFly(item, i, res);
+                                if (retried) {
+                                    try {
+                                        res = await sendItemFn(item, i);
+                                    } catch (retryErr) {
+                                        res = { ok: false, success: false, error: retryErr.message || 'Errore di rete' };
+                                    }
+                                }
+                            }
+
+                            const isOk = Boolean(res && (res.ok || res.success));
+                            if (isOk) {
+                                nSent++;
+                                onItemSuccess(item, i, res);
+                            } else {
+                                nErrors++;
+                                onItemError(item, i, res);
+                            }
+
+                            // Pausa anti-spam tra un invio e il successivo (tranne dopo l'ultimo)
+                            if (i < total - 1 && !aborted) {
+                                const pauseSec = _calcPauseSec();
+                                const targetTime = Date.now() + (pauseSec * 1000);
+                                while (!aborted) {
+                                    const remainingMs = targetTime - Date.now();
+                                    if (remainingMs <= 0) break;
+                                    const timeLeft = Math.ceil(remainingMs / 1000);
+                                    if (typeof document !== 'undefined') {
+                                        document.title = `⏳ [${timeLeft}s] (${i + 1}/${total}) Invio...`;
+                                    }
+                                    onPauseCountdown({
+                                        timeLeft: timeLeft,
+                                        index: i,
+                                        total: total,
+                                        item: item
+                                    });
+                                    const waitMs = Math.min(1000, Math.max(100, remainingMs));
+                                    await new Promise(r => setTimeout(r, waitMs));
                                 }
                             }
                         }
-
-                        const isOk = Boolean(res && (res.ok || res.success));
-                        if (isOk) {
-                            nSent++;
-                            onItemSuccess(item, i, res);
-                        } else {
-                            nErrors++;
-                            onItemError(item, i, res);
+                    } finally {
+                        isRunning = false;
+                        if (typeof window !== 'undefined') {
+                            window.removeEventListener('beforeunload', _beforeUnloadHandler);
                         }
-
-                        // Pausa anti-spam tra un invio e il successivo (tranne dopo l'ultimo)
-                        if (i < total - 1 && !aborted) {
-                            let pauseSec = _calcPauseSec();
-                            while (pauseSec > 0 && !aborted) {
-                                onPauseCountdown({
-                                    timeLeft: pauseSec,
-                                    index: i,
-                                    total: total,
-                                    item: item
-                                });
-                                await new Promise(r => setTimeout(r, 1000));
-                                pauseSec--;
+                        if (typeof document !== 'undefined') {
+                            if (aborted) {
+                                document.title = `⚠️ Interrotto (${nSent}/${total})`;
+                            } else {
+                                document.title = `✅ Completato (${nSent}/${total})`;
                             }
+                            setTimeout(() => {
+                                if (document.title.startsWith('✅') || document.title.startsWith('⚠️')) {
+                                    document.title = originalTitle;
+                                }
+                            }, 10000);
                         }
                     }
 
-                    isRunning = false;
                     onComplete({
                         nSent: nSent,
                         nErrors: nErrors,

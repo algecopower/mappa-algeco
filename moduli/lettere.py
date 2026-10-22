@@ -610,11 +610,20 @@ def list_aziende(generazione_id=None, search='', limit=500, provincia=None):
         LEFT JOIN lettere_righe lr ON lr.id=COALESCE(rp.row_id, rn.row_id)
         LEFT JOIN filone f ON f.rowid = COALESCE(
             (
+                SELECT fa.rowid FROM filone fa
+                WHERE fa.pod = UPPER(TRIM(COALESCE(ag.pod, lr.pod, '')))
+                  AND UPPER(TRIM(fa.lcl)) NOT IN ({dis_sql})
+                  AND UPPER(COALESCE(fa.note_appuntamento, '')) LIKE '%APP%'
+                ORDER BY fa.sheets_row DESC
+                LIMIT 1
+            ),
+            (
                 SELECT f1.rowid FROM filone f1
                 WHERE f1.pod = UPPER(TRIM(COALESCE(ag.pod, lr.pod, '')))
                   AND f1.lcl = lr.lcl
                   AND TRIM(COALESCE(lr.lcl, '')) != ''
-                ORDER BY f1.sheets_row DESC
+                  AND UPPER(TRIM(f1.lcl)) NOT IN ({dis_sql})
+                ORDER BY (CASE WHEN TRIM(COALESCE(f1.note_appuntamento, '')) != '' THEN 0 ELSE 1 END) ASC, f1.sheets_row DESC
                 LIMIT 1
             ),
             (
@@ -623,14 +632,15 @@ def list_aziende(generazione_id=None, search='', limit=500, provincia=None):
                   AND fe1.lcl = lr.lcl
                   AND TRIM(COALESCE(lr.lcl, '')) != ''
                   AND TRIM(COALESCE(lr.eneltel, '')) != ''
-                ORDER BY fe1.sheets_row DESC
+                  AND UPPER(TRIM(fe1.lcl)) NOT IN ({dis_sql})
+                ORDER BY (CASE WHEN TRIM(COALESCE(fe1.note_appuntamento, '')) != '' THEN 0 ELSE 1 END) ASC, fe1.sheets_row DESC
                 LIMIT 1
             ),
             (
                 SELECT f2.rowid FROM filone f2
                 WHERE f2.pod = UPPER(TRIM(COALESCE(ag.pod, lr.pod, '')))
                   AND UPPER(TRIM(f2.lcl)) NOT IN ({dis_sql})
-                ORDER BY f2.sheets_row DESC
+                ORDER BY (CASE WHEN TRIM(COALESCE(f2.note_appuntamento, '')) != '' THEN 0 ELSE 1 END) ASC, f2.sheets_row DESC
                 LIMIT 1
             ),
             (
@@ -638,13 +648,13 @@ def list_aziende(generazione_id=None, search='', limit=500, provincia=None):
                 WHERE fe2.eneltel_key = LTRIM(COALESCE(lr.eneltel, ''), '0')
                   AND TRIM(COALESCE(lr.eneltel, '')) != ''
                   AND UPPER(TRIM(fe2.lcl)) NOT IN ({dis_sql})
-                ORDER BY fe2.sheets_row DESC
+                ORDER BY (CASE WHEN TRIM(COALESCE(fe2.note_appuntamento, '')) != '' THEN 0 ELSE 1 END) ASC, fe2.sheets_row DESC
                 LIMIT 1
             ),
             (
                 SELECT f3.rowid FROM filone f3
                 WHERE f3.pod = UPPER(TRIM(COALESCE(ag.pod, lr.pod, '')))
-                ORDER BY f3.sheets_row DESC
+                ORDER BY (CASE WHEN UPPER(COALESCE(f3.note_appuntamento, '')) LIKE '%APP%' THEN 0 WHEN TRIM(COALESCE(f3.note_appuntamento, '')) != '' THEN 1 ELSE 2 END) ASC, f3.sheets_row DESC
                 LIMIT 1
             )
         )
@@ -693,12 +703,14 @@ def sincronizza_contatti_da_filone(*, provincia=None, user='sync_filone'):
     """
     provincia = (provincia or _provincia_attiva()).upper()
     conn = db.get_conn()
+    disabled_lcls = _get_disabled_lcls(provincia)
+    dis_sql = ', '.join(f"'{re.sub(r'[^A-Za-z0-9_-]', '', x)}'" for x in disabled_lcls if x) or "''"
     filone_rows = conn.execute(
-        '''
+        f'''
         SELECT pod, telefono, email
         FROM filone
         WHERE TRIM(COALESCE(pod, ''))!=''
-        ORDER BY sheets_row
+        ORDER BY CASE WHEN UPPER(TRIM(lcl)) IN ({dis_sql}) THEN 1 ELSE 0 END, sheets_row DESC
         '''
     ).fetchall()
 
@@ -1089,11 +1101,20 @@ def get_azienda(azienda_id, provincia=None):
         )
         LEFT JOIN filone f ON f.rowid = COALESCE(
             (
+                SELECT fa.rowid FROM filone fa
+                WHERE fa.pod = UPPER(TRIM(COALESCE(ag.pod, lr.pod, '')))
+                  AND UPPER(TRIM(fa.lcl)) NOT IN ({dis_sql})
+                  AND UPPER(COALESCE(fa.note_appuntamento, '')) LIKE '%APP%'
+                ORDER BY fa.sheets_row DESC
+                LIMIT 1
+            ),
+            (
                 SELECT f1.rowid FROM filone f1
                 WHERE f1.pod = UPPER(TRIM(COALESCE(ag.pod, lr.pod, '')))
                   AND f1.lcl = lr.lcl
                   AND TRIM(COALESCE(lr.lcl, '')) != ''
-                ORDER BY f1.sheets_row DESC
+                  AND UPPER(TRIM(f1.lcl)) NOT IN ({dis_sql})
+                ORDER BY (CASE WHEN TRIM(COALESCE(f1.note_appuntamento, '')) != '' THEN 0 ELSE 1 END) ASC, f1.sheets_row DESC
                 LIMIT 1
             ),
             (
@@ -1102,14 +1123,15 @@ def get_azienda(azienda_id, provincia=None):
                   AND fe1.lcl = lr.lcl
                   AND TRIM(COALESCE(lr.lcl, '')) != ''
                   AND TRIM(COALESCE(lr.eneltel, '')) != ''
-                ORDER BY fe1.sheets_row DESC
+                  AND UPPER(TRIM(fe1.lcl)) NOT IN ({dis_sql})
+                ORDER BY (CASE WHEN TRIM(COALESCE(fe1.note_appuntamento, '')) != '' THEN 0 ELSE 1 END) ASC, fe1.sheets_row DESC
                 LIMIT 1
             ),
             (
                 SELECT f2.rowid FROM filone f2
                 WHERE f2.pod = UPPER(TRIM(COALESCE(ag.pod, lr.pod, '')))
                   AND UPPER(TRIM(f2.lcl)) NOT IN ({dis_sql})
-                ORDER BY f2.sheets_row DESC
+                ORDER BY (CASE WHEN TRIM(COALESCE(f2.note_appuntamento, '')) != '' THEN 0 ELSE 1 END) ASC, f2.sheets_row DESC
                 LIMIT 1
             ),
             (
@@ -1117,13 +1139,13 @@ def get_azienda(azienda_id, provincia=None):
                 WHERE fe2.eneltel_key = LTRIM(COALESCE(lr.eneltel, ''), '0')
                   AND TRIM(COALESCE(lr.eneltel, '')) != ''
                   AND UPPER(TRIM(fe2.lcl)) NOT IN ({dis_sql})
-                ORDER BY fe2.sheets_row DESC
+                ORDER BY (CASE WHEN TRIM(COALESCE(fe2.note_appuntamento, '')) != '' THEN 0 ELSE 1 END) ASC, fe2.sheets_row DESC
                 LIMIT 1
             ),
             (
                 SELECT f3.rowid FROM filone f3
                 WHERE f3.pod = UPPER(TRIM(COALESCE(ag.pod, lr.pod, '')))
-                ORDER BY f3.sheets_row DESC
+                ORDER BY (CASE WHEN UPPER(COALESCE(f3.note_appuntamento, '')) LIKE '%APP%' THEN 0 WHEN TRIM(COALESCE(f3.note_appuntamento, '')) != '' THEN 1 ELSE 2 END) ASC, f3.sheets_row DESC
                 LIMIT 1
             )
         )
@@ -1372,11 +1394,20 @@ def list_privati(generazione_id=None, search='', limit=2000, provincia=None):
         JOIN lettere_generazioni g ON g.id=lr.generazione_id
         LEFT JOIN filone f ON f.rowid = COALESCE(
             (
+                SELECT fa.rowid FROM filone fa
+                WHERE fa.pod = UPPER(TRIM(lr.pod))
+                  AND UPPER(TRIM(fa.lcl)) NOT IN ({dis_sql})
+                  AND UPPER(COALESCE(fa.note_appuntamento, '')) LIKE '%APP%'
+                ORDER BY fa.sheets_row DESC
+                LIMIT 1
+            ),
+            (
                 SELECT f1.rowid FROM filone f1
                 WHERE f1.pod = UPPER(TRIM(lr.pod))
                   AND f1.lcl = lr.lcl
                   AND TRIM(COALESCE(lr.lcl, '')) != ''
-                ORDER BY f1.sheets_row DESC
+                  AND UPPER(TRIM(f1.lcl)) NOT IN ({dis_sql})
+                ORDER BY (CASE WHEN TRIM(COALESCE(f1.note_appuntamento, '')) != '' THEN 0 ELSE 1 END) ASC, f1.sheets_row DESC
                 LIMIT 1
             ),
             (
@@ -1385,14 +1416,15 @@ def list_privati(generazione_id=None, search='', limit=2000, provincia=None):
                   AND fe1.lcl = lr.lcl
                   AND TRIM(COALESCE(lr.lcl, '')) != ''
                   AND TRIM(COALESCE(lr.eneltel, '')) != ''
-                ORDER BY fe1.sheets_row DESC
+                  AND UPPER(TRIM(fe1.lcl)) NOT IN ({dis_sql})
+                ORDER BY (CASE WHEN TRIM(COALESCE(fe1.note_appuntamento, '')) != '' THEN 0 ELSE 1 END) ASC, fe1.sheets_row DESC
                 LIMIT 1
             ),
             (
                 SELECT f2.rowid FROM filone f2
                 WHERE f2.pod = UPPER(TRIM(lr.pod))
                   AND UPPER(TRIM(f2.lcl)) NOT IN ({dis_sql})
-                ORDER BY f2.sheets_row DESC
+                ORDER BY (CASE WHEN TRIM(COALESCE(f2.note_appuntamento, '')) != '' THEN 0 ELSE 1 END) ASC, f2.sheets_row DESC
                 LIMIT 1
             ),
             (
@@ -1400,13 +1432,13 @@ def list_privati(generazione_id=None, search='', limit=2000, provincia=None):
                 WHERE fe2.eneltel_key = LTRIM(COALESCE(lr.eneltel, ''), '0')
                   AND TRIM(COALESCE(lr.eneltel, '')) != ''
                   AND UPPER(TRIM(fe2.lcl)) NOT IN ({dis_sql})
-                ORDER BY fe2.sheets_row DESC
+                ORDER BY (CASE WHEN TRIM(COALESCE(fe2.note_appuntamento, '')) != '' THEN 0 ELSE 1 END) ASC, fe2.sheets_row DESC
                 LIMIT 1
             ),
             (
                 SELECT f3.rowid FROM filone f3
                 WHERE f3.pod = UPPER(TRIM(lr.pod))
-                ORDER BY f3.sheets_row DESC
+                ORDER BY (CASE WHEN UPPER(COALESCE(f3.note_appuntamento, '')) LIKE '%APP%' THEN 0 WHEN TRIM(COALESCE(f3.note_appuntamento, '')) != '' THEN 1 ELSE 2 END) ASC, f3.sheets_row DESC
                 LIMIT 1
             )
         )

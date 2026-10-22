@@ -23,9 +23,9 @@ from moduli.bulk_contatori_email import (
     send_contatori_email,
 )
 from moduli.shared import (
-    get_worksheet, get_header_map, find_row_by_pod,
+    get_header_map, find_row_by_pod,
     build_pod_row_map, safe_batch_update_by_name, _imposta_appuntamento_su_filone, _rimuovi_appuntamento_da_filone,
-    _api_error, _trova_indice_multi, _resolve_anchor_col_name,
+    _api_error, _resolve_anchor_col_name,
     _callbacks, _get_username,
 )
 from moduli.smtp import (
@@ -724,59 +724,17 @@ def parse_distinta_endpoint():
                 'differenze': []
             }), 400
 
-        # Carica dati filone per confronto e classificazione
+        # Carica dati filone per confronto e classificazione (prioritizza LCL attivi e note popolate)
         dati_filone = {}
         differenze = []
         try:
-            ws = get_worksheet()
-            all_data = ws.get_all_values()
-            headers = all_data[0] if all_data else []
-
-            # Trova indici colonne (usa helper condivisi + mappatura personalizzata)
-
-            idx_pod = _trova_indice_multi(headers, 'POD', 'Pod', 'pod', chiave_mapping='pod')
-            idx_eneltel = _trova_indice_multi(headers, 'ENELTEL', 'Eneltel', 'eneltel', chiave_mapping='eneltel')
-            idx_data = _trova_indice_multi(headers, 'DATA PIAN', 'DATA_PIAN', 'PROG', 'Prog', chiave_mapping='data_pianificata')
-            idx_telefono = _trova_indice_multi(headers, 'telefono', 'TELEFONO', 'Telefono', 'TEL', 'Tel', chiave_mapping='telefono')
-            idx_email = _trova_indice_multi(headers, 'email', 'EMAIL', 'Email', 'E-mail', 'e-mail', 'Mail', 'MAIL', chiave_mapping='email')
-            idx_nominativo = _trova_indice_multi(headers, 'NOMINATIVO', 'Nominativo', 'CLIENTE', 'Cliente', chiave_mapping='nominativo')
-            idx_indirizzo = _trova_indice_multi(headers, 'Indirizzo', 'Via', 'VIA', chiave_mapping='indirizzo')
-            idx_civico = _trova_indice_multi(headers, 'Num', 'NUM', 'civico', 'CIVICO', chiave_mapping='civico')
-            idx_comune = _trova_indice_multi(headers, 'COMUNE', 'Comune', chiave_mapping='comune')
-            idx_note = _trova_indice_multi(headers, 'NOTE APP', 'NOTE_APP', 'NOTE', 'Note', chiave_mapping='note_appuntamento')
-            idx_codice_ante = _trova_indice_multi(headers, 'Codice_Ante_Sostituzione', 'Codice misuratore in opera', chiave_mapping='codice_ante')
-            idx_matricola_ante = _trova_indice_multi(headers, 'Matricola_Ante_Sostituzione', 'Matricola misuratore in opera', chiave_mapping='matricola_ante')
-            idx_tipologia = _trova_indice_multi(headers, 'Tipo_Misuratore', 'TIPOLOGIA CE', 'Tipologia CE', chiave_mapping='tipo_misuratore')
-            idx_posizione = _trova_indice_multi(headers, 'Posizione_Mis_Ante_Sost', 'Posizione_Ante_Mis', 'Posizione misuratore', 'POSIZIONE', 'Posizione', chiave_mapping='posizione_misuratore')
-
-            for row in all_data[1:]:
-                if idx_pod is not None and idx_pod < len(row):
-                    pod = row[idx_pod].strip().upper()
-                    if pod:
-                        codice_ante = (row[idx_codice_ante].strip() if idx_codice_ante is not None and idx_codice_ante < len(row) else '')
-                        matricola_ante = (row[idx_matricola_ante].strip() if idx_matricola_ante is not None and idx_matricola_ante < len(row) else '')
-                        # Combina codice e matricola in unico blocco
-                        matricola_completa = ' / '.join(filter(None, [codice_ante, matricola_ante]))
-
-                        dati_filone[pod] = {
-                            'pod': pod,
-                            'eneltel': row[idx_eneltel].strip() if idx_eneltel is not None and idx_eneltel < len(row) else '',
-                            'data_pian': row[idx_data] if idx_data is not None and idx_data < len(row) else '',
-                            'telefono': row[idx_telefono] if idx_telefono is not None and idx_telefono < len(row) else '',
-                            'email': row[idx_email] if idx_email is not None and idx_email < len(row) else '',
-                            'nominativo': row[idx_nominativo] if idx_nominativo is not None and idx_nominativo < len(row) else '',
-                            'indirizzo': row[idx_indirizzo] if idx_indirizzo is not None and idx_indirizzo < len(row) else '',
-                            'civico': row[idx_civico] if idx_civico is not None and idx_civico < len(row) else '',
-                            'comune': row[idx_comune] if idx_comune is not None and idx_comune < len(row) else '',
-                            'note': row[idx_note] if idx_note is not None and idx_note < len(row) else '',
-                            'matricola': matricola_completa,
-                            'tipologia': row[idx_tipologia].strip() if idx_tipologia is not None and idx_tipologia < len(row) else '',
-                            'posizione': row[idx_posizione].strip() if idx_posizione is not None and idx_posizione < len(row) else '',
-                        }
+            from moduli import db as _db
+            pods_distinta = [l.get('pod') for l in all_lavori if l.get('pod')]
+            dati_filone = _db.get_dati_filone_dict(pods=pods_distinta)
 
             # Confronta distinta con filone
             differenze = confronta_con_filone(all_lavori, dati_filone)
-            logger.info(f"[DISTINTE] Rilevate {len(differenze)} differenze con il filone")
+            logger.info(f"[DISTINTE] Rilevate {len(differenze)} differenze con il filone (su {len(dati_filone)} contatori caricati)")
 
         except Exception as e:
             logger.error(f"[DISTINTE] Errore caricamento filone: {e}")
@@ -800,7 +758,7 @@ def parse_distinta_endpoint():
         contatti.sort(key=lambda x: x.get('lavoro', 999))
 
         # Aggiungi le note, la data e il telefono del filone ai contatti
-        logger.info(f"[DISTINTE] idx_telefono={idx_telefono}, dati_filone contiene {len(dati_filone)} PODs")
+        logger.info(f"[DISTINTE] dati_filone contiene {len(dati_filone)} PODs")
         for contatto in contatti:
             pod = contatto.get('pod', '').strip().upper()
             # Inizializza defaults per tutti
@@ -812,6 +770,7 @@ def parse_distinta_endpoint():
             contatto.setdefault('matricola_operatore', '')
             contatto.setdefault('pod_filone', '')
             contatto.setdefault('eneltel_filone', '')
+            contatto.setdefault('lcl_filone', '')
             contatto.setdefault('tipologia_contatore', '')
             contatto.setdefault('posizione_contatore', '')
             if pod in dati_filone:
@@ -822,6 +781,11 @@ def parse_distinta_endpoint():
                 contatto['matricola_filone'] = dati_filone[pod].get('matricola', '')
                 contatto['pod_filone'] = dati_filone[pod].get('pod', '')
                 contatto['eneltel_filone'] = dati_filone[pod].get('eneltel', '')
+                contatto['lcl_filone'] = dati_filone[pod].get('lcl', '')
+                if not contatto.get('lcl') and dati_filone[pod].get('lcl'):
+                    contatto['lcl'] = dati_filone[pod]['lcl']
+                if not contatto.get('eneltel') and dati_filone[pod].get('eneltel'):
+                    contatto['eneltel'] = dati_filone[pod]['eneltel']
                 contatto['tipologia_contatore'] = dati_filone[pod].get('tipologia', '')
                 contatto['posizione_contatore'] = dati_filone[pod].get('posizione', '')
                 # Se il nome dalla distinta è vuoto, usa il nominativo dal filone

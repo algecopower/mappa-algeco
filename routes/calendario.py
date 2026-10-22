@@ -485,6 +485,7 @@ def _recupera_dati_aggiornati_dal_filone() -> dict:
         # Indici colonne
         col_eneltel_idx = None
         col_pod_idx = None
+        col_lcl_idx = None
         col_note_idx = None
         col_nom_idx = None
         col_data_idx = None
@@ -495,11 +496,13 @@ def _recupera_dati_aggiornati_dal_filone() -> dict:
         
         for i, h in enumerate(headers_gs):
             h_upper = h.strip().upper()
-            # ENELTEL / POD (chiavi)
+            # ENELTEL / POD / LCL (chiavi)
             if h_upper == 'ENELTEL':
                 col_eneltel_idx = i
             if h_upper == 'POD':
                 col_pod_idx = i
+            if h_upper in ('LCL', 'LOTTO'):
+                col_lcl_idx = i
             # NOTE (cerca tra i nomi possibili)
             if h_upper in ('NOTE APP', 'NOTE_APP', 'NOTE APPUNTAMENTO', 'NOTE'):
                 if col_note_idx is None:
@@ -527,27 +530,44 @@ def _recupera_dati_aggiornati_dal_filone() -> dict:
         if col_data_idx is not None:
             from moduli.data_loader import parse_data_flessibile
             parse_data = parse_data_flessibile
+
+        disabled_lcls = set()
+        try:
+            import config
+            disabled_lcls = {str(x).strip().upper() for x in getattr(config, 'LCL_DISABILITATI', []) if str(x).strip()}
+        except Exception:
+            pass
         
         for row in all_data[1:]:
             # Estrai chiavi identificative
             enel = row[col_eneltel_idx].strip() if col_eneltel_idx is not None and col_eneltel_idx < len(row) else ''
             pod = row[col_pod_idx].strip().upper() if col_pod_idx is not None and col_pod_idx < len(row) else ''
+            lcl = row[col_lcl_idx].strip().upper() if col_lcl_idx is not None and col_lcl_idx < len(row) else ''
+            is_disabled = bool(lcl and lcl in disabled_lcls)
             
             if not enel and not pod:
                 continue
             
-            # Helper per assegnare un valore a entrambe le chiavi
-            def _assegna(dizionario, valore):
-                if enel:
-                    dizionario[enel] = valore
-                if pod:
-                    dizionario[pod] = valore
+            # Helper per assegnare un valore a entrambe le chiavi rispettando le priorità
+            def _assegna(dizionario, valore, is_note=False):
+                for k in (enel, pod):
+                    if not k:
+                        continue
+                    if k not in dizionario:
+                        dizionario[k] = valore
+                    elif not is_disabled:
+                        if is_note:
+                            ext_app = 'APP ' in str(dizionario[k]).upper() or str(dizionario[k]).upper().startswith('APP')
+                            new_app = 'APP ' in str(valore).upper() or str(valore).upper().startswith('APP')
+                            if ext_app and not new_app:
+                                continue
+                        dizionario[k] = valore
             
             # Note
             if col_note_idx is not None:
                 nota_val = row[col_note_idx].strip() if col_note_idx < len(row) else ''
                 if nota_val:
-                    _assegna(risultato['note'], nota_val)
+                    _assegna(risultato['note'], nota_val, is_note=True)
             
             # Nominativo
             if col_nom_idx is not None:

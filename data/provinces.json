@@ -10,36 +10,34 @@
       "AE101392",
       "AG49808",
       "AG18966",
-      "AG63397",
       "AG67817",
       "AE94428",
-      "AG05928"
+      "AG05928",
+      "AG46824"
     ],
     "colori_operatori": {
       "AE101392": "#e74c3c",
       "AG49808": "#f1c40f",
       "AG18966": "#2ecc71",
-      "AG63397": "#bf33db",
       "AG67817": "#7f33db",
       "AE94428": "#db33a6",
-      "AG05928": "#a0db33"
+      "AG05928": "#a0db33",
+      "AG46824": "#3498db"
     },
     "operatori_dict": {
       "PAUL": "AE101392",
       "MIHAI": "AG49808",
       "SIDI": "AG18966",
-      "MOHAMED": "AG63397",
       "ANGEL": "AG67817",
       "ALECCI": "AE94428",
-      "GUINDO": "AG05928"
+      "GUINDO": "AG05928",
+      "FENOCCHIO": "AG46824"
     },
     "ora_inizio_giornata": 540,
     "ora_fine_giornata": 1020,
     "sottodominio": "torino.mappa-algeco.com",
     "porta": 5001,
-    "operatori_disabilitati": [
-      "AG63397"
-    ],
+    "operatori_disabilitati": [],
     "lcl_disabilitati": [
       "6600101316",
       "6600106010",
@@ -55,11 +53,7 @@
       "Lon": 9.2254115
     },
     "operatori_vip": [
-      "AF34814",
-      "AF84468",
-      "AG17430",
       "AG49808",
-      "AG63397",
       "AG46824",
       "AE101392",
       "AG67817",
@@ -68,11 +62,7 @@
       "AG69238"
     ],
     "colori_operatori": {
-      "AF34814": "#e74c3c",
-      "AF84468": "#f1c40f",
-      "AG17430": "#2ecc71",
       "AG49808": "#3498db",
-      "AG63397": "#8733db",
       "AG46824": "#60db33",
       "AE101392": "#db7f33",
       "AG67817": "#db335d",
@@ -81,17 +71,13 @@
       "AG69238": "#bfdb33"
     },
     "operatori_dict": {
-      "MERCURI": "AF34814",
-      "MELEK": "AF84468",
-      "BRAHIM": "AG17430",
       "CIOBANU": "AG49808",
-      "NOUR": "AG63397",
       "FENOCCHIO": "AG46824",
       "PAUL": "AE101392",
       "ANGEL": "AG67817",
       "SIMONE": "AF09076",
       "SIDI": "AG18966",
-      "TORTI": "AG69238"
+      "CLAUDIO": "AG69238"
     },
     "usa_localita_come_comune": true,
     "ora_inizio_giornata": 480,

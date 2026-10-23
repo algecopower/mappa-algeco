@@ -1,10 +1,6 @@
 {
   "operatori_vip": [
-    "AF34814",
-    "AF84468",
-    "AG17430",
     "AG49808",
-    "AG63397",
     "AG46824",
     "AE101392",
     "AG67817",
@@ -13,11 +9,7 @@
     "AG69238"
   ],
   "colori_operatori": {
-    "AF34814": "#e74c3c",
-    "AF84468": "#f1c40f",
-    "AG17430": "#2ecc71",
     "AG49808": "#3498db",
-    "AG63397": "#8733db",
     "AG46824": "#60db33",
     "AE101392": "#db7f33",
     "AG67817": "#db335d",
@@ -26,17 +18,13 @@
     "AG69238": "#bfdb33"
   },
   "operatori_dict": {
-    "MERCURI": "AF34814",
-    "MELEK": "AF84468",
-    "BRAHIM": "AG17430",
     "CIOBANU": "AG49808",
-    "NOUR": "AG63397",
     "FENOCCHIO": "AG46824",
     "PAUL": "AE101392",
     "ANGEL": "AG67817",
     "SIMONE": "AF09076",
     "SIDI": "AG18966",
-    "TORTI": "AG69238"
+    "CLAUDIO": "AG69238"
   },
   "deposito": {
     "Nome": "DEPOSITO PAVIA",
@@ -51,5 +39,56 @@
   "data_fine": "",
   "intervallo_sync_secondi": 60,
   "mappatura_colonne": {},
-  "operatori_disabilitati": []
+  "operatori_disabilitati": [],
+  "lettere_excel": {
+    "fogli": {
+      "monofase": "MONOFASE",
+      "emme2": "EMME2",
+      "semidiretti": "SEMIDIRETTI",
+      "contatti_aziendali": "Contatti Aziendali",
+      "solo_monofase": "SOLO MONOFASE",
+      "solo_trifase_diretti": "SOLO TRIFASE DIRETTI"
+    },
+    "nomi_colonne": {
+      "nominativo": "Nominativo_Cliente",
+      "via": "VIA",
+      "civico": "Numero_Civico",
+      "comune": "Comune",
+      "provincia": "PROVINCIA",
+      "cap": "CAP",
+      "data_pianificazione": "Data Pianificazione",
+      "ora_pianificazione": "Ora pianificazione",
+      "lettera": "LETTERA",
+      "pod": "POD",
+      "operatore": "Operatore",
+      "posizione_mis": "Posizione mis.",
+      "appuntamento": "Appuntamento"
+    },
+    "valori_lettera": {
+      "si": "SI'",
+      "no": "NO"
+    },
+    "regole_no": {
+      "appuntamento": true,
+      "accessibile_esterno": true,
+      "civico_vuoto": true,
+      "civico_senza_numero": true
+    },
+    "parole_chiave": {
+      "lettera_no": [
+        "COMUNE",
+        "PROVINCIA",
+        "FIBERCOP",
+        "ENEL GREEN POWER",
+        "ENEL SOLE",
+        "CITELUM",
+        "SMAT",
+        "PAVIA ACQUE S.C.A R.L."
+      ]
+    },
+    "opzioni": {
+      "unisci_trifase_diretti_in_monofase": true,
+      "crea_fogli_dettaglio": true
+    }
+  }
 }

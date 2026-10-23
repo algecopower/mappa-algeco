@@ -3,28 +3,28 @@
     "AE101392",
     "AG49808",
     "AG18966",
-    "AG63397",
     "AG67817",
     "AE94428",
-    "AG05928"
+    "AG05928",
+    "AG46824"
   ],
   "colori_operatori": {
     "AE101392": "#e74c3c",
     "AG49808": "#f1c40f",
     "AG18966": "#2ecc71",
-    "AG63397": "#bf33db",
     "AG67817": "#7f33db",
     "AE94428": "#db33a6",
-    "AG05928": "#a0db33"
+    "AG05928": "#a0db33",
+    "AG46824": "#3498db"
   },
   "operatori_dict": {
     "PAUL": "AE101392",
     "MIHAI": "AG49808",
     "SIDI": "AG18966",
-    "MOHAMED": "AG63397",
     "ANGEL": "AG67817",
     "ALECCI": "AE94428",
-    "GUINDO": "AG05928"
+    "GUINDO": "AG05928",
+    "FENOCCHIO": "AG46824"
   },
   "deposito": {
     "Nome": "DEPOSITO VOLPIANO",
@@ -78,8 +78,10 @@
         "COMUNE",
         "PROVINCIA",
         "FIBERCOP",
+        "ENEL GREEN POWER",
         "ENEL SOLE",
-        "CITELUM"
+        "CITELUM",
+        "SMAT"
       ]
     },
     "opzioni": {
@@ -93,7 +95,5 @@
     "6600101286",
     "6600110809"
   ],
-  "operatori_disabilitati": [
-    "AG63397"
-  ]
+  "operatori_disabilitati": []
 }

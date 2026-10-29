@@ -322,3 +322,99 @@ def test_genera_excel_lettere_archivia_aziende_nel_db(
     assert aziende[0]['nominativo'] == 'Alfa SRL'
     assert aziende[0]['telefono'] == '0111234567'
     assert aziende[0]['email'] == 'info@alfa.it / alfa@pec.it'
+
+
+def test_genera_excel_lettere_pavia_fallback_localita_vuota(tmp_path, monkeypatch):
+    import config
+    from moduli import percorso
+
+    monkeypatch.setattr(config, 'PROVINCIA_ATTIVA', 'PAVIA', raising=False)
+    monkeypatch.setattr(config, 'MATRICOLE_VIP', ['TEC1'], raising=False)
+    monkeypatch.setattr(percorso, 'ordina_percorso', lambda punti, *_args, **_kwargs: punti)
+
+    df = pd.DataFrame([{
+        'DATA_K': '2026-06-01',
+        'TEC_K': 'TEC1',
+        'ENEL_K': 'ENEL1',
+        'TIPO_CE_K': 'MONOFASE',
+        'CLI_K': 'Mario Rossi',
+        'NOTE_K': '',
+        'CIVICO_K': '10',
+        'VIA_K': 'VIA ROMA',
+        'COMUNE': 'Broni',
+        'LOCALITA': '',  # Località vuota!
+        'POD_K': 'POD1',
+        'IS_APPUNTAMENTO': False,
+        'ORA_APPUNTAMENTO': '',
+    }])
+
+    out = tmp_path / 'lettere_pavia_fallback.xlsx'
+    gel.genera_excel_lettere(df, ['2026-06-01'], filename=str(out))
+
+    wb = load_workbook(out, data_only=True)
+    row = list(wb['MONOFASE'].iter_rows(min_row=2, values_only=True))[0]
+    # Nominativo, VIA, Civico, Comune, Provincia, CAP
+    assert row[3] == 'Broni'      # Comune usato come fallback
+    assert row[4] == 'PV'         # Provincia PV
+    assert row[5] == '27043'      # CAP di Broni (PV)
+
+
+def test_genera_excel_lettere_pavia_frazione_fallback_cap(tmp_path, monkeypatch):
+    import config
+    from moduli import percorso
+
+    monkeypatch.setattr(config, 'PROVINCIA_ATTIVA', 'PAVIA', raising=False)
+    monkeypatch.setattr(config, 'MATRICOLE_VIP', ['TEC1'], raising=False)
+    monkeypatch.setattr(percorso, 'ordina_percorso', lambda punti, *_args, **_kwargs: punti)
+
+    df = pd.DataFrame([{
+        'DATA_K': '2026-06-01',
+        'TEC_K': 'TEC1',
+        'ENEL_K': 'ENEL1',
+        'TIPO_CE_K': 'MONOFASE',
+        'CLI_K': 'Mario Rossi',
+        'NOTE_K': '',
+        'CIVICO_K': '10',
+        'VIA_K': 'VIA ROMA',
+        'COMUNE': 'Varzi',
+        'LOCALITA': 'PIETRAGAVINA',  # Frazione non comune
+        'POD_K': 'POD1',
+        'IS_APPUNTAMENTO': False,
+        'ORA_APPUNTAMENTO': '',
+    }])
+
+    out = tmp_path / 'lettere_pavia_frazione.xlsx'
+    gel.genera_excel_lettere(df, ['2026-06-01'], filename=str(out))
+
+    wb = load_workbook(out, data_only=True)
+    row = list(wb['MONOFASE'].iter_rows(min_row=2, values_only=True))[0]
+    assert row[3] == 'PIETRAGAVINA'
+    assert row[4] == 'PV'         # Non deve diventare AL (Gavi)
+    assert row[5] == '27057'      # CAP del comune Varzi (PV)
+
+
+def test_comuni_db_risoluzione_omonimia_dinamica():
+    from moduli.comuni_db import cerca_cap, cerca_provincia
+
+    # San Zenone in PV non deve mai diventare TV (San Zenone degli Ezzelini)
+    assert cerca_provincia('SAN ZENONE', provincia='PAVIA') == 'PV'
+    assert cerca_cap('SAN ZENONE', provincia='PAVIA') == '27010'
+
+    # San Zenone in TV diventa TV
+    assert cerca_provincia('SAN ZENONE', provincia='TV') == 'TV'
+    assert cerca_cap('SAN ZENONE', provincia='TV') == '31020'
+
+    # Samone in TO non deve mai diventare TN
+    assert cerca_provincia('SAMONE', provincia='TORINO') == 'TO'
+    assert cerca_cap('SAMONE', provincia='TORINO') == '10010'
+
+    # Valverde in PV non deve diventare CT (Catania)
+    assert cerca_provincia('VALVERDE', provincia='PAVIA') == 'PV'
+    assert cerca_cap('VALVERDE', provincia='PAVIA') == ''
+
+    # Nomi troncati Enel in Pavia
+    assert cerca_provincia('SAN GENESIO ED UNI', provincia='PAVIA') == 'PV'
+    assert cerca_cap('SAN GENESIO ED UNI', provincia='PAVIA') == '27010'
+    assert cerca_provincia('SANT ALESSIO CON V', provincia='PAVIA') == 'PV'
+    assert cerca_cap('SANT ALESSIO CON V', provincia='PAVIA') == '27016'
+

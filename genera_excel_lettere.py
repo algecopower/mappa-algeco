@@ -55,6 +55,22 @@ from moduli.rilevamento_aziende import is_azienda
 from moduli.comuni_db import cerca_cap, cerca_provincia
 
 
+def _cerca_cap_sicuro(comune, prov=None):
+    """Invoca cerca_cap passando provincia se supportata, compatibile con mock nei test."""
+    try:
+        return cerca_cap(comune, provincia=prov)
+    except TypeError:
+        return cerca_cap(comune)
+
+
+def _cerca_provincia_sicuro(comune, prov=None):
+    """Invoca cerca_provincia passando provincia se supportata, compatibile con mock nei test."""
+    try:
+        return cerca_provincia(comune, provincia=prov)
+    except TypeError:
+        return cerca_provincia(comune)
+
+
 # formatta_fascia_oraria() è ora importata da moduli/fasce_orarie.py
 
 COLONNE_LETTERE_ORDINE = [
@@ -587,15 +603,28 @@ def genera_excel_lettere(
         else:
             fogli_dettaglio_finali = fogli_dettaglio_finali[-1:]
     
-    # Per Pavia usa Località al posto di Comune
-    usa_localita = (PROVINCIA_ATTIVA.upper() == 'PAVIA')
+    import config
+    # Per Pavia usa Località al posto di Comune (o se abilitato per la provincia attiva)
+    usa_localita = (
+        PROVINCIA_ATTIVA.upper() == 'PAVIA'
+        or getattr(config, 'USA_LOCALITA_COME_COMUNE', False)
+    )
     
     headers = get_headers_lettere(lettere_cfg)
     archive_rows = []
     
-    # Verifica CAP disponibili per i comuni
-    comuni_unici = set(str(p.get('COMUNE', '')).strip() for p in tutti_punti if p.get('COMUNE'))
-    comuni_con_cap = sum(1 for c in comuni_unici if cerca_cap(c))
+    # Verifica CAP disponibili per i comuni (considerando fallback comune/località)
+    def _luogo_di_riferimento(p):
+        loc = testo_pulito(p.get('LOCALITA', ''))
+        com = testo_pulito(p.get('COMUNE', ''))
+        return (loc or com) if usa_localita else (com or loc)
+
+    comuni_unici = set(_luogo_di_riferimento(p) for p in tutti_punti)
+    comuni_unici.discard('')
+    comuni_con_cap = sum(
+        1 for c in comuni_unici
+        if _cerca_cap_sicuro(c, prov=PROVINCIA_ATTIVA)
+    )
     print(f"\n📮 CAP trovati per {comuni_con_cap}/{len(comuni_unici)} comuni")
     
     def scrivi_foglio_lettere(
@@ -620,11 +649,15 @@ def genera_excel_lettere(
             cell.alignment = Alignment(horizontal='center', vertical='center')
             cell.border = thin_border
 
-        # Dati contatori (ordina per data, poi località/comune, poi via)
-        campo_luogo = 'LOCALITA' if usa_localita else 'COMUNE'
+        # Dati contatori (ordina per data, poi luogo display/comune con fallback, poi via)
+        def _get_luogo_sort(p):
+            loc_s = testo_pulito(p.get('LOCALITA', ''))
+            com_s = testo_pulito(p.get('COMUNE', ''))
+            return (loc_s if loc_s else com_s) if usa_localita else (com_s if com_s else loc_s)
+
         contatori_ordinati = sorted(contatori, key=lambda x: (
             str(x.get('DATA_K', '')),
-            str(x.get(campo_luogo, '')).lower(),
+            _get_luogo_sort(x).lower(),
             str(x.get('VIA_K', '')).lower()
         ))
 
@@ -632,14 +665,48 @@ def genera_excel_lettere(
         for punto in contatori_ordinati:
             is_app = punto.get('IS_APPUNTAMENTO', False)
             fascia = punto.get('FASCIA_ORARIA', '')
-            # Per Pavia usa Località per tutto (più precisa del Comune)
-            luogo_display = (
-                testo_pulito(punto.get('LOCALITA', '')) if usa_localita
-                else testo_pulito(punto.get('COMUNE', ''))
+
+            loc_punto = testo_pulito(punto.get('LOCALITA', ''))
+            com_punto = testo_pulito(punto.get('COMUNE', ''))
+
+            # Luogo visualizzato nel file lettere:
+            # per Pavia usa Località ma se è vuota usa Comune come fallback (e viceversa per le altre province)
+            if usa_localita:
+                luogo_display = loc_punto if loc_punto else com_punto
+            else:
+                luogo_display = com_punto if com_punto else loc_punto
+
+            # Ricerca CAP e provincia vincolata/prioritizzata dinamicamente alla provincia attiva:
+            # - Se usa_localita: prova prima località (se non vuota); se non risolve il CAP, usa Comune come fallback.
+            # - Se non usa_localita: prova prima Comune; se non risolve il CAP, usa Località come fallback.
+            # In questo modo non si generano celle vuote né province errate (es. TV, CT, GE) per omonimie o frazioni.
+            target_prov = PROVINCIA_ATTIVA
+            candidati_luogo = (
+                [loc_punto, com_punto] if usa_localita
+                else [com_punto, loc_punto]
             )
-            comune_per_cap = luogo_display if usa_localita else str(punto.get('COMUNE', '')).strip()
-            cap = cerca_cap(comune_per_cap)
-            sigla_prov_riga = cerca_provincia(comune_per_cap)
+            candidati_luogo = [c for c in candidati_luogo if c]
+
+            cap = ''
+            sigla_prov_riga = ''
+            for cand in candidati_luogo:
+                c_cap = _cerca_cap_sicuro(cand, prov=target_prov)
+                c_prov = _cerca_provincia_sicuro(cand, prov=target_prov)
+
+                if c_cap:
+                    cap = c_cap
+                    sigla_prov_riga = c_prov
+                    break
+                elif c_prov and not sigla_prov_riga:
+                    sigla_prov_riga = c_prov
+
+            if not sigla_prov_riga:
+                luogo_fallback = luogo_display or com_punto or loc_punto
+                sigla_prov_riga = _cerca_provincia_sicuro(luogo_fallback, prov=target_prov)
+
+            if not cap:
+                luogo_fallback = luogo_display or com_punto or loc_punto
+                cap = _cerca_cap_sicuro(luogo_fallback, prov=target_prov)
             lettera = (
                 valore_lettera_si if richiede_lettera(punto, lettere_cfg)
                 else valore_lettera_no

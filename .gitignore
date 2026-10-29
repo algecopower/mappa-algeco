@@ -33,6 +33,7 @@ data/*/mappa_data.json
 data/*/state.db
 data/*/state.db-shm
 data/*/state.db-wal
+data/*/state.db.bak*
 
 # Config statica frontend, rigenerata da mappa_html.py a ogni sync
 data/*/config.json

@@ -1143,6 +1143,7 @@ def get_settings():
         cur = conn.execute(
             "SELECT lcl, COUNT(*) as count FROM filone "
             "WHERE is_orphan=0 AND lcl IS NOT NULL AND TRIM(lcl) != '' "
+            "AND lcl GLOB '[0-9]*' AND length(lcl) >= 4 "
             "GROUP BY lcl ORDER BY count DESC, lcl ASC"
         )
         tutti_lcl = [{'lcl': r['lcl'], 'count': r['count']} for r in cur.fetchall()]
@@ -1362,6 +1363,7 @@ def get_admin_lcls():
         cur = conn.execute(
             "SELECT lcl, COUNT(*) as count FROM filone "
             "WHERE is_orphan=0 AND lcl IS NOT NULL AND TRIM(lcl) != '' "
+            "AND lcl GLOB '[0-9]*' AND length(lcl) >= 4 "
             "GROUP BY lcl ORDER BY count DESC, lcl ASC"
         )
         disabilitati_set = {str(x).strip().upper() for x in getattr(config, 'LCL_DISABILITATI', []) if str(x).strip()}
@@ -2611,7 +2613,7 @@ def api_admin_import_excel():
         from moduli import excel_importer as _ei
         result = _ei.import_excel(
             tmp.name, export_ts=export_ts, sheet_name=sheet_name,
-            dry_run=dry_run, user=user,
+            dry_run=dry_run, user=user, current_province=PROVINCIA_ATTIVA,
         )
         
         # Se è stato un import reale (non dry-run), invalida la cache e triggera sync

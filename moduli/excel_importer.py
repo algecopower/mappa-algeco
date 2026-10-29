@@ -19,7 +19,9 @@ import csv
 import io
 import json
 import logging
+import math
 import os
+import sqlite3
 import time
 from collections import Counter
 from datetime import date, datetime
@@ -28,6 +30,8 @@ from . import db as _db
 from .safe_json import json_read  # noqa  (potrebbe servire per cache future)
 
 logger = logging.getLogger('mappa_algeco')
+
+_ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def _parse_export_ts(export_ts):
@@ -616,6 +620,144 @@ def _csv_structural_cell_anomalies(
     return anomalies
 
 
+def validate_province_fit(rows_xlsx, headers_xlsx, current_province=None):
+    """Verifica dinamicamente che i dati nel file appartengano alla provincia attiva.
+
+    Confronta i dati del file (LCL, coordinate geografiche) con tutte le province
+    configurate in `data/provinces.json`. Se rileva che il file appartiene palesemente
+    a un'altra provincia registrata, solleva ValueError per bloccare l'inquinamento del DB.
+    """
+    if not rows_xlsx or not headers_xlsx:
+        return
+
+    if not current_province:
+        import config
+        current_province = os.environ.get('PROVINCIA') or getattr(config, 'PROVINCIA_ATTIVA', 'TORINO')
+    current_province = str(current_province).upper().strip()
+
+    provinces_path = os.path.join(_ROOT_DIR, 'data', 'provinces.json')
+    if not os.path.exists(provinces_path):
+        return
+
+    try:
+        with open(provinces_path, 'r', encoding='utf-8') as f:
+            provinces = json.load(f)
+    except Exception as e:
+        logger.warning(f"[excel-import] lettura provinces.json non riuscita: {e}")
+        return
+
+    if len(provinces) <= 1:
+        return
+
+    lcl_idx = _find_col_idx(headers_xlsx, ['LCL', 'lcl'])
+    lat_idx = _find_col_idx(headers_xlsx, ['Latitudine', 'latitudine', 'Lat', 'lat'])
+    lon_idx = _find_col_idx(headers_xlsx, ['Longitudine', 'longitudine', 'Lon', 'lon'])
+
+    file_lcls = set()
+    file_coords = []
+
+    for r in rows_xlsx[:1000]:
+        if lcl_idx is not None and lcl_idx < len(r):
+            val_lcl = str(r[lcl_idx] or '').strip()
+            if val_lcl and _LCL_RE.match(val_lcl):
+                file_lcls.add(val_lcl)
+        if lat_idx is not None and lon_idx is not None and lat_idx < len(r) and lon_idx < len(r):
+            lat_val = _parse_decimal(r[lat_idx])
+            lon_val = _parse_decimal(r[lon_idx])
+            if lat_val is not None and lon_val is not None:
+                if 35.0 <= lat_val <= 48.0 and 5.0 <= lon_val <= 20.0:
+                    file_coords.append((lat_val, lon_val))
+
+    def _geo_dist(lat1, lon1, lat2, lon2):
+        x = (math.radians(lon2) - math.radians(lon1)) * math.cos(math.radians((lat1 + lat2) / 2))
+        y = math.radians(lat2) - math.radians(lat1)
+        return math.sqrt(x * x + y * y) * 6371.0
+
+    curr_cfg = provinces.get(current_province, {})
+    curr_nome = curr_cfg.get('nome') or current_province
+    curr_dep = curr_cfg.get('deposito', {})
+
+    # 1. Controllo incrociato LCL con i database delle altre province
+    if file_lcls:
+        curr_db_path = os.path.join(_ROOT_DIR, 'data', current_province.lower(), 'state.db')
+        curr_db_lcls = set()
+        if os.path.exists(curr_db_path):
+            try:
+                conn_curr = sqlite3.connect(f"file:{curr_db_path}?mode=ro", uri=True, timeout=5)
+                c_cur = conn_curr.cursor()
+                curr_db_lcls = {
+                    r[0] for r in c_cur.execute(
+                        "SELECT DISTINCT lcl FROM filone WHERE is_orphan=0 AND lcl IS NOT NULL AND TRIM(lcl) != ''"
+                    ).fetchall() if r[0]
+                }
+                conn_curr.close()
+            except Exception:
+                pass
+
+        for other_slug, other_cfg in provinces.items():
+            if other_slug.upper() == current_province:
+                continue
+            other_db_path = os.path.join(_ROOT_DIR, 'data', other_slug.lower(), 'state.db')
+            if not os.path.exists(other_db_path):
+                continue
+            try:
+                conn_other = sqlite3.connect(f"file:{other_db_path}?mode=ro", uri=True, timeout=5)
+                c_other = conn_other.cursor()
+                other_db_lcls = {
+                    r[0] for r in c_other.execute(
+                        "SELECT DISTINCT lcl FROM filone WHERE is_orphan=0 AND lcl IS NOT NULL AND TRIM(lcl) != ''"
+                    ).fetchall() if r[0]
+                }
+                conn_other.close()
+            except Exception:
+                continue
+
+            match_other = file_lcls.intersection(other_db_lcls)
+            match_curr = file_lcls.intersection(curr_db_lcls)
+
+            if match_other:
+                if len(match_other) > len(match_curr) and len(match_other) >= max(1, int(len(file_lcls) * 0.3)):
+                    other_nome = other_cfg.get('nome') or other_slug
+                    sample_str = ', '.join(sorted(list(match_other))[:4])
+                    raise ValueError(
+                        f"Import bloccato: il file sembra appartenere alla provincia di {other_nome} "
+                        f"(rilevati LCL di {other_nome}: {sample_str}), mentre sei sull'istanza di {curr_nome}. "
+                        f"Verifica la provincia corretta prima di caricare il file."
+                    )
+
+    # 2. Controllo geografico delle coordinate
+    if len(file_coords) >= 10 and curr_dep and 'Lat' in curr_dep and 'Lon' in curr_dep:
+        try:
+            c_lat, c_lon = float(curr_dep['Lat']), float(curr_dep['Lon'])
+            dist_curr = [_geo_dist(lat, lon, c_lat, c_lon) for lat, lon in file_coords]
+            avg_dist_curr = sum(dist_curr) / len(dist_curr)
+        except Exception as e_calc:
+            avg_dist_curr = None
+            logger.debug(f"[excel-import] calcolo distanze provincia corrente fallito: {e_calc}")
+
+        if avg_dist_curr is not None:
+            for other_slug, other_cfg in provinces.items():
+                if other_slug.upper() == current_province:
+                    continue
+                o_dep = other_cfg.get('deposito', {})
+                if not o_dep or 'Lat' not in o_dep or 'Lon' not in o_dep:
+                    continue
+                try:
+                    o_lat, o_lon = float(o_dep['Lat']), float(o_dep['Lon'])
+                    dist_other = [_geo_dist(lat, lon, o_lat, o_lon) for lat, lon in file_coords]
+                    avg_dist_other = sum(dist_other) / len(dist_other)
+                except Exception:
+                    continue
+
+                if avg_dist_curr > 70.0 and avg_dist_other < 35.0 and (avg_dist_curr - avg_dist_other) > 35.0:
+                    other_nome = other_cfg.get('nome') or other_slug
+                    raise ValueError(
+                        f"Import bloccato: le coordinate nel file ricadono nella zona di {other_nome} "
+                        f"(distanza media {avg_dist_other:.1f} km da {other_nome} vs {avg_dist_curr:.1f} km da {curr_nome}). "
+                        f"Verifica la provincia corretta prima di caricare il file."
+                    )
+
+
 def import_excel(
     file_path,
     *,
@@ -625,6 +767,7 @@ def import_excel(
     user=None,
     auto_mark_delivered=True,
     protect_pending_rows=False,
+    current_province=None,
 ):
     """Importa il filone da file Excel/CSV applicando merge most-recent-wins.
 
@@ -703,6 +846,9 @@ def import_excel(
     lcl_idx = _find_col_idx(headers_xlsx, ['LCL', 'lcl'])
     required_row_indices = _structural_col_indices(headers_xlsx) if file_format == 'csv' else []
     expected_row_cols = len(headers_xlsx) if file_format == 'csv' else None
+
+    # Controllo dinamico coerenza geografica / LCL con la provincia attiva
+    validate_province_fit(rows_xlsx, headers_xlsx, current_province=current_province)
 
     summary = {
         'success': True,

@@ -2832,59 +2832,47 @@ body {
     color: #ffffff;
 }
 
-.search-view-mode-selector {
+.search-options-subtle {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin-top: 14px;
-    padding: 10px 14px;
-    background: var(--bg-card, #1e293b);
-    border: 1px solid var(--border-color, #334155);
-    border-radius: 10px;
-}
-
-.view-mode-label {
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: var(--text-secondary, #94a3b8);
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    white-space: nowrap;
-}
-
-.view-mode-pills {
-    display: flex;
-    gap: 6px;
+    justify-content: flex-end;
     flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+    margin-bottom: 6px;
+    padding: 0 4px;
 }
 
-.view-mode-pill {
-    background: var(--bg-secondary, #0f172a);
-    color: var(--text-secondary, #94a3b8);
-    border: 1px solid var(--border-color, #334155);
-    border-radius: 8px;
-    padding: 5px 12px;
-    font-size: 0.8rem;
-    font-weight: 600;
-    cursor: pointer;
+.search-subtle-toggle {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    transition: all 0.2s ease;
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--text-secondary, #cbd5e1);
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    opacity: 0.85;
+    transition: opacity 0.2s ease, color 0.2s ease;
 }
 
-.view-mode-pill:hover {
-    color: var(--text-primary, #f8fafc);
-    border-color: var(--accent, #3b82f6);
+.search-subtle-toggle:hover {
+    opacity: 1;
+    color: var(--text-primary, #ffffff);
 }
 
-.view-mode-pill.active {
-    background: var(--accent, #3b82f6);
-    color: #ffffff;
-    border-color: var(--accent, #3b82f6);
-    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.35);
+.search-subtle-toggle input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    accent-color: var(--accent, #3b82f6);
+    cursor: pointer;
+}
+
+.search-subtle-hint {
+    font-size: 0.72rem;
+    color: var(--text-muted, #94a3b8);
+    opacity: 0.8;
 }
 
 /* Floating Pinned Toolbar on Map */

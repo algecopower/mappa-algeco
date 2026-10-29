@@ -2027,7 +2027,7 @@ function checkUrlSearchParameters() {
             const target = exactMatch || (contatoriTrovati.length === 1 ? contatoriTrovati[0] : null);
 
             if (target) {
-                vaiAContatoreSingolo(target.eneltel);
+                vaiAContatoreConModalita(target.eneltel);
                 return true;
             }
 
@@ -2675,7 +2675,7 @@ function pinContatore(eneltel, autoFly = false) {
     pinnedContatori.set(eneltel, contatore);
 
     if (autoFly) {
-        vaiAContatoreSingolo(eneltel);
+        vaiAContatoreConModalita(eneltel);
         return;
     }
 
@@ -2781,10 +2781,42 @@ function unpinAllContatori() {
 }
 
 function mostraContatoriPinnatiSullaMappa() {
-    if (UiModal.isOpen('advancedSearchModal')) {
+    if (typeof UiModal !== 'undefined' && UiModal.isOpen('advancedSearchModal')) {
         UiModal.close('advancedSearchModal');
     }
     if (pinnedContatori.size === 0) return;
+
+    const oggiStr = getOggiStr();
+    if (searchDefaultViewMode === 'date' && (!currentData || currentData < oggiStr || currentView === 'zone' || currentView === 'towns')) {
+        const targetData = getPrimaDataDisponibileDaOggi();
+        if (targetData) {
+            const dataFilter = document.getElementById('dataFilter');
+            if (dataFilter) {
+                if (!Array.from(dataFilter.options).some(o => o.value === targetData)) {
+                    const opt = document.createElement('option');
+                    opt.value = targetData;
+                    opt.textContent = formatDate(targetData);
+                    dataFilter.appendChild(opt);
+                }
+                dataFilter.value = targetData;
+            }
+            currentData = targetData;
+            populateOperatoreFilter(targetData);
+            const opRow = document.getElementById('operatoreFilterRow');
+            if (opRow) opRow.style.display = 'flex';
+            const dataRow = document.getElementById('dataFilterRow');
+            if (dataRow) dataRow.style.display = 'none';
+            mostraPercorsoTuttiOperatori(targetData);
+            if (pinnedContatori.size === 1) {
+                const eneltel = pinnedContatori.keys().next().value;
+                setTimeout(() => {
+                    const mk = pinnedMarkers.get(eneltel);
+                    if (mk) mk.openPopup();
+                }, 300);
+            }
+            return;
+        }
+    }
 
     renderPinnedMarkers();
     centraMappaSuPinnati();
@@ -2801,28 +2833,54 @@ function centraMappaSuPinnati() {
     if (pts.length === 0) return;
 
     if (pts.length === 1) {
-        map.flyTo(pts[0], 18);
+        map.setView(pts[0], Math.min(map.getZoom() || 14, 15));
         const eneltel = pinnedContatori.keys().next().value;
         setTimeout(() => {
             const mk = pinnedMarkers.get(eneltel);
             if (mk) mk.openPopup();
-        }, 400);
+        }, 300);
     } else {
         const bounds = L.latLngBounds(pts);
-        map.fitBounds(bounds, { padding: [60, 60] });
+        map.fitBounds(bounds, { padding: [60, 60], maxZoom: 16 });
     }
 }
 
-let searchDefaultViewMode = localStorage.getItem('searchDefaultViewMode') || 'detail';
+// Helper: calcola la prima data disponibile da oggi in poi (o oggi stesso se presente/vuoto)
+function getPrimaDataDisponibileDaOggi() {
+    const oggiStr = getOggiStr();
+    const dateSet = new Set();
+    if (typeof contatoriVisibili !== 'undefined' && Array.isArray(contatoriVisibili)) {
+        contatoriVisibili.forEach(c => {
+            if (c.data && c.data >= oggiStr) dateSet.add(c.data);
+        });
+    }
+    if (dateSet.size === 0 && typeof contatori !== 'undefined' && Array.isArray(contatori)) {
+        contatori.forEach(c => {
+            if (c.data && c.data >= oggiStr) dateSet.add(c.data);
+        });
+    }
+    const dateOrdinate = Array.from(dateSet).sort();
+    if (dateOrdinate.includes(oggiStr)) return oggiStr;
+    if (dateOrdinate.length > 0) return dateOrdinate[0];
+    return oggiStr;
+}
+
+let searchDefaultViewMode = localStorage.getItem('searchDefaultViewMode_v2') || 'date';
 
 function setSearchDefaultViewMode(mode) {
     searchDefaultViewMode = mode;
+    localStorage.setItem('searchDefaultViewMode_v2', mode);
     localStorage.setItem('searchDefaultViewMode', mode);
     
-    const pillDetail = document.getElementById('searchModeDetail');
-    const pillDate = document.getElementById('searchModeDate');
-    if (pillDetail) pillDetail.classList.toggle('active', mode === 'detail');
-    if (pillDate) pillDate.classList.toggle('active', mode === 'date');
+    const chk = document.getElementById('searchUseZoneViewCheckbox');
+    if (chk) chk.checked = (mode === 'detail');
+}
+
+function toggleSearchZoneView(useZone) {
+    setSearchDefaultViewMode(useZone ? 'detail' : 'date');
+    if (typeof renderModalSearchResults === 'function' && lastModalSearchResults && lastModalSearchResults.length > 0) {
+        renderModalSearchResults();
+    }
 }
 
 function vaiAContatoreConModalita(eneltel) {
@@ -2843,39 +2901,47 @@ function vaiAContatoreDataGlobale(eneltel) {
         UiModal.close('advancedSearchModal');
     }
 
-    if (c.data && c.data.trim() !== '') {
+    const oggiStr = getOggiStr();
+    // Se il contatore è passato (con data precedente a oggi) o da schedulare (senza data),
+    // imposta già il filtro data a partire dalla giornata attuale
+    const isPassatoOSenzaData = !c.data || c.data.trim() === '' || c.data < oggiStr;
+    const targetData = isPassatoOSenzaData ? getPrimaDataDisponibileDaOggi() : c.data;
+
+    if (targetData) {
         // Imposta il valore nel filtro date
         const dataFilter = document.getElementById('dataFilter');
-        if (dataFilter) dataFilter.value = c.data;
+        if (dataFilter) {
+            if (!Array.from(dataFilter.options).some(o => o.value === targetData)) {
+                const opt = document.createElement('option');
+                opt.value = targetData;
+                opt.textContent = formatDate(targetData);
+                dataFilter.appendChild(opt);
+            }
+            dataFilter.value = targetData;
+        }
         
-        currentData = c.data;
+        currentData = targetData;
         
         // Popola e mostra il filtro operatori per questa data
-        populateOperatoreFilter(c.data);
+        populateOperatoreFilter(targetData);
         const opRow = document.getElementById('operatoreFilterRow');
         if (opRow) opRow.style.display = 'flex';
-        document.getElementById('dataFilterRow').style.display = 'none';
+        const dataRow = document.getElementById('dataFilterRow');
+        if (dataRow) dataRow.style.display = 'none';
         
         // Mostra tutti gli operatori per questa data (indipendentemente dalla zona)
-        mostraPercorsoTuttiOperatori(c.data);
-    } else {
-        // Se non ha data programmata (schedulabile), apri la vista dettaglio della zona
-        vaiAContatoreSingolo(c.eneltel);
-        return;
+        mostraPercorsoTuttiOperatori(targetData);
     }
 
+    updatePinnedToolbar();
+    aggiornaStatoPinInModal();
+
     setTimeout(() => {
-        if (isValidCoordinate(c.lat, c.lon)) {
-            map.flyTo([c.lat, c.lon], 18, { duration: 1.0 });
-            setTimeout(() => {
-                const mk = pinnedMarkers.get(c.eneltel) || markers.find(m => m.contatore && (m.contatore.eneltel === c.eneltel || m.contatore.id === c.id));
-                if (mk && mk.openPopup) {
-                    mk.openPopup();
-                } else if (typeof mostraContatorePopup === 'function') {
-                    mostraContatorePopup(c);
-                }
-                evidenziaContatore(c.eneltel || c.id);
-            }, 600);
+        const mk = pinnedMarkers.get(c.eneltel) || markers.find(m => m.contatore && (m.contatore.eneltel === c.eneltel || m.contatore.id === c.id));
+        if (mk && mk.openPopup) {
+            mk.openPopup();
+        } else if (typeof mostraContatorePopup === 'function') {
+            mostraContatorePopup(c);
         }
     }, 400);
 }
@@ -2899,20 +2965,37 @@ function vaiAContatoreSingolo(eneltel) {
         if (zonaDelContatore) targetZona = zonaDelContatore.nome;
     }
 
-    apriDettaglio(targetZona, c.data || null);
+    const oggiStr = getOggiStr();
+    const isPassatoOSenzaData = !c.data || c.data.trim() === '' || c.data < oggiStr;
+    let targetData = c.data;
+    if (isPassatoOSenzaData) {
+        const zonaObj = zone.find(z => z.nome === targetZona);
+        let dateZona = [];
+        if (zonaObj && zonaObj.date) {
+            dateZona = zonaObj.date.map(d => d.data).filter(d => d >= oggiStr).sort();
+        } else {
+            const dateSet = new Set();
+            contatori.forEach(cc => {
+                if (cc.comune && cc.comune.toLowerCase() === (c.comune || '').toLowerCase() && cc.data && cc.data >= oggiStr) {
+                    dateSet.add(cc.data);
+                }
+            });
+            dateZona = Array.from(dateSet).sort();
+        }
+        targetData = dateZona.length > 0 ? dateZona[0] : getPrimaDataDisponibileDaOggi();
+    }
+
+    apriDettaglio(targetZona, targetData);
+
+    updatePinnedToolbar();
+    aggiornaStatoPinInModal();
 
     setTimeout(() => {
-        if (isValidCoordinate(c.lat, c.lon)) {
-            map.flyTo([c.lat, c.lon], 18, { duration: 1.0 });
-            setTimeout(() => {
-                const mk = pinnedMarkers.get(c.eneltel) || markers.find(m => m.contatore && (m.contatore.eneltel === c.eneltel || m.contatore.id === c.id));
-                if (mk && mk.openPopup) {
-                    mk.openPopup();
-                } else if (typeof mostraContatorePopup === 'function') {
-                    mostraContatorePopup(c);
-                }
-                evidenziaContatore(c.eneltel || c.id);
-            }, 600);
+        const mk = pinnedMarkers.get(c.eneltel) || markers.find(m => m.contatore && (m.contatore.eneltel === c.eneltel || m.contatore.id === c.id));
+        if (mk && mk.openPopup) {
+            mk.openPopup();
+        } else if (typeof mostraContatorePopup === 'function') {
+            mostraContatorePopup(c);
         }
     }, 400);
 }
@@ -5545,7 +5628,7 @@ function renderRisultatiRicercaMappa(contatoriTrovati) {
 
         marker.contatore = c;
         marker.bindPopup(() => createContatorePopup(c, idx + 1, colore));
-        marker.on('click', () => vaiAContatoreSingolo(c.eneltel));
+        marker.on('click', () => vaiAContatoreConModalita(c.eneltel));
         markers.push(marker);
     });
 
@@ -6410,7 +6493,7 @@ function renderDettaglioSidebar(perTecnico, data) {
             // Per i risultati di ricerca vai direttamente alla Vista Dettaglio del contatore
             let onclickAction;
             if (currentView === 'search-results') {
-                onclickAction = `vaiAContatoreSingolo('${c.eneltel}')`;
+                onclickAction = `vaiAContatoreConModalita('${c.eneltel}')`;
             } else if (isSchedulabile && showAllDatesInDetail) {
                 onclickAction = `mostraContatorePopup(contatori.find(cc => cc.id === '${c.id}'))`;
             } else {

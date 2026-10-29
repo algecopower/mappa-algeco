@@ -11,7 +11,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/theme.css">
     <link rel="stylesheet" href="/static/tour.css">
-    <link rel="stylesheet" href="/static/mappa.css?v={{ timestamp }}-gestionale-grid-v26">
+    <link rel="stylesheet" href="/static/mappa.css?v={{ timestamp }}-gestionale-grid-v27">
     <style>
         /* CSS dinamico (sidebar gestionale) */
         {{ css_gestionale|safe }}
@@ -951,17 +951,13 @@
                     <button class="btn-apply-advanced" onclick="applyModalAdvancedSearch()"><i data-lucide="search"></i> Cerca</button>
                 </div>
 
-                <!-- Selettore modalità di visualizzazione al click -->
-                <div class="search-view-mode-selector">
-                    <span class="view-mode-label"><i data-lucide="compass"></i> Destinazione click:</span>
-                    <div class="view-mode-pills">
-                        <button type="button" class="view-mode-pill active" id="searchModeDetail" onclick="setSearchDefaultViewMode('detail')">
-                            <i data-lucide="map-pin"></i> Vista Zona
-                        </button>
-                        <button type="button" class="view-mode-pill" id="searchModeDate" onclick="setSearchDefaultViewMode('date')">
-                            <i data-lucide="calendar"></i> Vista Date
-                        </button>
-                    </div>
+                <!-- Opzione discreta per aprire in Vista Zona (default: Vista Date) -->
+                <div class="search-options-subtle">
+                    <label class="search-subtle-toggle">
+                        <input type="checkbox" id="searchUseZoneViewCheckbox" onchange="toggleSearchZoneView(this.checked)">
+                        <span>Apri in Vista Zona</span>
+                    </label>
+                    <span class="search-subtle-hint">(mostra solo le date di questa zona anziché tutta la provincia)</span>
                 </div>
 
                 <!-- Barra di stato pin globali / azioni multiple -->
@@ -1181,7 +1177,7 @@
         };
     </script>
     <script src="/static/print_label_layout.js?v={{ timestamp }}-print-labels-v24"></script>
-    <script src="/static/mappa.js?v={{ timestamp }}-gestionale-grid-v26"></script>
+    <script src="/static/mappa.js?v={{ timestamp }}-gestionale-grid-v27"></script>
     <script>
         // JS dinamico (sidebar gestionale)
         {{ js_gestionale|safe }}

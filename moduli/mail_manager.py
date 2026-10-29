@@ -15,6 +15,7 @@ Funzionalità:
 import email
 import email.header
 import email.utils
+import glob
 import imaplib
 import json
 import logging
@@ -1679,49 +1680,127 @@ def save_template_or_snippet(data, prov=None):
     if is_wa_or_snippet and ('<' in body and '>' in body):
         body = html_to_plain_text(body)
 
-    # Aggiornamento template centralizzato di sistema
-    if item_id and str(item_id).startswith('sys_'):
-        k = str(item_id)[4:]
-        prov_file = os.path.join(_ROOT_DIR, 'data', p, 'distinte_templates.json')
-        base_file = os.path.join(_ROOT_DIR, 'data', 'distinte_templates.json')
-        target_file = prov_file if os.path.exists(prov_file) else base_file
-        tpl_data = json_read(target_file, default={}) or {}
-        if 'templates' not in tpl_data:
-            tpl_data['templates'] = {}
-        if k not in tpl_data['templates']:
-            base_data = json_read(base_file, default={}) or {}
-            tpl_data['templates'][k] = dict(base_data.get('templates', {}).get(k, {}))
-        tpl_data['templates'][k]['label'] = title
-        if subject is not None and item_type == 'template':
-            tpl_data['templates'][k]['subject'] = subject
-        # Se è template WhatsApp, garantisci che non contenga tag HTML
-        if k.startswith('wa_') or tpl_data['templates'][k].get('type') == 'whatsapp':
-            body = html_to_plain_text(body)
-        tpl_data['templates'][k]['body'] = body
-        if variables:
-            tpl_data['templates'][k]['fields'] = variables
-        os.makedirs(os.path.dirname(prov_file), exist_ok=True)
-        json_write(prov_file, tpl_data, indent=4)
-        return {'success': True, 'id': item_id}
+    base_file = os.path.join(_ROOT_DIR, 'data', 'distinte_templates.json')
+    prov_file = os.path.join(_ROOT_DIR, 'data', p, 'distinte_templates.json')
 
-    # Aggiornamento snippet centralizzato di sistema
-    if item_id and str(item_id).startswith('snip_'):
-        k = str(item_id)[5:]
-        prov_file = os.path.join(_ROOT_DIR, 'data', p, 'distinte_templates.json')
-        base_file = os.path.join(_ROOT_DIR, 'data', 'distinte_templates.json')
-        target_file = prov_file if os.path.exists(prov_file) else base_file
-        tpl_data = json_read(target_file, default={}) or {}
-        if 'snippets' not in tpl_data:
-            tpl_data['snippets'] = {}
-        if k not in tpl_data['snippets']:
-            base_data = json_read(base_file, default={}) or {}
-            tpl_data['snippets'][k] = dict(base_data.get('snippets', {}).get(k, {}))
-        tpl_data['snippets'][k]['title'] = title
-        tpl_data['snippets'][k]['body'] = html_to_plain_text(body)
-        os.makedirs(os.path.dirname(prov_file), exist_ok=True)
-        json_write(prov_file, tpl_data, indent=4)
-        return {'success': True, 'id': item_id}
-        
+    # Aggiornamento template o snippet centralizzato di sistema
+    if item_id and (str(item_id).startswith('sys_') or str(item_id).startswith('snip_')):
+        str_id = str(item_id)
+        if str_id.startswith('sys_'):
+            old_k = str_id[4:]
+            old_type = 'template'
+        else:
+            old_k = str_id[5:]
+            old_type = 'snippet'
+
+        # Caso 1: CONVERSIONE DA TEMPLATE A SNIPPET
+        if old_type == 'template' and item_type == 'snippet':
+            new_id = f"snip_{old_k}"
+            plain_body = html_to_plain_text(body) if ('<' in body and '>' in body) else body
+            snippet_obj = {'title': title, 'body': plain_body}
+
+            def _conv_tpl_to_snip(fpath):
+                fd = json_read(fpath, default={}) or {}
+                if 'templates' in fd and old_k in fd['templates']:
+                    del fd['templates'][old_k]
+                if 'snippets' not in fd:
+                    fd['snippets'] = {}
+                fd['snippets'][old_k] = snippet_obj
+                os.makedirs(os.path.dirname(fpath), exist_ok=True)
+                json_write(fpath, fd, indent=4)
+
+            if os.path.exists(base_file):
+                _conv_tpl_to_snip(base_file)
+            _conv_tpl_to_snip(prov_file)
+            for pf in glob.glob(os.path.join(_ROOT_DIR, 'data', '*', 'distinte_templates.json')):
+                if pf not in (base_file, prov_file):
+                    _conv_tpl_to_snip(pf)
+            return {'success': True, 'id': new_id}
+
+        # Caso 2: CONVERSIONE DA SNIPPET A TEMPLATE
+        elif old_type == 'snippet' and item_type == 'template':
+            new_id = f"sys_{old_k}"
+            is_wa = category == 'whatsapp' or old_k.startswith('wa_')
+            tpl_obj = {
+                'label': title,
+                'type': 'whatsapp' if is_wa else 'email',
+                'subject': subject or '',
+                'body': html_to_plain_text(body) if is_wa else body,
+                'fields': variables or []
+            }
+
+            def _conv_snip_to_tpl(fpath):
+                fd = json_read(fpath, default={}) or {}
+                if 'snippets' in fd and old_k in fd['snippets']:
+                    del fd['snippets'][old_k]
+                if 'templates' not in fd:
+                    fd['templates'] = {}
+                fd['templates'][old_k] = tpl_obj
+                os.makedirs(os.path.dirname(fpath), exist_ok=True)
+                json_write(fpath, fd, indent=4)
+
+            if os.path.exists(base_file):
+                _conv_snip_to_tpl(base_file)
+            _conv_snip_to_tpl(prov_file)
+            for pf in glob.glob(os.path.join(_ROOT_DIR, 'data', '*', 'distinte_templates.json')):
+                if pf not in (base_file, prov_file):
+                    _conv_snip_to_tpl(pf)
+            return {'success': True, 'id': new_id}
+
+        # Caso 3: AGGIORNAMENTO TEMPLATE ESISTENTE (rimane template)
+        elif old_type == 'template' and item_type == 'template':
+            target_file = prov_file if os.path.exists(prov_file) else base_file
+            tpl_data = json_read(target_file, default={}) or {}
+            if 'templates' not in tpl_data:
+                tpl_data['templates'] = {}
+            if old_k not in tpl_data['templates']:
+                b_data = json_read(base_file, default={}) or {}
+                tpl_data['templates'][old_k] = dict(b_data.get('templates', {}).get(old_k, {}))
+            tpl_data['templates'][old_k]['label'] = title
+            if subject is not None:
+                tpl_data['templates'][old_k]['subject'] = subject
+            if old_k.startswith('wa_') or tpl_data['templates'][old_k].get('type') == 'whatsapp':
+                body = html_to_plain_text(body)
+            tpl_data['templates'][old_k]['body'] = body
+            if variables:
+                tpl_data['templates'][old_k]['fields'] = variables
+            os.makedirs(os.path.dirname(prov_file), exist_ok=True)
+            json_write(prov_file, tpl_data, indent=4)
+            # Allinea anche il file base
+            if os.path.exists(base_file):
+                b_data = json_read(base_file, default={}) or {}
+                if 'templates' in b_data and old_k in b_data['templates']:
+                    b_data['templates'][old_k]['label'] = title
+                    if subject is not None:
+                        b_data['templates'][old_k]['subject'] = subject
+                    b_data['templates'][old_k]['body'] = body
+                    if variables:
+                        b_data['templates'][old_k]['fields'] = variables
+                    json_write(base_file, b_data, indent=4)
+            return {'success': True, 'id': item_id}
+
+        # Caso 4: AGGIORNAMENTO SNIPPET ESISTENTE (rimane snippet)
+        elif old_type == 'snippet' and item_type == 'snippet':
+            target_file = prov_file if os.path.exists(prov_file) else base_file
+            tpl_data = json_read(target_file, default={}) or {}
+            if 'snippets' not in tpl_data:
+                tpl_data['snippets'] = {}
+            if old_k not in tpl_data['snippets']:
+                b_data = json_read(base_file, default={}) or {}
+                tpl_data['snippets'][old_k] = dict(b_data.get('snippets', {}).get(old_k, {}))
+            tpl_data['snippets'][old_k]['title'] = title
+            tpl_data['snippets'][old_k]['body'] = html_to_plain_text(body)
+            os.makedirs(os.path.dirname(prov_file), exist_ok=True)
+            json_write(prov_file, tpl_data, indent=4)
+            # Allinea anche il file base
+            if os.path.exists(base_file):
+                b_data = json_read(base_file, default={}) or {}
+                if 'snippets' in b_data and old_k in b_data['snippets']:
+                    b_data['snippets'][old_k]['title'] = title
+                    b_data['snippets'][old_k]['body'] = html_to_plain_text(body)
+                    json_write(base_file, b_data, indent=4)
+            return {'success': True, 'id': item_id}
+
     if item_id and str(item_id).isdigit():
         if (category == 'whatsapp' or item_type == 'snippet') and ('<' in body and '>' in body):
             body = html_to_plain_text(body)
@@ -1729,8 +1808,8 @@ def save_template_or_snippet(data, prov=None):
             """UPDATE mail_templates_snippets SET
                title = ?, category = ?, type = ?, subject = ?, body = ?,
                variables_json = ?, updated_ts = ?
-               WHERE id = ? AND provincia = ?""",
-            (title, category, item_type, subject, body, json.dumps(variables), now, int(item_id), p)
+               WHERE id = ?""",
+            (title, category, item_type, subject, body, json.dumps(variables), now, int(item_id))
         )
         return {'success': True, 'id': int(item_id)}
     else:
@@ -1784,58 +1863,57 @@ def save_template_settings(settings, prov=None):
 
 def delete_template_or_snippet(item_id, prov=None):
     """Elimina qualsiasi template o snippet (sia di sistema in JSON che personalizzato in DB)."""
-    p = _get_prov(prov)
     conn = db.get_conn()
-    str_id = str(item_id)
-    
-    # 1. Se è un template di sistema salvato in distinte_templates.json
+    str_id = str(item_id).strip()
+
+    # Identifica tipologia e chiave del template/snippet
     if str_id.startswith('sys_'):
         k = str_id[4:]
-        prov_file = os.path.join(_ROOT_DIR, 'data', p, 'distinte_templates.json')
-        base_file = os.path.join(_ROOT_DIR, 'data', 'distinte_templates.json')
-        target_file = prov_file if os.path.exists(prov_file) else base_file
-        tpl_data = json_read(target_file, default={})
-        if 'templates' in tpl_data and k in tpl_data['templates']:
-            del tpl_data['templates'][k]
-            os.makedirs(os.path.dirname(prov_file), exist_ok=True)
-            json_write(prov_file, tpl_data, indent=4)
-            return True
-            
-    # 2. Se è uno snippet di sistema in distinte_templates.json
-    if str_id.startswith('snip_'):
+        sec = 'templates'
+    elif str_id.startswith('snip_'):
         k = str_id[5:]
-        prov_file = os.path.join(_ROOT_DIR, 'data', p, 'distinte_templates.json')
-        base_file = os.path.join(_ROOT_DIR, 'data', 'distinte_templates.json')
-        target_file = prov_file if os.path.exists(prov_file) else base_file
-        tpl_data = json_read(target_file, default={})
-        if 'snippets' in tpl_data and k in tpl_data['snippets']:
-            del tpl_data['snippets'][k]
-            os.makedirs(os.path.dirname(prov_file), exist_ok=True)
-            json_write(prov_file, tpl_data, indent=4)
-            return True
+        sec = 'snippets'
+    else:
+        k = str_id
+        sec = None  # cerca sia in templates che in snippets
 
-    # 3. Se è salvato nel DB SQLite
+    # 1. Se è salvato nel DB SQLite (id numerico)
     if str_id.isdigit():
-        conn.execute("DELETE FROM mail_templates_snippets WHERE id = ? AND provincia = ?", (int(item_id), p))
-        return True
-        
-    # 4. Fallback: cerca per chiave diretta
-    prov_file = os.path.join(_ROOT_DIR, 'data', p, 'distinte_templates.json')
-    base_file = os.path.join(_ROOT_DIR, 'data', 'distinte_templates.json')
-    target_file = prov_file if os.path.exists(prov_file) else base_file
-    tpl_data = json_read(target_file, default={})
-    if 'templates' in tpl_data and str_id in tpl_data['templates']:
-        del tpl_data['templates'][str_id]
-        os.makedirs(os.path.dirname(prov_file), exist_ok=True)
-        json_write(prov_file, tpl_data, indent=4)
-        return True
-    if 'snippets' in tpl_data and str_id in tpl_data['snippets']:
-        del tpl_data['snippets'][str_id]
-        os.makedirs(os.path.dirname(prov_file), exist_ok=True)
-        json_write(prov_file, tpl_data, indent=4)
-        return True
+        conn.execute("DELETE FROM mail_templates_snippets WHERE id = ?", (int(str_id),))
 
-    return False
+    # 2. Elimina dal file base globale (data/distinte_templates.json)
+    base_file = os.path.join(_ROOT_DIR, 'data', 'distinte_templates.json')
+    if os.path.exists(base_file):
+        base_data = json_read(base_file, default={}) or {}
+        modified = False
+        target_secs = [sec] if sec else ['templates', 'snippets']
+        for s in target_secs:
+            if s in base_data and isinstance(base_data[s], dict) and k in base_data[s]:
+                del base_data[s][k]
+                modified = True
+        if modified:
+            json_write(base_file, base_data, indent=4)
+
+    # 3. Elimina da tutti i file di configurazione provinciali (data/*/distinte_templates.json)
+    target_secs = [sec] if sec else ['templates', 'snippets']
+    prov_pattern = os.path.join(_ROOT_DIR, 'data', '*', 'distinte_templates.json')
+    for pf in glob.glob(prov_pattern):
+        p_data = json_read(pf, default={}) or {}
+        p_modified = False
+        for s in target_secs:
+            if s in p_data and isinstance(p_data[s], dict) and k in p_data[s]:
+                del p_data[s][k]
+                p_modified = True
+        if p_modified:
+            json_write(pf, p_data, indent=4)
+
+    # 4. Elimina da DB SQLite anche se registrato con key o title corrispondente
+    try:
+        conn.execute("DELETE FROM mail_templates_snippets WHERE title = ?", (k,))
+    except Exception:
+        pass
+
+    return True
 
 
 def resolve_template_placeholders(text, variables=None, prov=None):

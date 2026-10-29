@@ -222,6 +222,10 @@ function selectItem(id) {
 function onTypeChange() {
     const isTpl = document.getElementById('templateType').value === 'template';
     document.getElementById('subjectGroup').style.display = isTpl ? 'flex' : 'none';
+    const badge = document.getElementById('editorBadgeType');
+    if (badge) {
+        badge.textContent = isTpl ? '🪄 Template Completo' : '💬 Frase Rapida / Snippet';
+    }
 }
 
 // ============================================================================
@@ -368,12 +372,19 @@ async function saveTemplate() {
     lucide.createIcons();
 
     try {
+        let category = 'generale';
+        if (type === 'snippet') {
+            category = 'frasario';
+        } else if (currentItem && currentItem.category && currentItem.category !== 'frasario') {
+            category = currentItem.category;
+        }
+
         const payload = {
             id: id || undefined,
             title: title,
             type: type,
-            category: currentItem ? currentItem.category : (type === 'snippet' ? 'frasario' : 'generale'),
-            subject: subject,
+            category: category,
+            subject: type === 'snippet' ? '' : subject,
             body: body
         };
 
@@ -458,6 +469,8 @@ async function deleteCurrentTemplate() {
             await loadAllData();
             if (AppState.items.length > 0) {
                 selectItem(AppState.items[0].id || AppState.items[0].key);
+            } else {
+                createNewTemplate();
             }
         } else {
             showToast(data.error || 'Errore eliminazione', true);

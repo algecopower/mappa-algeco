@@ -320,7 +320,7 @@ def api_mail_template_save():
 def api_mail_template_delete(item_id):
     """Elimina un template/snippet."""
     try:
-        mail_manager.delete_template_or_snippet(item_id)
+        mail_manager.delete_template_or_snippet(item_id, prov=PROVINCIA_ATTIVA)
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 400

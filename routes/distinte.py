@@ -105,10 +105,23 @@ def _save_templates_data(data):
     existing = _load_templates_data() or {}
     merged = dict(existing)
     merged.update(data)
-    for key in ('settings', 'fields', 'templates', 'snippets'):
+    for key in ('settings', 'fields'):
         if key in data and isinstance(data[key], dict):
             merged[key] = dict(existing.get(key, {}))
             merged[key].update(data[key])
+
+    # Per templates e snippets: se presenti nel payload, sostituiscono l'insieme esistente.
+    # Eventuali template o snippet eliminati vengono rimossi anche a livello globale.
+    from moduli import mail_manager
+    for subkey, prefix in (('templates', 'sys_'), ('snippets', 'snip_')):
+        if subkey in data and isinstance(data[subkey], dict):
+            merged[subkey] = dict(data[subkey])
+            old_keys = set(existing.get(subkey, {}).keys())
+            new_keys = set(data[subkey].keys())
+            deleted_keys = old_keys - new_keys
+            for del_k in deleted_keys:
+                mail_manager.delete_template_or_snippet(f"{prefix}{del_k}", prov=PROVINCIA_ATTIVA)
+
     return json_write(prov_file, merged, indent=4)
 
 

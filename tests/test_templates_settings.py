@@ -353,4 +353,211 @@ def test_distinte_save_and_load_merges_snippets(tmp_path, monkeypatch):
     assert loaded['templates']['email_test']['label'] == 'Test Modificato'
 
 
+def test_delete_template_removes_from_base_and_provincial(tmp_path, monkeypatch):
+    """Verifica che l'eliminazione di un template lo rimuova sia dalla base che da tutte le province."""
+    monkeypatch.setattr(mail_manager, '_ROOT_DIR', str(tmp_path))
+    os.makedirs(str(tmp_path / 'data' / 'torino'), exist_ok=True)
+    os.makedirs(str(tmp_path / 'data' / 'pavia'), exist_ok=True)
+
+    base_file = str(tmp_path / 'data' / 'distinte_templates.json')
+    torino_file = str(tmp_path / 'data' / 'torino' / 'distinte_templates.json')
+    pavia_file = str(tmp_path / 'data' / 'pavia' / 'distinte_templates.json')
+
+    initial_data = {
+        'templates': {
+            'tpl_elimina': {'label': 'Da Eliminare', 'body': 'Test body'},
+            'tpl_resta': {'label': 'Da Conservare', 'body': 'Altro body'}
+        }
+    }
+    json_write(base_file, initial_data, indent=4)
+    json_write(torino_file, initial_data, indent=4)
+    json_write(pavia_file, initial_data, indent=4)
+
+    # Elimina con prefisso sys_
+    res = mail_manager.delete_template_or_snippet('sys_tpl_elimina', prov='torino')
+    assert res is True
+
+    # Verifica ricarica da list_templates_and_snippets
+    items_to = mail_manager.list_templates_and_snippets(prov='torino')
+    keys_to = [i.get('key') for i in items_to]
+    assert 'tpl_elimina' not in keys_to
+    assert 'tpl_resta' in keys_to
+
+    items_pv = mail_manager.list_templates_and_snippets(prov='pavia')
+    keys_pv = [i.get('key') for i in items_pv]
+    assert 'tpl_elimina' not in keys_pv
+    assert 'tpl_resta' in keys_pv
+
+    # Verifica su file
+    from moduli.safe_json import json_read
+    b_data = json_read(base_file)
+    assert 'tpl_elimina' not in b_data.get('templates', {})
+    assert 'tpl_resta' in b_data.get('templates', {})
+
+    t_data = json_read(torino_file)
+    assert 'tpl_elimina' not in t_data.get('templates', {})
+
+
+def test_delete_snippet_removes_from_base_and_provincial(tmp_path, monkeypatch):
+    """Verifica che l'eliminazione di uno snippet lo rimuova sia da base che da provinciale."""
+    monkeypatch.setattr(mail_manager, '_ROOT_DIR', str(tmp_path))
+    os.makedirs(str(tmp_path / 'data' / 'torino'), exist_ok=True)
+
+    base_file = str(tmp_path / 'data' / 'distinte_templates.json')
+    torino_file = str(tmp_path / 'data' / 'torino' / 'distinte_templates.json')
+
+    initial_data = {
+        'snippets': {
+            'snip_del': {'title': 'Snippet Da Eliminare', 'body': 'Corpo del'},
+            'snip_ok': {'title': 'Snippet OK', 'body': 'Corpo ok'}
+        }
+    }
+    json_write(base_file, initial_data, indent=4)
+    json_write(torino_file, initial_data, indent=4)
+
+    res = mail_manager.delete_template_or_snippet('snip_snip_del', prov='torino')
+    assert res is True
+
+    items = mail_manager.list_templates_and_snippets(prov='torino')
+    keys = [i.get('key') for i in items]
+    assert 'snip_del' not in keys
+    assert 'snip_ok' in keys
+
+
+def test_distinte_save_templates_deletes_removed_templates(tmp_path, monkeypatch):
+    """Verifica che salvando dal modal distinte, i template eliminati vengano rimossi anche dalla base."""
+    from routes import distinte as dist_routes
+    monkeypatch.setattr(dist_routes, '_ROOT_DIR', str(tmp_path))
+    monkeypatch.setattr(mail_manager, '_ROOT_DIR', str(tmp_path))
+    monkeypatch.setattr(dist_routes, 'PROVINCIA_ATTIVA', 'TORINO')
+
+    os.makedirs(str(tmp_path / 'data' / 'torino'), exist_ok=True)
+    real_base = str(tmp_path / 'data' / 'distinte_templates.json')
+    json_write(real_base, {
+        'templates': {
+            'tpl_a': {'label': 'Template A', 'body': 'Corpo A'},
+            'tpl_b': {'label': 'Template B', 'body': 'Corpo B'}
+        },
+        'snippets': {
+            'snip_1': {'title': 'Snip 1', 'body': 'Corpo 1'}
+        }
+    }, indent=4)
+
+    # Salvataggio in cui tpl_b è stato eliminato
+    save_payload = {
+        'templates': {
+            'tpl_a': {'label': 'Template A Modificato', 'body': 'Corpo A Modificato'}
+        }
+    }
+    dist_routes._save_templates_data(save_payload)
+
+    loaded = dist_routes._load_templates_data()
+    assert 'tpl_b' not in loaded.get('templates', {})
+    assert 'tpl_a' in loaded.get('templates', {})
+    assert 'snip_1' in loaded.get('snippets', {})
+
+
+def test_convert_template_to_snippet(tmp_path, monkeypatch):
+    """Verifica che la modifica della tipologia da template a snippet sposti l'elemento e aggiorni l'id."""
+    monkeypatch.setattr(mail_manager, '_ROOT_DIR', str(tmp_path))
+    os.makedirs(str(tmp_path / 'data' / 'torino'), exist_ok=True)
+
+    base_file = str(tmp_path / 'data' / 'distinte_templates.json')
+    torino_file = str(tmp_path / 'data' / 'torino' / 'distinte_templates.json')
+
+    initial_data = {
+        'templates': {
+            'comunicazione_test': {
+                'label': 'Comunicazione Test',
+                'subject': 'Oggetto Test',
+                'body': 'Corpo Testo',
+                'fields': ['nome']
+            }
+        },
+        'snippets': {}
+    }
+    json_write(base_file, initial_data, indent=4)
+    json_write(torino_file, initial_data, indent=4)
+
+    # Converti a snippet
+    payload = {
+        'id': 'sys_comunicazione_test',
+        'title': 'Frase Comunicazione Test',
+        'type': 'snippet',
+        'category': 'frasario',
+        'body': 'Nuovo corpo frase rapida'
+    }
+    res = mail_manager.save_template_or_snippet(payload, prov='torino')
+    assert res['success'] is True
+    assert res['id'] == 'snip_comunicazione_test'
+
+    # Ricarica
+    items = mail_manager.list_templates_and_snippets(prov='torino')
+    item = next((i for i in items if i.get('key') == 'comunicazione_test'), None)
+    assert item is not None
+    assert item['id'] == 'snip_comunicazione_test'
+    assert item['type'] == 'snippet'
+    assert item['title'] == 'Frase Comunicazione Test'
+    assert item['body'] == 'Nuovo corpo frase rapida'
+
+    # Verifica file su disco
+    from moduli.safe_json import json_read
+    b_data = json_read(base_file)
+    assert 'comunicazione_test' not in b_data.get('templates', {})
+    assert 'comunicazione_test' in b_data.get('snippets', {})
+
+    t_data = json_read(torino_file)
+    assert 'comunicazione_test' not in t_data.get('templates', {})
+    assert 'comunicazione_test' in t_data.get('snippets', {})
+
+
+def test_convert_snippet_to_template(tmp_path, monkeypatch):
+    """Verifica che la modifica della tipologia da snippet a template completo sposti l'elemento e aggiorni l'id."""
+    monkeypatch.setattr(mail_manager, '_ROOT_DIR', str(tmp_path))
+    os.makedirs(str(tmp_path / 'data' / 'torino'), exist_ok=True)
+
+    base_file = str(tmp_path / 'data' / 'distinte_templates.json')
+    torino_file = str(tmp_path / 'data' / 'torino' / 'distinte_templates.json')
+
+    initial_data = {
+        'templates': {},
+        'snippets': {
+            'frase_test': {
+                'title': 'Frase Test',
+                'body': 'Testo breve'
+            }
+        }
+    }
+    json_write(base_file, initial_data, indent=4)
+    json_write(torino_file, initial_data, indent=4)
+
+    # Converti a template
+    payload = {
+        'id': 'snip_frase_test',
+        'title': 'Template Completo Test',
+        'type': 'template',
+        'category': 'generale',
+        'subject': 'Oggetto {nome}',
+        'body': 'Gentile {nome}, corpo template'
+    }
+    res = mail_manager.save_template_or_snippet(payload, prov='torino')
+    assert res['success'] is True
+    assert res['id'] == 'sys_frase_test'
+
+    # Ricarica
+    items = mail_manager.list_templates_and_snippets(prov='torino')
+    item = next((i for i in items if i.get('key') == 'frase_test'), None)
+    assert item is not None
+    assert item['id'] == 'sys_frase_test'
+    assert item['type'] == 'template'
+    assert item['subject'] == 'Oggetto {nome}'
+
+    from moduli.safe_json import json_read
+    b_data = json_read(base_file)
+    assert 'frase_test' in b_data.get('templates', {})
+    assert 'frase_test' not in b_data.get('snippets', {})
+
+
+
+
 

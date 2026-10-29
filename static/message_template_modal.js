@@ -425,12 +425,24 @@
             .mtm-btn-wa:hover {
                 background: #1eb855 !important;
             }
-            .mtm-btn-mail {
-                background: var(--accent, #3b82f6) !important;
+            .mtm-btn-send-mail {
+                background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
                 color: #ffffff !important;
             }
-            .mtm-btn-mail:hover {
-                background: var(--accent-hover, #2563eb) !important;
+            .mtm-btn-send-mail:hover {
+                background: linear-gradient(135deg, #1d4ed8, #1e40af) !important;
+            }
+            .mtm-btn-open-mail, .mtm-btn-mail {
+                background: rgba(59, 130, 246, 0.15) !important;
+                color: #60a5fa !important;
+                border: 1px solid rgba(59, 130, 246, 0.35) !important;
+            }
+            .mtm-btn-open-mail:hover, .mtm-btn-mail:hover {
+                background: rgba(59, 130, 246, 0.25) !important;
+            }
+            .mtm-email-highlight {
+                color: #60a5fa;
+                font-weight: 600;
             }
         `;
         document.head.appendChild(style);
@@ -490,11 +502,14 @@
                         <button type="button" class="mtm-btn mtm-btn-sms" id="mtmSendSmsBtn" onclick="MessageTemplateModal.inviaSms()">
                             <i class="fas fa-sms"></i> Invia SMS
                         </button>
+                        <button type="button" class="mtm-btn mtm-btn-send-mail" id="mtmSendMailBtn" style="display:none;" onclick="MessageTemplateModal.inviaEmail()">
+                            <i class="fas fa-paper-plane"></i> Invia Email
+                        </button>
                         <a class="mtm-btn mtm-btn-wa" id="mtmOpenWaBtn" target="_blank" style="display:none;" onclick="MessageTemplateModal.handleWaClick()">
                             <i class="fab fa-whatsapp"></i> Apri WhatsApp
                         </a>
-                        <a class="mtm-btn mtm-btn-mail" id="mtmOpenMailBtn" target="_blank" style="display:none;" onclick="MessageTemplateModal.handleMailClick()">
-                            <i class="fas fa-envelope"></i> Apri Mail
+                        <a class="mtm-btn mtm-btn-open-mail" id="mtmOpenMailBtn" target="_blank" style="display:none;" onclick="MessageTemplateModal.handleMailClick()">
+                            <i class="fas fa-external-link-alt"></i> Apri Client Mail
                         </a>
                     </div>
                 </div>
@@ -754,9 +769,11 @@
 
             const targetTel = options.telOverride || c.telefono || c.telefono_filone || '';
             const targetTipo = options.tipoOverride || c.tipo || (_isCellulare(targetTel) ? 'cellulare' : (targetTel ? 'fisso' : 'senza_telefono'));
+            const targetEmail = (options.emailOverride || c.email || c.email_filone || '').trim();
 
             _activeContact.telefono_target = targetTel;
             _activeContact.tipo_target = targetTipo;
+            _activeContact.email_target = targetEmail;
 
             const infoEl = document.getElementById('mtmContactInfo');
             if (infoEl) {
@@ -765,6 +782,7 @@
                 const com = c.comune || '';
                 const ind = `${c.indirizzo || c.via || ''} ${c.civico || ''}`.trim();
                 const telStr = targetTel ? `<span class="mtm-tel-highlight"><i class="fas fa-phone"></i> ${_esc(targetTel)}</span>` : '<span style="color:#ef4444;"><i class="fas fa-phone-slash"></i> Nessun telefono</span>';
+                const emailStr = targetEmail ? `<span class="mtm-email-highlight"><i class="fas fa-envelope"></i> ${_esc(targetEmail)}</span>` : '<span style="color:#94a3b8;"><i class="fas fa-envelope-open"></i> Nessuna email</span>';
 
                 const cambioData = _checkCambioData(c.data_lettera || c.data_intervento, c.data_pian_filone);
                 let cambioBanner = '';
@@ -789,6 +807,7 @@
                 infoEl.innerHTML = `
                     <div><strong>${_esc(nome)}</strong></div>
                     <div>${telStr}</div>
+                    <div>${emailStr}</div>
                     <div>POD: <b>${_esc(pod)}</b></div>
                     ${com ? `<div><i class="fas fa-city"></i> ${_esc(com)}</div>` : ''}
                     ${ind ? `<div><i class="fas fa-map-marker-alt"></i> ${_esc(ind)}</div>` : ''}
@@ -901,9 +920,13 @@
             const plainTextForSending = isEmail ? _htmlToPlainText(resolvedBody) : (previewEl ? previewEl.textContent : '');
 
             const telTarget = _activeContact.telefono_target || '';
+            const emailTarget = (_activeContact.email_target || _activeContact.email || _activeContact.email_filone || '').trim();
             const isCell = _isCellulare(telTarget);
+            const hasEmail = Boolean(emailTarget && emailTarget.includes('@'));
+
             const waBtn = document.getElementById('mtmOpenWaBtn');
             const smsBtn = document.getElementById('mtmSendSmsBtn');
+            const sendMailBtn = document.getElementById('mtmSendMailBtn');
             const mailBtn = document.getElementById('mtmOpenMailBtn');
 
             if (waBtn) {
@@ -921,11 +944,26 @@
                 smsBtn.style.display = (tmpl.type === 'sms' || tmpl.type === 'whatsapp' || isCell) ? 'inline-flex' : 'none';
             }
 
+            if (sendMailBtn) {
+                if (isEmail && hasEmail) {
+                    sendMailBtn.style.display = 'inline-flex';
+                    sendMailBtn.title = `Invia direttamente tramite gestionale (SMTP) a ${emailTarget}`;
+                } else {
+                    sendMailBtn.style.display = 'none';
+                }
+            }
+
             if (mailBtn) {
                 if (isEmail) {
                     const subj = resolvedSubject || 'Sostituzione contatore';
-                    mailBtn.href = `mailto:?subject=${encodeURIComponent(subj)}`;
+                    const mailtoDest = hasEmail ? encodeURIComponent(emailTarget) : '';
+                    let mailtoUrl = `mailto:${mailtoDest}?subject=${encodeURIComponent(subj)}`;
+                    if (emailTecnico && emailTecnico.includes('@')) {
+                        mailtoUrl += `&bcc=${encodeURIComponent(emailTecnico)}`;
+                    }
+                    mailBtn.href = mailtoUrl;
                     mailBtn.style.display = 'inline-flex';
+                    mailBtn.title = hasEmail ? `Apri nel client di posta predefinito (${emailTarget})` : 'Apri nel client di posta predefinito';
                 } else {
                     mailBtn.style.display = 'none';
                 }
@@ -1023,9 +1061,90 @@
             }
         },
 
+        async inviaEmail() {
+            if (!_activeContact) return;
+            const email = (_activeContact.email_target || _activeContact.email || _activeContact.email_filone || '').trim();
+            if (!email || !email.includes('@')) {
+                _notify('Nessun indirizzo email valido per l\'invio', true);
+                return;
+            }
+
+            const tmpl = (_templates || {})[_selectedTmplId];
+            const isEmail = tmpl && (tmpl.type === 'email' || tmpl.type === 'mail');
+
+            const previewEl = document.getElementById('mtmMessagePreview');
+            const bodyHtml = previewEl ? previewEl.innerHTML : '';
+            const plainText = previewEl ? (previewEl.innerText || previewEl.textContent || '') : '';
+
+            const subjEl = document.getElementById('mtmSubjectText');
+            const subject = subjEl ? (subjEl.textContent || subjEl.innerText || '').trim() : '';
+
+            if (!plainText.trim() && !bodyHtml.trim()) {
+                _notify('Corpo del messaggio vuoto', true);
+                return;
+            }
+
+            const btn = document.getElementById('mtmSendMailBtn');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Invio...';
+            }
+
+            const endpoint = (_activeOptions && _activeOptions.emailEndpoint) || '/api/distinte/invia-singola-email';
+
+            try {
+                const payload = {
+                    template_id: _selectedTmplId || '',
+                    email: email,
+                    contatto: {
+                        ..._activeContact,
+                        email: email,
+                        pod: _activeContact.pod,
+                        nome: _activeContact.nome || _activeContact.nominativo || '',
+                        data_intervento: _activeContact.data_intervento || _activeContact.data_pian_filone || _activeContact.data_pianificazione || '',
+                        data_pian_filone: _activeContact.data_pian_filone || _activeContact.data_intervento || '',
+                        lcl: _activeContact.lcl || '',
+                        eneltel: _activeContact.eneltel || _activeContact.eneltel_filone || ''
+                    },
+                    subject_override: subject || undefined,
+                    body_override: isEmail ? bodyHtml : undefined,
+                    context: (_activeOptions && _activeOptions.context) || 'distinte'
+                };
+
+                const res = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    _notify(`Email inviata con successo a ${email}`);
+                    MessageTemplateModal.close();
+                    if (_activeOptions && typeof _activeOptions.onEmailSent === 'function') {
+                        _activeOptions.onEmailSent(_activeContact.pod, _activeContact, data);
+                    }
+                } else {
+                    const errMsg = data.error || data.errore || 'Errore invio email';
+                    _notify(errMsg, true);
+                    if ((data.error_code === 'SMTP_NOT_CONFIGURED' || data.error_code === 'SMTP_AUTH_FAILED' || errMsg.toLowerCase().includes('smtp')) && window.SmtpConfigModal) {
+                        if (confirm(`${errMsg}\n\nVuoi verificare/modificare le impostazioni SMTP adesso?`)) {
+                            window.SmtpConfigModal.open({ mode: 'provincia' });
+                        }
+                    }
+                }
+            } catch (e) {
+                _notify(e.message || 'Errore di connessione invio email', true);
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-paper-plane"></i> Invia Email';
+                }
+            }
+        },
+
         handleWaClick() {
             if (_activeContact && _activeOptions && typeof _activeOptions.onWaOpened === 'function') {
-                _activeOptions.onWaOpened(_activeContact.pod);
+                _activeOptions.onWaOpened(_activeContact.pod, _activeContact);
             }
             setTimeout(() => MessageTemplateModal.close(), 300);
         },
@@ -1053,7 +1172,7 @@
                 }
             }
             if (_activeContact && _activeOptions && typeof _activeOptions.onMailOpened === 'function') {
-                _activeOptions.onMailOpened(_activeContact.pod);
+                _activeOptions.onMailOpened(_activeContact.pod, _activeContact);
             }
             setTimeout(() => MessageTemplateModal.close(), 300);
         },

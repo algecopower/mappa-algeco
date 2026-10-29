@@ -25,7 +25,7 @@ from openpyxl.utils import get_column_letter
 
 from config import PROVINCIA_ATTIVA
 from moduli.safe_json import json_read
-from moduli.smtp import load_smtp_settings, send_smtp_message
+from moduli.smtp import load_smtp_settings, send_smtp_message, get_provincia_email
 
 logger = logging.getLogger('mappa_algeco')
 
@@ -63,7 +63,7 @@ def build_nota_invio(tipo: str, data_intervento: str | None = None, data_oggi: d
     Es:
     - tipo='mail' o 'email': "18/08 mandata mail per 25/08" (o "18/08 mandata mail")
     - tipo='sms': "18/08 mandato SMS per 25/08" (o "18/08 mandato SMS")
-    - tipo='wa' o 'whatsapp': "18/08 mandato WA per 25/08" (o "18/08 mandato WA")
+    - tipo='wa' o 'whatsapp': "18/08 mandato wa per 25/08" (o "18/08 mandato wa")
     """
     if data_oggi is None:
         data_oggi = datetime.date.today()
@@ -72,8 +72,8 @@ def build_nota_invio(tipo: str, data_intervento: str | None = None, data_oggi: d
     tipo_str = str(tipo).lower().strip()
     if tipo_str in ('sms', 'mandato sms', 'sms gateway'):
         azione = "mandato SMS"
-    elif tipo_str in ('wa', 'whatsapp', 'msg wa', 'mandato msg wa'):
-        azione = "mandato WA"
+    elif tipo_str in ('wa', 'whatsapp', 'msg wa', 'mandato msg wa', 'mandato wa'):
+        azione = "mandato wa"
     else:
         azione = "mandata mail"
 
@@ -84,10 +84,11 @@ def build_nota_invio(tipo: str, data_intervento: str | None = None, data_oggi: d
     return f"{oggi_str} {azione}"
 
 
-def registra_nota_su_db(pod: str, nota: str, user: str = '', origin: str = 'bulk_send', lcl: str = '', eneltel: str = '') -> bool:
+def registra_nota_su_db(pod: str, nota: str, user: str = '', origin: str = 'bulk_send', lcl: str = '', eneltel: str = '', data_intervento: str | None = None) -> bool:
     """
     Scrive/premette la nota nel campo note_appuntamento del filone sul DB locale.
     Se la nota non è già presente, la concatena all'inizio con ' // '.
+    Arricchisce automaticamente con la data di pianificazione se mancante.
     """
     if not pod and not eneltel:
         return False
@@ -107,11 +108,32 @@ def registra_nota_su_db(pod: str, nota: str, user: str = '', origin: str = 'bulk
 
         ek, resolved_lcl = found
         local = _db.get_filone_row(ek, lcl=resolved_lcl) or {}
+
+        # Se la nota di invio non ha " per GG/MM", cerca la data di intervento/pianificazione
+        nota_clean = str(nota).strip()
+        data_target = data_intervento or local.get('data_pianificata') or local.get('data_intervento')
+        data_breve = format_data_breve(data_target)
+
+        nota_lower = nota_clean.lower()
+        if (' per ' not in nota_lower) and data_breve:
+            if 'mandata mail' in nota_lower or 'mandata email' in nota_lower:
+                m_oggi = re.match(r'^(\d{1,2}/\d{1,2})\s+', nota_clean)
+                pref = m_oggi.group(1) if m_oggi else datetime.date.today().strftime('%d/%m')
+                nota_clean = f"{pref} mandata mail per {data_breve}"
+            elif 'mandato wa' in nota_lower or 'mandato msg wa' in nota_lower or 'whatsapp' in nota_lower:
+                m_oggi = re.match(r'^(\d{1,2}/\d{1,2})\s+', nota_clean)
+                pref = m_oggi.group(1) if m_oggi else datetime.date.today().strftime('%d/%m')
+                nota_clean = f"{pref} mandato wa per {data_breve}"
+            elif 'mandato sms' in nota_lower:
+                m_oggi = re.match(r'^(\d{1,2}/\d{1,2})\s+', nota_clean)
+                pref = m_oggi.group(1) if m_oggi else datetime.date.today().strftime('%d/%m')
+                nota_clean = f"{pref} mandato SMS per {data_breve}"
+
         nota_attuale = (local.get('note_appuntamento') or '').strip()
-        if nota in nota_attuale:
+        if nota_clean in nota_attuale:
             nuova_nota = nota_attuale
         else:
-            nuova_nota = f"{nota} // {nota_attuale}" if nota_attuale else nota
+            nuova_nota = f"{nota_clean} // {nota_attuale}" if nota_attuale else nota_clean
             conn = _db.get_conn()
             col_note = _column_name_for_internal(conn, 'note_appuntamento', None)
             _db.record_local_change(
@@ -574,6 +596,11 @@ def send_contatori_email(
     msg['Message-ID'] = make_msgid(domain=from_email.split('@')[-1] if '@' in from_email else 'algecopower.it')
     msg['Date'] = formatdate(localtime=True)
 
+    # Includi email della provincia in CCn (copia nascosta), se non coincidente con il destinatario
+    prov_bcc = get_provincia_email(prov)
+    if prov_bcc and prov_bcc.lower() != (email_dest or '').lower():
+        msg['Bcc'] = prov_bcc
+
     try:
         ok_send, send_err = send_smtp_message(
             smtp_settings, msg, max_retries=3, base_delay=6, save_sent=True
@@ -642,6 +669,7 @@ def send_contatori_email(
         logger.exception("[EMAIL] Invio riuscito ma registrazione storico lettere fallita")
 
     # Scrivi nota automatica sul DB filone per ciascun contatore (es. "18/08 mandata mail per 25/08")
+    last_nota = None
     for c_item in contatori_list:
         c_pod = c_item.get('pod') or c_item.get('pod_filone') or primary_pod
         c_data = c_item.get('data_intervento') or c_item.get('data_pian_filone') or c_item.get('data_pianificazione') or contatto.get('data_intervento') or contatto.get('data_pian_filone')
@@ -650,6 +678,7 @@ def send_contatori_email(
         if (c_pod and c_pod != '?') or c_eneltel:
             nota_invio = build_nota_invio('mail', data_intervento=c_data)
             registra_nota_su_db(c_pod, nota_invio, user=username, origin=f'{context}_invia_email', lcl=c_lcl, eneltel=c_eneltel)
+            last_nota = nota_invio
 
     # Registra in Audit Log
     try:
@@ -677,6 +706,7 @@ def send_contatori_email(
         'email': email_dest,
         'contatori_count': len(contatori_list),
         'allegati': allegati_nomi,
-        'subject': subject
+        'subject': subject,
+        'nota': last_nota
     }
 

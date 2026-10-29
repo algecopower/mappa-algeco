@@ -1113,16 +1113,39 @@ async function salvaNotaAzienda(id, nota) {
     }
 }
 
-async function aggiungiNotaAzienda(id, testo) {
+async function aggiungiNotaAzienda(id, testo, opzioni) {
+    opzioni = opzioni || {};
     document.querySelectorAll('.note-dropdown.show').forEach(d => d.classList.remove('show'));
     const a = aziende.find(x => Number(x.id) === Number(id));
     if (!a) return;
     const existing = (a.note || a.note_filone || a.note_appuntamento || '').trim();
-    if (existing && existing.includes(testo)) {
+
+    const oggi = new Date();
+    const gg = String(oggi.getDate()).padStart(2, '0');
+    const mm = String(oggi.getMonth() + 1).padStart(2, '0');
+    const prefisso = `${gg}/${mm}`;
+
+    const tLower = (testo || '').toLowerCase().trim();
+    const isMail = tLower === 'mandata mail' || tLower === 'mail';
+    const isWa = tLower === 'mandato wa' || tLower === 'mandato msg wa' || tLower === 'mandato whatsapp' || tLower === 'wa';
+
+    let testoNota = testo;
+    if (tLower === 'chiamare') {
+        testoNota = 'chiamare';
+    } else if (isMail || isWa) {
+        const azione = isMail ? 'mandata mail' : 'mandato wa';
+        const dataTarget = opzioni.dataIntervento || a.data_intervento || a.data_pian_filone || a.data_lettera || '';
+        const dataTargetBreve = formatDataBreve(dataTarget);
+        testoNota = dataTargetBreve ? `${prefisso} ${azione} per ${dataTargetBreve}` : `${prefisso} ${azione}`;
+    } else if (!testo.startsWith(prefisso) && !testo.match(/^\d{1,2}\/\d{1,2}/)) {
+        testoNota = `${prefisso} ${testo}`;
+    }
+
+    if (existing && existing.includes(testoNota)) {
         showToast('Nota già presente');
         return;
     }
-    const nuovaNota = existing ? `${existing} // ${testo}` : testo;
+    const nuovaNota = existing ? `${testoNota} // ${existing}` : testoNota;
     await salvaNotaAzienda(id, nuovaNota);
 }
 
@@ -1172,16 +1195,24 @@ function apriAziendaMessageModal(id) {
         window.MessageTemplateModal.open({
             contact: c,
             smsEndpoint: '/api/lettere/invia-singolo-sms',
-            onSmsSent: async (p) => {
-                const dataIntervento = c.data_pian_filone || c.data_lettera || c.data_intervento || '';
+            emailEndpoint: '/api/distinte/invia-singola-email',
+            context: 'lettere_aziende',
+            onSmsSent: async (p, contact) => {
+                const dataIntervento = (contact && (contact.data_pian_filone || contact.data_lettera || contact.data_intervento)) || c.data_pian_filone || c.data_lettera || c.data_intervento || '';
                 const notaInvio = `mandato SMS per ${dataIntervento}`;
-                await aggiungiNotaAzienda(a.id, notaInvio);
+                await aggiungiNotaAzienda(a.id, notaInvio, { dataIntervento });
             },
-            onWaOpened: async (p) => {
-                await aggiungiNotaAzienda(a.id, 'mandato wa');
+            onEmailSent: async (p, contact) => {
+                const dataIntervento = (contact && (contact.data_pian_filone || contact.data_lettera || contact.data_intervento)) || c.data_pian_filone || c.data_lettera || c.data_intervento || '';
+                await aggiungiNotaAzienda(a.id, 'mandata mail', { dataIntervento });
             },
-            onMailOpened: async (p) => {
-                await aggiungiNotaAzienda(a.id, 'mandata mail');
+            onWaOpened: async (p, contact) => {
+                const dataIntervento = (contact && (contact.data_pian_filone || contact.data_lettera || contact.data_intervento)) || c.data_pian_filone || c.data_lettera || c.data_intervento || '';
+                await aggiungiNotaAzienda(a.id, 'mandato wa', { dataIntervento });
+            },
+            onMailOpened: async (p, contact) => {
+                const dataIntervento = (contact && (contact.data_pian_filone || contact.data_lettera || contact.data_intervento)) || c.data_pian_filone || c.data_lettera || c.data_intervento || '';
+                await aggiungiNotaAzienda(a.id, 'mandata mail', { dataIntervento });
             }
         });
     } else {
@@ -2620,6 +2651,16 @@ function formatDateToItalian(dateStr) {
     return clean;
 }
 
+function formatDataBreve(dateStr) {
+    if (!dateStr) return '';
+    const val = String(dateStr).trim();
+    let m = val.match(/(\d{1,2})\/(\d{1,2})(?:\/\d{2,4})?/);
+    if (m) return `${m[1].padStart(2, '0')}/${m[2].padStart(2, '0')}`;
+    m = val.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return `${m[3]}/${m[2]}`;
+    return val;
+}
+
 function toggleCompletedPrivato(pod) {
     completedPrivati[pod] = !completedPrivati[pod];
     localStorage.setItem('lettere_privati_completed', JSON.stringify(completedPrivati));
@@ -2644,7 +2685,8 @@ function toggleNoteDropdownPrivato(pod) {
     }
 }
 
-async function aggiungiNotaPrivato(pod, testo) {
+async function aggiungiNotaPrivato(pod, testo, opzioni) {
+    opzioni = opzioni || {};
     document.querySelectorAll('.note-dropdown.show').forEach(d => d.classList.remove('show'));
     const inputCard = document.getElementById(`noteDisplay_privato_${pod}`);
     const inputTable = document.getElementById(`noteTable_privato_${pod}`);
@@ -2653,12 +2695,35 @@ async function aggiungiNotaPrivato(pod, testo) {
         localStorage.setItem('lettere_privati_errati', JSON.stringify(erratiPrivati));
     }
     const c = privati.find(x => x.pod === pod);
+
+    const oggi = new Date();
+    const gg = String(oggi.getDate()).padStart(2, '0');
+    const mm = String(oggi.getMonth() + 1).padStart(2, '0');
+    const prefisso = `${gg}/${mm}`;
+
+    const tLower = (testo || '').toLowerCase().trim();
+    const isMail = tLower === 'mandata mail' || tLower === 'mail';
+    const isWa = tLower === 'mandato wa' || tLower === 'mandato msg wa' || tLower === 'mandato whatsapp' || tLower === 'wa';
+
+    let testoNota = testo;
+    if (tLower === 'chiamare') {
+        testoNota = 'chiamare';
+    } else if (isMail || isWa) {
+        const azione = isMail ? 'mandata mail' : 'mandato wa';
+        const dateInput = document.getElementById(`appDate_privato_${pod}`);
+        const dateVal = (dateInput && dateInput.value) || opzioni.dataIntervento || (c && (c.data_lettera || c.data_intervento || c.data_pian_filone)) || '';
+        const dataBreve = formatDataBreve(dateVal);
+        testoNota = dataBreve ? `${prefisso} ${azione} per ${dataBreve}` : `${prefisso} ${azione}`;
+    } else if (!testo.startsWith(prefisso) && !testo.match(/^\d{1,2}\/\d{1,2}/)) {
+        testoNota = `${prefisso} ${testo}`;
+    }
+
     let current = (noteStatesPrivati[pod] || (c ? (c.note_filone || c.note || c.note_appuntamento || '') : '') || (inputCard ? inputCard.value : (inputTable ? inputTable.value : '')) || '').trim();
-    if (current && current.includes(testo)) {
+    if (current && current.includes(testoNota)) {
         showToast('Nota già presente');
         return;
     }
-    let nuovaNota = current ? `${current} // ${testo}` : testo;
+    let nuovaNota = current ? `${testoNota} // ${current}` : testoNota;
     if (inputCard) inputCard.value = nuovaNota;
     if (inputTable) inputTable.value = nuovaNota;
     await salvaNotaPrivato(pod, nuovaNota);
@@ -2811,14 +2876,24 @@ async function fissaAppuntamentoPrivato(pod) {
         return;
     }
 
+    const c = privati.find(x => x.pod === pod);
+    const inputCard = document.getElementById(`noteDisplay_privato_${pod}`);
+    const inputTable = document.getElementById(`noteTable_privato_${pod}`);
+    const currentNote = (noteStatesPrivati[pod] !== undefined)
+        ? noteStatesPrivati[pod]
+        : ((inputCard ? inputCard.value : (inputTable ? inputTable.value : '')) || (c ? (c.note_filone || c.note || c.note_appuntamento || '') : ''));
+
     try {
         const res = await fetch('/api/lettere/appuntamento', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 pod,
+                lcl: c ? (c.lcl || '') : '',
+                eneltel: c ? (c.eneltel || c.eneltel_filone || '') : '',
                 orario,
-                data_appuntamento: dataItaliana
+                data_appuntamento: dataItaliana,
+                nota_corrente: currentNote
             })
         });
         const data = await res.json();
@@ -2826,12 +2901,23 @@ async function fissaAppuntamentoPrivato(pod) {
             showToast(data.message || 'Appuntamento impostato');
             const btnRim = document.getElementById(`btnRimuoviApp_privato_${pod}`);
             if (btnRim) btnRim.style.display = 'inline-flex';
-            if (data.nota) {
+            if (data.nota !== undefined) {
                 noteStatesPrivati[pod] = data.nota;
+                if (c) {
+                    c.note_filone = data.nota;
+                    c.note = data.nota;
+                    c.note_appuntamento = data.nota;
+                }
                 const noteCard = document.getElementById(`noteDisplay_privato_${pod}`);
-                if (noteCard) noteCard.value = data.nota;
+                if (noteCard) {
+                    noteCard.value = data.nota;
+                    noteCard.classList.toggle('has-note', Boolean(data.nota));
+                }
                 const noteTable = document.getElementById(`noteTable_privato_${pod}`);
-                if (noteTable) noteTable.value = data.nota;
+                if (noteTable) {
+                    noteTable.value = data.nota;
+                    noteTable.classList.toggle('has-note', Boolean(data.nota));
+                }
             }
         } else {
             showToast(data.error || 'Errore appuntamento', true);
@@ -2843,11 +2929,23 @@ async function fissaAppuntamentoPrivato(pod) {
 
 async function rimuoviAppuntamentoPrivato(pod) {
     if (!confirm('Rimuovere l\'appuntamento da questo contatore?')) return;
+    const c = privati.find(x => x.pod === pod);
+    const inputCard = document.getElementById(`noteDisplay_privato_${pod}`);
+    const inputTable = document.getElementById(`noteTable_privato_${pod}`);
+    const currentNote = (noteStatesPrivati[pod] !== undefined)
+        ? noteStatesPrivati[pod]
+        : ((inputCard ? inputCard.value : (inputTable ? inputTable.value : '')) || (c ? (c.note_filone || c.note || c.note_appuntamento || '') : ''));
+
     try {
         const res = await fetch('/api/lettere/rimuovi-appuntamento', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ pod })
+            body: JSON.stringify({
+                pod,
+                lcl: c ? (c.lcl || '') : '',
+                eneltel: c ? (c.eneltel || c.eneltel_filone || '') : '',
+                nota_corrente: currentNote
+            })
         });
         const data = await res.json();
         if (data.success) {
@@ -2856,10 +2954,21 @@ async function rimuoviAppuntamentoPrivato(pod) {
             if (btnRim) btnRim.style.display = 'none';
             if (data.nota !== undefined) {
                 noteStatesPrivati[pod] = data.nota;
+                if (c) {
+                    c.note_filone = data.nota;
+                    c.note = data.nota;
+                    c.note_appuntamento = data.nota;
+                }
                 const noteCard = document.getElementById(`noteDisplay_privato_${pod}`);
-                if (noteCard) noteCard.value = data.nota;
+                if (noteCard) {
+                    noteCard.value = data.nota;
+                    noteCard.classList.toggle('has-note', Boolean(data.nota));
+                }
                 const noteTable = document.getElementById(`noteTable_privato_${pod}`);
-                if (noteTable) noteTable.value = data.nota;
+                if (noteTable) {
+                    noteTable.value = data.nota;
+                    noteTable.classList.toggle('has-note', Boolean(data.nota));
+                }
             }
         } else {
             showToast(data.error || 'Errore rimozione appuntamento', true);
@@ -2898,22 +3007,38 @@ function apriPrivatiMessageModal(pod, telOverride, tipoOverride) {
         showToast('Contatto non trovato', true);
         return;
     }
+    const contactCopy = { ...c };
+    const emailInput = document.getElementById(`emailEdit_privato_${pod}`) || document.getElementById(`emailTable_privato_${pod}`);
+    if (emailInput && emailInput.value) {
+        contactCopy.email = emailInput.value.trim();
+        contactCopy.email_filone = emailInput.value.trim();
+    } else if (!contactCopy.email && contactCopy.email_filone) {
+        contactCopy.email = contactCopy.email_filone;
+    }
     if (window.MessageTemplateModal) {
         window.MessageTemplateModal.open({
-            contact: c,
+            contact: contactCopy,
             telOverride: telOverride,
             tipoOverride: tipoOverride,
             smsEndpoint: '/api/lettere/invia-singolo-sms',
-            onSmsSent: async (p) => {
-                const dataIntervento = c.data_pian_filone || c.data_intervento || '';
+            emailEndpoint: '/api/distinte/invia-singola-email',
+            context: 'lettere_privati',
+            onSmsSent: async (p, contact) => {
+                const dataIntervento = (contact && (contact.data_intervento || contact.data_pian_filone)) || c.data_pian_filone || c.data_intervento || '';
                 const notaInvio = `mandato SMS per ${dataIntervento}`;
-                await aggiungiNotaPrivato(p, notaInvio);
+                await aggiungiNotaPrivato(p, notaInvio, { dataIntervento });
             },
-            onWaOpened: async (p) => {
-                await aggiungiNotaPrivato(p, 'mandato wa');
+            onEmailSent: async (p, contact) => {
+                const dataIntervento = (contact && (contact.data_intervento || contact.data_pian_filone)) || c.data_pian_filone || c.data_intervento || '';
+                await aggiungiNotaPrivato(p, 'mandata mail', { dataIntervento });
             },
-            onMailOpened: async (p) => {
-                await aggiungiNotaPrivato(p, 'mandata mail');
+            onWaOpened: async (p, contact) => {
+                const dataIntervento = (contact && (contact.data_intervento || contact.data_pian_filone)) || c.data_pian_filone || c.data_intervento || '';
+                await aggiungiNotaPrivato(p, 'mandato wa', { dataIntervento });
+            },
+            onMailOpened: async (p, contact) => {
+                const dataIntervento = (contact && (contact.data_intervento || contact.data_pian_filone)) || c.data_pian_filone || c.data_intervento || '';
+                await aggiungiNotaPrivato(p, 'mandata mail', { dataIntervento });
             }
         });
     } else {

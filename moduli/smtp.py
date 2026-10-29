@@ -9,7 +9,7 @@ import imaplib
 import logging
 
 from email.mime.text import MIMEText
-from email.utils import formataddr, formatdate, make_msgid
+from email.utils import formataddr, formatdate, make_msgid, getaddresses
 
 from moduli.safe_json import json_read, json_write
 from config import PROVINCIA_ATTIVA
@@ -75,7 +75,7 @@ def test_send_email(smtp_settings, recipient, prov=None):
     msg['Date'] = formatdate(localtime=True)
     msg['Message-ID'] = make_msgid(domain=from_email.split('@')[-1] if '@' in from_email else 'algecopower.it')
 
-    ok, err = send_smtp_message(smtp_settings, msg, max_retries=1, save_sent=False)
+    ok, err = send_smtp_message(smtp_settings, msg, max_retries=1, save_sent=False, add_provincia_ccn=False)
     if ok:
         return True, f"Email di prova inviata con successo a {recipient}!"
     return False, err or "Errore durante l'invio dell'email di prova"
@@ -136,6 +136,78 @@ def save_smtp_settings(data, prov=None):
     return True
 
 
+def get_provincia_email(prov=None) -> str:
+    """Restituisce l'indirizzo email configurato per la provincia specificata (o PROVINCIA_ATTIVA).
+    Cerca in:
+      1. data/{prov}/distinte_templates.json o data/distinte_templates.json (settings.province[PROV].email o settings.email_{prov})
+      2. data/smtp_settings.json (from_email / username)
+      3. fallback: f"tecnico_{prov.lower()}@algecopower.it"
+    """
+    prov_norm = (prov or PROVINCIA_ATTIVA or 'TORINO').strip().upper()
+    prov_lower = prov_norm.lower()
+
+    # 1. Prova dai template distinte (per-provincia o globale)
+    for tpl_path in [
+        os.path.join(_ROOT_DIR, 'data', prov_lower, 'distinte_templates.json'),
+        os.path.join(_ROOT_DIR, 'data', 'distinte_templates.json'),
+    ]:
+        if os.path.isfile(tpl_path):
+            try:
+                tpl_data = json_read(tpl_path, default={}) or {}
+                settings = tpl_data.get('settings', {})
+                prov_dict = settings.get('province', {}).get(prov_norm, {})
+                email = prov_dict.get('email') or settings.get(f'email_{prov_lower}') or settings.get('email_tecnico')
+                if email and '@' in str(email):
+                    return str(email).strip()
+            except Exception:
+                pass
+
+    # 2. Prova dalle impostazioni SMTP
+    try:
+        smtp_conf = load_smtp_settings(prov_lower)
+        if smtp_conf:
+            email = smtp_conf.get('from_email') or smtp_conf.get('username')
+            if email and '@' in str(email):
+                return str(email).strip()
+    except Exception:
+        pass
+
+    return f"tecnico_{prov_lower}@algecopower.it"
+
+
+def add_provincia_ccn_to_msg(msg, prov=None, ccn_email=None):
+    """Aggiunge l'email della provincia in CCn (BCC) all'oggetto Message/MIMEMultipart,
+    se non già presente nei destinatari (To, Cc, Bcc).
+    Non altera i destinatari visibili (To, Cc) e rispetta lo standard RFC 2822
+    in modo che l'invio via smtplib.send_message lo trasmetta come copia nascosta.
+    """
+    ccn = (ccn_email or get_provincia_email(prov) or '').strip()
+    if not ccn or '@' not in ccn:
+        return msg
+
+    to_headers = msg.get_all('To', [])
+    cc_headers = msg.get_all('Cc', [])
+    bcc_headers = msg.get_all('Bcc', [])
+
+    existing_to = [a[1].lower() for a in getaddresses(to_headers)]
+    existing_cc = [a[1].lower() for a in getaddresses(cc_headers)]
+    existing_bcc = [a[1].lower() for a in getaddresses(bcc_headers)]
+
+    ccn_lower = ccn.lower()
+    # Se già presente in To, Cc o Bcc, non duplicare
+    if ccn_lower in existing_to or ccn_lower in existing_cc or ccn_lower in existing_bcc:
+        return msg
+
+    if bcc_headers:
+        current_bcc = ', '.join(bcc_headers)
+        del msg['Bcc']
+        msg['Bcc'] = f"{current_bcc}, {ccn}"
+    else:
+        msg['Bcc'] = ccn
+
+    return msg
+
+
 def connect_smtp(smtp_settings, timeout=15):
     """Crea e restituisce una connessione SMTP autenticata.
     Porta 465 → SSL diretto (SMTP_SSL). Porta 587 → STARTTLS."""
@@ -158,14 +230,22 @@ def connect_smtp(smtp_settings, timeout=15):
     return server
 
 
-def send_smtp_message(smtp_settings, msg, max_retries=3, base_delay=6, save_sent=True):
+def send_smtp_message(smtp_settings, msg, max_retries=3, base_delay=6, save_sent=True, add_provincia_ccn=True, prov=None):
     """Invia un messaggio email gestendo la connessione SMTP, l'invio e il retry
     in caso di errori temporanei (es. SMTP 452 / 421 / 450 rate limit / policy violation,
     disconnessione o timeout).
+    Se add_provincia_ccn è True, assicura che l'indirizzo email configurato per la provincia
+    sia incluso in copia nascosta (BCC/CCn).
 
     Ritorna:
         (ok: bool, error_message: str | None)
     """
+    if add_provincia_ccn:
+        try:
+            add_provincia_ccn_to_msg(msg, prov=prov)
+        except Exception as e:
+            logger.warning(f"[SMTP] Impossibile applicare CCn provincia: {e}")
+
     last_err = None
     for attempt in range(1, max_retries + 1):
         server = None

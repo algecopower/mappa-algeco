@@ -482,6 +482,7 @@ def invia_email_prova():
 
 
 @bp.route('/api/distinte/invia-singola-email', methods=['POST'])
+@bp.route('/api/lettere/invia-singola-email', methods=['POST'])
 @login_required
 def invia_singola_email():
     """
@@ -496,11 +497,12 @@ def invia_singola_email():
         body_override = data.get('body_override')
         allegati_nomi = data.get('allegati', [])
         contatori = data.get('contatori')
+        context = data.get('context') or 'distinte'
 
         if not contatto and not data.get('email'):
             return jsonify({'error': 'Contatto mancante'}), 400
 
-        email_dest = (contatto.get('email') if contatto else data.get('email', '')) or ''
+        email_dest = ((contatto.get('email') if contatto else '') or data.get('email') or '').strip()
         username = _get_username()
 
         res = send_contatori_email(
@@ -513,7 +515,7 @@ def invia_singola_email():
             allegati_nomi=allegati_nomi,
             provincia=PROVINCIA_ATTIVA,
             username=username,
-            context='distinte'
+            context=context
         )
 
         status_code = 200 if res.get('ok') else (401 if res.get('error_code') == 'SMTP_AUTH_FAILED' else 400)
@@ -998,6 +1000,7 @@ def salva_nota_distinte():
         # DB-only: no chiamate Sheets nel path di scrittura. Il drainer pusha.
         from moduli import db as _db
         from moduli.lettere import _get_disabled_lcls, _column_name_for_internal
+        from moduli.bulk_contatori_email import format_data_breve
         disabled = _get_disabled_lcls()
         found = None
         if pod:
@@ -1009,6 +1012,28 @@ def salva_nota_distinte():
         ek, resolved_lcl = found
         local = _db.get_filone_row(ek, lcl=resolved_lcl) or {}
         nota_attuale = local.get('note_appuntamento') or ''
+
+        # Se la nota è di invio e manca " per GG/MM", arricchiscila con la data di pianificazione se disponibile
+        nota_lower = nota.lower()
+        if ' per ' not in nota_lower:
+            dt_target = local.get('data_pianificata') or local.get('data_intervento')
+            dt_breve = format_data_breve(dt_target)
+            if dt_breve:
+                import datetime as _dt
+                oggi_str = _dt.date.today().strftime('%d/%m')
+                if 'mandata mail' in nota_lower or 'mandata email' in nota_lower:
+                    m = re.match(r'^(\d{1,2}/\d{1,2})\s+', nota)
+                    pref = m.group(1) if m else oggi_str
+                    nota = f"{pref} mandata mail per {dt_breve}"
+                elif 'mandato wa' in nota_lower or 'mandato msg wa' in nota_lower or 'whatsapp' in nota_lower:
+                    m = re.match(r'^(\d{1,2}/\d{1,2})\s+', nota)
+                    pref = m.group(1) if m else oggi_str
+                    nota = f"{pref} mandato wa per {dt_breve}"
+                elif 'mandato sms' in nota_lower:
+                    m = re.match(r'^(\d{1,2}/\d{1,2})\s+', nota)
+                    pref = m.group(1) if m else oggi_str
+                    nota = f"{pref} mandato SMS per {dt_breve}"
+
         if sovrascrivere:
             nuova_nota = nota
         elif not nota:
@@ -1016,7 +1041,7 @@ def salva_nota_distinte():
         elif not nota_attuale:
             nuova_nota = nota
         elif nota not in nota_attuale:
-            nuova_nota = f"{nota_attuale} // {nota}"
+            nuova_nota = f"{nota} // {nota_attuale}"
         else:
             nuova_nota = nota_attuale
 
@@ -1088,27 +1113,39 @@ def segna_numero_errato():
 def set_appuntamento_distinte():
     """
     Imposta un appuntamento per un contatore cercato per POD.
-    Body: {"pod": "IT...", "orario": "10:00-12:00"}
+    Body: {"pod": "IT...", "orario": "10:00-12:00", "nota_corrente": "...", "data_appuntamento": "..."}
     """
     try:
-        data = request.json
+        data = request.json or {}
         pod = data.get('pod', '').strip().upper()
         orario = data.get('orario', '').strip()
         data_app = data.get('data_appuntamento', '')
         note_extra = data.get('note', '')
+        nota_corrente = data.get('nota_corrente')
+        lcl = data.get('lcl', '').strip() or None
 
         if not pod:
             return jsonify({'error': 'POD mancante'}), 400
         if not orario:
             return jsonify({'error': 'Orario richiesto'}), 400
 
-        row = find_row_by_pod(pod)
-        if row is None:
+        from moduli import db as _db
+        from moduli.lettere import _get_disabled_lcls
+        disabled = _get_disabled_lcls()
+        found = _db.find_filone_row_by_pod(pod, lcl=lcl, disabled_lcls=disabled)
+        if not found:
+            found = _db.find_filone_row_by_pod(pod, lcl=lcl)
+        if not found:
             return jsonify({'error': f'POD {pod} non trovato'}), 404
+
+        ek, resolved_lcl = found
+        local = _db.get_filone_row(ek, lcl=resolved_lcl) or {}
+        row = local.get('sheets_row') or 1
 
         result = _imposta_appuntamento_su_filone(
             row, orario, data_app=data_app, note_extra=note_extra,
-            origine='distinte', pod_override=pod
+            origine='distinte', pod_override=pod, eneltel_override=ek,
+            nota_corrente=nota_corrente, lcl=resolved_lcl,
         )
         return jsonify({
             'success': True,
@@ -1128,17 +1165,31 @@ def set_appuntamento_distinte():
 def remove_appuntamento_distinte():
     """Rimuove l'appuntamento da un contatore cercato per POD."""
     try:
-        data = request.json
+        data = request.json or {}
         pod = data.get('pod', '').strip().upper()
+        nota_corrente = data.get('nota_corrente')
+        lcl = data.get('lcl', '').strip() or None
 
         if not pod:
             return jsonify({'error': 'POD mancante'}), 400
 
-        row = find_row_by_pod(pod)
-        if row is None:
+        from moduli import db as _db
+        from moduli.lettere import _get_disabled_lcls
+        disabled = _get_disabled_lcls()
+        found = _db.find_filone_row_by_pod(pod, lcl=lcl, disabled_lcls=disabled)
+        if not found:
+            found = _db.find_filone_row_by_pod(pod, lcl=lcl)
+        if not found:
             return jsonify({'error': f'POD {pod} non trovato'}), 404
 
-        result = _rimuovi_appuntamento_da_filone(row)
+        ek, resolved_lcl = found
+        local = _db.get_filone_row(ek, lcl=resolved_lcl) or {}
+        row = local.get('sheets_row') or 1
+
+        result = _rimuovi_appuntamento_da_filone(
+            row, nota_corrente=nota_corrente, lcl=resolved_lcl,
+            pod_override=pod, eneltel_override=ek,
+        )
         return jsonify({
             'success': True,
             'message': 'Appuntamento rimosso',

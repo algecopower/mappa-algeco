@@ -15,7 +15,7 @@ from email.utils import formataddr
 
 from config import PROVINCIA_ATTIVA
 from moduli import db as _db
-from moduli.smtp import load_smtp_settings, send_smtp_message
+from moduli.smtp import load_smtp_settings, send_smtp_message, get_provincia_email
 
 logger = logging.getLogger('mappa_algeco')
 
@@ -626,6 +626,11 @@ def _build_comune_email_message(dest_email, subject, body_html, allegati_nomi,
     msg['Message-ID'] = email_utils.make_msgid(
         domain=from_email.split('@')[-1] if '@' in from_email else 'algecopower.it')
     msg['Date'] = email_utils.formatdate(localtime=True)
+
+    # Includi email della provincia in CCn (copia nascosta), se non coincidente con il destinatario
+    prov_bcc = get_provincia_email()
+    if prov_bcc and prov_bcc.lower() != (dest_email or '').lower():
+        msg['Bcc'] = prov_bcc
 
     return msg
 

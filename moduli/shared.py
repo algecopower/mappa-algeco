@@ -885,6 +885,10 @@ def _resolve_eneltel_for_appuntamento(row, *, pod_override=None, eneltel_overrid
     from . import db as _db
     if eneltel_override:
         return _db.normalize_eneltel(eneltel_override)
+    if pod_override:
+        ek = _db.find_eneltel_by_pod(pod_override)
+        if ek:
+            return ek
     try:
         cd = _callbacks['extract_contatore_data'](row)
         ek = cd.get('eneltel') or cd.get('Eneltel') or ''
@@ -892,36 +896,45 @@ def _resolve_eneltel_for_appuntamento(row, *, pod_override=None, eneltel_overrid
             return _db.normalize_eneltel(ek)
     except Exception:
         pass
-    if pod_override:
-        ek = _db.find_eneltel_by_pod(pod_override)
-        if ek:
-            return ek
     return _db.find_eneltel_by_sheets_row(row)
 
 
 def _calcola_nuova_nota_app(nota_attuale, orario_app):
-    """Inserisce 'APP HH:MM' nella nota, rimuovendo eventuali APP precedenti.
-
-    Logica identica a quella di _imposta_appuntamento_su_filone (path Fase 1).
+    """Inserisce 'APP HH:MM' nella nota, rimuovendo eventuali APP precedenti
+    e preservando TUTTE le altre note esistenti (concatenate con ' // ').
     """
-    nota_app = f"APP {orario_app}"
-    if 'APP' in (nota_attuale or '').upper():
-        nota_attuale = re.sub(
-            r'APP\s*\d{1,2}[:.]\d{2}(?:\s*[-/]\s*\d{1,2}[:.]\d{2})?',
-            '', nota_attuale, flags=re.IGNORECASE
-        ).strip(' /|-')
-    return f"{nota_app} // {nota_attuale}" if nota_attuale else nota_app
+    clean_orario = re.sub(r'^APP\s*', '', str(orario_app or '').strip(), flags=re.IGNORECASE)
+    nota_app = f"APP {clean_orario}"
+    
+    nota_str = str(nota_attuale or '').strip()
+    if not nota_str:
+        return nota_app
+        
+    parti = [p.strip() for p in nota_str.split('//') if p.strip()]
+    altre_note = [p for p in parti if not re.match(r'^APP(\.|\b|\s*\d)', p, flags=re.IGNORECASE)]
+    
+    # Se c'era una sola parte che conteneva APP e altro testo senza '//' (es. 'APP 10:00 cliente assente')
+    if not altre_note and len(parti) == 1:
+        rimasto = re.sub(r'^APP(\.|\b)?\s*[\d:.\s\-/]+\s*', '', nota_str, flags=re.IGNORECASE).strip(' /|-')
+        if rimasto:
+            altre_note = [rimasto]
+            
+    if altre_note:
+        return f"{nota_app} // {' // '.join(altre_note)}"
+    return nota_app
 
 
 def _calcola_rimozione_app(nota_attuale):
-    """Rimuove 'APP HH:MM' dalla nota. Logica identica al path Fase 1."""
-    nuova = re.sub(
-        r'APP\s*\d{1,2}[:.]\d{2}(?:\s*[-/]\s*\d{1,2}[:.]\d{2})?',
-        '', nota_attuale or '', flags=re.IGNORECASE,
-    )
-    nuova = re.sub(r'\s*//\s*', ' // ', nuova).strip(' /|-')
-    nuova = re.sub(r'^//\s*|\s*//\s*$', '', nuova).strip()
-    return nuova
+    """Rimuove l'appuntamento dalla nota preservando tutte le altre note."""
+    nota_str = str(nota_attuale or '').strip()
+    if not nota_str:
+        return ""
+    parti = [p.strip() for p in nota_str.split('//') if p.strip()]
+    altre_note = [p for p in parti if not re.match(r'^APP(\.|\b|\s*\d)', p, flags=re.IGNORECASE)]
+    if altre_note:
+        return ' // '.join(altre_note)
+    rimasto = re.sub(r'^APP(\.|\b)?\s*[\d:.\s\-/]+\s*', '', nota_str, flags=re.IGNORECASE).strip(' /|-')
+    return rimasto
 
 
 def _imposta_appuntamento_db_primary(row, orario, nota_app, *, data_app='',
@@ -937,17 +950,28 @@ def _imposta_appuntamento_db_primary(row, orario, nota_app, *, data_app='',
     if not ek:
         raise ValueError(f'Eneltel non risolto per riga {row}')
 
-    # Nota corrente: priorità a quella passata, altrimenti dal DB.
-    if nota_corrente is None:
-        local = _db.get_filone_row(ek) or {}
-        nota_corrente = local.get('note_appuntamento') or ''
+    local = _db.get_filone_row(ek, lcl=lcl) or {}
+    nota_db = (local.get('note_appuntamento') or '').strip()
+    c_note = (nota_corrente or '').strip() if nota_corrente is not None else ''
 
-    # Risolvi nome colonna note dal column_registry / fallback
-    col_note = _get_colonna_note()  # questa accede a _header_map; in Fase 2
-    # potremmo voler bypassare get_worksheet, ma per ora lo lasciamo: header è
-    # cached e già affidabile.
+    # Riconcilia nota da DB e nota corrente passata dal client (nessuna informazione persa)
+    if c_note and nota_db:
+        if c_note == nota_db or c_note in nota_db:
+            nota_base = nota_db
+        elif nota_db in c_note:
+            nota_base = c_note
+        else:
+            nota_base = f"{c_note} // {nota_db}"
+    elif c_note:
+        nota_base = c_note
+    else:
+        nota_base = nota_db
 
-    nuova_nota = _calcola_nuova_nota_app(nota_corrente, orario)
+    if note_extra and str(note_extra).strip() and str(note_extra).strip() not in nota_base:
+        nota_base = f"{nota_base} // {str(note_extra).strip()}" if nota_base else str(note_extra).strip()
+
+    col_note = _get_colonna_note()
+    nuova_nota = _calcola_nuova_nota_app(nota_base, orario)
 
     _db.record_local_change(
         ek, {col_note: nuova_nota},
@@ -956,6 +980,22 @@ def _imposta_appuntamento_db_primary(row, orario, nota_app, *, data_app='',
         initial_state='pending',
         lcl=lcl,
     )
+
+    pod_val = pod_override or (local.get('pod') if local else '')
+    if pod_val and pod_val != '?':
+        try:
+            conn = _db.get_conn()
+            with conn:
+                conn.execute(
+                    '''
+                    UPDATE lettere_aziende_generazione
+                    SET note=?
+                    WHERE UPPER(TRIM(pod))=UPPER(TRIM(?))
+                    ''',
+                    (nuova_nota, pod_val),
+                )
+        except Exception:
+            pass
 
 
     # Auto-crea promemoria boxbeat (riusa logica esistente)
@@ -1002,20 +1042,35 @@ def _imposta_appuntamento_db_primary(row, orario, nota_app, *, data_app='',
     return {'nota_app': nota_app, 'nuova_nota': nuova_nota}
 
 
-def _rimuovi_appuntamento_db_primary(row, *, nota_corrente=None, lcl=None):
+def _rimuovi_appuntamento_db_primary(row, *, nota_corrente=None, lcl=None,
+                                     pod_override=None, eneltel_override=None):
     """Variante FASE 2 di _rimuovi_appuntamento_da_filone — solo DB."""
     from . import db as _db
 
-    ek = _resolve_eneltel_for_appuntamento(row)
+    ek = _resolve_eneltel_for_appuntamento(
+        row, pod_override=pod_override, eneltel_override=eneltel_override,
+    )
     if not ek:
         raise ValueError(f'Eneltel non risolto per riga {row}')
 
-    if nota_corrente is None:
-        local = _db.get_filone_row(ek, lcl=lcl) or {}
-        nota_corrente = local.get('note_appuntamento') or ''
+    local = _db.get_filone_row(ek, lcl=lcl) or {}
+    nota_db = (local.get('note_appuntamento') or '').strip()
+    c_note = (nota_corrente or '').strip() if nota_corrente is not None else ''
+
+    if c_note and nota_db:
+        if c_note == nota_db or c_note in nota_db:
+            nota_base = nota_db
+        elif nota_db in c_note:
+            nota_base = c_note
+        else:
+            nota_base = f"{c_note} // {nota_db}"
+    elif c_note:
+        nota_base = c_note
+    else:
+        nota_base = nota_db
 
     col_note = _get_colonna_note()
-    nuova_nota = _calcola_rimozione_app(nota_corrente)
+    nuova_nota = _calcola_rimozione_app(nota_base)
 
     _db.record_local_change(
         ek, {col_note: nuova_nota},
@@ -1025,6 +1080,21 @@ def _rimuovi_appuntamento_db_primary(row, *, nota_corrente=None, lcl=None):
         lcl=lcl,
     )
 
+    pod_val = pod_override or (local.get('pod') if local else '')
+    if pod_val and pod_val != '?':
+        try:
+            conn = _db.get_conn()
+            with conn:
+                conn.execute(
+                    '''
+                    UPDATE lettere_aziende_generazione
+                    SET note=?
+                    WHERE UPPER(TRIM(pod))=UPPER(TRIM(?))
+                    ''',
+                    (nuova_nota, pod_val),
+                )
+        except Exception:
+            pass
 
     _callbacks['trigger_sync_after_edit']()
     return {'nuova_nota': nuova_nota}
@@ -1050,9 +1120,13 @@ def _imposta_appuntamento_su_filone(row, orario, data_app='', note_extra='',
     )
 
 
-def _rimuovi_appuntamento_da_filone(row, nota_corrente=None, lcl=None):
+def _rimuovi_appuntamento_da_filone(row, nota_corrente=None, lcl=None,
+                                    pod_override=None, eneltel_override=None):
     """Logica condivisa per rimuovere appuntamento da una riga del filone."""
-    return _rimuovi_appuntamento_db_primary(row, nota_corrente=nota_corrente, lcl=lcl)
+    return _rimuovi_appuntamento_db_primary(
+        row, nota_corrente=nota_corrente, lcl=lcl,
+        pod_override=pod_override, eneltel_override=eneltel_override,
+    )
 
 
 # ============================================================================

@@ -45,7 +45,7 @@ def test_build_nota_invio():
 
     # WhatsApp con data intervento
     nota_wa = build_nota_invio('wa', data_intervento='2026-08-25', data_oggi=d_oggi)
-    assert nota_wa == "18/08 mandato WA per 25/08"
+    assert nota_wa == "18/08 mandato wa per 25/08"
 
 
 def test_registra_nota_su_db(db_isolato):

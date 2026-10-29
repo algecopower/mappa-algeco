@@ -3152,7 +3152,13 @@ def genera_js_gestionale():
             try {{
                 const _payloadApp = {{ orario }};
                 try {{
+                    const noteTextareaCorrente = document.querySelector('.fullscreen-edit-input-field[data-campo="note_app"]');
                     const _c = contatori.find(cc => cc.eneltel === currentAppuntamentoEneltel);
+                    if (noteTextareaCorrente && noteTextareaCorrente.value) {{
+                        _payloadApp.nota_corrente = noteTextareaCorrente.value;
+                    }} else if (_c && _c.note_app) {{
+                        _payloadApp.nota_corrente = _c.note_app;
+                    }}
                     if (_c && _c.lcl !== undefined) _payloadApp._anchor_lcl = String(_c.lcl || '');
                 }} catch (e) {{ /* ignora */ }}
                 const response = await fetch(`${{API_BASE}}/api/contatore/${{currentAppuntamentoEneltel}}/appuntamento`, {{
@@ -3174,10 +3180,18 @@ def genera_js_gestionale():
                     if (idx >= 0) {{
                         contatori[idx].is_appuntamento = true;
                         contatori[idx].ora_appuntamento = orario;
-                        contatori[idx].note_app = result.nota;
+                        if (result.nota) {{
+                            contatori[idx].note_app = result.nota;
+                        }}
                         if (typeof aggiornaUIDopoModifica === 'function') {{
                             aggiornaUIDopoModifica(savedEneltel, contatori[idx]);
                         }}
+                    }}
+
+                    // Aggiorna anche la textarea delle note se visibile
+                    const noteTextarea = document.querySelector('.fullscreen-edit-input-field[data-campo="note_app"]');
+                    if (noteTextarea && result.nota) {{
+                        noteTextarea.value = result.nota;
                     }}
 
                     // Refresh istantaneo della mappa e delle viste
@@ -3197,14 +3211,14 @@ def genera_js_gestionale():
             try {{
                 // Includi il contenuto corrente delle note per non perdere modifiche non salvate
                 const noteTextareaCorrente = document.querySelector('.fullscreen-edit-input-field[data-campo="note_app"]');
+                const _c = contatori.find(cc => cc.eneltel === eneltel);
                 const payload = {{}};
-                if (noteTextareaCorrente) {{
+                if (noteTextareaCorrente && noteTextareaCorrente.value) {{
                     payload.nota_corrente = noteTextareaCorrente.value;
+                }} else if (_c && _c.note_app) {{
+                    payload.nota_corrente = _c.note_app;
                 }}
-                try {{
-                    const _c = contatori.find(cc => cc.eneltel === eneltel);
-                    if (_c && _c.lcl !== undefined) payload._anchor_lcl = String(_c.lcl || '');
-                }} catch (e) {{ /* ignora */ }}
+                if (_c && _c.lcl !== undefined) payload._anchor_lcl = String(_c.lcl || '');
                 const response = await fetch(`${{API_BASE}}/api/contatore/${{eneltel}}/rimuovi-appuntamento`, {{
                     method: 'POST',
                     headers: {{ 'Content-Type': 'application/json' }},

@@ -3427,6 +3427,15 @@
             currentTemplatePod = pod;
             currentTemplateContact = { ...contatto };
 
+            // Recupera email aggiornata da input a video se presente
+            const emailInput = document.getElementById(`emailEdit_${pod}`) || document.getElementById(`emailEditTable_${pod}`);
+            if (emailInput && emailInput.value) {
+                currentTemplateContact.email = emailInput.value.trim();
+                currentTemplateContact.email_filone = emailInput.value.trim();
+            } else if (!currentTemplateContact.email && currentTemplateContact.email_filone) {
+                currentTemplateContact.email = currentTemplateContact.email_filone;
+            }
+
             if (numeroOverride) {
                 currentTemplateContact.telefono = numeroOverride;
             } else if (!currentTemplateContact.telefono && contatto.numeri_alternativi && contatto.numeri_alternativi.length > 0) {
@@ -3440,14 +3449,22 @@
                     telOverride: numeroOverride || currentTemplateContact.telefono,
                     tipoOverride: tipoOverride,
                     smsEndpoint: '/api/distinte/invia-singolo-sms',
+                    emailEndpoint: '/api/distinte/invia-singola-email',
+                    context: 'distinte',
                     onSmsSent: (p) => {
                         aggiungiNota(p, 'mandato sms');
                     },
-                    onWaOpened: (p) => {
-                        aggiungiNota(p, 'mandato wa');
+                    onEmailSent: (p, contact) => {
+                        const dataPian = contact ? (contact.data_intervento || contact.data_pian_filone || contact.data_pianificazione) : null;
+                        aggiungiNota(p, 'mandata mail', false, { dataPianificazione: dataPian });
                     },
-                    onMailOpened: (p) => {
-                        aggiungiNota(p, 'mandata mail');
+                    onWaOpened: (p, contact) => {
+                        const dataPian = contact ? (contact.data_intervento || contact.data_pian_filone || contact.data_pianificazione) : null;
+                        aggiungiNota(p, 'mandato wa', false, { dataPianificazione: dataPian });
+                    },
+                    onMailOpened: (p, contact) => {
+                        const dataPian = contact ? (contact.data_intervento || contact.data_pian_filone || contact.data_pianificazione) : null;
+                        aggiungiNota(p, 'mandata mail', false, { dataPianificazione: dataPian });
                     }
                 });
             }
@@ -3698,9 +3715,14 @@
         }
 
         function dataPianificazioneNota(pod) {
+            const dateInput = document.getElementById(`appDate_${pod}`);
+            if (dateInput && dateInput.value) {
+                const breve = formatDataBreveNota(dateInput.value);
+                if (breve) return breve;
+            }
             const contatto = contatti.find(c => c.pod === pod);
             if (!contatto) return '';
-            return formatDataBreveNota(contatto.data_pian_filone || contatto.data_intervento || '');
+            return formatDataBreveNota(contatto.data_pian_filone || contatto.data_intervento || contatto.data_pianificazione || '');
         }
 
         function registraNotaInvioLocale(pod, tipo, dataPian) {
@@ -3708,8 +3730,14 @@
             const oggi = new Date();
             const gg = String(oggi.getDate()).padStart(2, '0');
             const mm = String(oggi.getMonth() + 1).padStart(2, '0');
-            const dataPianFmt = formatDataBreveNota(dataPian);
-            const azione = tipo === 'sms' ? 'mandato SMS' : 'mandata mail';
+            const dataPianFmt = formatDataBreveNota(dataPian || dataPianificazioneNota(pod));
+            let azione = 'mandata mail';
+            const t = (tipo || '').toLowerCase();
+            if (t.includes('wa') || t.includes('whatsapp')) {
+                azione = 'mandato wa';
+            } else if (t.includes('sms')) {
+                azione = 'mandato SMS';
+            }
             const testoNota = dataPianFmt ? `${gg}/${mm} ${azione} per ${dataPianFmt}` : `${gg}/${mm} ${azione}`;
             
             const existing = (noteStates[pod] || '').trim();
@@ -3721,6 +3749,13 @@
                 if (noteDisplay) {
                     noteDisplay.value = nuovaNota;
                     noteDisplay.title = nuovaNota;
+                    noteDisplay.classList.add('has-note');
+                }
+                const noteTableDisplay = document.getElementById(`noteDisplayTable_${pod}`);
+                if (noteTableDisplay) {
+                    noteTableDisplay.value = nuovaNota;
+                    noteTableDisplay.title = nuovaNota;
+                    noteTableDisplay.classList.add('has-note');
                 }
             }
         }
@@ -3770,12 +3805,16 @@
             const giorno = String(oggi.getDate()).padStart(2, '0');
             const mese = String(oggi.getMonth() + 1).padStart(2, '0');
             const prefisso = `${giorno}/${mese}`;
+
+            const tLower = (tipo || '').toLowerCase().trim();
+            const isMail = tLower === 'mandata mail' || tLower === 'mail';
+            const isWa = tLower === 'mandato wa' || tLower === 'mandato msg wa' || tLower === 'mandato whatsapp' || tLower === 'wa';
             
             // "chiamare" e "numero errato" non hanno prefisso data
-            let testoNota = (tipo === 'chiamare') ? tipo : `${prefisso} ${tipo}`;
-            if ((tipo === 'mandata mail' || tipo === 'mandato msg wa' || tipo === 'mandato WA') && opzioni.includiDataPianificazione) {
-                const dataPian = opzioni.dataPianificazione || dataPianificazioneNota(pod);
-                const azione = (tipo === 'mandato msg wa' || tipo === 'mandato WA') ? 'mandato WA' : 'mandata mail';
+            let testoNota = (tLower === 'chiamare') ? 'chiamare' : `${prefisso} ${tipo}`;
+            if (isMail || isWa) {
+                const azione = isMail ? 'mandata mail' : 'mandato wa';
+                const dataPian = (opzioni.dataPianificazione ? formatDataBreveNota(opzioni.dataPianificazione) : '') || dataPianificazioneNota(pod);
                 if (dataPian) {
                     testoNota = `${prefisso} ${azione} per ${dataPian}`;
                 } else {
@@ -4115,11 +4154,20 @@
                 } catch(e) { /* verifica non bloccante */ }
             }
             
+            const currentNote = (noteStates[pod] !== undefined)
+                ? noteStates[pod]
+                : (document.getElementById(`noteDisplay_${pod}`)?.value || document.getElementById(`noteDisplayTable_${pod}`)?.value || '');
+
             try {
                 const resp = await fetch('/api/distinte/appuntamento', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pod, orario })
+                    body: JSON.stringify({
+                        pod,
+                        orario,
+                        nota_corrente: currentNote,
+                        data_appuntamento: dataApp || undefined
+                    })
                 });
                 
                 const data = await resp.json();
@@ -4130,7 +4178,7 @@
                     showToast(`Appuntamento fissato: ${orario}`);
                     
                     // Aggiorna il campo note con la nota restituita dal server
-                    if (data.nota) {
+                    if (data.nota !== undefined) {
                         noteStates[pod] = data.nota;
                         saveStates();
                         const noteDisplay = document.getElementById(`noteDisplay_${pod}`);
@@ -4138,6 +4186,12 @@
                             noteDisplay.value = data.nota;
                             noteDisplay.title = data.nota;
                             noteDisplay.classList.add('has-note');
+                        }
+                        const noteTableDisplay = document.getElementById(`noteDisplayTable_${pod}`);
+                        if (noteTableDisplay) {
+                            noteTableDisplay.value = data.nota;
+                            noteTableDisplay.title = data.nota;
+                            noteTableDisplay.classList.add('has-note');
                         }
                     }
                     
@@ -4175,11 +4229,15 @@
             }
             statusDiv.className = 'appuntamento-status';
             
+            const currentNote = (noteStates[pod] !== undefined)
+                ? noteStates[pod]
+                : (document.getElementById(`noteDisplay_${pod}`)?.value || document.getElementById(`noteDisplayTable_${pod}`)?.value || '');
+
             try {
                 const resp = await fetch('/api/distinte/rimuovi-appuntamento', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pod })
+                    body: JSON.stringify({ pod, nota_corrente: currentNote })
                 });
                 
                 const data = await resp.json();
@@ -4198,6 +4256,12 @@
                             noteDisplay.value = data.nota;
                             noteDisplay.title = data.nota;
                             noteDisplay.classList.toggle('has-note', !!data.nota);
+                        }
+                        const noteTableDisplay = document.getElementById(`noteDisplayTable_${pod}`);
+                        if (noteTableDisplay) {
+                            noteTableDisplay.value = data.nota;
+                            noteTableDisplay.title = data.nota;
+                            noteTableDisplay.classList.toggle('has-note', !!data.nota);
                         }
                     }
                     

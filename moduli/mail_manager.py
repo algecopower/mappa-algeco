@@ -35,7 +35,7 @@ from config import PROVINCIA_ATTIVA
 from moduli import db
 from moduli.bulk_contatori_email import registra_nota_su_db
 from moduli.safe_json import json_read, json_write
-from moduli.smtp import load_smtp_settings, send_smtp_message
+from moduli.smtp import load_smtp_settings, send_smtp_message, get_provincia_email
 
 logger = logging.getLogger('mappa_algeco')
 
@@ -870,6 +870,8 @@ def build_mime_message(from_addr, from_name, to_addrs, cc_addrs=None, bcc_addrs=
     msg['To'] = ', '.join(to_addrs) if isinstance(to_addrs, list) else str(to_addrs)
     if cc_addrs:
         msg['Cc'] = ', '.join(cc_addrs) if isinstance(cc_addrs, list) else str(cc_addrs)
+    if bcc_addrs:
+        msg['Bcc'] = ', '.join(bcc_addrs) if isinstance(bcc_addrs, list) else str(bcc_addrs)
     if reply_to:
         msg['Reply-To'] = reply_to
     elif from_addr:
@@ -943,6 +945,17 @@ def send_or_schedule_mail(data, user='', prov=None):
     bcc_addrs = data.get('bcc', [])
     if isinstance(bcc_addrs, str):
         bcc_addrs = [a.strip() for a in re.split(r'[,;]', bcc_addrs) if a.strip()]
+    elif isinstance(bcc_addrs, list):
+        bcc_addrs = [str(a).strip() for a in bcc_addrs if str(a).strip()]
+    else:
+        bcc_addrs = []
+
+    # Includi email della provincia in CCn se non già presente tra i destinatari
+    prov_email = get_provincia_email(p)
+    if prov_email and '@' in prov_email:
+        all_dests = [a.lower() for a in (to_addrs + cc_addrs + bcc_addrs)]
+        if prov_email.lower() not in all_dests:
+            bcc_addrs.append(prov_email)
         
     subject = (data.get('subject') or '').strip() or '(Nessun oggetto)'
     body_html = data.get('body_html', '')
@@ -1115,7 +1128,7 @@ def send_or_schedule_mail(data, user='', prov=None):
     if add_filone_note and linked_pod:
         try:
             today_str = datetime.now().strftime('%d/%m')
-            nota = f"{today_str} inviata mail: {subject[:40]}"
+            nota = f"{today_str} mandata mail"
             registra_nota_su_db(linked_pod, nota, user=user or 'webmail', origin='gestione_mail')
         except Exception as e:
             logger.warning(f"[MAIL] Errore salvataggio nota su filone: {e}")

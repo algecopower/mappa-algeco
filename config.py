@@ -246,12 +246,12 @@ MAPPATURA_COLONNE_DEFAULT = {
     'data_installazione': {
         'label': 'Data Installazione',
         'descrizione': 'Data effettiva dell\'installazione',
-        'nomi_default': ['Data Installazione', 'DATA INSTALLAZIONE', 'Data_Installazione'],
+        'nomi_default': ['Data Installazione', 'DATA INSTALLAZIONE', 'Data_Installazione', 'Data inst', 'DATA INST', 'Data Inst'],
     },
     'codice_ante': {
         'label': 'Codice Misuratore Ante',
         'descrizione': 'Codice misuratore in opera (prima della sostituzione)',
-        'nomi_default': ['Codice_Ante_Sostituzione', 'Codice misuratore in opera', 'CODICE ANTE', 'Codice', 'CODICE', 'cod.', 'Cod. Misuratore'],
+        'nomi_default': ['Codice_Ante_Sostituzione', 'Codice misuratore in opera', 'CODICE ANTE', 'Codice', 'CODICE', 'Cod. Misuratore'],
     },
     'matricola_ante': {
         'label': 'Matricola Misuratore Ante',

@@ -727,7 +727,8 @@ def csrf_check():
     # - /api/login: nessuna sessione ancora, niente token in sessione.
     # - /api/logout: forzare un logout non causa danno; e se fallisse qui
     #   l'utente resterebbe loggato silenziosamente.
-    if request.path in ('/api/login', '/api/logout'):
+    # - /api/internal/: chiamate da localhost (cron, auto-import)
+    if request.path in ('/api/login', '/api/logout') or request.path.startswith('/api/internal/'):
         return None
 
     # 1) Origin/Referer check
@@ -762,7 +763,7 @@ def csrf_check():
 def check_provincia_access():
     """Verifica che l'utente loggato abbia accesso alla provincia di questa istanza."""
     # Escludi pagine pubbliche
-    if request.path in ('/login', '/api/login', '/api/logout', '/logout'):
+    if request.path in ('/login', '/api/login', '/api/logout', '/logout') or request.path.startswith('/api/internal/'):
         return None
     # Escludi risorse statiche
     if request.path.startswith('/static/'):
@@ -2636,6 +2637,79 @@ def api_admin_import_excel():
             os.unlink(tmp.name)
         except Exception:
             pass
+
+
+@app.route('/api/internal/trigger-sync', methods=['POST'])
+def api_internal_trigger_sync():
+    """Triggera la rigenerazione mappa da un processo locale (es. auto-import CLI)."""
+    if request.remote_addr not in ('127.0.0.1', '::1', 'localhost'):
+        return jsonify({'success': False, 'error': 'Accesso negato'}), 403
+    from moduli import shared as _shared
+    _shared.invalidate_values_cache()
+    try:
+        _sync_needed.set()
+    except Exception:
+        pass
+    return jsonify({'success': True, 'message': 'Sync risvegliato'})
+
+
+@app.route('/api/internal/auto-import', methods=['POST'])
+def api_internal_auto_import():
+    """Esegue auto-import dal Google Sheet configurato (chiamata localhost / CLI)."""
+    if request.remote_addr not in ('127.0.0.1', '::1', 'localhost'):
+        return jsonify({'success': False, 'error': 'Accesso negato'}), 403
+    from moduli import auto_import
+    force = (request.form.get('force') or request.args.get('force') or '').strip().lower() in ('1', 'true', 'yes')
+    dry_run = (request.form.get('dry_run') or request.args.get('dry_run') or '').strip().lower() in ('1', 'true', 'yes')
+    res = auto_import.esegui_auto_import(
+        PROVINCIA_ATTIVA,
+        force=force,
+        dry_run=dry_run,
+        user='internal_auto_import',
+    )
+    if res.get('success') and not dry_run and not res.get('skipped'):
+        from moduli import shared as _shared
+        _shared.invalidate_values_cache()
+        try:
+            _sync_needed.set()
+        except Exception:
+            pass
+    return jsonify(res), 200 if res.get('success') else 400
+
+
+@app.route('/api/admin/auto-import-sheets', methods=['POST'])
+@admin_required
+def api_admin_auto_import_sheets():
+    """Scarica il foglio Google Sheets configurato e lo importa nel DB."""
+    from moduli import auto_import
+    force = (request.form.get('force') or request.args.get('force') or '').strip().lower() in ('1', 'true', 'yes')
+    dry_run = (request.form.get('dry_run') or request.args.get('dry_run') or '').strip().lower() in ('1', 'true', 'yes')
+    user = ((session.get('user') or {}).get('username') or session.get('utente') or 'admin')
+
+    res = auto_import.esegui_auto_import(
+        PROVINCIA_ATTIVA,
+        force=force,
+        dry_run=dry_run,
+        user=user,
+    )
+    if res.get('success') and not dry_run and not res.get('skipped'):
+        from moduli import shared as _shared
+        _shared.invalidate_values_cache()
+        try:
+            _sync_needed.set()
+        except Exception:
+            pass
+    return jsonify(res), 200 if res.get('success') else 400
+
+
+@app.route('/api/admin/auto-import-status', methods=['GET'])
+@admin_required
+def api_admin_auto_import_status():
+    """Restituisce lo stato dell'ultimo auto-import e la configurazione del foglio."""
+    from moduli import auto_import
+    status = auto_import.get_last_auto_import_status(PROVINCIA_ATTIVA)
+    cfg = auto_import.get_google_sheet_config(PROVINCIA_ATTIVA)
+    return jsonify({'success': True, 'status': status, 'config': cfg})
 
 
 @app.route('/api/admin/db-dump/anomalies', methods=['GET'])

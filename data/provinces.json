@@ -10,7 +10,6 @@
       "AE101392",
       "AG49808",
       "AG18966",
-      "AG67817",
       "AE94428",
       "AG05928",
       "AG46824"
@@ -19,7 +18,6 @@
       "AE101392": "#e74c3c",
       "AG49808": "#f1c40f",
       "AG18966": "#2ecc71",
-      "AG67817": "#7f33db",
       "AE94428": "#db33a6",
       "AG05928": "#a0db33",
       "AG46824": "#3498db"
@@ -28,7 +26,6 @@
       "PAUL": "AE101392",
       "MIHAI": "AG49808",
       "SIDI": "AG18966",
-      "ANGEL": "AG67817",
       "ALECCI": "AE94428",
       "GUINDO": "AG05928",
       "FENOCCHIO": "AG46824"
@@ -43,7 +40,9 @@
       "6600106010",
       "6600101286",
       "6600110809"
-    ]
+    ],
+    "google_sheet_url": "https://docs.google.com/spreadsheets/d/1SXRlFDtagjNVpxfzEViMCEoi9cI6FBtt/edit?gid=229428995",
+    "auto_import_enabled": true
   },
   "PAVIA": {
     "nome": "Pavia",
@@ -56,7 +55,6 @@
       "AG49808",
       "AG46824",
       "AE101392",
-      "AG67817",
       "AF09076",
       "AG18966",
       "AG69238"
@@ -65,7 +63,6 @@
       "AG49808": "#3498db",
       "AG46824": "#60db33",
       "AE101392": "#db7f33",
-      "AG67817": "#db335d",
       "AF09076": "#33dbbf",
       "AG18966": "#d833db",
       "AG69238": "#bfdb33"
@@ -74,7 +71,6 @@
       "CIOBANU": "AG49808",
       "FENOCCHIO": "AG46824",
       "PAUL": "AE101392",
-      "ANGEL": "AG67817",
       "SIMONE": "AF09076",
       "SIDI": "AG18966",
       "CLAUDIO": "AG69238"
@@ -84,7 +80,9 @@
     "ora_fine_giornata": 1020,
     "sottodominio": "pavia.mappa-algeco.com",
     "porta": 5002,
-    "operatori_disabilitati": []
+    "operatori_disabilitati": [],
+    "google_sheet_url": "https://docs.google.com/spreadsheets/d/1j2twW9aaYB7mak_6vnyr7oJcePPg-XyN/edit?gid=375972784",
+    "auto_import_enabled": true
   },
   "LECCO": {
     "nome": "Lecco",
@@ -112,6 +110,8 @@
     "data_inizio": "",
     "data_fine": "",
     "sottodominio": "lecco.mappa-algeco.com",
-    "porta": 5003
+    "porta": 5003,
+    "google_sheet_url": "",
+    "auto_import_enabled": false
   }
 }

@@ -893,6 +893,19 @@
         <div class="help">Attiva solo se nel file dati la colonna "Comune" è vuota e usi "Località" per raggruppare le zone.</div>
       </div>
 
+      <div class="form-group">
+        <label>URL Google Sheets del filone</label>
+        <input name="google_sheet_url" type="url" placeholder="https://docs.google.com/spreadsheets/d/.../edit?gid=...">
+        <div class="help">Link di condivisione del foglio (accesso con link "Chiunque abbia il link può visualizzare"). Usato per l'import automatico orario.</div>
+      </div>
+
+      <div class="form-group">
+        <label style="display:flex; align-items:center; gap:8px; text-transform:none; font-size:13px;">
+          <input type="checkbox" name="auto_import_enabled" checked style="width:auto;"> Auto-import automatico ogni ora
+        </label>
+        <div class="help">Se attivo, il filone viene scaricato e aggiornato ogni ora verificando prima se ci sono modifiche (check hash).</div>
+      </div>
+
       <div class="form-row">
         <div class="form-group">
           <label>Porta interna (lascia vuoto per default)</label>
@@ -1296,6 +1309,7 @@ async function caricaHealth() {
         if (h) {
           p.outbox = h.outbox || {};
           p.health = h.health || {};
+          p.auto_import = h.auto_import || {};
         }
       }
       rendiGrid(_province);
@@ -1417,6 +1431,7 @@ function rendiGrid(province) {
         <button class="btn secondary" onclick="azione('${p.slug}','restart')" title="Riavvia il programma di questa provincia">🔄 Riavvia</button>
         <button class="btn danger" onclick="azione('${p.slug}','stop')" title="Ferma il programma di questa provincia">⏸ Ferma</button>
         <button class="btn warn" onclick="apriImportExcel('${p.slug}')" title="Importa un nuovo file CSV o Excel">📥 Importa Excel</button>
+        ${p.google_sheet_url ? `<button class="btn success" onclick="eseguiAutoImport('${p.slug}')" title="Scarica il filone da Google Sheets e sincronizza subito i contatori">⚡ Da Sheets</button>` : ''}
         <button class="${obClass}" ${obDisabled} onclick="scaricaOutbox('${p.slug}')" title="Scarica il file Excel con le modifiche fatte dal programma">📤 Scarica cambiamenti${obLabel}</button>
         ${obCount > 0 ? `<button class="btn secondary" onclick="segnaConsegnate('${p.slug}', ${obCount})" title="Marca tutte le modifiche correnti come gi&agrave; gestite">✓ Segna gestite</button>` : ''}
         <button class="btn secondary" onclick="scaricaFiloneCompleto('${p.slug}')" title="Scarica l'intero filone (snapshot completo dei dati nel DB)">📋 Scarica completo</button>
@@ -1430,6 +1445,32 @@ function rendiGrid(province) {
       actionsHtml = `<button class="btn success" onclick="azione('${p.slug}','start')" title="Avvia il programma di questa provincia">▶ Avvia</button>`;
     }
 
+    const aiInfo = p.google_sheet_url ? (() => {
+      const ai = p.auto_import || {};
+      let aiDetail = '';
+      if (ai.last_check_ts) {
+        const d = new Date(ai.last_check_ts * 1000);
+        const hhmm = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        if (ai.success === false) {
+          aiDetail = `<span style="color:var(--error);" title="${escapeHtml(ai.message || '')}">⚠️ Errore (${hhmm})</span>`;
+        } else if (ai.skipped) {
+          aiDetail = `<span style="color:var(--ok);" title="Ultimo controllo: nessun cambiamento">✓ Verificato ${hhmm} (invariato)</span>`;
+        } else {
+          const mod = (ai.rows_aggiornate || 0) + (ai.rows_nuove || 0);
+          aiDetail = `<span style="color:var(--ok);" title="${escapeHtml(ai.message || '')}">✓ Importato ${hhmm} (${mod} righe)</span>`;
+        }
+      }
+      return `
+        <div class="field">
+          <span class="k">Google Sheets</span>
+          <span class="v" style="display:flex; align-items:center; gap:8px;">
+            <a href="${escapeHtml(p.google_sheet_url)}" target="_blank" rel="noopener" title="Apri foglio Google in una nuova scheda">Apri foglio ↗</a>
+            ${aiDetail}
+          </span>
+        </div>
+      `;
+    })() : '';
+
     card.innerHTML = `
       <div class="card-head">
         <div class="card-title">
@@ -1440,6 +1481,7 @@ function rendiGrid(province) {
       </div>
       <div class="field"><span class="k">Indirizzo</span><span class="v">${p.sottodominio ? `<a href="https://${escapeHtml(p.sottodominio)}" target="_blank" rel="noopener" title="Apri ${escapeHtml(p.sottodominio)} in una nuova scheda">${escapeHtml(p.sottodominio)}</a>` : '—'}</span></div>
       <div class="field"><span class="k">Deposito</span><span class="v">${escapeHtml(p.deposito && p.deposito.Nome || '—')}</span></div>
+      ${aiInfo}
       <div class="actions">
         ${actionsHtml}
         <button class="btn secondary" onclick='apriSmtpSettings("${p.slug}")' title="Configura credenziali SMTP">📧 SMTP</button>
@@ -2681,6 +2723,46 @@ async function segnaConsegnate(slug, count) {
 
 
 // ============================================================
+// AUTO-IMPORT GOOGLE SHEETS
+// ============================================================
+async function eseguiAutoImport(slug) {
+  if (!confirm(`Scaricare e importare adesso il filone da Google Sheets per ${slug}?\n\nIl sistema scaricherà l'ultima versione dal foglio Google e applicherà il merge intelligente proteggendo le modifiche locali più recenti.`)) {
+    return;
+  }
+  toast(`Scaricamento filone ${slug} da Google Sheets in corso…`);
+  try {
+    const csrf = _getCsrfToken();
+    const r = await fetch(`/api/provinces/${slug}/auto-import`, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(csrf ? { 'X-CSRF-Token': csrf } : {}),
+      },
+      body: JSON.stringify({ force: true }),
+    });
+    let data;
+    try { data = await r.json(); } catch { data = {}; }
+    if (r.ok && data.success) {
+      if (data.skipped) {
+        toast(`ℹ️ ${slug}: ${data.message || 'Nessuna modifica rilevata'}`, 'info');
+      } else {
+        const agg = data.rows_aggiornate || 0;
+        const nuove = data.rows_nuove || 0;
+        const celle = data.celle_modificate || 0;
+        toast(`✅ Import da Sheets completato: ${agg} aggiornate, ${nuove} nuove (${celle} celle modificate)`, 'success');
+        setTimeout(caricaTutto, 1500);
+      }
+    } else {
+      toast(`❌ Errore import da Sheets: ${data.error || data.message || 'Operazione fallita'}`, 'error');
+    }
+  } catch (e) {
+    toast(`Errore di rete: ${e.message}`, 'error');
+  }
+}
+
+
+// ============================================================
 // IMPORT EXCEL
 // ============================================================
 let _importingSlug = null;
@@ -2875,6 +2957,8 @@ function apriFormAggiungi() {
   form.querySelector('[name=slug]').readOnly = false;
   document.querySelector('[name=ora_inizio_giornata]').value = '08:00';
   document.querySelector('[name=ora_fine_giornata]').value = '17:00';
+  document.querySelector('[name=google_sheet_url]').value = '';
+  document.querySelector('[name=auto_import_enabled]').checked = true;
   document.getElementById('modalAggiungi').classList.add('open');
 }
 
@@ -2899,6 +2983,8 @@ function apriFormModifica(p) {
   form.querySelector('[name=ora_inizio_giornata]').value = minutiToHHMM(p.ora_inizio_giornata != null ? p.ora_inizio_giornata : 480);
   form.querySelector('[name=ora_fine_giornata]').value = minutiToHHMM(p.ora_fine_giornata != null ? p.ora_fine_giornata : 1020);
   form.querySelector('[name=usa_localita_come_comune]').checked = !!p.usa_localita_come_comune;
+  form.querySelector('[name=google_sheet_url]').value = p.google_sheet_url || '';
+  form.querySelector('[name=auto_import_enabled]').checked = p.auto_import_enabled !== false;
   form.querySelector('[name=porta]').value = p.porta != null ? p.porta : '';
   document.getElementById('modalAggiungi').classList.add('open');
 }
@@ -2937,6 +3023,8 @@ async function submitForm(ev) {
     data_inizio: fd.get('data_inizio') || '',
     data_fine: fd.get('data_fine') || '',
     usa_localita_come_comune: fd.get('usa_localita_come_comune') === 'on',
+    google_sheet_url: (fd.get('google_sheet_url') || '').trim(),
+    auto_import_enabled: fd.get('auto_import_enabled') === 'on',
   };
   const porta = fd.get('porta');
   if (porta) body.porta = parseInt(porta);

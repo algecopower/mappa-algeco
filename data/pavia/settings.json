@@ -3,7 +3,6 @@
     "AG49808",
     "AG46824",
     "AE101392",
-    "AG67817",
     "AF09076",
     "AG18966",
     "AG69238"
@@ -12,7 +11,6 @@
     "AG49808": "#3498db",
     "AG46824": "#60db33",
     "AE101392": "#db7f33",
-    "AG67817": "#db335d",
     "AF09076": "#33dbbf",
     "AG18966": "#d833db",
     "AG69238": "#bfdb33"
@@ -21,7 +19,6 @@
     "CIOBANU": "AG49808",
     "FENOCCHIO": "AG46824",
     "PAUL": "AE101392",
-    "ANGEL": "AG67817",
     "SIMONE": "AF09076",
     "SIDI": "AG18966",
     "CLAUDIO": "AG69238"
@@ -38,7 +35,10 @@
   "data_inizio": "2025-10-01",
   "data_fine": "",
   "intervallo_sync_secondi": 60,
-  "mappatura_colonne": {},
+  "mappatura_colonne": {
+    "matricola_installata": "Matricola CE inst",
+    "codice_installato": "cod."
+  },
   "operatori_disabilitati": [],
   "lettere_excel": {
     "fogli": {

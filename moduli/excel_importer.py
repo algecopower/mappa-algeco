@@ -616,7 +616,16 @@ def _csv_structural_cell_anomalies(
     return anomalies
 
 
-def import_excel(file_path, *, export_ts=None, sheet_name=None, dry_run=False, user=None):
+def import_excel(
+    file_path,
+    *,
+    export_ts=None,
+    sheet_name=None,
+    dry_run=False,
+    user=None,
+    auto_mark_delivered=True,
+    protect_pending_rows=False,
+):
     """Importa il filone da file Excel/CSV applicando merge most-recent-wins.
 
     Args:
@@ -625,6 +634,10 @@ def import_excel(file_path, *, export_ts=None, sheet_name=None, dry_run=False, u
         sheet_name: nome scheda Excel da leggere (default: prima scheda).
         dry_run: se True, calcola tutto ma NON scrive sul DB.
         user: nome utente che ha caricato il file (per audit).
+        auto_mark_delivered: se True, marca pending_writes <= export_ts come 'done'.
+                             Se False (es. auto-import orario), non tocca la outbox.
+        protect_pending_rows: se True, protegge da sovrascrittura qualunque riga
+                              con modifiche locali in stato 'pending' nella outbox.
 
     Returns:
         dict summary
@@ -641,13 +654,34 @@ def import_excel(file_path, *, export_ts=None, sheet_name=None, dry_run=False, u
             'rows_excel': 0,
         }
 
-    # 1. Header mapping: per ogni colonna Excel, cerca la chiave interna nel DB
+    # 1. Header mapping: per ogni colonna Excel, cerca la chiave interna
+    # Usa prima il lookup da config/settings per riflettere le definizioni correnti.
+    # Evita collisioni: se più colonne mappano sulla stessa chiave interna,
+    # solo la prima mantiene la chiave e le altre diventano extra (None).
     header_mapping = {}
     conn = _db.get_conn()
+    lookup = _db._build_internal_lookup()
+    seen_keys = {}
     for h in headers_xlsx:
         if not h:
             continue
-        header_mapping[h] = _db.column_to_internal_key(conn, h)
+        ch = lookup.get(h.strip().lower())
+        if not ch:
+            ch = _db.column_to_internal_key(conn, h)
+        if ch:
+            if ch in seen_keys:
+                prev_h = seen_keys[ch]
+                logger.warning(
+                    f"[excel-import] Collisione mappatura colonne: {prev_h!r} e {h!r} "
+                    f"mappano entrambe su {ch!r}. {prev_h!r} mantiene la chiave, "
+                    f"{h!r} viene trattata come colonna extra."
+                )
+                header_mapping[h] = None
+            else:
+                seen_keys[ch] = h
+                header_mapping[h] = ch
+        else:
+            header_mapping[h] = None
 
     # 2. Identifica colonna Eneltel (obbligatoria)
     eneltel_idx = _find_col_idx(headers_xlsx, ['Eneltel', 'ENELTEL', 'eneltel'])
@@ -763,6 +797,21 @@ def import_excel(file_path, *, export_ts=None, sheet_name=None, dry_run=False, u
             f"in {time.time() - t0:.2f}s"
         )
 
+        # Eneltel con pending_writes attive (se protect_pending_rows=True)
+        pending_eneltels = set()
+        if protect_pending_rows:
+            try:
+                p_rows = conn.execute(
+                    "SELECT DISTINCT eneltel_key FROM pending_writes WHERE state='pending'"
+                ).fetchall()
+                pending_eneltels = {r[0] for r in p_rows if r[0]}
+                logger.info(
+                    f"[excel-import] {len(pending_eneltels)} contatori con modifiche "
+                    f"pendenti protetti da overwrite"
+                )
+            except Exception as e:
+                logger.warning(f"[excel-import] errore recupero pending_eneltels: {e}")
+
         # Audit batch: accumuliamo tutto e flushiamo con executemany alla fine
         audit_batch = []  # list of (ts, eneltel_key, column_name, old, new, source, user, detail_json)
         diff_counter = Counter()
@@ -871,9 +920,9 @@ def import_excel(file_path, *, export_ts=None, sheet_name=None, dry_run=False, u
                         )
                 continue
 
-            # Most-recent-wins a livello riga
+            # Most-recent-wins a livello riga (o protezione riga pendente attiva)
             db_last_local = db_row.get('last_local_change_ts') or 0
-            if db_last_local > export_ts_int:
+            if (protect_pending_rows and eneltel_key in pending_eneltels) or db_last_local > export_ts_int:
                 summary['rows_db_vince'] += 1
                 if len(summary['sample_db_vince']) < 20:
                     summary['sample_db_vince'].append(eneltel_key)
@@ -983,8 +1032,9 @@ def import_excel(file_path, *, export_ts=None, sheet_name=None, dry_run=False, u
     # Auto-mark-delivered: tutte le pending create PRIMA dell'export_ts si
     # considerano già applicate sul foglio (perché il file Excel le riflette).
     # Quelle create DOPO restano in outbox per la prossima consegna.
+    # Se auto_mark_delivered=False (es. auto-import da Google Sheets), non tocca l'outbox.
     auto_marked = 0
-    if not dry_run:
+    if not dry_run and auto_mark_delivered:
         try:
             from . import outbox as _ob
             r = _ob.mark_delivered(before_ts=export_ts_int, user=user)

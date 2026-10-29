@@ -913,6 +913,14 @@ def _build_internal_lookup():
     for col in COLONNE_NOTE:
         lookup.setdefault(col.strip().lower(), col)
 
+    # Alias storici noti per matricola/codice installato (es. foglio Pavia: 'Matricola CE inst', 'cod.')
+    # Aggiunti solo con setdefault: configurazioni esplicite o MAPPATURA_COLONNE vincono sempre.
+    lookup.setdefault('matricola ce inst', 'matricola_installata')
+    lookup.setdefault('matricola misuratore installato', 'matricola_installata')
+    lookup.setdefault('cod.', 'codice_installato')
+    lookup.setdefault('codice misuratore installat', 'codice_installato')
+    lookup.setdefault('codice ce inst', 'codice_installato')
+
     # Override utente (vince sui default)
     for chiave, nome in (MAPPATURA_COLONNE or {}).items():
         if nome:
@@ -929,10 +937,19 @@ def update_column_registry(conn, headers):
     """
     lookup = _build_internal_lookup()
     now = _now_ts()
+    seen_keys = set()
     for idx, name in enumerate(headers, start=1):
         if not name:
             continue
         chiave = lookup.get(name.strip().lower())
+        if chiave and chiave in seen_keys:
+            logger.warning(
+                f"[column_registry] Collisione: {name!r} mappa su {chiave!r} già assegnata. "
+                f"Assegnato NULL per evitare conflitti."
+            )
+            chiave = None
+        elif chiave:
+            seen_keys.add(chiave)
         conn.execute(
             'INSERT OR REPLACE INTO column_registry(column_name, chiave_interna, last_index, last_seen_ts) '
             'VALUES (?, ?, ?, ?)',

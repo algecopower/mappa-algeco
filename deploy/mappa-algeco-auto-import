@@ -1,0 +1,11 @@
+# Auto-import orario del filone da Google Sheets per tutte le province abilitate.
+# Scarica l'export XLSX, calcola l'hash SHA-256 e importa solo se ci sono novita'.
+#
+# Frequenza: ogni ora al minuto 05.
+# Per disinstallare: rm /etc/cron.d/mappa-algeco-auto-import
+# Logs: tail -f /var/log/mappa-auto-import.log
+SHELL=/bin/bash
+PATH=/opt/mappa-algeco/venv/bin:/usr/local/bin:/usr/bin:/bin
+MAILTO=""
+
+5 * * * * root cd /opt/mappa-algeco && /opt/mappa-algeco/venv/bin/python tools/auto_import_filone.py --all >> /var/log/mappa-auto-import.log 2>&1

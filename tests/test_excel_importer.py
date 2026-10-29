@@ -523,3 +523,85 @@ def test_import_cell_to_str_date():
     ts = _parse_export_ts('2026-05-21T14:30')
     assert ts > 0
 
+
+def test_import_excel_non_tocca_outbox_se_auto_mark_delivered_false(db_isolato, tmp_path):
+    """Verifica che con auto_mark_delivered=False le pending writes restino intatte nell'outbox."""
+    db = db_isolato
+    from moduli import excel_importer
+    excel_importer = importlib.reload(excel_importer)
+
+    # 1. Crea riga iniziale
+    path1 = tmp_path / 'filone1.csv'
+    path1.write_text(
+        'Eneltel,LCL,NOMINATIVO,Comune\n'
+        '10001,6600104200,Mario Rossi,Torino\n',
+        encoding='utf-8',
+    )
+    excel_importer.import_excel(str(path1), export_ts='2026-06-01 10:00:00')
+
+    # 2. Registra modifica locale (crea pending_write)
+    db.record_local_change('10001', {'NOTE APP': 'Nota locale da preservare'}, user='operatore')
+    pending = db.list_pending_writes(state='pending')
+    assert len(pending) == 1
+
+    # 3. Import successivo con auto_mark_delivered=False (come fa l'auto-import da Sheets)
+    path2 = tmp_path / 'filone2.csv'
+    path2.write_text(
+        'Eneltel,LCL,NOMINATIVO,Comune\n'
+        '10001,6600104200,Mario Rossi,Torino\n'
+        '10002,6600104200,Luigi Verdi,Torino\n',
+        encoding='utf-8',
+    )
+    res = excel_importer.import_excel(
+        str(path2),
+        export_ts='2026-06-02 10:00:00',
+        auto_mark_delivered=False,
+        protect_pending_rows=True,
+    )
+    assert res['success'] is True
+    assert res['auto_marked_delivered'] == 0
+
+    # 4. Verifica che la pending write sia ANCORA pending
+    pending_dopo = db.list_pending_writes(state='pending')
+    assert len(pending_dopo) == 1
+    assert pending_dopo[0]['new_value'] == 'Nota locale da preservare'
+
+
+def test_import_excel_protegge_righe_pending_se_protect_pending_rows_true(db_isolato, tmp_path):
+    """Verifica che una riga con modifiche pending non venga sovrascritta dal foglio se protect_pending_rows=True."""
+    db = db_isolato
+    from moduli import excel_importer
+    excel_importer = importlib.reload(excel_importer)
+
+    # 1. Inserisci riga iniziale
+    path1 = tmp_path / 'filone1.csv'
+    path1.write_text(
+        'Eneltel,LCL,NOMINATIVO,Comune,NOTE APP\n'
+        '20001,6600104200,Mario Rossi,Torino,Nota iniziale\n',
+        encoding='utf-8',
+    )
+    excel_importer.import_excel(str(path1), export_ts='2026-06-01 10:00:00')
+
+    # 2. Modifica locale su NOTE APP
+    db.record_local_change('20001', {'NOTE APP': 'Nota fatta da programma'}, user='operatore')
+
+    # 3. Import con protect_pending_rows=True dove Excel prova a riportare "Nota vecchia dal foglio"
+    path2 = tmp_path / 'filone2.csv'
+    path2.write_text(
+        'Eneltel,LCL,NOMINATIVO,Comune,NOTE APP\n'
+        '20001,6600104200,Mario Rossi,Torino,Nota vecchia dal foglio\n',
+        encoding='utf-8',
+    )
+    res = excel_importer.import_excel(
+        str(path2),
+        export_ts='2026-06-02 10:00:00',
+        auto_mark_delivered=False,
+        protect_pending_rows=True,
+    )
+    assert res['success'] is True
+    assert res['rows_db_vince'] == 1
+
+    # 4. Verifica che il valore nel DB sia ancora quello locale
+    row = db.get_filone_row('20001', lcl='6600104200')
+    assert row['note_appuntamento'] == 'Nota fatta da programma'
+

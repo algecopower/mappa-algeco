@@ -119,6 +119,8 @@ _SETTINGS_OVERRIDE_FIELDS = {
     'tempo_intervento_min',
     'data_inizio',
     'data_fine',
+    'google_sheet_url',
+    'auto_import_enabled',
 }
 
 
@@ -783,6 +785,13 @@ def _admin_dispatch(path):
         return _admin_check() or _admin_proxy_simple(m.group(1), '/api/admin/sms-test', 'POST')
 
 
+    m = re.match(r'^api/provinces/([a-zA-Z0-9_]+)/auto-import$', p)
+    if m and method == 'POST':
+        return _admin_check() or _admin_proxy_simple(m.group(1), '/api/admin/auto-import-sheets', 'POST', timeout=180)
+    m = re.match(r'^api/provinces/([a-zA-Z0-9_]+)/auto-import-status$', p)
+    if m and method == 'GET':
+        return _admin_check() or _admin_proxy_simple(m.group(1), '/api/admin/auto-import-status', 'GET', timeout=15)
+
     m = re.match(r'^api/provinces/([a-zA-Z0-9_]+)/import-excel$', p)
     if m and method == 'POST':
         return _admin_check() or _admin_import_excel(m.group(1))
@@ -929,6 +938,11 @@ def _admin_health_overview():
         except requests.RequestException as e:
             item['reachable'] = False
             item['error'] = str(e)
+        try:
+            from moduli import auto_import
+            item['auto_import'] = auto_import.get_last_auto_import_status(slug)
+        except Exception:
+            item['auto_import'] = {}
         out.append(item)
     return jsonify({'province': out})
 
@@ -1315,6 +1329,8 @@ def _admin_create_province():
         'data_fine': body.get('data_fine') or '',
         'sottodominio': sottodominio,
         'porta': porta,
+        'google_sheet_url': (body.get('google_sheet_url') or '').strip(),
+        'auto_import_enabled': bool(body.get('auto_import_enabled', True)),
     }
     if body.get('usa_localita_come_comune'):
         cfg['usa_localita_come_comune'] = True
@@ -1424,6 +1440,9 @@ def _admin_update_province(slug):
                     return jsonify({'error': f"deposito.{k} deve essere numerico"}), 400
         aggiornato['deposito'] = dep
     for k in ('operatori_vip', 'colori_operatori', 'operatori_dict', 'operatori_disabilitati', 'lcl_disabilitati'):
+        if k in body:
+            aggiornato[k] = body[k]
+    for k in ('google_sheet_url', 'auto_import_enabled'):
         if k in body:
             aggiornato[k] = body[k]
 

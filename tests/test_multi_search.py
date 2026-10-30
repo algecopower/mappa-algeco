@@ -1,12 +1,15 @@
 # -*- coding: utf-8 -*-
 """Test per la ricerca multipla POD ed Eneltel nel modal Ricerca Utente."""
 
+import json
 import subprocess
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[1]
+
 
 def test_mappa_template_contains_multi_search_elements():
-    template_path = Path("/opt/mappa-algeco/templates/mappa.html")
+    template_path = ROOT / "templates" / "mappa.html"
     content = template_path.read_text(encoding="utf-8")
 
     # POD multi search elements
@@ -32,7 +35,7 @@ def test_mappa_template_contains_multi_search_elements():
 
 
 def test_mappa_css_contains_multi_search_styles():
-    css_path = Path("/opt/mappa-algeco/static/mappa.css")
+    css_path = ROOT / "static" / "mappa.css"
     css = css_path.read_text(encoding="utf-8")
 
     assert ".multi-search-toggle" in css
@@ -46,9 +49,10 @@ def test_mappa_css_contains_multi_search_styles():
 
 def test_js_multi_search_tokens_parser_and_filtering_logic():
     # Eseguiamo uno script Node che testa direttamente la logica JS implementata in mappa.js
+    js_path_json = json.dumps((ROOT / "static" / "mappa.js").as_posix())
     node_script = r"""
     const fs = require('fs');
-    const content = fs.readFileSync('/opt/mappa-algeco/static/mappa.js', 'utf-8');
+    const content = fs.readFileSync(__JS_PATH__, 'utf-8');""".replace("__JS_PATH__", js_path_json) + r"""
 
     // Estrai la definizione di parseMultiSearchTokens
     const fnMatch = content.match(/function parseMultiSearchTokens\([\s\S]*?\n\}/);
@@ -220,12 +224,12 @@ def test_inactive_lcl_api_endpoint(monkeypatch, db_isolato):
 
 def test_inactive_lcl_ui_elements_in_assets():
     """Verifica presenza degli stili CSS e logica JS per avvisi LCL disabilitate."""
-    css = Path("/opt/mappa-algeco/static/mappa.css").read_text(encoding="utf-8")
+    css = (ROOT / "static" / "mappa.css").read_text(encoding="utf-8")
     assert ".inactive-lcl-alert-box" in css
     assert ".inactive-lcl-badge" in css
     assert ".missing-token-pill--inactive-lcl" in css
 
-    js = Path("/opt/mappa-algeco/static/mappa.js").read_text(encoding="utf-8")
+    js = (ROOT / "static" / "mappa.js").read_text(encoding="utf-8")
     assert "checkInactiveLclForSearch" in js
     assert "renderInactiveLclAlertInResults" in js
     assert "/api/contatori/check-inactive-lcl" in js

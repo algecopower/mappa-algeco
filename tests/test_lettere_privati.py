@@ -244,7 +244,8 @@ def test_lettere_template_has_unified_compact_table_structure():
     import re
     from pathlib import Path
 
-    html_content = Path('/opt/mappa-algeco/templates/lettere.html').read_text(encoding='utf-8')
+    root = Path(__file__).resolve().parents[1]
+    html_content = (root / 'templates' / 'lettere.html').read_text(encoding='utf-8')
 
     # Entrambi i wrap presenti
     assert 'id="aziendeTableWrap"' in html_content

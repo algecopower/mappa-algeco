@@ -688,6 +688,19 @@ def _create_lettere_tables(conn):
             ON lettere_invii(azienda_generazione_id, sent_ts);
         CREATE INDEX IF NOT EXISTS idx_lettere_invii_contact
             ON lettere_invii(provincia, contact_key, sent_ts);
+
+        CREATE TABLE IF NOT EXISTS lettere_classificazione_override (
+            provincia TEXT NOT NULL,
+            contact_key TEXT NOT NULL,
+            pod TEXT,
+            nominativo TEXT,
+            is_azienda INTEGER NOT NULL,
+            updated_ts INTEGER NOT NULL,
+            updated_by TEXT,
+            PRIMARY KEY (provincia, contact_key)
+        );
+        CREATE INDEX IF NOT EXISTS idx_lettere_override_pod
+            ON lettere_classificazione_override(provincia, pod);
     ''')
 
 

@@ -446,4 +446,75 @@ def test_note_appuntamento_filone_in_list_aziende(tmp_path, db_isolato, monkeypa
     assert aziende[0]['note_appuntamento'] == 'Citofonare custode scala B'
 
 
+def test_riclassifica_contatto_tra_aziende_e_privati(tmp_path, db_isolato, monkeypatch):
+    import config
+    from moduli import lettere
+
+    monkeypatch.setattr(config, 'PROVINCIA_ATTIVA', 'TORINO', raising=False)
+    path = tmp_path / 'generazione_test.xlsx'
+    path.write_bytes(b'fake')
+
+    righe = [
+        _riga_azienda(
+            nominativo='DANIELE DI GIUSEPPE',
+            pod='IT001E99999001',
+            is_azienda=True,  # Inizialmente marcata falsamente come azienda
+        ),
+        _riga_azienda(
+            nominativo='MARIO BIANCHI',
+            pod='IT001E99999002',
+            is_azienda=False,  # Inizialmente privato
+        ),
+    ]
+
+    info = lettere.registra_generazione(
+        str(path), '2026-06-15', '2026-06-15', righe, provincia='TORINO'
+    )
+    gen_id = info['generazione_id']
+
+    aziende = lettere.list_aziende(generazione_id=gen_id)
+    assert len(aziende) == 1
+    assert aziende[0]['pod'] == 'IT001E99999001'
+
+    privati = lettere.list_privati(generazione_id=gen_id)
+    assert privati['totale'] == 1
+    assert privati['contatti'][0]['pod'] == 'IT001E99999002'
+
+    # 1. Sposta l'azienda in PRIVATI
+    az_id = aziende[0]['id']
+    res = lettere.riclassifica_contatto(
+        azienda_id=az_id,
+        is_azienda=False,
+        provincia='TORINO',
+        generazione_id=gen_id,
+    )
+    assert res['success'] is True
+    assert res['is_azienda'] is False
+
+    aziende_dopo = lettere.list_aziende(generazione_id=gen_id)
+    assert len(aziende_dopo) == 0
+
+    privati_dopo = lettere.list_privati(generazione_id=gen_id)
+    assert privati_dopo['totale'] == 2
+
+    # 2. Sposta il privato IT001E99999002 in AZIENDE
+    res2 = lettere.riclassifica_contatto(
+        pod='IT001E99999002',
+        is_azienda=True,
+        provincia='TORINO',
+        generazione_id=gen_id,
+    )
+    assert res2['success'] is True
+    assert res2['is_azienda'] is True
+
+    aziende_dopo2 = lettere.list_aziende(generazione_id=gen_id)
+    assert len(aziende_dopo2) == 1
+    assert aziende_dopo2[0]['pod'] == 'IT001E99999002'
+
+    privati_dopo2 = lettere.list_privati(generazione_id=gen_id)
+    assert privati_dopo2['totale'] == 1
+    assert privati_dopo2['contatti'][0]['pod'] == 'IT001E99999001'
+
+
+
 

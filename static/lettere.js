@@ -1063,9 +1063,12 @@ function renderAziendaRow(a) {
                         </div>
                     </div>
                 </div>
-                <div style="margin-top:5px;">
+                <div style="margin-top:5px;display:flex;gap:4px;flex-wrap:wrap;align-items:center;">
                     <button type="button" class="btn-mini" onclick="apriAziendaMessageModal(${a.id})" title="Apri Template Messaggio (Mail / WA / SMS)" style="padding:3px 8px;font-size:0.75rem;border-radius:4px;background:rgba(59,130,246,0.15);color:#60a5fa;border:1px solid rgba(59,130,246,0.3);cursor:pointer;display:inline-flex;align-items:center;gap:4px;">
                         <i class="fas fa-paper-plane"></i> Template
+                    </button>
+                    <button type="button" class="btn-mini" onclick="spostaAziendaInPrivati(${a.id}, '${esc(a.pod || '')}', ${a.generazione_id})" title="Sposta in Utenti Privati" style="padding:3px 8px;font-size:0.75rem;border-radius:4px;background:rgba(239,68,68,0.12);color:#f87171;border:1px solid rgba(239,68,68,0.3);cursor:pointer;display:inline-flex;align-items:center;gap:4px;">
+                        <i class="fas fa-user-slash"></i> A Privato
                     </button>
                 </div>
             </td>
@@ -1365,9 +1368,12 @@ function renderAziendaCard(a) {
                 </div>
             </div>
 
-            <div class="contact-actions" style="margin-top:6px;display:flex;gap:8px;">
+            <div class="contact-actions" style="margin-top:6px;display:flex;gap:8px;flex-wrap:wrap;">
                 <button type="button" class="btn-soft" onclick="apriAziendaMessageModal(${a.id})" style="flex:1;font-weight:700;padding:6px 10px;font-size:0.82rem;display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:6px;color:#3b82f6;border-color:rgba(59,130,246,0.35);" title="Invia o componi con Template Messaggi">
                     <i class="fas fa-paper-plane"></i> Template
+                </button>
+                <button type="button" class="btn-soft" onclick="spostaAziendaInPrivati(${a.id}, '${esc(a.pod || '')}', ${a.generazione_id})" style="font-weight:700;padding:6px 10px;font-size:0.82rem;display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:6px;color:#f87171;border-color:rgba(239,68,68,0.35);" title="Sposta in Utenti Privati">
+                    <i class="fas fa-user-slash"></i> A Privato
                 </button>
                 ${renderSearchShortcuts(a)}
             </div>
@@ -2448,9 +2454,12 @@ function renderPrivatoRow(c) {
                         </div>
                     </div>
                 </div>
-                <div style="margin-top:5px;">
+                <div style="margin-top:5px;display:flex;gap:4px;flex-wrap:wrap;align-items:center;">
                     <button type="button" class="btn-mini ${c.tipo === 'cellulare' ? 'btn-wa' : ''}" onclick="apriPrivatiMessageModal('${esc(c.pod)}')" title="Apri Template Messaggio" style="padding:3px 8px;font-size:0.75rem;border-radius:4px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;${c.tipo === 'cellulare' ? 'background:rgba(16,185,129,0.15);color:#10b981;border:1px solid rgba(16,185,129,0.3);' : 'background:rgba(59,130,246,0.15);color:#60a5fa;border:1px solid rgba(59,130,246,0.3);'}">
                         <i class="${c.tipo === 'cellulare' ? 'fab fa-whatsapp' : 'fas fa-paper-plane'}"></i> Template
+                    </button>
+                    <button type="button" class="btn-mini" onclick="spostaPrivatoInAziende('${esc(c.pod)}', ${c.generazione_id || 'null'}, ${c.id || 'null'})" title="Sposta in Aziende ed Enti" style="padding:3px 8px;font-size:0.75rem;border-radius:4px;background:rgba(59,130,246,0.12);color:#60a5fa;border:1px solid rgba(59,130,246,0.3);cursor:pointer;display:inline-flex;align-items:center;gap:4px;">
+                        <i class="fas fa-building"></i> Ad Azienda
                     </button>
                 </div>
             </td>
@@ -2625,6 +2634,11 @@ function renderPrivatoCard(c) {
                 <button type="button" class="btn-quick-time" onclick="regolaOrarioPrivato('${esc(c.pod)}', 10)">+10m</button>
                 <button type="button" class="btn-quick-time" onclick="regolaOrarioPrivato('${esc(c.pod)}', 15)">+15m</button>
                 <button type="button" class="btn-quick-time" onclick="regolaOrarioPrivato('${esc(c.pod)}', 30)">+30m</button>
+            </div>
+            <div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border, #334155);display:flex;justify-content:flex-end;">
+                <button type="button" class="btn-mini" onclick="spostaPrivatoInAziende('${esc(c.pod)}', ${c.generazione_id || 'null'}, ${c.id || 'null'})" style="font-size:0.75rem;padding:4px 8px;border-radius:4px;background:rgba(59,130,246,0.12);color:#60a5fa;border:1px solid rgba(59,130,246,0.3);cursor:pointer;display:inline-flex;align-items:center;gap:4px;" title="Sposta in Aziende ed Enti">
+                    <i class="fas fa-building"></i> Sposta in Aziende
+                </button>
             </div>
         </div>
     </div>
@@ -3542,4 +3556,55 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     loadAll().catch(e => showToast(e.message, true));
 });
+
+async function spostaAziendaInPrivati(aziendaId, pod, generazioneId) {
+    if (!confirm('Vuoi spostare questo contatto da Aziende ed Enti a Utenti Privati?')) return;
+    try {
+        const res = await fetch('/api/lettere/riclassifica', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                azienda_id: aziendaId,
+                pod: pod,
+                generazione_id: generazioneId,
+                is_azienda: false,
+            })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast(data.message || 'Contatto spostato in Utenti Privati');
+            await Promise.all([loadAziende(), loadPrivati(), loadStats()]);
+        } else {
+            showToast(data.error || 'Errore durante lo spostamento', true);
+        }
+    } catch (err) {
+        showToast('Errore di connessione: ' + err.message, true);
+    }
+}
+
+async function spostaPrivatoInAziende(pod, generazioneId, rowId) {
+    if (!confirm('Vuoi spostare questo contatto da Utenti Privati ad Aziende ed Enti?')) return;
+    try {
+        const res = await fetch('/api/lettere/riclassifica', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                pod: pod,
+                generazione_id: generazioneId,
+                row_id: rowId,
+                is_azienda: true,
+            })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast(data.message || 'Contatto spostato in Aziende ed Enti');
+            await Promise.all([loadAziende(), loadPrivati(), loadStats()]);
+        } else {
+            showToast(data.error || 'Errore durante lo spostamento', true);
+        }
+    } catch (err) {
+        showToast('Errore di connessione: ' + err.message, true);
+    }
+}
+
 

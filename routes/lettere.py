@@ -123,6 +123,28 @@ def api_lettere_privati():
 
 
 
+@bp.route('/api/lettere/riclassifica', methods=['POST'])
+@login_required
+def api_lettere_riclassifica():
+    """Riclassifica un contatto spostandolo tra Aziende ed Enti e Utenti Privati."""
+    try:
+        data = request.get_json() or {}
+        res = lettere_store.riclassifica_contatto(
+            generazione_id=data.get('generazione_id'),
+            azienda_id=data.get('azienda_id'),
+            row_id=data.get('row_id'),
+            pod=data.get('pod'),
+            contact_key_val=data.get('contact_key'),
+            is_azienda=bool(data.get('is_azienda', False)),
+            user=_get_username(),
+            provincia=PROVINCIA_ATTIVA,
+        )
+        return jsonify(res)
+    except Exception as e:
+        logger.exception("[Lettere] Errore riclassificazione contatto")
+        return jsonify({'error': str(e)}), 500
+
+
 @bp.route('/api/lettere/contatti/<path:contact_key>', methods=['PUT'])
 @login_required
 def api_lettere_update_contatto(contact_key):

@@ -186,7 +186,7 @@ def leggi_file(path):
                 'email': recapiti.get('email', ''),
                 'is_azienda': (
                     (pod in contatti or nominativo.upper() in contatti)
-                    or is_azienda(nominativo, tipo)
+                    or is_azienda(nominativo, tipo, note=value('posizione_mis'))
                 ),
             })
 

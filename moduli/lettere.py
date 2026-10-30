@@ -267,6 +267,14 @@ def registra_generazione(
             comune = _clean(r.get('comune'))
             ck = contact_key(pod, nominativo, comune)
 
+            # Rispetta eventuali override manuali precedenti
+            ov_row = conn.execute(
+                'SELECT is_azienda FROM lettere_classificazione_override WHERE provincia=? AND contact_key=?',
+                (provincia, ck)
+            ).fetchone()
+            if ov_row is not None:
+                is_azienda_row = int(ov_row['is_azienda'])
+
             conn.execute(
                 '''
                 INSERT INTO lettere_righe(
@@ -1556,4 +1564,250 @@ def list_privati(generazione_id=None, search='', limit=2000, provincia=None):
         'fisso': len(classificati['fisso']),
         'senza_telefono': len(classificati['senza_telefono']),
     }
+
+
+def riclassifica_contatto(
+    *,
+    generazione_id=None,
+    azienda_id=None,
+    row_id=None,
+    pod=None,
+    contact_key_val=None,
+    is_azienda=False,
+    user=None,
+    provincia=None
+):
+    """
+    Riclassifica manualmente un contatto spostandolo tra Aziende ed Enti e Utenti Privati.
+
+    - Se is_azienda=False:
+      * Imposta lettere_righe.is_azienda = 0
+      * Rimuove da lettere_aziende_generazione
+      * Registra l'override persistente in lettere_classificazione_override
+    - Se is_azienda=True:
+      * Imposta lettere_righe.is_azienda = 1
+      * Crea/aggiorna il record in lettere_aziende_generazione e lettere_contatti
+      * Registra l'override persistente in lettere_classificazione_override
+    """
+    prov = (provincia or _provincia_attiva()).upper()
+    conn = db.get_conn()
+    now = int(time.time())
+
+    target_gen_id = int(generazione_id) if generazione_id else None
+    target_pod = _clean(pod).upper() if pod else None
+    target_ck = _clean(contact_key_val) if contact_key_val else None
+    target_nom = None
+    target_com = None
+
+    # 1. Da azienda_id (presente nella vista Aziende)
+    if azienda_id:
+        row_ag = conn.execute(
+            'SELECT id, generazione_id, contact_key, pod, nominativo, comune FROM lettere_aziende_generazione WHERE id=?',
+            (int(azienda_id),)
+        ).fetchone()
+        if row_ag:
+            target_gen_id = target_gen_id or row_ag['generazione_id']
+            target_ck = target_ck or row_ag['contact_key']
+            target_pod = target_pod or (_clean(row_ag['pod']).upper() if row_ag['pod'] else None)
+            target_nom = row_ag['nominativo']
+            target_com = row_ag['comune']
+
+    # 2. Da row_id (presente nella vista Privati)
+    if row_id:
+        row_lr = conn.execute(
+            'SELECT id, generazione_id, pod, nominativo, comune FROM lettere_righe WHERE id=?',
+            (int(row_id),)
+        ).fetchone()
+        if row_lr:
+            target_gen_id = target_gen_id or row_lr['generazione_id']
+            target_pod = target_pod or (_clean(row_lr['pod']).upper() if row_lr['pod'] else None)
+            target_nom = target_nom or row_lr['nominativo']
+            target_com = target_com or row_lr['comune']
+
+    # 3. Lookup di supporto per POD e generazione
+    if target_pod and (not target_nom or not target_com):
+        query_lr = 'SELECT nominativo, comune FROM lettere_righe WHERE UPPER(TRIM(pod))=?'
+        prms = [target_pod]
+        if target_gen_id:
+            query_lr += ' AND generazione_id=?'
+            prms.append(target_gen_id)
+        query_lr += ' ORDER BY id DESC LIMIT 1'
+        r_supp = conn.execute(query_lr, prms).fetchone()
+        if r_supp:
+            target_nom = target_nom or r_supp['nominativo']
+            target_com = target_com or r_supp['comune']
+
+    if not target_ck and (target_pod or target_nom):
+        target_ck = contact_key(target_pod or '', target_nom or '', target_com or '')
+
+    is_az_int = 1 if is_azienda else 0
+
+    with conn:
+        # Aggiorna lettere_righe
+        if target_pod:
+            if target_gen_id:
+                conn.execute(
+                    'UPDATE lettere_righe SET is_azienda=? WHERE generazione_id=? AND UPPER(TRIM(pod))=?',
+                    (is_az_int, target_gen_id, target_pod)
+                )
+            else:
+                conn.execute(
+                    'UPDATE lettere_righe SET is_azienda=? WHERE UPPER(TRIM(pod))=?',
+                    (is_az_int, target_pod)
+                )
+        elif target_nom and target_com:
+            if target_gen_id:
+                conn.execute(
+                    'UPDATE lettere_righe SET is_azienda=? WHERE generazione_id=? AND UPPER(TRIM(nominativo))=? AND UPPER(TRIM(comune))=?',
+                    (is_az_int, target_gen_id, target_nom.upper().strip(), target_com.upper().strip())
+                )
+            else:
+                conn.execute(
+                    'UPDATE lettere_righe SET is_azienda=? WHERE UPPER(TRIM(nominativo))=? AND UPPER(TRIM(comune))=?',
+                    (is_az_int, target_nom.upper().strip(), target_com.upper().strip())
+                )
+        elif row_id:
+            conn.execute('UPDATE lettere_righe SET is_azienda=? WHERE id=?', (is_az_int, int(row_id)))
+
+        if not is_azienda:
+            # Sposta a PRIVATI: rimuovi da lettere_aziende_generazione
+            if azienda_id:
+                conn.execute('DELETE FROM lettere_aziende_generazione WHERE id=?', (int(azienda_id),))
+            elif target_ck:
+                if target_gen_id:
+                    conn.execute(
+                        'DELETE FROM lettere_aziende_generazione WHERE generazione_id=? AND contact_key=?',
+                        (target_gen_id, target_ck)
+                    )
+                else:
+                    conn.execute(
+                        'DELETE FROM lettere_aziende_generazione WHERE contact_key=?',
+                        (target_ck,)
+                    )
+            elif target_pod:
+                if target_gen_id:
+                    conn.execute(
+                        'DELETE FROM lettere_aziende_generazione WHERE generazione_id=? AND UPPER(TRIM(pod))=?',
+                        (target_gen_id, target_pod)
+                    )
+                else:
+                    conn.execute(
+                        'DELETE FROM lettere_aziende_generazione WHERE UPPER(TRIM(pod))=?',
+                        (target_pod,)
+                    )
+        else:
+            # Sposta ad AZIENDE: inserisci in lettere_aziende_generazione se mancante
+            if target_ck:
+                # Cerca i dati più completi per la riga
+                lr_q = 'SELECT * FROM lettere_righe WHERE '
+                lr_p = []
+                if target_pod:
+                    lr_q += 'UPPER(TRIM(pod))=?'
+                    lr_p.append(target_pod)
+                else:
+                    lr_q += 'UPPER(TRIM(nominativo))=? AND UPPER(TRIM(comune))=?'
+                    lr_p.extend([(target_nom or '').upper().strip(), (target_com or '').upper().strip()])
+                if target_gen_id:
+                    lr_q += ' AND generazione_id=?'
+                    lr_p.append(target_gen_id)
+                lr_q += ' ORDER BY id DESC LIMIT 1'
+                lr_data = conn.execute(lr_q, lr_p).fetchone()
+
+                eff_gen_id = target_gen_id or (lr_data['generazione_id'] if lr_data else None)
+                if eff_gen_id:
+                    conn.execute(
+                        '''
+                        INSERT INTO lettere_aziende_generazione (
+                            generazione_id, provincia, contact_key, pod, nominativo, comune,
+                            data_pianificazione, ora_pianificazione, operatore,
+                            tipo_misuratore, lettera, created_ts
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(generazione_id, contact_key) DO UPDATE SET
+                            pod=excluded.pod,
+                            nominativo=excluded.nominativo,
+                            comune=excluded.comune,
+                            data_pianificazione=excluded.data_pianificazione,
+                            ora_pianificazione=excluded.ora_pianificazione,
+                            operatore=excluded.operatore,
+                            tipo_misuratore=excluded.tipo_misuratore,
+                            lettera=excluded.lettera
+                        ''',
+                        (
+                            eff_gen_id,
+                            prov,
+                            target_ck,
+                            lr_data['pod'] if lr_data else target_pod,
+                            lr_data['nominativo'] if lr_data else target_nom,
+                            lr_data['comune'] if lr_data else target_com,
+                            lr_data['data_pianificazione'] if lr_data else '',
+                            lr_data['ora_pianificazione'] if lr_data else '',
+                            lr_data['operatore'] if lr_data else '',
+                            lr_data['tipo_misuratore'] if lr_data else '',
+                            lr_data['lettera'] if lr_data else '',
+                            now,
+                        ),
+                    )
+                    conn.execute(
+                        '''
+                        INSERT INTO lettere_contatti (
+                            provincia, contact_key, pod, nominativo, comune, telefono, email,
+                            created_ts, updated_ts, updated_by
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(provincia, contact_key) DO UPDATE SET
+                            nominativo=excluded.nominativo,
+                            comune=excluded.comune,
+                            updated_ts=excluded.updated_ts,
+                            updated_by=excluded.updated_by
+                        ''',
+                        (
+                            prov,
+                            target_ck,
+                            lr_data['pod'] if lr_data else target_pod,
+                            lr_data['nominativo'] if lr_data else target_nom,
+                            lr_data['comune'] if lr_data else target_com,
+                            lr_data['telefono'] if lr_data else '',
+                            lr_data['email'] if lr_data else '',
+                            now,
+                            now,
+                            user or 'manual',
+                        ),
+                    )
+
+        # Salva override persistente
+        if target_ck:
+            conn.execute(
+                '''
+                CREATE TABLE IF NOT EXISTS lettere_classificazione_override (
+                    provincia TEXT NOT NULL,
+                    contact_key TEXT NOT NULL,
+                    pod TEXT,
+                    nominativo TEXT,
+                    is_azienda INTEGER NOT NULL,
+                    updated_ts INTEGER NOT NULL,
+                    updated_by TEXT,
+                    PRIMARY KEY (provincia, contact_key)
+                )
+                '''
+            )
+            conn.execute(
+                '''
+                INSERT INTO lettere_classificazione_override (
+                    provincia, contact_key, pod, nominativo, is_azienda, updated_ts, updated_by
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(provincia, contact_key) DO UPDATE SET
+                    is_azienda=excluded.is_azienda,
+                    updated_ts=excluded.updated_ts,
+                    updated_by=excluded.updated_by
+                ''',
+                (prov, target_ck, target_pod, target_nom, is_az_int, now, user or 'manual'),
+            )
+
+    return {
+        'success': True,
+        'is_azienda': bool(is_azienda),
+        'contact_key': target_ck,
+        'pod': target_pod,
+        'message': 'Contatto spostato in Aziende ed Enti' if is_azienda else 'Contatto spostato in Utenti Privati',
+    }
+
 

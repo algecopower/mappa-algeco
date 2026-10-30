@@ -716,7 +716,8 @@ def genera_excel_lettere(
             civico_raw = punto.get('CIVICO_K', '')
             via_pulita, civico_pulito = separa_via_civico(via_raw, civico_raw)
             tipo_ce = testo_pulito(punto.get('TIPO_CE_K', ''))
-            is_azienda_archivio = is_azienda(nominativo, tipo_ce)
+            note_punto = f"{punto.get('NOTE_K', '')} {punto.get('NOTE_APP_RAW', '')} {punto.get('note_appuntamento', '')}".strip()
+            is_azienda_archivio = is_azienda(nominativo, tipo_ce, note=note_punto)
             
             values_by_key = {
                 'nominativo': nominativo,

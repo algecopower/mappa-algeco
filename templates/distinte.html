@@ -3288,14 +3288,27 @@
          */
         function resolveTemplate(bodyStr, fields, conditionals) {
             let result = bodyStr;
-            // Risolvi condizionali (es. {distacco_text})
+
+            const distaccoVal = (fields && fields['distacco']) || 'no';
+            const fallbackDistacco = (distaccoVal === 'si' || distaccoVal === 'sì')
+                ? 'Facciamo presente che durante l’intervento è previsto un breve distacco della fornitura elettrica.'
+                : 'Precisiamo inoltre che durante l’intervento NON è previsto il distacco della fornitura elettrica (in allegato la specifica tecnica di riferimento).';
+
+            // Risolvi condizionali (es. {distacco_text}, {frase_distacco})
             if (conditionals) {
                 for (const [key, cond] of Object.entries(conditionals)) {
-                    const fieldVal = fields[cond.field] || '';
-                    const replacement = cond.values[fieldVal] || '';
+                    const condField = cond.field || (key.includes('distacco') ? 'distacco' : key);
+                    const fieldVal = fields[condField] || distaccoVal;
+                    const replacement = (cond.values && cond.values[fieldVal]) || fallbackDistacco;
                     result = result.replace(new RegExp('\\{' + key + '\\}', 'g'), replacement);
                 }
             }
+
+            const customFraseDistacco = fields && (fields['frase_distacco'] || fields['distacco_text']);
+            const finalDistaccoStr = (customFraseDistacco && customFraseDistacco.trim()) ? customFraseDistacco : fallbackDistacco;
+
+            result = result.replace(/\{frase_distacco\}/g, finalDistaccoStr);
+            result = result.replace(/\{distacco_text\}/g, finalDistaccoStr);
             // Risolvi {email_tecnico} e {telefono_tecnico} dinamicamente per qualsiasi provincia
             const pk = (provincia || window.provincia || (window.BulkEmailPreview && BulkEmailPreview.getDetectedProvince()) || 'TORINO').toUpperCase();
             const provSettings = (templateSettings.province && templateSettings.province[pk]) || {};
@@ -6252,7 +6265,8 @@ Rispondi con un JSON array in questo formato esatto:
             
             allAvailable.forEach(f => {
                 const isConditional = availableConditionals.includes(f);
-                const checked = currentFields.includes(f) || isConditional ? 'checked' : '';
+                const realField = (t.conditionals && t.conditionals[f]?.field) || (f === 'frase_distacco' || f === 'distacco_text' ? 'distacco' : f);
+                const checked = currentFields.includes(f) || currentFields.includes(realField) || isConditional ? 'checked' : '';
                 const titleStr = isConditional ? 'Variabile condizionale' : 'Variabile standard';
                 html += `
                     <label class="editor-checkbox-item" title="${titleStr}">
@@ -6310,8 +6324,24 @@ Rispondi con un JSON array in questo formato esatto:
             if (checkboxes.length > 0) {
                 const selectedFields = [];
                 checkboxes.forEach(cb => {
-                    if (cb.checked) selectedFields.push(cb.value);
+                    if (cb.checked) {
+                        const val = cb.value;
+                        if (val === 'frase_distacco' || val === 'distacco_text' || (t.conditionals && t.conditionals[val])) {
+                            const realField = (t.conditionals && t.conditionals[val]?.field) || 'distacco';
+                            if (!selectedFields.includes(realField)) {
+                                selectedFields.push(realField);
+                            }
+                        } else {
+                            if (!selectedFields.includes(val)) {
+                                selectedFields.push(val);
+                            }
+                        }
+                    }
                 });
+                const bodyHtml = t.body || '';
+                if ((bodyHtml.includes('{frase_distacco}') || bodyHtml.includes('{distacco_text}')) && !selectedFields.includes('distacco')) {
+                    selectedFields.push('distacco');
+                }
                 t.fields = selectedFields;
             }
             

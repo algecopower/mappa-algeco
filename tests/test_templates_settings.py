@@ -558,6 +558,99 @@ def test_convert_snippet_to_template(tmp_path, monkeypatch):
     assert 'frase_test' not in b_data.get('snippets', {})
 
 
+def test_distacco_field_normalization_and_resolution(tmp_path, monkeypatch):
+    """Verifica che la clausola frase_distacco mappi correttamente sul campo reale distacco e non sia mai vuota."""
+    from routes import distinte as dist_routes
+    from moduli.safe_json import json_read
+
+    monkeypatch.setattr(mail_manager, '_ROOT_DIR', str(tmp_path))
+    monkeypatch.setattr(dist_routes, '_ROOT_DIR', str(tmp_path))
+    monkeypatch.setattr(dist_routes, 'PROVINCIA_ATTIVA', 'TORINO')
+
+    os.makedirs(str(tmp_path / 'data' / 'torino'), exist_ok=True)
+    base_file = str(tmp_path / 'data' / 'distinte_templates.json')
+    torino_file = str(tmp_path / 'data' / 'torino' / 'distinte_templates.json')
+
+    initial_data = {
+        'fields': {
+            'comune': {'label': 'Comune', 'placeholder': 'Comune'},
+            'distacco': {
+                'autoFillRule': {'field': 'tipologia_contatore', 'contains': 'semidiretto', 'then': 'no', 'else': 'si'},
+                'label': 'Distacco fornitura?',
+                'type': 'select',
+                'options': [{'l': 'No', 'v': 'no'}, {'l': 'Sì', 'v': 'si'}]
+            }
+        },
+        'templates': {
+            'email_semplificata': {
+                'label': 'Email Semplificata',
+                'type': 'email',
+                'subject': 'Sostituzione contatore {comune}',
+                'body': 'Buongiorno, la data è fissata. {frase_distacco} Cordiali saluti.',
+                'conditionals': {
+                    'frase_distacco': {
+                        'field': 'distacco',
+                        'values': {
+                            'no': 'NON è previsto il distacco della fornitura.',
+                            'si': 'È previsto un breve distacco.'
+                        }
+                    }
+                },
+                'fields': ['comune', 'distacco']
+            }
+        }
+    }
+    json_write(base_file, initial_data, indent=4)
+    json_write(torino_file, initial_data, indent=4)
+
+    # 1. Salva template da mail_manager (es. editor Modelli Centralizzati)
+    payload = {
+        'id': 'sys_email_semplificata',
+        'title': 'Email Semplificata Modificata',
+        'type': 'template',
+        'category': 'distinte',
+        'subject': 'Sostituzione contatore {comune}',
+        'body': 'Buongiorno a {comune}. {frase_distacco} Fine.'
+    }
+    res = mail_manager.save_template_or_snippet(payload, prov='torino')
+    assert res['success'] is True
+
+    t_data = json_read(torino_file)
+    tpl = t_data['templates']['email_semplificata']
+    # Il campo reale deve essere 'distacco', non 'frase_distacco'
+    assert 'distacco' in tpl['fields']
+    assert 'frase_distacco' not in tpl['fields']
+    assert 'conditionals' in tpl
+
+    # 2. Verifica _resolve_template_server con distacco 'no' e 'si'
+    body = tpl['body']
+    conds = tpl['conditionals']
+
+    res_no = dist_routes._resolve_template_server(body, {'comune': 'Torino', 'distacco': 'no'}, conditionals=conds)
+    assert 'NON è previsto il distacco' in res_no
+    assert '{frase_distacco}' not in res_no
+
+    res_si = dist_routes._resolve_template_server(body, {'comune': 'Torino', 'distacco': 'si'}, conditionals=conds)
+    assert 'È previsto un breve distacco' in res_si
+    assert '{frase_distacco}' not in res_si
+
+    # 3. Verifica fallback se fields non ha distacco
+    res_fallback = dist_routes._resolve_template_server(body, {'comune': 'Torino'}, conditionals=conds)
+    assert len(res_fallback) > 0
+    assert '{frase_distacco}' not in res_fallback
+    assert 'distacco' in res_fallback.lower()
+
+    # 4. Verifica _build_fields_for_contact per semidiretto e diretto
+    c_semi = {'comune': 'Chieri', 'tipologia_contatore': 'Contatore Semidiretto'}
+    fields_semi = dist_routes._build_fields_for_contact(c_semi, tpl, initial_data['fields'])
+    assert fields_semi.get('distacco') == 'no'
+
+    c_dir = {'comune': 'Chieri', 'tipologia_contatore': 'Monofase Diretto'}
+    fields_dir = dist_routes._build_fields_for_contact(c_dir, tpl, initial_data['fields'])
+    assert fields_dir.get('distacco') == 'si'
+
+
+
 
 
 

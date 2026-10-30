@@ -157,13 +157,30 @@ def _format_data_estesa(date_str):
 
 def _resolve_template_server(body_str, fields, conditionals=None, email_tecnico='', telefono_tecnico=''):
     """Risolve un template sostituendo i placeholder con i valori dei campi (server-side)."""
-    result = body_str
+    result = body_str or ''
+    fields = fields or {}
+
+    distacco_val = str(fields.get('distacco') or 'no').strip().lower()
+    fallback_frase = (
+        "Facciamo presente che durante l’intervento è previsto un breve distacco della fornitura elettrica."
+        if distacco_val in ('si', 'sì') else
+        "Precisiamo inoltre che durante l’intervento NON è previsto il distacco della fornitura elettrica (in allegato la specifica tecnica di riferimento)."
+    )
+
     # Risolvi condizionali (es. {distacco_text})
     if conditionals:
         for key, cond in conditionals.items():
-            field_val = fields.get(cond['field'], '')
-            replacement = cond.get('values', {}).get(field_val, '')
+            cond_field = cond.get('field') or ('distacco' if 'distacco' in key else key)
+            field_val = fields.get(cond_field, distacco_val if cond_field == 'distacco' else '')
+            replacement = cond.get('values', {}).get(field_val, fallback_frase if 'distacco' in key else '')
             result = re.sub(r'\{' + key + r'\}', replacement, result)
+
+    custom_frase = fields.get('frase_distacco') or fields.get('distacco_text')
+    final_frase = custom_frase if custom_frase and custom_frase.strip() else fallback_frase
+
+    result = result.replace('{frase_distacco}', final_frase)
+    result = result.replace('{distacco_text}', final_frase)
+
     # Risolvi {email_tecnico}
     result = result.replace('{email_tecnico}', email_tecnico)
     # Risolvi {telefono_tecnico}, {telefono_ufficio}, {telefono_tecnico_clean}
@@ -203,6 +220,25 @@ def _build_fields_for_contact(contatto, template_def, field_defs):
         elif fdef.get('autoFillFrom'):
             value = contatto.get(fdef['autoFillFrom'], '') or ''
         fields[field_id] = value
+
+    # Se il template usa il distacco ma il campo non è in template_def.fields, auto-compilalo
+    body_str = template_def.get('body') or ''
+    needs_distacco = (
+        'distacco' in template_def.get('fields', []) or
+        '{frase_distacco}' in body_str or
+        '{distacco_text}' in body_str or
+        any(c.get('field') == 'distacco' for c in (template_def.get('conditionals') or {}).values())
+    )
+    if needs_distacco and 'distacco' not in fields:
+        fdef = field_defs.get('distacco', {})
+        rule = fdef.get('autoFillRule')
+        if rule:
+            src_val = (contatto.get(rule['field']) or contatto.get('tipologia_contatore') or contatto.get('tipo_misuratore') or '').lower()
+            fields['distacco'] = rule['then'] if rule.get('contains') and rule['contains'] in src_val else rule['else']
+        else:
+            tipo_mis = str(contatto.get('tipologia_contatore') or contatto.get('tipo_misuratore') or '').lower()
+            fields['distacco'] = 'no' if 'semidiretto' in tipo_mis else 'si'
+
     return fields
 
 
@@ -230,12 +266,28 @@ def save_distinte_templates():
         data = request.get_json()
         if not data:
             return jsonify({'error': 'Nessun dato ricevuto'}), 400
-        # Normalizza i template WhatsApp e SMS a plain text senza tag HTML
+        # Normalizza i template WhatsApp e SMS a plain text senza tag HTML, e normalizza i fields per il distacco
         from moduli.mail_manager import html_to_plain_text
         for tk, tv in (data.get('templates') or {}).items():
-            if isinstance(tv, dict) and (tv.get('type') in ('whatsapp', 'sms') or str(tk).startswith('wa_')):
-                if tv.get('body') and ('<' in tv['body'] and '>' in tv['body']):
-                    tv['body'] = html_to_plain_text(tv['body'])
+            if isinstance(tv, dict):
+                if tv.get('type') in ('whatsapp', 'sms') or str(tk).startswith('wa_'):
+                    if tv.get('body') and ('<' in tv['body'] and '>' in tv['body']):
+                        tv['body'] = html_to_plain_text(tv['body'])
+                # Normalizza i campi: frase_distacco o distacco_text nei fields vanno rimossi e sostituiti con distacco
+                if 'fields' in tv and isinstance(tv['fields'], list):
+                    normalized_fields = []
+                    needs_distacco = (
+                        (tv.get('body') and ('{frase_distacco}' in tv['body'] or '{distacco_text}' in tv['body'])) or
+                        any(c.get('field') == 'distacco' for c in (tv.get('conditionals') or {}).values())
+                    )
+                    for f in tv['fields']:
+                        if f in ('frase_distacco', 'distacco_text'):
+                            needs_distacco = True
+                        elif f not in normalized_fields:
+                            normalized_fields.append(f)
+                    if needs_distacco and 'distacco' not in normalized_fields:
+                        normalized_fields.append('distacco')
+                    tv['fields'] = normalized_fields
         _save_templates_data(data)
         return jsonify({'ok': True})
     except Exception as e:

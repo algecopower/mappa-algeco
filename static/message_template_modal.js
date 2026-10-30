@@ -561,7 +561,12 @@
             return (rule.contains && srcVal.includes(rule.contains)) ? rule.then : rule.else;
         }
 
-        if (fieldId === 'distacco') {
+        if (fieldId === 'distacco' || fieldId === 'frase_distacco' || fieldId === 'distacco_text') {
+            const rule = def.autoFillRule;
+            if (rule) {
+                const srcVal = String(c[rule.field] || c.tipologia_contatore || c.tipo_misuratore || '').toLowerCase();
+                return (rule.contains && srcVal.includes(rule.contains)) ? rule.then : rule.else;
+            }
             const tipo = String(c.tipologia_contatore || c.tipo_misuratore || '').toLowerCase();
             return tipo.includes('semidirett') ? 'no' : 'si';
         }
@@ -624,7 +629,20 @@
         const grid = document.getElementById('mtmFieldsGrid');
         if (!wrap || !grid) return;
 
-        const fieldsList = (tmpl && tmpl.fields) || [];
+        let fieldsList = (tmpl && tmpl.fields) ? [...tmpl.fields] : [];
+        // Se nel template compare frase_distacco o distacco_text nei campi o nel testo/conditionals,
+        // normalizza inserendo il campo reale 'distacco' (menu a tendina Sì/No) ed eliminando i segnaposto condizionali
+        const needsDistacco = fieldsList.includes('distacco') ||
+            fieldsList.includes('frase_distacco') ||
+            fieldsList.includes('distacco_text') ||
+            (tmpl && tmpl.conditionals && (tmpl.conditionals.frase_distacco || tmpl.conditionals.distacco_text)) ||
+            (tmpl && typeof tmpl.body === 'string' && (tmpl.body.includes('{frase_distacco}') || tmpl.body.includes('{distacco_text}')));
+
+        fieldsList = fieldsList.filter(f => f !== 'frase_distacco' && f !== 'distacco_text');
+        if (needsDistacco && !fieldsList.includes('distacco')) {
+            fieldsList.push('distacco');
+        }
+
         if (!fieldsList.length) {
             wrap.style.display = 'none';
             grid.innerHTML = '';
@@ -698,20 +716,26 @@
         if (!templateStr) return '';
         let result = templateStr;
 
+        const distaccoVal = fieldValues['distacco'] || (c ? _computeInitialFieldValue('distacco', c) : '') || 'no';
+        const fallbackDistacco = (distaccoVal === 'si' || distaccoVal === 'sì')
+            ? 'Facciamo presente che durante l’intervento è previsto un breve distacco della fornitura elettrica.'
+            : 'Precisiamo inoltre che durante l’intervento NON è previsto il distacco della fornitura elettrica (in allegato la specifica tecnica di riferimento).';
+
         if (conditionals) {
             for (const [key, cond] of Object.entries(conditionals)) {
-                const fVal = fieldValues[cond.field] || (c ? _computeInitialFieldValue(cond.field, c) : '');
-                const rep = (cond.values && cond.values[fVal]) || '';
+                const condField = cond.field || (key.includes('distacco') ? 'distacco' : key);
+                const fVal = fieldValues[condField] || (c ? _computeInitialFieldValue(condField, c) : '') || distaccoVal;
+                const rep = (cond.values && cond.values[fVal]) || fallbackDistacco;
                 result = result.replace(new RegExp('\\{' + key + '\\}', 'g'), rep);
             }
         }
 
-        const distaccoVal = fieldValues['distacco'] || (c && String(c.tipologia_contatore || c.tipo_misuratore || '').toLowerCase().includes('semidirett') ? 'no' : 'si');
-        const fallbackDistacco = distaccoVal === 'no'
-            ? 'Precisiamo inoltre che durante l’intervento NON è previsto il distacco della fornitura elettrica (in allegato la specifica tecnica di riferimento).'
-            : 'Facciamo presente che durante l’intervento è previsto un breve distacco della fornitura elettrica.';
-        result = result.replace(/{frase_distacco}/g, fallbackDistacco);
-        result = result.replace(/{distacco_text}/g, fallbackDistacco);
+        // Se l'utente ha comunque un valore esplicito in frase_distacco o distacco_text, usalo come override
+        const customFraseDistacco = fieldValues['frase_distacco'] || fieldValues['distacco_text'];
+        const finalDistaccoStr = (customFraseDistacco && customFraseDistacco.trim()) ? customFraseDistacco : fallbackDistacco;
+
+        result = result.replace(/{frase_distacco}/g, finalDistaccoStr);
+        result = result.replace(/{distacco_text}/g, finalDistaccoStr);
 
         const telUff = fieldValues['telefono_tecnico'] || fieldValues['telefono_ufficio'] || telTecnico || '011 025 2702';
         const mailUff = fieldValues['email_tecnico'] || emailTecnico || 'info@algecopower.it';
@@ -1004,14 +1028,14 @@
             if (!subj) return;
             navigator.clipboard.writeText(subj)
                 .then(() => _notify('Oggetto copiato negli appunti!'))
-                .catch(() => _notify('Errore nella copia dell\'oggetto', true));
+                .catch(() => _notify("Errore nella copia dell'oggetto", true));
         },
 
         async inviaSms() {
             if (!_activeContact) return;
             const tel = _activeContact.telefono_target;
             if (!tel) {
-                _notify('Nessun numero di telefono per l\'invio SMS', true);
+                _notify("Nessun numero di telefono per l'invio SMS", true);
                 return;
             }
             const previewEl = document.getElementById('mtmMessagePreview');
@@ -1065,7 +1089,7 @@
             if (!_activeContact) return;
             const email = (_activeContact.email_target || _activeContact.email || _activeContact.email_filone || '').trim();
             if (!email || !email.includes('@')) {
-                _notify('Nessun indirizzo email valido per l\'invio', true);
+                _notify("Nessun indirizzo email valido per l'invio", true);
                 return;
             }
 

@@ -1671,6 +1671,21 @@ def save_template_or_snippet(data, prov=None):
         found = re.findall(r'\{([a-zA-Z0-9_]+)\}', f"{subject} {body}")
         variables = list(set(found))
 
+    # Normalizza le variabili: i segnaposto condizionali (es. {frase_distacco})
+    # mappano sul campo di input reale 'distacco'
+    if variables:
+        normalized_vars = []
+        needs_distacco = False
+        for v in variables:
+            if v in ('frase_distacco', 'distacco_text'):
+                needs_distacco = True
+            elif v not in ('telefono_tecnico_clean',):
+                if v not in normalized_vars:
+                    normalized_vars.append(v)
+        if needs_distacco and 'distacco' not in normalized_vars:
+            normalized_vars.append('distacco')
+        variables = normalized_vars
+
     # Se il template o snippet è WhatsApp o frase rapida, normalizza il body rimuovendo tag HTML (<br>, <div>, <p>)
     is_wa_or_snippet = (
         category == 'whatsapp' or
@@ -1756,6 +1771,10 @@ def save_template_or_snippet(data, prov=None):
             if old_k not in tpl_data['templates']:
                 b_data = json_read(base_file, default={}) or {}
                 tpl_data['templates'][old_k] = dict(b_data.get('templates', {}).get(old_k, {}))
+            elif 'conditionals' not in tpl_data['templates'][old_k]:
+                b_data = json_read(base_file, default={}) or {}
+                if 'conditionals' in b_data.get('templates', {}).get(old_k, {}):
+                    tpl_data['templates'][old_k]['conditionals'] = dict(b_data['templates'][old_k]['conditionals'])
             tpl_data['templates'][old_k]['label'] = title
             if subject is not None:
                 tpl_data['templates'][old_k]['subject'] = subject

@@ -100,28 +100,43 @@
         /**
          * Costruisce oggetto, corpo ed allegati per un gruppo di contatori (N=1, N=2, N>2).
          */
-        buildPluralContent: function (tmpl, contatoriList, fieldDefs, emailTecnico) {
+        buildPluralContent: function (tmpl, contatoriList, fieldDefs, emailTecnico, telefonoTecnico, provKey) {
             const n = (contatoriList && contatoriList.length) || 1;
             const first = contatoriList[0] || {};
+
+            let fieldsList = (tmpl && tmpl.fields) ? [...tmpl.fields] : [];
+            const needsDistacco = fieldsList.includes('distacco') ||
+                fieldsList.includes('frase_distacco') ||
+                fieldsList.includes('distacco_text') ||
+                (tmpl && tmpl.conditionals && (tmpl.conditionals.frase_distacco || tmpl.conditionals.distacco_text)) ||
+                (tmpl && typeof tmpl.body === 'string' && (tmpl.body.includes('{frase_distacco}') || tmpl.body.includes('{distacco_text}')));
+            if (needsDistacco && !fieldsList.includes('distacco')) {
+                fieldsList.push('distacco');
+            }
+
             const fields = {};
-            if (tmpl.fields && fieldDefs) {
-                for (const fId of tmpl.fields) {
+            if (fieldDefs) {
+                for (const fId of fieldsList) {
                     const fd = fieldDefs[fId];
                     if (fd && fd.autoFill) {
                         fields[fId] = fd.autoFill(first);
                     }
                 }
             }
+            if (needsDistacco && !fields['distacco']) {
+                const tipo = String(first.tipologia_contatore || first.tipo_misuratore || '').toLowerCase();
+                fields['distacco'] = tipo.includes('semidirett') ? 'no' : 'si';
+            }
 
             const nomeAzienda = first.nome_societa || first.nome || first.nominativo || 'Azienda';
 
             if (n <= 1) {
-                const bodyText = tmpl.generate ? tmpl.generate(first, fields, emailTecnico) : this.resolveTemplate(tmpl.body, fields, tmpl.conditionals, emailTecnico);
+                const bodyText = tmpl.generate ? tmpl.generate(first, fields, emailTecnico, telefonoTecnico, provKey) : this.resolveTemplate(tmpl.body, fields, tmpl.conditionals, emailTecnico, telefonoTecnico, provKey);
                 const subject = tmpl.generateSubject
-                    ? tmpl.generateSubject(first, fields, emailTecnico)
+                    ? tmpl.generateSubject(first, fields, emailTecnico, telefonoTecnico, provKey)
                     : (typeof tmpl.subject === 'function'
-                        ? tmpl.subject(first, fields, emailTecnico)
-                        : (tmpl.subject ? this.resolveTemplate(tmpl.subject, fields, null, emailTecnico) : `Sostituzione contatore - ${nomeAzienda}`));
+                        ? tmpl.subject(first, fields, emailTecnico, telefonoTecnico, provKey)
+                        : (tmpl.subject ? this.resolveTemplate(tmpl.subject, fields, null, emailTecnico, telefonoTecnico, provKey) : `Sostituzione contatore - ${nomeAzienda}`));
                 return {
                     subject: subject,
                     bodyText: bodyText,
@@ -131,8 +146,8 @@
 
             // N >= 2: Pluralizza il corpo base
             let rawBody = tmpl.generate
-                ? tmpl.generate(first, fields, emailTecnico)
-                : this.resolveTemplate(tmpl.body, fields, tmpl.conditionals, emailTecnico);
+                ? tmpl.generate(first, fields, emailTecnico, telefonoTecnico, provKey)
+                : this.resolveTemplate(tmpl.body, fields, tmpl.conditionals, emailTecnico, telefonoTecnico, provKey);
             let pluralBody = this.pluralizeText(rawBody);
 
             if (n === 2) {
@@ -270,13 +285,26 @@
                 return bodyStr({}, fields || {}, emailTecnico, telefonoTecnico, provKey);
             }
             let result = String(bodyStr || '');
+
+            const distaccoVal = (fields && fields['distacco']) || 'no';
+            const fallbackDistacco = (distaccoVal === 'si' || distaccoVal === 'sì')
+                ? 'Facciamo presente che durante l’intervento è previsto un breve distacco della fornitura elettrica.'
+                : 'Precisiamo inoltre che durante l’intervento NON è previsto il distacco della fornitura elettrica (in allegato la specifica tecnica di riferimento).';
+
             if (conditionals) {
                 for (const [key, cond] of Object.entries(conditionals)) {
-                    const fieldVal = (fields && fields[cond.field]) || '';
-                    const replacement = (cond.values && cond.values[fieldVal]) || '';
+                    const condField = cond.field || (key.includes('distacco') ? 'distacco' : key);
+                    const fieldVal = (fields && fields[condField]) || distaccoVal;
+                    const replacement = (cond.values && cond.values[fieldVal]) || fallbackDistacco;
                     result = result.replace(new RegExp('\\{' + key + '\\}', 'g'), replacement);
                 }
             }
+
+            const customFraseDistacco = fields && (fields['frase_distacco'] || fields['distacco_text']);
+            const finalDistaccoStr = (customFraseDistacco && customFraseDistacco.trim()) ? customFraseDistacco : fallbackDistacco;
+
+            result = result.replace(/\{frase_distacco\}/g, finalDistaccoStr);
+            result = result.replace(/\{distacco_text\}/g, finalDistaccoStr);
 
             const st = this.getTemplateSettings();
             const prov = (provKey || this.getDetectedProvince()).toUpperCase();
@@ -406,7 +434,7 @@
                     } catch (e) {
                         console.error('Errore download excel contatori:', e);
                         if (typeof showToast === 'function') {
-                            showToast('Errore durante il download dell\'Excel', true);
+                            showToast("Errore durante il download dell'Excel", true);
                         }
                         return;
                     }
@@ -788,8 +816,8 @@
 
                 return new Promise((resolve) => {
                     const msg = (res.error_code === 'SMTP_NOT_CONFIGURED' || errLower.includes('non configurat'))
-                        ? 'Configurazione SMTP non trovata o incompleta.\nVuoi configurare i parametri SMTP adesso per riprendere l\'invio senza perdere la selezione?'
-                        : 'Autenticazione SMTP fallita con le credenziali attuali.\nVuoi verificare o modificare le impostazioni SMTP per riprendere l\'invio?';
+                        ? "Configurazione SMTP non trovata o incompleta.\nVuoi configurare i parametri SMTP adesso per riprendere l'invio senza perdere la selezione?"
+                        : "Autenticazione SMTP fallita con le credenziali attuali.\nVuoi verificare o modificare le impostazioni SMTP per riprendere l'invio?";
 
                     const proceed = confirm(msg);
                     if (!proceed) {
@@ -820,7 +848,7 @@
 
             function _beforeUnloadHandler(e) {
                 if (isRunning && !aborted) {
-                    const msg = 'Un invio massivo è in corso. Se lasci la pagina, l\'invio verrà interrotto.';
+                    const msg = "Un invio massivo è in corso. Se lasci la pagina, l'invio verrà interrotto.";
                     e.preventDefault();
                     e.returnValue = msg;
                     return msg;

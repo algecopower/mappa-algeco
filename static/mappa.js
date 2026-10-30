@@ -3173,7 +3173,7 @@ function toggleMultiSearch(type) {
     setMultiSearchActive(type, toggle.checked);
 }
 
-function setMultiSearchActive(type, active) {
+function setMultiSearchActive(type, active, shouldFocus = true) {
     const isPod = type === 'pod';
     const toggle = document.getElementById(`modalMultiSearch${isPod ? 'Pod' : 'Eneltel'}Toggle`);
     const singleInput = document.getElementById(`modalSearch${isPod ? 'Pod' : 'Eneltel'}`);
@@ -3189,7 +3189,7 @@ function setMultiSearchActive(type, active) {
             singleInput.style.display = 'none';
             multiInput.style.display = 'block';
             updateMultiTokensBadge(type);
-            multiInput.focus();
+            if (shouldFocus) multiInput.focus();
         }
     } else {
         if (singleInput && multiInput) {
@@ -3199,7 +3199,7 @@ function setMultiSearchActive(type, active) {
             multiInput.style.display = 'none';
             singleInput.style.display = 'block';
             updateMultiTokensBadge(type);
-            singleInput.focus();
+            if (shouldFocus) singleInput.focus();
         }
     }
 }
@@ -3207,7 +3207,7 @@ function setMultiSearchActive(type, active) {
 function updateMultiTokensBadge(type) {
     const isPod = type === 'pod';
     const toggle = document.getElementById(`modalMultiSearch${isPod ? 'Pod' : 'Eneltel'}Toggle`);
-    const isMulti = toggle ? toggle.checked : false;
+    const isMulti = toggle ? toggle.checked : true;
     const badge = document.getElementById(`modalSearch${isPod ? 'Pod' : 'Eneltel'}Badge`);
     const multiInput = document.getElementById(`modalSearch${isPod ? 'Pod' : 'Eneltel'}Multi`);
 
@@ -3275,6 +3275,20 @@ function setupMultiSearchPasteHandlers() {
                     }
                 }
             });
+
+            // Se l'utente digita o incolla più codici nell'input singolo, passa automaticamente alla modalità multipla
+            singleInput.addEventListener('input', () => {
+                const tokens = parseMultiSearchTokens(singleInput.value);
+                if (tokens.length > 1) {
+                    const text = singleInput.value;
+                    setMultiSearchActive(type, true);
+                    if (multiInput) {
+                        multiInput.value = text;
+                        updateMultiTokensBadge(type);
+                        multiInput.focus();
+                    }
+                }
+            });
         }
 
         if (multiInput) {
@@ -3303,30 +3317,32 @@ function getModalSearchMaxDisplay() {
 function applyModalAdvancedSearch() {
     const nominativo = document.getElementById('modalSearchNominativo').value.trim().toLowerCase();
 
-    // Controllo toggle modalità multipla
-    const isMultiPod = document.getElementById('modalMultiSearchPodToggle')?.checked || false;
-    const isMultiEneltel = document.getElementById('modalMultiSearchEneltelToggle')?.checked || false;
+    // Controllo toggle modalità multipla (default true)
+    const isMultiPod = document.getElementById('modalMultiSearchPodToggle')?.checked ?? true;
+    const isMultiEneltel = document.getElementById('modalMultiSearchEneltelToggle')?.checked ?? true;
 
     // POD
-    const podRaw = isMultiPod ?
-        (document.getElementById('modalSearchPodMulti')?.value || '') :
-        (document.getElementById('modalSearchPod')?.value || '');
-    const podTokens = isMultiPod ? parseMultiSearchTokens(podRaw) : [];
-    const singlePod = !isMultiPod ? podRaw.trim().toLowerCase() : '';
+    const podMultiVal = document.getElementById('modalSearchPodMulti')?.value || '';
+    const podSingleVal = document.getElementById('modalSearchPod')?.value || '';
+    const podRaw = isMultiPod ? podMultiVal : (podSingleVal || podMultiVal);
+    const podTokens = parseMultiSearchTokens(podRaw);
+    const effectiveMultiPod = isMultiPod || podTokens.length > 1;
+    const singlePod = (!effectiveMultiPod && podTokens.length === 1) ? podTokens[0] : (!effectiveMultiPod ? podRaw.trim().toLowerCase() : '');
 
     // Eneltel
-    const eneltelRaw = isMultiEneltel ?
-        (document.getElementById('modalSearchEneltelMulti')?.value || '') :
-        (document.getElementById('modalSearchEneltel')?.value || '');
-    const eneltelTokens = isMultiEneltel ? parseMultiSearchTokens(eneltelRaw) : [];
-    const singleEneltel = !isMultiEneltel ? eneltelRaw.trim().toLowerCase() : '';
+    const eneltelMultiVal = document.getElementById('modalSearchEneltelMulti')?.value || '';
+    const eneltelSingleVal = document.getElementById('modalSearchEneltel')?.value || '';
+    const eneltelRaw = isMultiEneltel ? eneltelMultiVal : (eneltelSingleVal || eneltelMultiVal);
+    const eneltelTokens = parseMultiSearchTokens(eneltelRaw);
+    const effectiveMultiEneltel = isMultiEneltel || eneltelTokens.length > 1;
+    const singleEneltel = (!effectiveMultiEneltel && eneltelTokens.length === 1) ? eneltelTokens[0] : (!effectiveMultiEneltel ? eneltelRaw.trim().toLowerCase() : '');
 
     const comune = document.getElementById('modalSearchComune').value.trim().toLowerCase();
     const via = document.getElementById('modalSearchVia').value.trim().toLowerCase();
     const telefono = document.getElementById('modalSearchTelefono').value.trim().replace(/\s+/g, '').toLowerCase();
 
-    const hasPod = isMultiPod ? podTokens.length > 0 : !!singlePod;
-    const hasEneltel = isMultiEneltel ? eneltelTokens.length > 0 : !!singleEneltel;
+    const hasPod = effectiveMultiPod ? podTokens.length > 0 : !!singlePod;
+    const hasEneltel = effectiveMultiEneltel ? eneltelTokens.length > 0 : !!singleEneltel;
     if (!nominativo && !hasPod && !hasEneltel && !comune && !via && !telefono) return;
 
     saveAdvancedSearchData();
@@ -3345,14 +3361,14 @@ function applyModalAdvancedSearch() {
         if (nominativo && !(c.cliente || '').toLowerCase().includes(nominativo)) match = false;
 
         // POD
-        if (isMultiPod && podTokens.length > 0) {
+        if (effectiveMultiPod && podTokens.length > 0) {
             if (!matchesTokens(c.pod, podTokens)) match = false;
         } else if (singlePod) {
             if (!(c.pod || '').toLowerCase().includes(singlePod)) match = false;
         }
 
         // Eneltel
-        if (isMultiEneltel && eneltelTokens.length > 0) {
+        if (effectiveMultiEneltel && eneltelTokens.length > 0) {
             if (!matchesTokens(c.eneltel, eneltelTokens)) match = false;
         } else if (singleEneltel) {
             if (!(c.eneltel || '').toLowerCase().includes(singleEneltel)) match = false;
@@ -3365,7 +3381,7 @@ function applyModalAdvancedSearch() {
     });
 
     // Se ricerca multipla, ordina i risultati secondo l'ordine dei codici incollati
-    if (isMultiPod && podTokens.length > 0) {
+    if (effectiveMultiPod && podTokens.length > 1) {
         risultati.sort((a, b) => {
             const aPod = String(a.pod || '').toLowerCase().trim();
             const bPod = String(b.pod || '').toLowerCase().trim();
@@ -3373,7 +3389,7 @@ function applyModalAdvancedSearch() {
             const idxB = podTokens.findIndex(t => bPod === t || (t.length >= 3 && bPod.includes(t)) || (bPod.length >= 3 && t.includes(bPod)));
             return (idxA === -1 ? 9999 : idxA) - (idxB === -1 ? 9999 : idxB);
         });
-    } else if (isMultiEneltel && eneltelTokens.length > 0) {
+    } else if (effectiveMultiEneltel && eneltelTokens.length > 1) {
         risultati.sort((a, b) => {
             const aEn = String(a.eneltel || '').toLowerCase().trim();
             const bEn = String(b.eneltel || '').toLowerCase().trim();
@@ -3384,7 +3400,7 @@ function applyModalAdvancedSearch() {
     }
 
     // Calcolo codici mancanti (non trovati nel database)
-    const isMultiSearchUsed = (isMultiPod && podTokens.length > 0) || (isMultiEneltel && eneltelTokens.length > 0);
+    const isMultiSearchUsed = (effectiveMultiPod && podTokens.length > 0) || (effectiveMultiEneltel && eneltelTokens.length > 0);
     let missingTokens = [];
     if (isMultiSearchUsed) {
         if (podTokens.length > 0) {
@@ -3405,9 +3421,10 @@ function applyModalAdvancedSearch() {
                 if (!found) missingTokens.push({ type: 'Eneltel', token: t });
             });
         }
+        const totalSearched = podTokens.length + eneltelTokens.length;
         lastModalMultiSearchMeta = {
-            isMulti: true,
-            totalSearched: podTokens.length + eneltelTokens.length,
+            isMulti: totalSearched > 1,
+            totalSearched: totalSearched,
             missingTokens: missingTokens
         };
     } else {
@@ -3423,10 +3440,10 @@ function applyModalAdvancedSearch() {
             resultsDiv.innerHTML = `
                 <div class="no-results" style="padding: 24px; text-align: center;">
                     <div style="font-size: 1.05rem; font-weight: 600; color: var(--text-primary); margin-bottom: 6px;">
-                        🔍 Nessun contatore trovato per i codici cercati
+                        🔍 Nessun contatore trovato per ${lastModalMultiSearchMeta.totalSearched === 1 ? 'il codice cercato' : 'i codici cercati'}
                     </div>
                     <div style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 12px;">
-                        Nessuno dei ${lastModalMultiSearchMeta.totalSearched} codici inseriti corrisponde a contatori nel database.
+                        ${lastModalMultiSearchMeta.totalSearched === 1 ? 'Il codice inserito non corrisponde ad alcun contatore nel database.' : `Nessuno dei ${lastModalMultiSearchMeta.totalSearched} codici inseriti corrisponde a contatori nel database.`}
                     </div>
                     <div class="missing-box-tokens" style="justify-content: center;">
                         ${lastModalMultiSearchMeta.missingTokens.map(m => `<span class="missing-token-pill" data-type="${m.type}" data-token="${escapeSearchHtml(m.token.toUpperCase())}">${m.type}: ${escapeSearchHtml(m.token.toUpperCase())}</span>`).join('')}
@@ -3766,8 +3783,16 @@ function saveAdvancedSearchData() {
 function restoreAdvancedSearchData() {
     setSearchDefaultViewMode(searchDefaultViewMode);
     setupMultiSearchPasteHandlers();
+
+    // Default v3: la ricerca multipla è attiva di default sia per POD che per Eneltel
+    const isMigrated = localStorage.getItem('multiSearchDefaultV3_active');
     const saved = localStorage.getItem('advancedSearchData');
-    if (!saved) return;
+
+    if (!saved) {
+        setMultiSearchActive('pod', true, false);
+        setMultiSearchActive('eneltel', true, false);
+        return;
+    }
 
     try {
         const data = JSON.parse(saved);
@@ -3784,21 +3809,32 @@ function restoreAdvancedSearchData() {
             document.getElementById('modalSearchTelefono').value = data.telefono || '';
         }
 
+        // Se non ancora migrato, abilitiamo di default la ricerca multipla
+        const isPodMulti = !isMigrated ? true : ((data.pod_multi_active !== undefined) ? !!data.pod_multi_active : true);
+        const isEneltelMulti = !isMigrated ? true : ((data.eneltel_multi_active !== undefined) ? !!data.eneltel_multi_active : true);
+        if (!isMigrated) {
+            localStorage.setItem('multiSearchDefaultV3_active', '1');
+        }
+
         // POD
         if (document.getElementById('modalSearchPod')) {
             document.getElementById('modalSearchPod').value = data.pod || '';
         }
         const podMulti = document.getElementById('modalSearchPodMulti');
-        if (podMulti) podMulti.value = data.pod_multi_val || '';
-        setMultiSearchActive('pod', !!data.pod_multi_active);
+        if (podMulti) {
+            podMulti.value = data.pod_multi_val || (!isMigrated && data.pod ? data.pod : '');
+        }
+        setMultiSearchActive('pod', isPodMulti, false);
 
         // Eneltel
         if (document.getElementById('modalSearchEneltel')) {
             document.getElementById('modalSearchEneltel').value = data.eneltel || '';
         }
         const eneltelMulti = document.getElementById('modalSearchEneltelMulti');
-        if (eneltelMulti) eneltelMulti.value = data.eneltel_multi_val || '';
-        setMultiSearchActive('eneltel', !!data.eneltel_multi_active);
+        if (eneltelMulti) {
+            eneltelMulti.value = data.eneltel_multi_val || (!isMigrated && data.eneltel ? data.eneltel : '');
+        }
+        setMultiSearchActive('eneltel', isEneltelMulti, false);
     } catch (e) {
         console.error('Errore ripristino dati ricerca:', e);
     }

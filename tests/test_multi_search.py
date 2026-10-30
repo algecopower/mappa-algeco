@@ -24,6 +24,12 @@ def test_mappa_template_contains_multi_search_elements():
     # Check labels
     assert "Ricerca multipla" in content
 
+    # Check default active multi-search in HTML
+    assert 'id="modalMultiSearchPodToggle" onchange="toggleMultiSearch(\'pod\')" checked' in content
+    assert 'id="modalMultiSearchEneltelToggle" onchange="toggleMultiSearch(\'eneltel\')" checked' in content
+    assert 'id="modalSearchPod" placeholder="Es: IT001E..." autocomplete="off" style="display: none;"' in content
+    assert 'id="modalSearchEneltel" placeholder="Es: 12345678" autocomplete="off" style="display: none;"' in content
+
 
 def test_mappa_css_contains_multi_search_styles():
     css_path = Path("/opt/mappa-algeco/static/mappa.css")

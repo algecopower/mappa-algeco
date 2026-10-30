@@ -11,7 +11,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/theme.css">
     <link rel="stylesheet" href="/static/tour.css">
-    <link rel="stylesheet" href="/static/mappa.css?v={{ timestamp }}-gestionale-grid-v27">
+    <link rel="stylesheet" href="/static/mappa.css?v={{ timestamp }}-gestionale-grid-v28">
     <style>
         /* CSS dinamico (sidebar gestionale) */
         {{ css_gestionale|safe }}
@@ -904,32 +904,32 @@
                     </div>
                     <div class="advanced-search-field" id="fieldContainerPod">
                         <div class="advanced-search-field-header">
-                            <label for="modalSearchPod"><i data-lucide="zap"></i> POD</label>
-                            <label class="multi-search-toggle" title="Attiva per incollare più POD separati da spazio, virgola o a capo">
-                                <input type="checkbox" id="modalMultiSearchPodToggle" onchange="toggleMultiSearch('pod')">
+                            <label for="modalSearchPodMulti"><i data-lucide="zap"></i> POD</label>
+                            <label class="multi-search-toggle" title="Attiva/disattiva ricerca multipla per POD">
+                                <input type="checkbox" id="modalMultiSearchPodToggle" onchange="toggleMultiSearch('pod')" checked>
                                 <span class="multi-toggle-track">
                                     <span class="multi-toggle-thumb"></span>
                                 </span>
                                 <span class="multi-toggle-text">Ricerca multipla</span>
                             </label>
                         </div>
-                        <input type="text" id="modalSearchPod" placeholder="Es: IT001E..." autocomplete="off">
-                        <textarea id="modalSearchPodMulti" class="multi-search-textarea" placeholder="Incolla più POD (es: IT001E... IT001E... separati da spazio o a capo)" autocomplete="off" style="display: none;" rows="2"></textarea>
+                        <input type="text" id="modalSearchPod" placeholder="Es: IT001E..." autocomplete="off" style="display: none;">
+                        <textarea id="modalSearchPodMulti" class="multi-search-textarea" placeholder="Es: IT001E... (anche più POD separati da spazio o a capo)" autocomplete="off" rows="2"></textarea>
                         <div id="modalSearchPodBadge" class="multi-tokens-count-badge" style="display: none;"></div>
                     </div>
                     <div class="advanced-search-field" id="fieldContainerEneltel">
                         <div class="advanced-search-field-header">
-                            <label for="modalSearchEneltel"><i data-lucide="hash"></i> Eneltel</label>
-                            <label class="multi-search-toggle" title="Attiva per incollare più codici Eneltel separati da spazio, virgola o a capo">
-                                <input type="checkbox" id="modalMultiSearchEneltelToggle" onchange="toggleMultiSearch('eneltel')">
+                            <label for="modalSearchEneltelMulti"><i data-lucide="hash"></i> Eneltel</label>
+                            <label class="multi-search-toggle" title="Attiva/disattiva ricerca multipla per Eneltel">
+                                <input type="checkbox" id="modalMultiSearchEneltelToggle" onchange="toggleMultiSearch('eneltel')" checked>
                                 <span class="multi-toggle-track">
                                     <span class="multi-toggle-thumb"></span>
                                 </span>
                                 <span class="multi-toggle-text">Ricerca multipla</span>
                             </label>
                         </div>
-                        <input type="text" id="modalSearchEneltel" placeholder="Es: 12345678" autocomplete="off">
-                        <textarea id="modalSearchEneltelMulti" class="multi-search-textarea" placeholder="Incolla più Eneltel (es: 12345678 87654321 separati da spazio o a capo)" autocomplete="off" style="display: none;" rows="2"></textarea>
+                        <input type="text" id="modalSearchEneltel" placeholder="Es: 12345678" autocomplete="off" style="display: none;">
+                        <textarea id="modalSearchEneltelMulti" class="multi-search-textarea" placeholder="Es: 12345678 (anche più codici separati da spazio o a capo)" autocomplete="off" rows="2"></textarea>
                         <div id="modalSearchEneltelBadge" class="multi-tokens-count-badge" style="display: none;"></div>
                     </div>
                     <div class="advanced-search-field">
@@ -1177,7 +1177,7 @@
         };
     </script>
     <script src="/static/print_label_layout.js?v={{ timestamp }}-print-labels-v24"></script>
-    <script src="/static/mappa.js?v={{ timestamp }}-gestionale-grid-v27"></script>
+    <script src="/static/mappa.js?v={{ timestamp }}-gestionale-grid-v28"></script>
     <script>
         // JS dinamico (sidebar gestionale)
         {{ js_gestionale|safe }}

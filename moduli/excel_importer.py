@@ -648,6 +648,25 @@ def _csv_structural_cell_anomalies(
     return anomalies
 
 
+def _get_province_db_lcls(province_slug):
+    """Restituisce il set di LCL registrati nel DB locale della provincia indicata."""
+    db_path = os.path.join(_ROOT_DIR, 'data', str(province_slug).lower(), 'state.db')
+    if not os.path.exists(db_path):
+        return set()
+    try:
+        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=5)
+        c = conn.cursor()
+        lcls = {
+            r[0] for r in c.execute(
+                "SELECT DISTINCT lcl FROM filone WHERE is_orphan=0 AND lcl IS NOT NULL AND TRIM(lcl) != ''"
+            ).fetchall() if r[0]
+        }
+        conn.close()
+        return lcls
+    except Exception:
+        return set()
+
+
 def validate_province_fit(rows_xlsx, headers_xlsx, current_province=None):
     """Verifica dinamicamente che i dati nel file appartengano alla provincia attiva.
 
@@ -707,37 +726,13 @@ def validate_province_fit(rows_xlsx, headers_xlsx, current_province=None):
 
     # 1. Controllo incrociato LCL con i database delle altre province
     if file_lcls:
-        curr_db_path = os.path.join(_ROOT_DIR, 'data', current_province.lower(), 'state.db')
-        curr_db_lcls = set()
-        if os.path.exists(curr_db_path):
-            try:
-                conn_curr = sqlite3.connect(f"file:{curr_db_path}?mode=ro", uri=True, timeout=5)
-                c_cur = conn_curr.cursor()
-                curr_db_lcls = {
-                    r[0] for r in c_cur.execute(
-                        "SELECT DISTINCT lcl FROM filone WHERE is_orphan=0 AND lcl IS NOT NULL AND TRIM(lcl) != ''"
-                    ).fetchall() if r[0]
-                }
-                conn_curr.close()
-            except Exception:
-                pass
+        curr_db_lcls = _get_province_db_lcls(current_province)
 
         for other_slug, other_cfg in provinces.items():
             if other_slug.upper() == current_province:
                 continue
-            other_db_path = os.path.join(_ROOT_DIR, 'data', other_slug.lower(), 'state.db')
-            if not os.path.exists(other_db_path):
-                continue
-            try:
-                conn_other = sqlite3.connect(f"file:{other_db_path}?mode=ro", uri=True, timeout=5)
-                c_other = conn_other.cursor()
-                other_db_lcls = {
-                    r[0] for r in c_other.execute(
-                        "SELECT DISTINCT lcl FROM filone WHERE is_orphan=0 AND lcl IS NOT NULL AND TRIM(lcl) != ''"
-                    ).fetchall() if r[0]
-                }
-                conn_other.close()
-            except Exception:
+            other_db_lcls = _get_province_db_lcls(other_slug)
+            if not other_db_lcls:
                 continue
 
             match_other = file_lcls.intersection(other_db_lcls)

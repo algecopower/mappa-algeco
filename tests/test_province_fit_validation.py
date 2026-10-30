@@ -4,7 +4,7 @@ import pytest
 from moduli import excel_importer
 
 
-def test_validate_province_fit_rejects_pavia_lcls_on_torino():
+def test_validate_province_fit_rejects_pavia_lcls_on_torino(monkeypatch):
     """Un file contenente LCL noti di Pavia deve essere bloccato se importato su Torino."""
     headers = ['Eneltel', 'LCL', 'POD', 'Comune']
     # LCL di Pavia (es. 6600110023, 6600110478)
@@ -13,6 +13,12 @@ def test_validate_province_fit_rejects_pavia_lcls_on_torino():
         ['ENEL_TEST_2', '6600110478', 'IT001E12345679', 'SIZIANO'],
         ['ENEL_TEST_3', '6600110023', 'IT001E12345680', 'BELGIOIOSO'],
     ]
+    # Mock dei DB provinciali affinché il test sia deterministico e non dipenda dal DB locale (CI)
+    monkeypatch.setattr(
+        excel_importer,
+        '_get_province_db_lcls',
+        lambda prov: {'6600110023', '6600110478'} if str(prov).upper() == 'PAVIA' else set()
+    )
     with pytest.raises(ValueError) as excinfo:
         excel_importer.validate_province_fit(rows, headers, current_province='TORINO')
 

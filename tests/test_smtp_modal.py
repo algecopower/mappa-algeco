@@ -66,7 +66,8 @@ def test_smtp_endpoints_server_py(db_isolato, monkeypatch):
     csrf_headers = {'X-CSRF-Token': 'test-token'}
 
     # GET /api/smtp-settings
-    with patch('server.load_smtp_settings', return_value={'host': 'smtps.aruba.it', 'password': 'pwd'}):
+    with patch('server.load_smtp_settings', return_value={'host': 'smtps.aruba.it', 'password': 'pwd'}), \
+         patch('moduli.smtp.load_smtp_settings', return_value={'host': 'smtps.aruba.it', 'password': 'pwd'}):
         res = client.get('/api/smtp-settings')
         assert res.status_code == 200
         data = res.get_json()

@@ -97,6 +97,29 @@ _OPERATOR_RE = _re.compile(r'^[A-Z]{2,3}\d{4,8}$')
 _POSITION_RE = _re.compile(r'^\d+\s*-?')
 
 
+def normalize_lcl(val):
+    """Estrae e normalizza il codice LCL canonico (numerico).
+
+    Gestisce:
+      - float Excel (es. '6600108760.0' -> '6600108760')
+      - suffissi operativi/anomalie (es. '6600109363 GUASTI', '6600109363 GUASTO' -> '6600109363')
+      - prefissi o separatori (es. 'LCL 6600109363', '6600109363-GUASTI')
+    """
+    if val is None:
+        return ''
+    s = str(val).strip()
+    if not s:
+        return ''
+    if s.endswith('.0') and s[:-2].isdigit():
+        s = s[:-2]
+    if s.isdigit():
+        return s
+    m = _re.search(r'(?:^|[^\d])(\d{4,20})(?:[^\d]|$)', s)
+    if m:
+        return m.group(1)
+    return s
+
+
 def _normalize_for_compare(s):
     """Normalizzazione aggressiva PER IL CONFRONTO (non per il salvataggio).
 
@@ -163,6 +186,8 @@ def _values_equivalent(old_value, new_value, chiave_interna):
     new_cmp = _normalize_for_compare(new_value)
     if old_cmp == new_cmp:
         return True
+    if chiave_interna == 'lcl':
+        return normalize_lcl(old_cmp) == normalize_lcl(new_cmp)
     if chiave_interna in _KEYS_NUMERIC_DOT:
         old_num = _parse_decimal(old_cmp)
         new_num = _parse_decimal(new_cmp)
@@ -178,6 +203,7 @@ def _normalize_for_db(value, chiave_interna):
 
     - lat/lon: virgola → punto (formato Python standard).
     - date: ISO `YYYY-MM-DD` → italiano `DD/MM/YYYY` (formato legacy del foglio).
+    - lcl: normalizzazione codice numerico (ignora suffissi operativi tipo GUASTI).
     - altre colonne: invariato (solo strip).
     """
     if value is None:
@@ -185,6 +211,8 @@ def _normalize_for_db(value, chiave_interna):
     s = str(value).strip()
     if not s:
         return ''
+    if chiave_interna == 'lcl':
+        return normalize_lcl(s)
     if chiave_interna in _KEYS_NUMERIC_DOT:
         if _is_invalid_numeric_value(s):
             return s.upper()
@@ -550,7 +578,7 @@ def _invalid_import_row_reason(
 ):
     """Motivo di scarto per righe che hanno colonne slittate o chiavi impossibili."""
     key = _normalize_for_compare(eneltel_key).upper()
-    lcl_clean = _normalize_for_compare(lcl)
+    lcl_clean = normalize_lcl(_normalize_for_compare(lcl))
     if not key:
         return ''
     if row is not None and required_indices:
@@ -658,7 +686,7 @@ def validate_province_fit(rows_xlsx, headers_xlsx, current_province=None):
 
     for r in rows_xlsx[:1000]:
         if lcl_idx is not None and lcl_idx < len(r):
-            val_lcl = str(r[lcl_idx] or '').strip()
+            val_lcl = normalize_lcl(r[lcl_idx])
             if val_lcl and _LCL_RE.match(val_lcl):
                 file_lcls.add(val_lcl)
         if lat_idx is not None and lon_idx is not None and lat_idx < len(r) and lon_idx < len(r):
@@ -992,7 +1020,7 @@ def import_excel(
                 continue
 
             lcl_raw = row[lcl_idx] if lcl_idx is not None and lcl_idx < len(row) else ''
-            lcl = (lcl_raw or '').strip()
+            lcl = normalize_lcl(lcl_raw)
             invalid_reason = _invalid_import_row_reason(
                 eneltel_raw, eneltel_key, lcl,
                 row=row, required_indices=required_row_indices,

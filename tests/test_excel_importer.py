@@ -605,3 +605,50 @@ def test_import_excel_protegge_righe_pending_se_protect_pending_rows_true(db_iso
     row = db.get_filone_row('20001', lcl='6600104200')
     assert row['note_appuntamento'] == 'Nota fatta da programma'
 
+
+def test_normalize_lcl_various_formats():
+    """Verifica che normalize_lcl gestisca suffissi operativi (GUASTI/GUASTO), float e prefissi."""
+    from moduli.excel_importer import normalize_lcl
+
+    assert normalize_lcl(None) == ''
+    assert normalize_lcl('') == ''
+    assert normalize_lcl('6600109363') == '6600109363'
+    assert normalize_lcl('6600109363 GUASTI') == '6600109363'
+    assert normalize_lcl('6600109363 GUASTO') == '6600109363'
+    assert normalize_lcl('6600109363-GUASTI') == '6600109363'
+    assert normalize_lcl('6600109363_GUASTI') == '6600109363'
+    assert normalize_lcl('LCL 6600109363') == '6600109363'
+    assert normalize_lcl('6600108760.0') == '6600108760'
+    assert normalize_lcl(6600108760.0) == '6600108760'
+
+
+def test_import_excel_con_lcl_guasti(db_isolato, tmp_path):
+    """Verifica che righe con LCL contenente 'GUASTI' o 'GUASTO' non vengano scartate ma importate con LCL canonico."""
+    db = db_isolato
+    from moduli import excel_importer
+    excel_importer = importlib.reload(excel_importer)
+
+    csv_content = (
+        'Eneltel,LCL,POD,NOMINATIVO,Comune,NOTE APP\n'
+        '165798341,6600104200 GUASTI,IT001E16579834,Mara Capone,Torino,Nota guasto 1\n'
+        '19457741A,6600104200 GUASTO,ITP0AE19457741,Marco Cassiani,Torino,Nota guasto 2\n'
+    )
+    csv_file = tmp_path / 'filone_guasti.csv'
+    csv_file.write_text(csv_content, encoding='utf-8')
+
+    res = excel_importer.import_excel(str(csv_file), export_ts='2026-10-30 09:00:00')
+    assert res['success'] is True
+    assert res['rows_skip_invalid_key'] == 0
+    assert res['rows_nuove'] == 2
+
+    row1 = db.get_filone_row('165798341', lcl='6600104200')
+    assert row1 is not None
+    assert row1['pod'] == 'IT001E16579834'
+    assert row1['lcl'] == '6600104200'
+
+    row2 = db.get_filone_row('19457741A', lcl='6600104200')
+    assert row2 is not None
+    assert row2['pod'] == 'ITP0AE19457741'
+    assert row2['lcl'] == '6600104200'
+
+

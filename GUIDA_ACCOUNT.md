@@ -1,417 +1,168 @@
 # Guida alla Creazione e Gestione degli Account
 
-Questa guida spiega come creare, modificare, eliminare e gestire gli account utente del **Gestionale Mappa Contatori**.
+Questa guida spiega come creare, modificare, abilitare e gestire gli account utente del **Gestionale Mappa Contatori**.
 
 ---
 
 ## Indice
 
-1. [Prerequisiti](#1-prerequisiti)
-2. [Avvio rapido](#2-avvio-rapido)
-3. [Menu interattivo](#3-menu-interattivo)
-4. [Comandi da riga di comando (CLI)](#4-comandi-da-riga-di-comando-cli)
-5. [Creazione utente](#5-creazione-utente)
-6. [Gestione province](#6-gestione-province)
-7. [Reset password](#7-reset-password)
-8. [Attivazione / Disattivazione utente](#8-attivazione--disattivazione-utente)
-9. [Eliminazione utente](#9-eliminazione-utente)
-10. [Creazione utenti in bulk](#10-creazione-utenti-in-bulk)
-11. [Sicurezza e note tecniche](#11-sicurezza-e-note-tecniche)
-12. [Risoluzione problemi](#12-risoluzione-problemi)
+1. [Due modalità di gestione](#1-due-modalità-di-gestione)
+2. [Gestione via Web UI Admin](#2-gestione-via-web-ui-admin)
+3. [Prerequisiti CLI e avvio rapido](#3-prerequisiti-cli-e-avvio-rapido)
+4. [Comandi CLI (`gestione_utenti.py`)](#4-comandi-cli-gestione_utentipy)
+5. [Ruoli e controllo province](#5-ruoli-e-controllo-province)
+6. [Sicurezza, password (Argon2id) e sessioni](#6-sicurezza-password-argon2id-e-sessioni)
+7. [Risoluzione problemi](#7-risoluzione-problemi)
 
 ---
 
-## 1. Prerequisiti
+## 1. Due modalità di gestione
 
-- Accesso SSH al server (o terminale locale)
-- Ambiente virtuale Python attivato:
+Gli account in [`users.json`](users.json) (file locale escluso da Git) possono essere gestiti in due modi equivalenti:
+
+1. **Da Web UI Admin** (consigliato nell'uso quotidiano): accessibile agli utenti con ruolo `admin` sia su `https://admin.<dominio>/` (pulsante **🔑 Utenti**) sia dalla scheda **🔑 Utenti** nelle impostazioni della mappa.
+2. **Da terminale via CLI** ([`gestione_utenti.py`](gestione_utenti.py)): utile in fase di primo bootstrap del server o via SSH.
+
+---
+
+## 2. Gestione via Web UI Admin
+
+Dalla dashboard router (`https://admin.mappa-algeco.com/` → **🔑 Utenti**) un amministratore può eseguire tutte le operazioni senza accesso SSH:
+
+- **Creare nuovi utenti** indicando username, password (o generazione casuale), ruolo (`user` oppure `admin`) e province autorizzate;
+- **Assegnare o revocare province** dinamicamente in base a [`data/provinces.json`](data/provinces.json);
+- **Cambiare il ruolo** (`admin` / `user`);
+- **Resettare la password**;
+- **Attivare / disattivare** temporaneamente un account;
+- **Eliminare** definitivamente un account.
+
+Le stesse funzionalità sono esposte dalle API `/api/admin/users*` in [`server.py`](server.py) e [`router.py`](router.py).
+
+---
+
+## 3. Prerequisiti CLI e avvio rapido
+
+- Accesso al terminale o SSH sul server
+- Ambiente virtuale Python del progetto:
 
 ```bash
 cd /opt/mappa-algeco
 source venv/bin/activate
 ```
 
-Lo script da utilizzare è `gestione_utenti.py`, che si trova nella directory principale del progetto.
-
----
-
-## 2. Avvio rapido
-
-### Creare un utente con password generata automaticamente:
-
 ```bash
-python gestione_utenti.py --crea nomeutente
-```
+# Menu interattivo guidato
+python gestione_utenti.py
 
-### Visualizzare tutti gli utenti:
-
-```bash
+# Visualizzare tutti gli utenti (stato, ruolo, province, ultimo login)
 python gestione_utenti.py --lista
+
+# Creare un utente con password casuale generata automaticamente
+python gestione_utenti.py --crea nome.cognome
+
+# Creare un utente con password specifica (minimo 8 caratteri)
+python gestione_utenti.py --crea nome.cognome --password MiaPasswordSicura1!
 ```
 
-### Aprire il menu interattivo completo:
-
-```bash
-python gestione_utenti.py
-```
+> **Nota:** la password generata è salvata solo come hash Argon2id e non è più recuperabile. I nuovi utenti creati da CLI hanno ruolo `user`; per promuovere il primo utente a `admin` (ad esempio al primo setup di un server) esegui:
+> ```bash
+> python -c "from moduli.auth import set_user_role; print(set_user_role('nome.cognome', 'admin'))"
+> ```
 
 ---
 
-## 3. Menu interattivo
+## 4. Comandi CLI (`gestione_utenti.py`)
 
-Lanciando lo script senza argomenti si apre un menu guidato con tutte le operazioni disponibili:
+Tutti i flag supportati da [`gestione_utenti.py`](gestione_utenti.py):
 
-```bash
-python gestione_utenti.py
-```
+| Comando | Alias corto | Descrizione |
+|---|---|---|
+| `python gestione_utenti.py` | — | Apre il menu interattivo (7 operazioni) |
+| `python gestione_utenti.py --lista` | `-l` | Elenca utenti, stato, ruolo, province e ultimo login |
+| `python gestione_utenti.py --crea NOME` | `-c` | Crea utente con password casuale |
+| `python gestione_utenti.py --crea NOME --password PASS` | `-c ... -p ...` | Crea utente con password esplicita (min 8 caratteri) |
+| `python gestione_utenti.py --elimina NOME` | `-e` | Elimina permanentemente un utente |
+| `python gestione_utenti.py --reset NOME` | — | Genera una nuova password casuale per l'utente |
+| `python gestione_utenti.py --toggle NOME` | `-t` | Attiva/Disattiva temporaneamente l'account |
+| `python gestione_utenti.py --bulk N` | `-b` | Crea `N` account in blocco (`utente1..utenteN`, max 100) |
+| `python gestione_utenti.py --province NOME PROV1,PROV2` | — | Imposta l'elenco delle province accessibili |
 
-```
-============================================================
-  GESTIONE UTENTI - Gestionale Mappa Contatori
-============================================================
+> **Attenzione:** `--reset NOME` da CLI genera sempre una nuova password casuale (non accetta `--password`). Per impostare una password scelta manualmente su un account esistente usa la Web UI Admin oppure elimina e ricrea l'account.
 
-Operazioni disponibili:
-  1. 📋 Lista utenti
-  2. ➕ Crea nuovo utente
-  3. 📦 Crea utenti in bulk
-  4. 🗑️  Elimina utente
-  5. 🔄 Reset password
-  6. 🔒 Attiva/Disattiva utente
-  7. 🗺️  Gestione province
-  0. 🚪 Esci
-```
+### Menu interattivo
 
-Seleziona il numero dell'operazione desiderata e segui le istruzioni a schermo.
-
----
-
-## 4. Comandi da riga di comando (CLI)
-
-Tutti i comandi disponibili in modalità non interattiva:
-
-| Comando | Descrizione |
-|---------|-------------|
-| `python gestione_utenti.py` | Menu interattivo |
-| `python gestione_utenti.py --lista` | Lista tutti gli utenti |
-| `python gestione_utenti.py --crea NOME` | Crea utente con password casuale |
-| `python gestione_utenti.py --crea NOME --password PASS` | Crea utente con password specifica |
-| `python gestione_utenti.py --elimina NOME` | Elimina un utente |
-| `python gestione_utenti.py --reset NOME` | Reset password (genera nuova casuale) |
-| `python gestione_utenti.py --toggle NOME` | Attiva/Disattiva un utente |
-| `python gestione_utenti.py --bulk N` | Crea N utenti in blocco |
-| `python gestione_utenti.py --province NOME TORINO,PAVIA` | Imposta le province accessibili |
-
-### Alias abbreviati
-
-Alcuni comandi hanno alias brevi:
-
-| Lungo | Corto |
-|-------|-------|
-| `--crea` | `-c` |
-| `--lista` | `-l` |
-| `--elimina` | `-e` |
-| `--toggle` | `-t` |
-| `--bulk` | `-b` |
-| `--password` | `-p` |
-
-Esempio: `python gestione_utenti.py -c mario` equivale a `python gestione_utenti.py --crea mario`
+Lanciando `python gestione_utenti.py` senza argomenti sono disponibili:
+1. Lista utenti (`--lista`)
+2. Crea nuovo utente
+3. Crea utenti in bulk (con prefisso personalizzabile ed export opzionale su file)
+4. Elimina utente
+5. Reset password
+6. Attiva/Disattiva utente
+7. Gestione province (accetta lista separata da virgole o `tutte`)
 
 ---
 
-## 5. Creazione utente
+## 5. Ruoli e controllo province
 
-### Con password generata automaticamente
+### Ruoli disponibili (`RUOLI_DISPONIBILI` in [`moduli/auth.py`](moduli/auth.py))
 
-```bash
-python gestione_utenti.py --crea giovanni
-```
+| Ruolo | Permessi |
+|---|---|
+| `user` (default) | Accesso operativo completo alle province assegnate (mappa, distinte, lettere, mail, calendario, report, filone). |
+| `admin` | Tutti i permessi operativi più gestione configurazione provincia, impostazioni SMTP/SMS, import/outbox DB, dashboard router `admin.*` e gestione utenti/ruoli. |
 
-Output:
-```
-✅ Utente 'giovanni' creato con successo
+### Controllo accesso per provincia
 
-🔐 PASSWORD GENERATA: FAqo9XdU3CtcUWzR
-   ⚠️ Salva questa password, non sarà più visibile!
-```
+Le province disponibili non sono fisse nel codice ma vengono caricate dinamicamente da [`data/provinces.json`](data/provinces.json) tramite `get_available_provinces()` (ad esempio `TORINO`, `PAVIA`, `LECCO`).
 
-> **IMPORTANTE**: Annota subito la password generata. Non sarà possibile recuperarla in seguito (è salvata solo come hash).
-
-### Con password personalizzata
+- Alla creazione da CLI l'utente riceve accesso a **tutte le province** configurate al momento.
+- Per limitare un utente a specifiche province:
 
 ```bash
-python gestione_utenti.py --crea giovanni --password MiaPassword123!
+python gestione_utenti.py --province tecnico.rossi TORINO
+python gestione_utenti.py --province coord.nord TORINO,PAVIA,LECCO
 ```
 
-### Tramite menu interattivo (opzione 2)
-
-1. Seleziona `2` dal menu
-2. Inserisci lo username
-3. Scegli se generare la password automaticamente o inserirla manualmente
-4. La password minima è di **8 caratteri**
-
-### Cosa succede alla creazione
-
-- Lo username viene **normalizzato in minuscolo** (es. "Giovanni" → "giovanni")
-- La password viene hashata con **PBKDF2-SHA256** (100.000 iterazioni)
-- L'utente riceve accesso a **tutte le province** di default (TORINO + PAVIA)
-- L'account è **attivo** immediatamente
+Ogni backend provinciale verifica ad ogni richiesta (`@app.before_request: check_provincia_access()` in [`server.py`](server.py)) che l'utente autenticato abbia la provincia corrente nella propria lista aggiornata da `users.json`. In caso contrario la sessione viene respinta.
 
 ---
 
-## 6. Gestione province
+## 6. Sicurezza, password (Argon2id) e sessioni
 
-Ogni utente può avere accesso a una o più province. Le province disponibili nel sistema sono:
+### Hashing password (`moduli/auth.py`)
 
-- **TORINO**
-- **PAVIA**
+- Tutti i nuovi account e i reset/cambi password utilizzano **Argon2id** tramite `argon2-cffi` (`PasswordHasher()`).
+- Per retrocompatibilità con account storici, il sistema verifica anche eventuali vecchi hash **PBKDF2-SHA256** (100.000 iterazioni + salt) ed esegue automaticamente l'**upgrade trasparente ad Argon2id** al primo login riuscito.
+- Gli username sono normalizzati in minuscolo e devono rispettare i requisiti di lunghezza minima password (**8 caratteri**).
 
-### Come funziona il controllo province
-
-Il server avvia istanze Flask separate per ogni provincia (Torino sulla porta 5001, Pavia sulla porta 5002). Al momento del login, il sistema verifica che l'utente abbia accesso alla provincia dell'istanza a cui si sta collegando. Se non autorizzato, il login viene rifiutato con il messaggio *"Non hai accesso alla provincia X"*.
-
-### Impostare le province via CLI
-
-```bash
-# Accesso a entrambe le province
-python gestione_utenti.py --province giovanni TORINO,PAVIA
-
-# Solo Torino
-python gestione_utenti.py --province giovanni TORINO
-
-# Solo Pavia
-python gestione_utenti.py --province giovanni PAVIA
-```
-
-### Impostare le province via menu interattivo (opzione 7)
-
-1. Seleziona `7` dal menu
-2. Verrà mostrata la lista utenti con le province attuali
-3. Inserisci lo username da modificare
-4. Vedrai le province correnti e quelle disponibili
-5. Inserisci le nuove province separate da virgola, oppure `tutte`
-
-Esempio di output nel menu:
-```
-🗺️  GESTIONE PROVINCE UTENTE
-----------------------------------------
-
-Province attuali di 'giovanni': TORINO, PAVIA
-Province disponibili: TORINO, PAVIA
-
-  1. TORINO ✅
-  2. PAVIA ✅
-
-Inserisci le province separate da virgola (es: TORINO,PAVIA)
-oppure 'tutte' per assegnare tutte le province:
-
-Province: TORINO
-✅ Province di 'giovanni' aggiornate: TORINO
-```
-
-### Configurazione attuale degli utenti
-
-| Utente | Province |
-|--------|----------|
-| giada | TORINO, PAVIA |
-| gessica | TORINO, PAVIA |
-| giovanni | TORINO, PAVIA |
-
----
-
-## 7. Reset password
-
-### Via CLI
-
-```bash
-python gestione_utenti.py --reset giovanni
-```
-
-Output:
-```
-✅ Password di 'giovanni' resettata
-
-🔐 NUOVA PASSWORD: xK7mP2nQ9rLsW4vB
-```
-
-### Via menu interattivo (opzione 5)
-
-1. Seleziona `5` dal menu
-2. Inserisci lo username
-3. La nuova password viene generata automaticamente
-
-> **NOTA**: Non è possibile impostare una password specifica dal reset via CLI. Per farlo, eliminare e ricreare l'utente con `--crea NOME --password NUOVAPASSWORD`, oppure usare il menu interattivo per la creazione.
-
----
-
-## 8. Attivazione / Disattivazione utente
-
-Disattivare un utente ne impedisce il login senza eliminare l'account. Utile per sospensioni temporanee.
-
-### Via CLI
-
-```bash
-python gestione_utenti.py --toggle giovanni
-```
-
-Output:
-```
-✅ Utente 'giovanni' ora è disabilitato
-```
-
-Eseguendo di nuovo lo stesso comando, l'utente viene riattivato:
-```
-✅ Utente 'giovanni' ora è attivo
-```
-
-### Via menu interattivo (opzione 6)
-
-1. Seleziona `6` dal menu
-2. Vedrai la lista utenti con lo stato attuale (✅ attivo / ❌ disabilitato)
-3. Inserisci lo username da modificare
-
-### Cosa succede a un utente disabilitato
-
-- Il login viene rifiutato con il messaggio *"Account disabilitato"*
-- Le sessioni attive **non** vengono invalidate automaticamente (scadranno naturalmente dopo 24 ore)
-- I dati dell'utente restano intatti
-
----
-
-## 9. Eliminazione utente
-
-### Via CLI
-
-```bash
-python gestione_utenti.py --elimina giovanni
-```
-
-### Via menu interattivo (opzione 4)
-
-1. Seleziona `4` dal menu
-2. Vedrai la lista utenti
-3. Inserisci lo username da eliminare
-4. Conferma con `s`
-
-> **ATTENZIONE**: L'eliminazione è **permanente e irreversibile**. L'utente e tutti i suoi dati di accesso vengono rimossi.
-
----
-
-## 10. Creazione utenti in bulk
-
-Per creare più utenti contemporaneamente:
-
-### Via CLI
-
-```bash
-python gestione_utenti.py --bulk 5
-```
-
-Crea 5 utenti con nomi `utente1`, `utente2`, ..., `utente5` e password casuali.
-
-### Via menu interattivo (opzione 3)
-
-1. Seleziona `3` dal menu
-2. Inserisci il numero di utenti da creare
-3. Scegli un prefisso personalizzato (default: `utente`)
-4. Le credenziali vengono mostrate a schermo
-5. Puoi scegliere di salvarle in un file di testo
-
-Output di esempio:
-```
-📋 Utenti creati:
-------------------------------------------------------------
-Username             Password
-------------------------------------------------------------
-tecnico1             aB3$kL9mNpQrS7vX
-tecnico2             wE5&hJ2cDfGtY8zA
-------------------------------------------------------------
-
-✅ Creati 2/2 utenti
-Salvare credenziali in file? [S/n]:
-✅ Credenziali salvate in: credenziali_utenti_tecnico.txt
-```
-
----
-
-## 11. Sicurezza e note tecniche
-
-### Archiviazione password
-
-- Le password **non** vengono mai salvate in chiaro
-- Viene utilizzato **PBKDF2-SHA256** con **100.000 iterazioni** e un **salt** casuale unico per ogni utente
-- Il file `users.json` contiene solo hash e salt
-
-### Sessioni
-
-- Le sessioni hanno una durata di **24 ore**
-- I cookie sono configurati con `HttpOnly` e `SameSite=Lax`
-- In produzione (via Cloudflare) i cookie sono `Secure` (solo HTTPS)
-
-### Protezione brute-force
-
-- Il server implementa un limite ai tentativi di login per indirizzo IP
-- Dopo troppi tentativi falliti, l'IP viene temporaneamente bloccato
-- Un ritardo artificiale viene aggiunto per prevenire l'enumerazione degli utenti
-
-### File coinvolti
-
-| File | Descrizione |
-|------|-------------|
-| `users.json` | Database utenti (hash password, province, stato) |
-| `gestione_utenti.py` | Script CLI per la gestione |
-| `moduli/auth.py` | Modulo di autenticazione (funzioni core) |
-| `.flask_secret_key` | Chiave segreta per le sessioni (generata automaticamente) |
-
-### Struttura dati utente in `users.json`
+### Struttura indicativa di `users.json`
 
 ```json
 {
-  "giovanni": {
-    "password_hash": "adb2d892...",
-    "salt": "e3df59ec...",
-    "created_at": "2026-04-13T14:09:36.897861",
-    "last_login": null,
+  "admin.example": {
+    "password_hash": "$argon2id$v=19$m=65536,t=3,p=4$...",
+    "created_at": "2026-06-01T09:00:00.000000",
+    "last_login": "2026-11-11T08:30:12.000000",
     "active": true,
-    "province": ["TORINO", "PAVIA"]
+    "ruolo": "admin",
+    "province": ["TORINO", "PAVIA", "LECCO"]
   }
 }
 ```
 
+> `users.json` e `.flask_secret_key` sono elencati in [`.gitignore`](.gitignore) e non devono mai essere committati nel repository.
+
+### Protezioni sessione, CSRF e brute-force
+
+- **Cookie di sessione:** durata **24 ore**, attributi `HttpOnly`, `SameSite=Lax`, e `Secure` quando `FLASK_ENV=production`. Con `SESSION_COOKIE_DOMAIN=.mappa-algeco.com` la sessione autenticata è condivisa tra i sottodomini provincia e `admin.*`.
+- **Protezione CSRF & Origin:** tutte le mutazioni `POST`/`PUT`/`DELETE` autenticate verificano sia gli header `Origin`/`Referer` contro i sottodomini fidati sia il doppio token (`X-CSRF-Token` confrontato in tempo costante con `session['csrf_token']`).
+- **Rate limiting anti brute-force:** su `POST /api/login` il backend blocca temporaneamente l'IP per **60 secondi** dopo **5 tentativi falliti** (`429 Too Many Requests`). Inoltre l'autenticazione applica un piccolo ritardo anti-enumerazione in caso di username inesistente.
+
 ---
 
-## 12. Risoluzione problemi
+## 7. Risoluzione problemi
 
-### "Utente già esistente"
-
-Lo username è già registrato. Usa `--lista` per verificare gli utenti esistenti.
-
-### "Credenziali non valide" al login
-
-- Verifica che lo username sia corretto (viene normalizzato in minuscolo)
-- Usa `--reset NOME` per generare una nuova password
-- Verifica che l'account sia attivo con `--lista`
-
-### "Non hai accesso alla provincia X"
-
-L'utente non ha i permessi per la provincia a cui sta tentando di accedere. Usa:
-```bash
-python gestione_utenti.py --province NOME TORINO,PAVIA
-```
-
-### "Account disabilitato"
-
-L'account è stato disattivato. Riattivalo con:
-```bash
-python gestione_utenti.py --toggle NOME
-```
-
-### Password dimenticata
-
-Non è possibile recuperare la password originale. Generane una nuova:
-```bash
-python gestione_utenti.py --reset NOME
-```
-
-### Il file `users.json` è corrotto
-
-Se il file JSON è danneggiato, il sistema lo tratterà come vuoto. Verifica la sintassi JSON o ripristina da un backup.
+- **"Account disabilitato":** riattiva l'account da Web UI Admin o con `python gestione_utenti.py --toggle NOME`.
+- **"Non hai accesso alla provincia X":** assegna la provincia mancante da Web UI Admin oppure con `python gestione_utenti.py --province NOME TORINO,PAVIA,LECCO`.
+- **"Troppi tentativi":** attendi 60 secondi prima di riprovare il login.
+- **Dimenticata la password di un amministratore:** accedi via SSH al server ed esegui `python gestione_utenti.py --reset NOME` (genera una nuova password casuale) oppure crea un nuovo utente e promuovilo dalla UI admin.

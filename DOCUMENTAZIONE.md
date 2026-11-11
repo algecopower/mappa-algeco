@@ -1,395 +1,165 @@
-# Gestionale Mappa Contatori — Documentazione
+# Gestionale Mappa Contatori — Documentazione Tecnica e Funzionale
 
-> **Versione:** 3.0 (post-disconnessione Google Sheets)
-> **Ultimo aggiornamento:** 2026-05-25
-> **Progetto:** Mappa Algeco — Sistema di gestione e ottimizzazione percorsi per la sostituzione contatori elettrici
+> **Versione:** 4.0 (Architettura Multi-Tenant SQLite-First, Outbox & Auto-Import Read-Only)  
+> **Ultimo aggiornamento:** 2026-11-11  
+> **Progetto:** Mappa Algeco — Piattaforma multi-provincia per pianificazione, routing OSRM e comunicazioni operative nella sostituzione contatori elettrici.
 
 ---
 
 ## Indice
 
-### Parte 1 — Guida Utente
-
+### Parte 1 — Panoramica e Uso
 1. [Cos'è questo programma](#1-cosè-questo-programma)
-2. [Requisiti di sistema](#2-requisiti-di-sistema)
+2. [Requisiti di sistema e file di configurazione](#2-requisiti-di-sistema-e-file-di-configurazione)
 3. [Avvio del server](#3-avvio-del-server)
 4. [Login e autenticazione](#4-login-e-autenticazione)
-5. [La mappa interattiva](#5-la-mappa-interattiva)
-6. [Il gestionale (sidebar)](#6-il-gestionale-sidebar)
-7. [Gestione distinte e WhatsApp](#7-gestione-distinte-e-whatsapp)
-8. [Import dati esterni](#8-import-dati-esterni)
-9. [Gestione sigilli e matricole](#9-gestione-sigilli-e-matricole)
-10. [Vista FILONE (Excel)](#10-vista-filone-excel)
-11. [Accesso remoto (Cloudflare)](#11-accesso-remoto-cloudflare)
-12. [FAQ](#12-faq)
+5. [La mappa interattiva e gli strumenti operativi](#5-la-mappa-interattiva-e-gli-strumenti-operativi)
+6. [Moduli gestionali integrati](#6-moduli-gestionali-integrati)
+7. [Import dati esterni, BOXBEAT e Outbox](#7-import-dati-esterni-boxbeat-e-outbox)
+8. [FAQ rapide](#8-faq-rapide)
 
 ### Parte 2 — Guida Sviluppatore
-
-13. [Architettura del sistema](#13-architettura-del-sistema)
-14. [Struttura del progetto](#14-struttura-del-progetto)
-15. [Flusso dati](#15-flusso-dati)
-16. [Moduli — Riferimento](#16-moduli--riferimento)
-17. [API REST](#17-api-rest)
-18. [Configurazione](#18-configurazione)
-19. [Cache e performance](#19-cache-e-performance)
-20. [Algoritmo di ottimizzazione percorsi](#20-algoritmo-di-ottimizzazione-percorsi)
-21. [Sistema di refresh mappa](#21-sistema-di-refresh-mappa)
-22. [Aggiungere una nuova provincia](#22-aggiungere-una-nuova-provincia)
-23. [Troubleshooting](#23-troubleshooting)
+9. [Architettura del sistema](#9-architettura-del-sistema)
+10. [Struttura del progetto](#10-struttura-del-progetto)
+11. [Flusso dati ed eventi](#11-flusso-dati-ed-eventi)
+12. [Moduli (`moduli/`) — Riferimento](#12-moduli-moduli--riferimento)
+13. [Blueprint e API REST (`routes/`, `server.py`, `router.py`)](#13-blueprint-e-api-rest-routes-serverpy-routerpy)
+14. [Configurazione e variabili d'ambiente](#14-configurazione-e-variabili-dambiente)
+15. [Cache e performance](#15-cache-e-performance)
+16. [Algoritmo di ottimizzazione percorsi, Access Points e Clustering](#16-algoritmo-di-ottimizzazione-percorsi-access-points-e-clustering)
+17. [Test, CI/CD e Troubleshooting](#17-test-cicd-e-troubleshooting)
 
 ---
 
-# PARTE 1 — GUIDA UTENTE
+# PARTE 1 — PANORAMICA E USO
 
 ---
 
 ## 1. Cos'è questo programma
 
-Il **Gestionale Mappa Contatori** è un sistema web per la gestione operativa della sostituzione di contatori elettrici (Enel / e-distribuzione). È pensato per aziende come **Algeco Power** che coordinano squadre di tecnici sul campo.
+**Mappa Algeco** è un gestionale web **multi-provincia** in Python/Flask dedicato al coordinamento operativo della sostituzione di contatori elettrici (Enel / E-Distribuzione).
 
-### Cosa fa in pratica
+### Capacità principali
+- **Mappa operativa Leaflet + OSRM:** clustering geografico delle zone (DBSCAN), percorsi giornalieri ottimizzati per tecnico con ancore temporali sugli appuntamenti, snapping stradale degli Access Point, stampa ad alta risoluzione ed etichette ENELTEL anti-sovrapposizione.
+- **Pianificazione massiva & Vista Excel (`/filone`):** selezione a rettangolo/lasso sulla mappa e tabella multi-tab sincronizzata in tempo reale con il database locale.
+- **Database SQLite locale per provincia (`Schema v7`):** unica fonte di verità per tutte le scritture dal 21/05/2026 ([`DB_LOCALE_README.md`](DB_LOCALE_README.md)), con import Excel protetto, auto-import orario read-only da Google Sheets ed export **Outbox** compatto delle sole celle modificate.
+- **Suite documentale e multicanale:** parsing PDF E-Distribuzione (`/distinte`), archivio lettere postali & invii PEC aziendali (`/lettere`), webmail completa SMTP/IMAP (`/mail`), rubrica Comuni/ZTL (`/comuni`), **SMS Gateway** integrato via smartphone Android/webhook, editor template e frasario (`/templates`).
+- **Monitoraggio, agenda e multi-tenancy:** dashboard KPI (`/dashboard`), reportistica (`/report`), calendario/bacheca promemoria (`/calendario`), elenco appuntamenti (`/appuntamenti`) e pannello di amministrazione multi-provincia (`admin.*`).
 
-- **Visualizza su mappa** tutti i contatori da sostituire, con colori diversi per tecnico e zone
-- **Ottimizza automaticamente i percorsi** giornalieri per ogni tecnico, riducendo km e tempo di viaggio
-- **Gestisce gli appuntamenti** con i clienti, calcolando fasce orarie realistiche
-- **Genera messaggi WhatsApp** per avvisare i clienti della sostituzione
-- **Importa dati esterni** (Excel/CSV del foglio commesse, file di ritorno installazioni) con merge sicuro
-- **Traccia sigilli e matricole** dei contatori installati
-- **Mantiene la fonte di verità in un DB SQLite locale** (post-disconnessione Google Sheets del 21/05/2026, vedi [DB_LOCALE_README.md](DB_LOCALE_README.md))
+### Province configurate di default ([`data/provinces.json`](data/provinces.json))
 
-### Province supportate
+| Provincia | Porta backend | Deposito | Orario giornata | Sottodominio |
+|---|---|---|---|---|
+| **Torino** (`TORINO`) | `5001` | `DEPOSITO VOLPIANO` (`45.1964682, 7.7888303`) | `09:00` – `17:00` (`540`–`1020`) | `torino.mappa-algeco.com` |
+| **Pavia** (`PAVIA`) | `5002` | `DEPOSITO PAVIA` (`45.2221001, 9.2254115`) | `08:00` – `17:00` (`480`–`1020`) | `pavia.mappa-algeco.com` |
+| **Lecco** (`LECCO`) | `5003` | `DEPOSITO LECCO` (`45.7727912, 9.3257548`) | `08:00` – `17:00` (`480`–`1020`) | `lecco.mappa-algeco.com` |
 
-Le province sono definite in `data/provinces.json` e aggiungibili a runtime dalla UI admin. Default storici:
-
-| Provincia | Porta backend | Deposito | Orario inizio |
-| --- | --- | --- | --- |
-| **Torino** | 5001 | Volpiano (Via Brandizzo 121d) | 09:00 |
-| **Pavia**  | 5002 | Pavia città                  | 08:00 |
-
-In produzione il **router** espone una porta unica (5050) e instrada per Host alle province via Cloudflare Tunnel.
+Ulteriori province possono essere create e avviate direttamente dall'interfaccia `admin.*`.
 
 ---
 
-## 2. Requisiti di sistema
+## 2. Requisiti di sistema e file di configurazione
 
-### Software obbligatorio
+### Software
+| Software | Versione / Note | Scopo |
+|---|---|---|
+| **Python** | `3.12` (testato su 3.12 in CI) | Backend Flask, Gunicorn, CLI e pipeline dati |
+| **OSRM** | `osrm-routed` (`v5.27.1` nativo `--mmap` o Docker) su porta `5000` | Matrici distanze/durate stradali reali, `/trip`, `/route`, `/nearest` |
+| **Cloudflare Tunnel** (`cloudflared`) | Opzionale in locale, attivo in produzione | Reverse tunnel TLS wildcard `*.mappa-algeco.com` → `:5050` |
 
-| Software | Versione minima | Scopo |
-| --- | --- | --- |
-| **Python** | 3.10+ (consigliato 3.12) | Linguaggio del server |
-| **OSRM** (nativo o Docker) | qualsiasi | Calcolo percorsi stradali reali |
-| **Browser moderno** | Chrome, Edge, Firefox | Interfaccia utente |
+### File operativi e di configurazione
 
-### Software opzionale
-
-| Software | Scopo |
-| --- | --- |
-| **Cloudflare Tunnel** (`cloudflared`) | Accesso remoto da Internet |
-
-### File necessari
-
-| File | Descrizione |
-| --- | --- |
-| `users.json` | Database utenti per il login (creato con `gestione_utenti.py`). Non in git. |
-| `data/provinces.json` | Configurazione province (deposito, operatori, colori). In git. |
-| `data/{prov}/state.db` | DB SQLite per provincia. Generato al primo avvio o via import Excel. |
-| `data/{prov}/settings.json` | Override impostazioni provincia (da UI admin). Opzionale. |
-
-> **Nota**: `credenziali.json` (vecchio Service Account Google) **non serve più**. È rimasto in `.gitignore` per precauzione storica ma il programma non lo legge.
-
-### Server OSRM
-
-Il sistema richiede un server **OSRM** (Open Source Routing Machine) per calcolare distanze e tempi di percorrenza reali. In produzione gira nativo come servizio systemd (`osrm-routed.service`); in locale può girare anche su Docker (porta 5000).
-
-Senza OSRM le distanze sono calcolate in linea d'aria con correzione 1.35× (fallback haversine) e i percorsi NON sono ottimizzati sulla rete stradale reale.
+| File | In Git | Descrizione |
+|---|---|---|
+| `data/provinces.json` | Sì | Registry province (deposito, operatori, colori, orari, LCL disabilitati, `google_sheet_url`, porte, sottodomini) |
+| `users.json` | No (`.gitignore`) | Utenti, hash Argon2id, ruoli (`admin`/`user`) e province autorizzate |
+| `.flask_secret_key` | No (`.gitignore`) | Chiave firma cookie di sessione (auto-generata al primo avvio se assente) |
+| `data/{prov}/state.db` | No (`.gitignore`) | Database SQLite WAL della provincia (Schema v7) |
+| `data/{prov}/settings.json` | No (`.gitignore`) | Override runtime salvati dalla UI admin/impostazioni |
+| `data/{prov}/mappa_data.json` | No (`.gitignore`) | Payload JSON letto dal frontend Leaflet e aggiornato in-place/full-sync |
+| `data/smtp_settings.json` | No (`.gitignore`) | Credenziali SMTP/IMAP per provincia |
+| `data/{prov}/sms_settings.json` | No (`.gitignore`) | Configurazione SMS Gateway (Android App / Webhook) |
 
 ---
 
 ## 3. Avvio del server
 
-### Modalità di avvio
-
 ```bash
 PY=/opt/mappa-algeco/venv/bin/python
 
-# Dev: singola provincia (no router)
-$PY server.py --torino
+# Sviluppo locale (singola provincia standalone)
+$PY server.py --torino --skip-osrm-check
 $PY server.py --pavia
+PROVINCIA=LECCO FLASK_PORT=5003 $PY server.py
 
-# Produzione: router multi-tenant
-$PY router.py
-
-# Oppure via systemd (in produzione)
-sudo systemctl start mappa-algeco-router
-sudo systemctl restart mappa-algeco-router
+# Multi-tenant completo (router + worker Gunicorn per tutte le province)
+ROUTER_PORT=5050 $PY router.py
 ```
 
-### Cosa succede all'avvio
-
-1. Il **router** (in produzione) o `server.py` standalone valida la configurazione.
-2. Per ogni provincia spawna un processo Flask figlio sulla sua porta.
-3. Ogni processo figlio:
-   - Apre il DB SQLite (`data/{prov}/state.db`)
-   - Esegue `PRAGMA integrity_check` (logga warning se KO)
-   - Carica il DataFrame dei contatori dal DB
-   - Calcola distanze e percorsi ottimizzati (OSRM)
-   - Genera la mappa HTML interattiva
-   - Avvia il loop event-driven (svegliato da modifiche utente o import Excel)
-4. Il router monta i backend dietro routing per Host.
-
-### URL di accesso
-
-| Provincia | URL locale | URL pubblico (con Cloudflare) |
-| --- | --- | --- |
-| Torino | http://localhost:5001 | https://torino.mappa-algeco.com |
-| Pavia | http://localhost:5002 | https://pavia.mappa-algeco.com |
-| Admin | http://localhost:5050/ (Host: `admin.*`) | https://admin.mappa-algeco.com |
-
-### Arresto
-
-In dev: **Ctrl+C** nel terminale. In produzione: `sudo systemctl stop mappa-algeco-router`.
+In produzione il stack viene gestito da `systemd` (`mappa-algeco-router.service`, `osrm-server.service`, `cloudflared-tunnel.service`, `mappa-algeco-restart.timer`). Vedi [`deploy/README.md`](deploy/README.md) e [`GUIDA_DEPLOY_VPS.md`](GUIDA_DEPLOY_VPS.md).
 
 ---
 
 ## 4. Login e autenticazione
 
-All'apertura del sito viene mostrata la pagina di login.
-
-- Inserisci **username** e **password** configurati con `gestione_utenti.py` (vedi [GUIDA_ACCOUNT.md](GUIDA_ACCOUNT.md))
-- Dopo 5 tentativi falliti il login viene bloccato per 30 secondi
-- La sessione dura **24 ore**, poi è necessario rifare il login
-- Per uscire: pulsante di logout o `/logout`
-
----
-
-## 5. La mappa interattiva
-
-La mappa è il cuore dell'applicazione. Si apre dopo il login.
-
-### Viste disponibili
-
-| Vista | Descrizione |
-| --- | --- |
-| **Zone** | Mostra le zone geografiche come aree colorate (poligoni). Utile per la pianificazione settimanale. |
-| **Comuni** | Aggregazione per comune con conteggi e calendario. |
-| **Dettaglio** | Mostra ogni singolo contatore per una data specifica come segnaposto numerato per ordine di percorso. |
-| **Percorso operatore** | Mostra solo il percorso di un tecnico in una data. |
-
-### Elementi della mappa
-
-- **Marker colorati** — un colore per tecnico (rosso, giallo, verde, ciano…)
-- **Numeri nei marker** — indicano l'ordine di visita ottimizzato
-- **Linee colorate** — mostrano il percorso ottimizzato che segue le strade reali
-- **Segnaposto "APP"** — contatori con appuntamento, mostrati con icona speciale
-- **Deposito** — punto di partenza/arrivo dei tecnici (icona casetta)
-
-### Filtri e ricerca
-
-- **Filtro data** — mostra solo i contatori pianificati per una data specifica
-- **Filtro operatore** — mostra solo i contatori di un tecnico
-- **Filtro LCL** — filtra per codice LCL
-- **Filtro appuntamenti** — solo contatori con/senza appuntamento
-- **Barra di ricerca** — cerca per nome cliente, indirizzo, POD, ENELTEL o comune
-- **Temi** — alterna tra tema chiaro e scuro
-
-### Popup contatore
-
-Cliccando su un contatore si apre un popup con:
-
-- Dati del cliente (nome, indirizzo, telefono, comune)
-- Codici identificativi (ENELTEL, POD)
-- Data di pianificazione
-- Note e appuntamenti
-- Fascia oraria stimata
-- Pulsanti per modificare i dati o impostare appuntamenti
-
-### Aggiornamento automatico
-
-La mappa si aggiorna automaticamente tramite **SSE** (Server-Sent Events): dopo ogni modifica utente o import, il server invia un evento `sync_complete` e il browser ricarica i JSON. Quando la connessione SSE è giù, fallback su polling JSON ogni `INTERVALLO_SYNC_SECONDI` (default 300s).
+- Modulo [`moduli/auth.py`](moduli/auth.py): hashing password **Argon2id** (`argon2-cffi`) con verifica e **upgrade trasparente automatico** degli eventuali hash legacy PBKDF2-SHA256 al login.
+- **Ruoli:** `admin` e `user`.
+- **Rate limiting:** dopo **5 tentativi falliti**, `POST /api/login` blocca l'IP per **60 secondi** (`429`).
+- **Sessione e CSRF:** cookie `HttpOnly`, `SameSite=Lax`, durata **24 ore**, `Secure` se `FLASK_ENV=production`. Tutte le mutazioni autenticate richiedono match `Origin`/`Referer` + doppio token CSRF (`cookie csrf_token` ↔ header `X-CSRF-Token`).
+- Gestione utenti completa via Web UI (`admin.*` → **🔑 Utenti**) e CLI [`gestione_utenti.py`](gestione_utenti.py). Vedi [`GUIDA_ACCOUNT.md`](GUIDA_ACCOUNT.md).
 
 ---
 
-## 6. Il gestionale (sidebar)
+## 5. La mappa interattiva e gli strumenti operativi
 
-La sidebar contiene gli strumenti gestionali.
-
-### Modifica contatore
-
-Dal popup di un contatore puoi modificare i campi configurati in `CAMPI_MODIFICABILI` (vedi [config.py](config.py)):
-
-- **Data pianificata** — quando il tecnico deve andare
-- **Note/Appuntamento** — annotazioni e orari appuntamento
-- **Nominativo** — nome del cliente
-- **Indirizzo e civico** — correzione indirizzo
-- **Telefono / Email** — contatti
-- **Posizione misuratore** — dove si trova
-- **Operatore** — tecnico assegnato
-
-Le modifiche vengono scritte nel DB locale e triggherano un refresh immediato della mappa (patch in-place per soft edit, sync_loop classico per cambi strutturali).
-
-### Pulsanti sidebar (variabili per provincia)
-
-| Pulsante | Funzione |
-| --- | --- |
-| **Import Report** | Carica file Excel di ritorno installazioni (BOXBEAT/Beat) |
-| **Sigilli** | Gestisci sigilli per contatori trifase/fotovoltaici |
-| **Matricole** | Inserisci matricole dei contatori installati |
-| **Vista FILONE** | Vista Excel del DB completo |
-| **Sync** | Forza refresh manuale della mappa |
+Dettaglio passo-passo in [`GUIDA_UTILIZZO.md`](GUIDA_UTILIZZO.md):
+- **Viste principali:** *Zone* (poligoni/riepiloghi DBSCAN), *Comuni*, *Dettaglio per data*, *Percorso Operatore* (singolo o **multi-operatore** con tracce stradali OSRM).
+- **Modalità Pianificazione (`📋 Pianifica`):** filtri granulari su schedulabili/pianificati e selezione singola, rettangolo (`▭`) o lasso (`✂`) per assegnazione massiva via `POST /api/contatori/bulk-pianifica`.
+- **Ricerca Utente Avanzata:** ricerca su tutto il DB (Nominativo, POD, Eneltel, Comune, Via, Telefono) con **ricerca multipla** a token per elenchi di POD ed Eneltel.
+- **Pin multipli & Badge orari:** supporto a più contatori fissati simultaneamente (`pinnedFloatingToolbar`) e toggle **Badge orari per tutti** (`🕒`).
+- **Stampa percorso:** pannello anteprima dedicato ad alta risoluzione per stampa mappa e foglio tappe.
 
 ---
 
-## 7. Gestione distinte e WhatsApp
+## 6. Moduli gestionali integrati
 
-Accessibile da `/distinte` (link nella mappa).
+Accessibili dal **Menu Gestionale & Moduli** (pulsante `⊞` sulla mappa, con ricerca e preferiti rapidi) o direttamente via URL:
 
-### Funzionalità
-
-1. **Carica distinte PDF** — trascina o seleziona i file PDF "DistintaBase" di Enel
-2. **Classifica contatti** — il sistema divide automaticamente:
-   - 📱 **Cellulare** — numeri mobili (prefisso 320-399), pronti per WhatsApp
-   - 📞 **Fisso** — numeri di rete fissa
-   - ❌ **Senza telefono** — nessun numero disponibile
-3. **Genera messaggi WhatsApp** — messaggi pre-compilati con data, indirizzo e fascia oraria
-4. **Confronta con FILONE** — evidenzia differenze tra distinta e dati nel DB
-5. **Aggiorna dati** — sovrascrivi telefono, data, note direttamente dal pannello distinte
-6. **Segna numeri errati** — marca numeri non validi
-7. **Imposta appuntamenti** — direttamente dalla vista distinte
-
-### Flusso tipico
-
-1. Ricevi le distinte PDF da Enel
-2. Caricale nella pagina distinte
-3. Controlla le differenze con il FILONE
-4. Invia i messaggi WhatsApp ai clienti con cellulare
-5. Per i numeri fissi, chiama manualmente
-6. Per quelli senza telefono, cerca su PagineBianche e salva
+| Route | Modulo | Funzionalità principali |
+|---|---|---|
+| `/` | Mappa operativa | Viste geografiche, routing TSP OSRM, pianificazione bulk, popup edit, stampa |
+| `/filone` | Vista Excel Filone | Tabella multi-tab su `state.db`, filtri/ordinamento, editing inline, import/append |
+| `/distinte` | PDF E-Distribuzione | Parsing DistintaBase & Moduli Maxy, WhatsApp, Email SMTP, **SMS Gateway** singolo/multiplo, diff/overwrite DB |
+| `/lettere` | Gestione Lettere | Archivio generazioni Excel postali, rilevamento Aziende/Enti vs Privati + override, bulk email/PEC aziende, bulk SMS privati |
+| `/mail` | Gestione Mail (`/webmail`) | Client SMTP/IMAP completo, sincronizzazione inbox, bozze, invii programmati, categorie automatiche, allegati standard |
+| `/comuni` | Gestione Comuni | Anagrafica comuni, ZTL, PEC/email Polizia Locale & Ufficio Tecnico, invio comunicazioni in bulk |
+| `/templates` | Modelli & Template | Editor centralizzato per template completi (Email/WA/SMS), frasario snippet e firma/recapiti ufficio |
+| `/calendario` | Calendario Attività | Agenda condivisa per provincia, promemoria BOXBEAT e checklist giornaliera (`La mia Giornata`) |
+| `/appuntamenti` | Gestione Appuntamenti | Vista tabellare appuntamenti con filtri ed export `.xlsx` |
+| `/dashboard` | Dashboard Operativa | KPI avanzamento commessa, LCL, appuntamenti e km operatori |
+| `/report` | Reportistica Operatori | Analisi storica multi-tab (`Panoramica`, `Dettaglio Operatori`, `Esiti`, `Confronto`) ed export Excel |
+| `admin.*` | Router Admin UI | Ciclo vita worker Gunicorn, Wizard 3-step, Import/Auto-Import/Outbox Excel, CRUD colonne, SMTP/SMS, Utenti, Log `journalctl` |
 
 ---
 
-## 8. Import dati esterni
+## 7. Import dati esterni, BOXBEAT e Outbox
 
-Il sistema importa due tipi di file Excel/CSV:
-
-### A. Import FILONE (foglio commesse)
-
-Sostituisce il vecchio pull periodico da Google Sheets (rimosso il 21/05/2026).
-
-1. L'admin scarica il foglio Sheets come `.xlsx` o `.csv`
-2. UI admin → **Import FILONE** → seleziona file
-3. Inserisci la data/ora di export (per la politica di merge)
-4. Il sistema:
-   - Legge il file e risolve il mapping colonne
-   - Esegue **merge cella-per-cella** col DB locale
-   - Politica: **"vince il più recente"** a granularità RIGA — se una riga è stata modificata nel programma dopo l'export Excel, il DB protegge l'intera riga
-5. Riepilogo: righe nuove, aggiornate, ignorate (per protezione locale), anomalie
-
-Vedi [moduli/excel_importer.py](moduli/excel_importer.py) e [DB_LOCALE_README.md](DB_LOCALE_README.md).
-
-### B. Import Report installazioni (BOXBEAT/Beat)
-
-Il **Report** è il file scaricabile da Beat con i contatori installati con successo.
-
-1. Apri la mappa → sidebar → **Import Report**
-2. Seleziona uno o più file `.xlsx`, `.xls` o `.csv`
-3. Il sistema:
-   - Legge il file (header alla riga 3)
-   - Filtra solo le righe con **"Esito OK"**
-   - Cerca il **POD** corrispondente nel DB
-   - Aggiorna automaticamente: **Operatore**, **Data Installazione**, **Esito**
-
-### Cosa viene aggiornato dal Report
-
-| Campo Report | Campo DB |
-| --- | --- |
-| Matricola preposto | Operatore |
-| Data esecuzione | Data Installazione |
-| Esito = "Esito OK" | Esito = "ESITO OK" |
+- **Installato E-Distribuzione (BOXBEAT):** caricabile dalla mappa via `POST /api/upload-BOXBEAT` (`.xlsx`/`.xls`/`.csv`, header riga 3); associa il `POD` e aggiorna `Operatore`, `Data Installazione` ed `Esito = ESITO OK`.
+- **Import FILONE manuale (`POST /api/admin/import-excel`):** carica fogli Excel/CSV applicando il merge "vince il più recente" a granularità di riga (`last_local_change_ts` vs `excel_export_ts`).
+- **Auto-Import orario read-only ([`moduli/auto_import.py`](moduli/auto_import.py)):** cron `:05` (`tools/auto_import_filone.py --all`) o pulsante `⚡ Da Sheets` in `admin.*`; scarica l'export `.xlsx` pubblico da `google_sheet_url`, confronta SHA-256 deterministico sui CRC (escludendo `docProps/`) e importa solo in caso di modifiche effettive proteggendo le righe modificate localmente.
+- **Outbox modifica locale ([`moduli/outbox.py`](moduli/outbox.py)):** esporta un `.xlsx` compatto (`POD` + sole celle modificate evidenziate in giallo) tramite `GET /api/admin/outbox/excel` e marca le modifiche come gestite (`POST /api/admin/outbox/mark-delivered`).
 
 ---
 
-## 9. Gestione sigilli e matricole
+## 8. FAQ rapide
 
-### Sigilli
-
-Necessari per contatori **trifase semidiretti** e **fotovoltaici** (ENELTEL che termina con A o B).
-
-1. Sidebar → **Sigilli**
-2. Vengono mostrati i contatori installati (Esito OK) senza sigillo
-3. Inserisci il numero di sigillo
-4. Il sistema lo salva nel DB
-
-### Matricole
-
-Numeri seriali dei contatori installati.
-
-1. Sidebar → **Matricole**
-2. Vengono mostrati TUTTI i contatori installati senza matricola
-3. Inserisci la matricola del contatore nuovo
-4. Il sistema la salva nel DB
-
-> Sia sigilli che matricole mostrano solo le installazioni dell'anno corrente.
-
----
-
-## 10. Vista FILONE (Excel)
-
-Vista tabellare di tutti i contatori del DB, equivalente alla vista del foglio Excel originale. Permette:
-
-- Filtri rapidi per colonna
-- Editing inline dei campi modificabili
-- Aggiunta manuale di una nuova riga
-- Export Excel del filone corrente
-
----
-
-## 11. Accesso remoto (Cloudflare)
-
-Per accedere al sistema da fuori la rete locale è disponibile **Cloudflare Tunnel** come servizio systemd indipendente (`cloudflared-tunnel.service`).
-
-### URL pubblici (con dominio configurato)
-
-| Servizio | URL |
-| --- | --- |
-| Torino | https://torino.mappa-algeco.com |
-| Pavia  | https://pavia.mappa-algeco.com |
-| Admin  | https://admin.mappa-algeco.com |
-
-Vedi [GUIDA_CLOUDFLARE.md](GUIDA_CLOUDFLARE.md) per la configurazione dettagliata del tunnel.
-
----
-
-## 12. FAQ
-
-### Il server non si avvia, dice "OSRM non raggiungibile"
-
-In produzione (servizio nativo): `sudo systemctl status osrm-routed`.
-In dev locale (Docker): `docker ps` e verifica porta 5000.
-Test diretto: `curl "http://localhost:5000/route/v1/driving/7.68,45.07;7.78,45.19"`.
-
-Si può avviare comunque con `python server.py --skip-osrm-check`, ma i percorsi non saranno ottimizzati.
-
-### La mappa non si aggiorna
-
-- Verifica che l'SSE sia connessa (in dev tools del browser, scheda Network → `/api/events`)
-- Prova il **sync manuale** dalla sidebar
-- Ricarica la pagina con **Ctrl+F5** (svuota cache browser)
-
-### Non riesco a loggarmi
-
-- Verifica che l'utente sia stato creato con `gestione_utenti.py` (vedi [GUIDA_ACCOUNT.md](GUIDA_ACCOUNT.md))
-- Controlla che l'utente sia **attivo**
-- Dopo 5 tentativi falliti, attendi 30 secondi
-
-### Una modifica fatta in Excel non appare
-
-Da quando Google Sheets è scollegato (21/05/2026), il sistema NON legge più da Sheets in automatico. Per aggiornare il DB con i dati del foglio devi fare un **import Excel manuale** dalla UI admin (sezione [8](#8-import-dati-esterni)).
-
-### Come cambio la password di un utente?
-
-```bash
-/opt/mappa-algeco/venv/bin/python gestione_utenti.py --reset --username nomeutente --password nuovapassword
-```
+- **Reset password da CLI:**
+  ```bash
+  /opt/mappa-algeco/venv/bin/python gestione_utenti.py --reset nomeutente
+  ```
+  *(Genera automaticamente una nuova password casuale; per impostare una password scelta manualmente o cambiare ruolo usa la scheda `🔑 Utenti` su `https://admin.<dominio>/`).*
+- **OSRM non raggiungibile in dev:** verifica `curl "http://localhost:5000/route/v1/driving/7.68,45.07;7.78,45.19"` oppure avvia in locale con `--skip-osrm-check` (fallback su stima Haversine/sweep angolare).
+- **Rate limit login:** attendi **60 secondi** dopo 5 tentativi errati consecutivi.
 
 ---
 
@@ -397,711 +167,339 @@ Da quando Google Sheets è scollegato (21/05/2026), il sistema NON legge più da
 
 ---
 
-## 13. Architettura del sistema
-
-### Diagramma ad alto livello
+## 9. Architettura del sistema
 
 ```
-┌──────────────────────────────────────────────────────────────────────┐
-│                         router.py (entry produzione)                 │
-│  Reverse proxy per Host → backend per provincia                      │
-│  + UI admin (templates_router/) su admin.*                           │
-├─────────────────────────────┬────────────────────────────────────────┤
-│  server.py :5001 (Torino)   │  server.py :5002 (Pavia)               │
-│                             │  (stessa struttura, config diversa)    │
-│                             │                                        │
-│  ┌─── Loop event-driven ───────────────────────────────────────┐    │
-│  │  Risvegliato da: POST utente, import Excel, sync manuale    │    │
-│  │   1. Legge DB → DataFrame pandas (con cache)                │    │
-│  │   2. Calcola distanze OSRM (con cache hash)                 │    │
-│  │   3. Genera zone (DBSCAN)                                   │    │
-│  │   4. Genera mappa_data.json + HTML                          │    │
-│  │   5. SSE notify → browser                                   │    │
-│  └─────────────────────────────────────────────────────────────┘    │
-│                                                                       │
-│  ┌─── API REST (blueprint in routes/) ───────────────────────────┐   │
-│  │  /api/contatore/<eneltel>    ← CRUD contatore                 │   │
-│  │  /api/upload-report          ← Import installazioni Beat      │   │
-│  │  /api/admin/import-excel     ← Import FILONE                  │   │
-│  │  /api/sigilli, /api/matricole← Tracking installazioni         │   │
-│  │  /api/filone                 ← Vista Excel                    │   │
-│  │  /api/distinte/*             ← Gestione distinte              │   │
-│  │  /api/sync                   ← Trigger manuale                │   │
-│  │  /api/events                 ← SSE stream                     │   │
-│  └───────────────────────────────────────────────────────────────┘   │
-└──────────────────────────────────────────────────────────────────────┘
-
-Dipendenze esterne:
-  • OSRM (:5000) — calcolo distanze e percorsi stradali reali
-  • Cloudflare Tunnel — accesso pubblico (opzionale)
+                        Cloudflare Tunnel (*.mappa-algeco.com → :5050)
+                                              │
+                                              ▼
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│  router.py (:5050, Processo supervisore mappa-algeco-router.service)             │
+│  • Reverse proxy streaming-aware per Host header (supporto SSE `/api/events`)    │
+│  • Validazione auth delegata (/api/user con cache 30s) + CSRF guard              │
+│  • ProcessManager + Watchdog + UI Admin (`templates_router/admin.html`)          │
+└───────────┬─────────────────────────────┬────────────────────────────┬───────────┘
+            │                             │                            │
+            ▼                             ▼                            ▼
+  Gunicorn wsgi:app             Gunicorn wsgi:app            Gunicorn wsgi:app
+  PROVINCIA=TORINO :5001        PROVINCIA=PAVIA :5002        PROVINCIA=LECCO :5003
+  (1 worker × 32 gthread)       (1 worker × 32 gthread)      (1 worker × 32 gthread)
+            │
+            ├─ 14 Blueprint Flask (`routes/*.py`) + Routes core/admin (`server.py`)
+            ├─ Loop background (ogni 5s):
+            │    • Risveglio immediato per `sync_loop` o `try_patch_inplace()` (~50ms)
+            │    • Scheduler ogni 15s: `mail_manager.process_scheduled_queue()`
+            │    • Snapshot DB giornaliero + backup JSON (`backup_periodico_auto()`)
+            ├─ SQLite WAL `data/{prov}/state.db` (Schema v7, PK `(eneltel_key, lcl)`)
+            └─ OSRM `:5000` (Table, Trip, Route, Nearest) + Cache SQLite `cache_distanze_{prov}.db`
 ```
 
 ### Principi architetturali
-
-1. **DB SQLite locale = unica fonte di verità** (dal 21/05/2026). I dati esterni entrano via import Excel manuale. Vedi [DB_LOCALE_README.md](DB_LOCALE_README.md) per il dettaglio.
-2. **OSRM consigliato** — distanze e tempi calcolati su strade reali. Fallback haversine × 1.35 in caso di errore parziale.
-3. **Ottimizzazione per tempo** — l'algoritmo preferisce le autostrade anche se più lunghe in km. Implicito nel profilo `driving` di OSRM.
-4. **Isolamento per provincia** — ogni provincia è un processo Flask separato, con il proprio DB, cache, output HTML.
-5. **Architettura dual-JSON** — il file HTML della mappa è uno shell statico; i dati arrivano come JSON separati (`data/{prov}/mappa_data.json` e `data/{prov}/config.json`), aggiornati via SSE per refresh rapidi.
-6. **Refresh event-driven** — niente sync periodico. La mappa viene rigenerata solo quando serve (modifica utente o import). Soft edit applicano una patch in-place a `mappa_data.json` in ~50ms; cambi strutturali fanno girare l'intero sync_loop (~7-10s).
-7. **Cache aggressiva** — distanze OSRM e ordine percorsi vengono cachate per evitare ricalcoli inutili.
+1. **Isolamento multi-tenant per processo:** ogni provincia ha il proprio processo Gunicorn (`PROVINCIA=<SLUG>`), database `state.db`, cache distanze, settings e archivi `data/{prov}/`, `backup/{prov}/`.
+2. **DB-first + API legacy compatibile:** `moduli/shared.py` espone l'interfaccia storica compatibile con i blueprint originali instradando tutte le letture e scritture al DB SQLite locale (`moduli/db.py`). `moduli/sync_engine.py` è uno stub post-disconnessione Sheets.
+3. **Dual-speed UI sync:** le modifiche non strutturali (`SOFT_FIELDS_DB`) applicano patch JSON in-place su `mappa_data.json` (~50 ms) e inviano `sync_complete` via SSE; le modifiche strutturali scatenano la rigenerazione completa di DataFrame, cluster DBSCAN, rotte OSRM e `mappa_data.json`.
+4. **HTML rendering on-demand + JSON statici:** `mappa_html.py` non scrive più `mappa_{prov}.html` su disco; salva `config.json` e `mappa_data.json`, mentre `GET /` renderizza `templates/mappa.html` da cache leggera in memoria.
 
 ---
 
-## 14. Struttura del progetto
+## 10. Struttura del progetto
 
 ```
 /opt/mappa-algeco/
+├── server.py                        # App Flask per provincia, sicurezza CSRF/auth, SSE, loop sync, admin DB API
+├── router.py                        # Reverse proxy by-Host, ProcessManager, admin.* API & dashboard
+├── wsgi.py                          # Entry point WSGI per Gunicorn
+├── gunicorn.conf.py                 # 1 worker gthread × 32 thread (GUNICORN_THREADS), timeout 600s, max_requests 1000
+├── config.py                        # Caricamento data/provinces.json, settings.json override, mapping colonne, costanti
+├── gestione_utenti.py               # CLI gestione utenti in users.json
+├── genera_excel_lettere.py          # CLI generazione Excel multi-foglio lettere (MONOFASE, EMME2, SEMIDIRETTI, ...)
+├── pyproject.toml                   # Configurazione Ruff (F, E9, W6; py312; max line 100) e Pytest
+├── requirements.txt                 # Dipendenze runtime
+├── requirements-dev.txt             # Dipendenze sviluppo/CI (pytest, ruff)
+├── .github/workflows/test.yml       # CI GitHub Actions (ruff check . + pytest -v su push/PR main)
 │
-├── server.py                    # Entry point per-provincia (Flask)
-├── router.py                    # Reverse proxy multi-tenant + admin UI
-├── wsgi.py                      # Bootstrap per gunicorn
-├── gunicorn.conf.py             # Config gunicorn (1 worker, 32 thread, gthread)
-├── config.py                    # Configurazione (carica provinces.json)
-├── requirements.txt             # Dipendenze runtime
-├── requirements-dev.txt         # Dipendenze test
-├── pyproject.toml
-│
-├── users.json                   # DB utenti (non in git)
-├── gestione_utenti.py           # CLI gestione utenti
-├── genera_excel_lettere.py      # CLI export lettere clienti
-│
-├── data/
-│   ├── provinces.json           # Definizioni province (in git)
-│   ├── torino/
-│   │   ├── state.db             # DB SQLite (WAL)
-│   │   ├── mappa_data.json      # JSON per la mappa (aggiornato a ogni refresh)
-│   │   ├── config.json          # Config statica per il frontend
-│   │   └── settings.json        # Override settings (da UI admin)
-│   └── pavia/
-│       └── (idem)
-│
-├── moduli/                      # Logica di dominio
+├── moduli/                          # Logica di dominio (31 moduli)
 │   ├── __init__.py
-│   ├── access_points.py         # Risoluzione civici e access road OSRM
-│   ├── appuntamenti_core.py     # Parsing e normalizzazione appuntamenti
-│   ├── auth.py                  # Auth Flask + sessioni
-│   ├── backup.py                # Backup periodico DB + JSON
-│   ├── bulk_contatori_email.py  # Preparazione e invio email massive
-│   ├── cache.py                 # Cache persistente distanze OSRM
-│   ├── calendario.py            # Calendario zone/comuni
-│   ├── comuni_db.py             # DB normalizzato comuni
-│   ├── comuni_manager.py        # Gestione anagrafica comuni e PEC
-│   ├── data_loader.py           # DB → DataFrame (con cache + hash)
-│   ├── db.py                    # Schema SQLite, record_local_change, upsert
-│   ├── distanze.py              # OSRM Table/Route
-│   ├── distinte_manager.py      # Parser PDF distinte + WhatsApp
-│   ├── excel_importer.py        # Import FILONE Excel/CSV (merge sicuro)
-│   ├── fasce_orarie.py          # Assegnazione fasce orarie
-│   ├── gestionale.py            # CSS/JS/HTML del gestionale embeddato
-│   ├── lettere.py               # Archivio lettere clienti e rubrica
-│   ├── mail_manager.py          # Invio email, parsing allegati e outbox
-│   ├── mappa_data_patcher.py    # Patch in-place mappa_data.json (soft edit)
-│   ├── mappa_html.py            # Generazione mappa HTML completa
-│   ├── outbox.py                # Coda email / modifiche
-│   ├── percorso.py              # TSP via OSRM Trip
-│   ├── rilevamento_aziende.py   # Detect aziende/condomini dagli indirizzi
-│   ├── safe_json.py             # Read/write JSON robusto
-│   ├── shared.py                # API legacy compatibilità gspread → DB
-│   ├── sms_gateway.py           # Integrazione SMS Gateway Android
-│   ├── smtp.py                  # Configurazione e test server SMTP
-│   ├── sync_engine.py           # STUB no-op (post-disconnessione)
-│   ├── workflow.py              # Gestione step workflow
-│   └── zone_geografiche.py      # Clustering DBSCAN delle zone
+│   ├── access_points.py             # Risoluzione access point stradali via OSRM /nearest + override/undo
+│   ├── appuntamenti_core.py         # Parsing unificato rilevazione appuntamenti (^APP)
+│   ├── auth.py                      # Hashing Argon2id + fallback PBKDF2-SHA256, ruoli, ACL per provincia
+│   ├── auto_import.py               # Pull read-only XLSX da Google Sheets con dedup ZIP CRC SHA-256
+│   ├── backup.py                    # Backup giornaliero JSON + snapshot DB SQLite (VACUUM INTO, ultimi 7)
+│   ├── bulk_contatori_email.py      # Raggruppamento contatori aziendali, allegati Excel dinamici e note invio
+│   ├── cache.py                     # Cache lazy SQLite (cache/cache_distanze_{prov}.db) distanze & hash MD5
+│   ├── calendario.py                # Attività calendario, promemoria BOXBEAT, registry appuntamenti
+│   ├── comuni_db.py                 # Lookup CAP/Provincia su comuni-json con cache 30gg
+│   ├── comuni_manager.py            # CRUD rubrica comuni_info, ZTL e bulk mail/PEC ai Comuni
+│   ├── data_loader.py               # Lettura DB SQLite → DataFrame normalizzato con filtri e cache TTL
+│   ├── db.py                        # Core SQLite WAL v7 (18 tabelle), migrations, record_local_change, audit
+│   ├── distanze.py                  # Calcolo matrici OSRM /table, rotte /route e fallback Haversine × 1.35
+│   ├── distinte_manager.py          # Parser PDF E-Distribuzione (DistintaBase & Modulo Maxy) + telefoni/WA
+│   ├── excel_importer.py            # Import Excel/CSV filone con merge sicuro "vince il più recente"
+│   ├── fasce_orarie.py              # 7 fasce orarie ('8/11'..'14/17'), consolidamento indirizzi
+│   ├── gestionale.py                # CSS/JS/HTML embedded per popup editing e upload BOXBEAT
+│   ├── lettere.py                   # Archivio lettere, rubrica contatti, aziende/privati, storico invii
+│   ├── mail_manager.py              # Storage webmail SQLite, sincronizzazione IMAP, categorie, queue schedulata
+│   ├── mappa_data_patcher.py        # Patch JSON in-place per soft edit (~50 ms)
+│   ├── mappa_html.py                # Preparazione mappa_data.json, config.json e render template mappa
+│   ├── outbox.py                    # Export modifiche pending (xlsx giallo compatto) + mark_delivered
+│   ├── percorso.py                  # TSP via OSRM /trip con ancore temporali e fallback sweep angolare
+│   ├── rilevamento_aziende.py       # Heuristica aziende/condomini/enti pubblici vs privati
+│   ├── safe_json.py                 # Letture/scritture JSON thread-safe e atomiche (temp + os.replace)
+│   ├── shared.py                    # Layer compatibilità API legacy → SQLite DB + callback registry
+│   ├── sms_gateway.py               # Client Android SMS Gateway (locale/cloud) + webhook + contatore GSM-7/UCS-2
+│   ├── smtp.py                      # Invio SMTP (465 SSL / 587 STARTTLS, retry), salvataggio IMAP Sent, CCN provincia
+│   ├── sync_engine.py               # Stub no-op post-disconnessione Sheets (check integrità DB al boot)
+│   ├── workflow.py                  # Configurazione checklist "La mia Giornata" per provincia
+│   └── zone_geografiche.py          # Clustering geografico DBSCAN dei comuni e calendario zone
 │
-├── routes/                      # Blueprint Flask
-│   ├── access_points.py         # Access points / punti di interesse
-│   ├── appuntamenti.py          # Gestione Appuntamenti (vista dedicata)
-│   ├── bacheca.py               # Bacheca avvisi e promemoria
-│   ├── calendario.py            # Calendario zone e attività
-│   ├── comuni.py                # Anagrafica comuni e contatti
-│   ├── contatori.py             # CRUD contatori + filone + ricerca
-│   ├── dashboard.py             # Dashboard e metriche
-│   ├── distinte.py              # Gestione distinte e messaggi
-│   ├── lettere.py               # Gestione lettere e contatti
-│   ├── mail.py                  # Invio email e log outbox
-│   ├── report.py                # Generazione report Excel
-│   ├── sigilli.py               # API sigilli
-│   ├── sync.py                  # Trigger sync manuale + SSE
-│   └── templates.py             # Gestione template messaggi
+├── routes/                          # 14 Blueprint Flask montati da server.py
+│   ├── access_points.py             # GET/POST/DELETE/undo/snap /api/access-point/<eneltel>
+│   ├── appuntamenti.py              # /appuntamenti + JSON + export Excel
+│   ├── bacheca.py                   # /api/bacheca/{promemoria,tutti}
+│   ├── calendario.py                # /calendario, /api/calendario*, /api/workflow*, /api/boxbeat/*
+│   ├── comuni.py                    # /comuni + rubrica + import/export + bulk email
+│   ├── contatori.py                 # /api/contatore/<eneltel>*, /api/contatori/*, /api/filone*, orari lettere
+│   ├── dashboard.py                 # /dashboard, /api/dashboard
+│   ├── distinte.py                  # /distinte, /whatsapp, parse PDF, WA/Email/SMS bulk, appuntamenti/note
+│   ├── lettere.py                   # /lettere, generazioni, aziende/privati, riclassifica, bulk email
+│   ├── mail.py                      # /mail (/webmail, /gestione-mail), IMAP sync, send/draft, categorie, template
+│   ├── report.py                    # /report, /api/report, /api/report/export
+│   ├── sigilli.py                   # /api/sigilli/* e /api/matricole/*
+│   ├── sync.py                      # /api/sync*, /api/filone/sync, /api/backup/*, /api/upload-BOXBEAT
+│   └── templates.py                 # /templates + API CRUD modelli/snippet/impostazioni firma
 │
-├── tools/                       # CLI di servizio
-│   ├── dump_db.py               # Diagnostica DB
-│   ├── archive_audit_log.py     # Archiviazione mensile audit
-│   ├── cleanup_done_pendings.py # Cleanup mensile pending done
-│   └── confronta_percorsi.py    # Confronto offline percorsi
+├── tools/                           # 9 CLI di servizio e documentazione SMS
+│   ├── README_SMS_GATEWAY.md
+│   ├── archive_audit_log.py         # Archivia audit_log > N giorni in .jsonl.gz
+│   ├── auto_import_filone.py        # CLI auto-import cron (--all / --provincia / --force / --dry-run)
+│   ├── cleanup_cross_province_pollution.py
+│   ├── cleanup_done_pendings.py     # Pulizia pending_writes in stato done > 30 giorni
+│   ├── confronta_percorsi.py        # Benchmark A/B offline ordinamento percorsi su backup JSON
+│   ├── dump_db.py                   # Ispezione CLI state.db (--eneltel, --pending, --conflicts, --anomalies, --columns)
+│   ├── import_invii_email_storici.py
+│   ├── import_lettere_storiche.py
+│   └── riclassifica_aziende_lettere.py
 │
-├── templates/                   # HTML per-provincia (Jinja2)
-├── templates_router/            # HTML admin del router
-├── static/                      # CSS/JS/asset frontend
-├── cache/                       # Cache OSRM + hash (auto, non in git)
-├── output/                      # Excel/PDF generati (auto)
-├── backup/                      # Snapshot DB + audit archive
-├── deploy/                      # Script deploy e systemd unit
-├── tests/                       # pytest
-│
-├── AGENTS.md                    # Linee guida per agent
-├── CLAUDE.md                    # (se presente) istruzioni Claude per il repo
-├── DB_LOCALE_README.md          # Architettura DB-only
-├── DOCUMENTAZIONE.md            # Questo file
-├── GUIDA_UTILIZZO.md            # Guida utente
-├── GUIDA_ACCOUNT.md             # Gestione utenti
-├── GUIDA_CLOUDFLARE.md          # Setup tunnel
-└── GUIDA_DEPLOY_VPS.md          # Deploy su VPS
-```
-
-### File generati automaticamente
-
-- `data/{prov}/mappa_data.json` — rigenerato a ogni refresh
-- `templates/mappa_{prov}.html` — generato dalla pipeline (non editare a mano)
-- `cache/cache_*.json` — cache distanze OSRM
-- `output/*.xlsx`, `output/*.pdf` — export utente
-- `backup/{prov}/state_YYYY-MM-DD.db` — snapshot DB giornaliero
-- `.flask_secret_key` — chiave Flask persistente
-
----
-
-## 15. Flusso dati
-
-### Refresh della mappa (event-driven)
-
-```
-POST utente / Import Excel / Trigger manuale
-        │
-        ▼
-  trigger_sync_after_edit()  ← server.py
-        │
-        ├── soft edit? ──→ try_patch_inplace()  → patch JSON  → SSE
-        │   (~50 ms)        moduli/mappa_data_patcher.py
-        │
-        └── cambio strutturale? ──→ sync_loop classico (~7-10 s)
-            │
-            ▼
-  1. data_loader.py
-     └─ carica_dati_google_sheets()  ← nome legacy: legge dal DB
-        ├─ Apre state.db, applica join filone + filone_extra
-        ├─ Normalizza colonne (trova_colonna fuzzy match)
-        ├─ Filtra: rimuove ESITO OK, date fuori range, no coordinate
-        ├─ Rileva appuntamenti (regex su NOTE APP + esclusioni)
-        └─ Risultato: pandas DataFrame
-        │
-        ▼
-  2. distanze.py
-     └─ genera_report_distanze_con_cache()
-        ├─ Raggruppa per tecnico + data
-        ├─ Controlla hash cache (skip se dati invariati)
-        ├─ Calcola matrice distanze OSRM (blocchi da 80)
-        ├─ Ottimizza percorso (percorso.py → TSP via OSRM Trip)
-        ├─ Assegna fasce orarie (fasce_orarie.py)
-        └─ Risultato: report con ordine, km, tempo per ogni tecnico/data
-        │
-        ▼
-  3. zone_geografiche.py
-     └─ genera_report_zone()
-        ├─ Calcola centroide per comune
-        ├─ Clustering DBSCAN (raggio configurabile)
-        ├─ Unisce zone piccole (<10-15 contatori)
-        └─ Nomina zone (direzione cardinale + comune principale)
-        │
-        ▼
-  4. mappa_html.py
-     └─ genera_mappa_html()
-        ├─ Prepara dati contatori con percorsi
-        ├─ Calcola rotte OSRM per le linee sulla mappa
-        ├─ Genera HTML completo (Leaflet.js + gestionale.py)
-        ├─ Salva data/{prov}/mappa_data.json
-        └─ Salva templates/mappa_{prov}.html
-        │
-        ▼
-  5. SSE notify
-     └─ Invia 'sync_complete' a tutti i browser connessi
-```
-
-### Flusso di modifica (utente → DB)
-
-```
-Browser (popup / sidebar / FILONE)
-    │
-    ├── PUT /api/contatore/<eneltel>
-    │      → routes/contatori.py
-    │      → safe_batch_update_by_name (legacy name, routes al DB)
-    │      → moduli/db.py:record_local_change()
-    │
-    ├── POST /api/upload-report           (Beat)
-    │      → routes/contatori.py
-    │      → match POD → db.record_local_change()
-    │
-    ├── POST /api/admin/import-excel      (FILONE)
-    │      → moduli/excel_importer.py
-    │      → merge "vince il più recente" cella per cella
-    │
-    └── PUT /api/sigillo/<eneltel>, /api/matricola/<eneltel>
-           → routes/sigilli.py, routes/contatori.py
-    │
-    ▼
-DB SQLite (state.db) aggiornato + audit_log popolato
-    │
-    ▼
-trigger_sync_after_edit()
-    └─ Patch in-place o sync_loop classico → SSE notify
+├── deploy/                          # Template systemd, cloudflared, cron e guida deploy
+├── templates/                       # 12 template HTML Jinja2 per provincia
+├── templates_router/                # admin.html (dashboard multi-provincia del router)
+├── static/                          # CSS/JS/asset condivisi (mappa, mail, lettere, comuni, csrf, tour, modali)
+├── data/                            # provinces.json + sottocartelle isolate data/{prov}/
+└── tests/                           # Suite pytest (conftest.py + 32 file test_*.py)
 ```
 
 ---
 
-## 16. Moduli — Riferimento
+## 11. Flusso dati ed eventi
 
-### `moduli/db.py`
+### Ciclo modifica → UI in tempo reale
 
-Schema SQLite v2 + accessor thread-local. Funzioni principali:
-
-| Funzione | Descrizione |
-| --- | --- |
-| `record_local_change(eneltel, fields, ...)` | Update filone + audit (entry point per le scritture utente). |
-| `upsert_filone_row(...)` | Insert/update da import Excel. |
-| `find_eneltel_by_pod(pod)` | Lookup secondario. |
-| `canonical_column_name(name)` | Risolve alias colonna → chiave interna. |
-| `dump_filone_as_rows(...)` | Export DataFrame-like dal DB. |
-| `stats()` | Statistiche DB (count, integrity, ecc.). |
-| `integrity_check()` | PRAGMA integrity_check. |
-
-Schema: `filone`, `filone_extra`, `pending_writes` (legacy), `audit_log`, `column_registry`, `filone_anomalies`, `sync_state`. Vedi [DB_LOCALE_README.md](DB_LOCALE_README.md).
-
-### `moduli/excel_importer.py`
-
-Import del FILONE da Excel/CSV. Politica di merge: "vince il più recente" a granularità RIGA (`last_local_change_ts` vs `excel_export_ts`).
-
-### `moduli/data_loader.py`
-
-Legge dal DB e produce il DataFrame pandas. Mantiene una cache TTL in memoria invalidata da `mark_data_changed()` dopo ogni scrittura.
-
-**Colonne output principali:**
-`DATA_K`, `NOTE_APP_RAW`, `IS_APPUNTAMENTO`, `ORA_APPUNTAMENTO`, `Eneltel_Key`, `CLI_K`, `VIA_K`, `COMUNE`, `TEL_K`, `TEC_K`, `POD_K`, `Lat`, `Lon`, `CIVICO_K`, `TIPO_CE_K`, `LCL`, `LOCALITA`, `NOTE_K`.
-
-**Filtri applicati:**
-- Rimuove righe con `ESITO OK` (già installate)
-- Rimuove righe senza coordinate GPS valide
-- Filtra per operatori VIP (`MATRICOLE_VIP`)
-- Filtra per range date (`DATA_INIZIO` — `DATA_FINE`)
-
-### `moduli/shared.py`
-
-API legacy gspread (`safe_batch_update_by_name`, `get_worksheet`, `get_header_map`, `force_refresh_headers`, ecc.) re-implementata sopra il DB. Tutte le chiamate gspread effettive (es. `ws.batch_update`) sollevano eccezioni esplicite. Mantenuta per non toccare le route Blueprint.
-
-### `moduli/sync_engine.py`
-
-**Stub no-op**. `pull_once`, `drain_once`, `trigger_drain_now` ritornano risultati success-like senza effetti. `start_workers` esegue solo `PRAGMA integrity_check` al boot. Vedi commento nel modulo per la cronologia.
-
-### `moduli/mappa_data_patcher.py`
-
-Patch in-place di `mappa_data.json` per soft edit (~50ms invece di rigenerare tutto). Definisce `SOFT_FIELDS_DB` e `STRUCTURAL_FIELDS_DB`.
-
-### `moduli/distanze.py`
-
-| Funzione | Descrizione |
-| --- | --- |
-| `calcola_matrice_distanze_osrm(...)` | OSRM Table API, blocchi da 80 coordinate |
-| `calcola_rotta_osrm(...)` | Rotta singola con geometria per le linee sulla mappa |
-| `genera_report_distanze_con_cache(...)` | Entry point principale del calcolo distanze |
-
-**Costanti:** `OSRM_MAX_TABLE_SIZE=80`, `OSRM_TIMEOUT=30`, `VELOCITA_MEDIA_KMH=35` (override per provincia), `TEMPO_INTERVENTO_MIN=20`, `FATTORE_CORREZIONE_HAVERSINE=1.35`.
-
-### `moduli/percorso.py`
-
-TSP via **OSRM Trip API**. Gestisce vincoli di appuntamento con strategia ad ancore temporali. Fallback geografico (sweep angolare) se OSRM cade. Vedi sezione [20](#20-algoritmo-di-ottimizzazione-percorsi).
-
-### `moduli/fasce_orarie.py`
-
-| Funzione | Descrizione |
-| --- | --- |
-| `assegna_fasce(percorso)` | 4 contatori per fascia, ordine del percorso ottimizzato |
-| `formatta_fascia_oraria(fascia)` | `'8/11'` → `'dalle 8:00 alle 11:00'` |
-
-**Fasce definite:** `['8/11', '10/13', '11/14', '12/15', '13/16', '14/17']`.
-
-### `moduli/zone_geografiche.py`
-
-Clustering DBSCAN dei comuni in zone operative. `eps = cella_km × 0.625 / 111`, `min_samples = 1`. Naming: direzione cardinale + comune principale.
-
-### `moduli/mappa_html.py`
-
-Generazione mappa HTML completa con Leaflet.js. Inietta CSS/JS dal modulo `gestionale.py`. Output: `templates/mappa_{prov}.html` + `data/{prov}/mappa_data.json`.
-
-### `moduli/distinte_manager.py`
-
-Parsing PDF "DistintaBase" Enel (pdfplumber), classificazione contatti per prefisso (320-399 → cellulare), generazione messaggi WhatsApp.
-
-### `moduli/auth.py`
-
-Auth Flask con sessioni. Password PBKDF2-SHA256 (100k iterazioni). Storage: `users.json`.
-
-### `moduli/backup.py`
-
-Backup periodico del DB (`VACUUM INTO backup/{prov}/state_YYYY-MM-DD.db`, rotation ultimi 7).
-
-### `moduli/rilevamento_aziende.py`
-
-Detect di indirizzi aziendali/condomini per il raggruppamento marker (stessa azienda/indirizzo → fascia unica in lettera, pin separati sulla mappa).
+1. Il client invia una mutazione (`POST`/`PUT`/`DELETE`) con header `X-CSRF-Token`.
+2. La route valida i parametri ed esegue la scrittura sul DB SQLite locale (`moduli/db.py:record_local_change`), aggiornando `filone`/`filone_extra`, `last_local_change_ts`, `audit_log` e la coda `pending_writes` (Outbox).
+3. `server.py:trigger_sync_after_edit()` verifica i campi toccati tramite [`moduli/mappa_data_patcher.py`](moduli/mappa_data_patcher.py):
+   - **Se tutti i campi appartengono a `SOFT_FIELDS_DB`**: patcha `data/{prov}/mappa_data.json` in ~50 ms e chiama `sse_notify_all('sync_complete', {'source': 'inplace_patch', ...})`.
+   - **Se almeno un campo è in `STRUCTURAL_FIELDS_DB`** (es. `data_pianificata`, `operatore`, coordinate, `comune`, `esito`, note `APP`): imposta `_sync_needed` per risvegliare immediatamente il `background_sync_loop`.
+4. Durante il `sync_loop`: `data_loader.py` legge SQLite → `access_points.py` risolve eventuali access point mancanti → `distanze.py` + `percorso.py` aggiornano percorsi con cache hash MD5 → `zone_geografiche.py` calcola le zone → `mappa_html.py` scrive `mappa_data.json` e `config.json` → `sse_notify_all('sync_complete')` → `backup_periodico_auto()`.
 
 ---
 
-## 17. API REST
+## 12. Moduli (`moduli/`) — Riferimento
 
-Tutte le API (tranne `/api/config` e `/api/login`) richiedono autenticazione.
-
-### Auth
-
-| Metodo | Endpoint | Descrizione |
-| --- | --- | --- |
-| GET | `/login` | Pagina di login HTML |
-| POST | `/api/login` | Login. Body: `{"username": "...", "password": "..."}` |
-| POST | `/api/logout` | Logout |
-| GET | `/api/user` | Utente corrente |
-| GET | `/logout` | Logout + redirect |
-
-### Mappa e config
-
-| Metodo | Endpoint | Descrizione |
-| --- | --- | --- |
-| GET | `/` | Mappa HTML della provincia attiva |
-| GET | `/api/config` | Configurazione provincia (non protetto) |
-| GET | `/api/events` | Stream SSE per notifiche real-time |
-| GET | `/data/<path>` | File JSON dalla cartella `data/` (no cache) |
-
-### Contatori
-
-| Metodo | Endpoint | Descrizione |
-| --- | --- | --- |
-| GET | `/api/contatore/<eneltel>` | Dati di un contatore |
-| PUT | `/api/contatore/<eneltel>` | Aggiorna campi |
-| POST | `/api/contatore/<eneltel>/appuntamento` | Imposta appuntamento |
-| POST | `/api/contatore/<eneltel>/rimuovi-appuntamento` | Rimuove appuntamento |
-
-### Import dati esterni
-
-| Metodo | Endpoint | Descrizione |
-| --- | --- | --- |
-| POST | `/api/upload-report` | Upload file Excel di ritorno installazioni (Beat) |
-| POST | `/api/admin/import-excel` | Upload FILONE Excel/CSV con merge sicuro |
-
-### Sigilli / Matricole
-
-| Metodo | Endpoint | Descrizione |
-| --- | --- | --- |
-| GET | `/api/sigilli/pending` | Contatori (trifase/fotovolt.) installati senza sigillo |
-| PUT | `/api/sigillo/<eneltel>` | Salva sigillo |
-| GET | `/api/matricole/pending` | Contatori installati senza matricola |
-| PUT | `/api/matricola/<eneltel>` | Salva matricola |
-
-### FILONE (vista Excel)
-
-| Metodo | Endpoint | Descrizione |
-| --- | --- | --- |
-| GET | `/api/filone` | Tutti i contatori del DB |
-| PUT | `/api/filone/row/<row_num>` | Aggiorna riga |
-| POST | `/api/filone/row` | Aggiunge nuova riga manualmente |
-
-### Distinte
-
-| Metodo | Endpoint | Descrizione |
-| --- | --- | --- |
-| GET | `/distinte` | Pagina gestione distinte |
-| POST | `/api/distinte/parse-distinta` | Upload PDF distinte |
-| POST | `/api/distinte/sovrascrivi` | Sovrascrivi campo via POD |
-| POST | `/api/distinte/salva-nota` | Salva nota |
-| POST | `/api/distinte/appuntamento` | Appuntamento via POD |
-| POST | `/api/distinte/salva-telefono` | Salva telefono |
-
-### Sync / Admin
-
-| Metodo | Endpoint | Descrizione |
-| --- | --- | --- |
-| POST | `/api/sync` | Forza refresh manuale |
-| GET | `/api/sync/status` | Stato del refresh |
-| GET | `/api/admin/db-stats` | Stats DB locale |
-| GET | `/api/admin/db-pending` | Pending residue per stato |
+| Modulo | Responsabilità tecnica |
+|---|---|
+| `db.py` | Schema SQLite WAL **v7** (18 tabelle, PK `(eneltel_key, lcl)`), pool connessioni thread-local, migrazioni v1→v7, `record_local_change`, `upsert_filone_row`, `dump_filone_as_rows`, `canonical_column_name`. |
+| `shared.py` | Bridge di compatibilità legacy gspread → DB SQLite, cache letture con invalidazione, helper lookup anchor (`eneltel`, `pod`, `sheets_row`), registry callback con `server.py`. |
+| `data_loader.py` | Query unificata `filone` + `filone_extra`, normalizzazione fuzzy colonne (`trova_colonna`), esclusione `ESITO OK` / coordinate invalide / LCL e operatori disabilitati / date fuori finestra. |
+| `excel_importer.py` | Parser `.xlsx`/`.xls`/`.csv`, creazione automatica colonne mancanti in `column_registry`, merge cella-per-cella protetto per riga (`last_local_change_ts` vs `excel_export_ts`). |
+| `auto_import.py` | Scaricamento XLSX da link Google Sheets (`export?format=xlsx&gid=...`), calcolo hash SHA-256 deterministico sui CRC dello ZIP (escluso `docProps/`), invocazione sicura importer. |
+| `outbox.py` | Aggregazione (`_list_pending_coalesced`) delle modifiche `pending`, export Excel compatto giallo (`build_outbox_xlsx`), export completo (`build_full_xlsx`), marca consegnate (`mark_delivered`). |
+| `mappa_data_patcher.py` | Patch atomica su `mappa_data.json` per campi non strutturali (`SOFT_FIELDS_DB`). |
+| `access_points.py` | Calcolo access point stradali via OSRM `/nearest` (`OSRM_NEAREST_NUMBER=15`, `SOGLIA_SIMILARITY=0.85`, `DISTANZA_MAX_SNAP_M=80.0m`), override manuali in `data/{prov}/access_overrides.json` con undo stack. |
+| `distanze.py` | Client HTTP OSRM `/table` (blocchi fino a 80 punti) e `/route`, fallback Haversine × `1.35`, orchestrazione cache con `genera_report_distanze_con_cache`. |
+| `percorso.py` | Ordinamento tappe per giornata/operatore: `/trip` roundtrip oppure segmentazione a **ancore temporali** tra appuntamenti con fallback **sweep angolare**. |
+| `appuntamenti_core.py` | Matching rigoroso `^\W*app\b` (case-insensitive) condiviso tra mappa, dashboard, report e lettere. |
+| `fasce_orarie.py` | 7 fasce (`'8/11'`, `'9/12'`, `'10/13'`, `'11/14'`, `'12/15'`, `'13/16'`, `'14/17'`), assegnazione fissa (`TAPPE_PER_FASCIA=4`) o bilanciata e consolidamento indirizzi aziendali. |
+| `zone_geografiche.py` | Centroidi comunali, clustering DBSCAN con matrice distanze km precomputata (`dimensione_cella_km=8`, `eps_km = dimensione_cella_km * 0.625`), split zone estese e merge zone piccole (`min_contatori_zona=15`), calendario per zona. |
+| `cache.py` | Wrapper dict-like sopra SQLite (`cache/cache_distanze_{prov}.db`, tabelle `distanze` e `hashes`) con migrazione automatica da eventuali vecchi `.json`. |
+| `mappa_html.py` | Costruzione payload `mappa_data.json` + `config.json`, memorizzazione inputs leggeri per il render Jinja dinamico (`render_mappa_corrente()`). |
+| `gestionale.py` | Componenti UI embedded nella mappa per pannello modifica popup/full, BOXBEAT upload, sigilli/matricole. |
+| `distinte_manager.py` | Estrazione dati da PDF **DistintaBase** e **Modulo Maxy** (`pdfplumber`), classificazione numeri cellulari italiani (`320–399`), confronto numeri tollerando lo `0` iniziale e helper WhatsApp. |
+| `bulk_contatori_email.py` | Raggruppamento contatori per destinatario/azienda, pluralizzazione testi, allegati Excel dinamici e scrittura automatica note (`mandata mail` / `mandato SMS` / `mandato wa`) su `state.db`. |
+| `lettere.py` | Gestione archivio generazioni lettere, chiavi contatto (`POD:`/`NOPOD:`), rubrica contatti/PEC, aziende per generazione, statistiche e invii email. |
+| `rilevamento_aziende.py` | Classificazione `azienda` / `condominio` / `ente_pubblico` / `privato` tramite regex suffissi societari, prefissi ente e analisi contestuale della preposizione `'DI'` nelle note. |
+| `mail_manager.py` | Webmail SQLite (`mail_messages`, `mail_categories`, `mail_templates_snippets`), fetch IMAP, invio programmato in coda (`process_scheduled_queue`), categorizzazione automatica, rubrica unificata. |
+| `smtp.py` | Client SMTP centralizzato (SSL `465` / STARTTLS `587`, retry errori 4xx/transitori), salvataggio automatico in `Sent` via IMAP, supporto CCN automatico email provincia. |
+| `sms_gateway.py` | Invio SMS via Android SMS Gateway (Server Locale o Cloud Capcom6) o HTTP Webhook, normalizzazione `+39` E.164, conteggio caratteri/segmenti GSM-7 (`160`) vs UCS-2 (`70`/`67`). |
+| `comuni_db.py` | Lookup locale CAP/Provincia italiana basato su dataset `comuni-json` (`matteocontrini/comuni-json`), cache in `cache/cache_comuni_italiani.json` (TTL 30 giorni). |
+| `comuni_manager.py` | Gestione tabella `comuni_info`, import/export `.xlsx`, anteprima e invio bulk email/PEC a Comuni, Polizia Locale e Uffici Tecnici. |
+| `calendario.py` | CRUD attività giornaliere (`data/{prov}/calendario.json`), promemoria BOXBEAT e pulizia automatica completati. |
+| `workflow.py` | Gestione checklist operativa personalizzata (`data/{prov}/user_workflows.json`). |
+| `backup.py` | Dump giornaliero `filone_{prov}_YYYY-MM-DD.json` e snapshot SQLite binario `state_YYYY-MM-DD.db` via `VACUUM INTO` con rotazione ultimi 7 giorni. |
+| `auth.py` | Autenticazione Argon2id + rehash PBKDF2 legacy, ruoli `['admin', 'user']`, controllo province da `data/provinces.json`, sicurezza cookie. |
+| `safe_json.py` | I/O JSON thread-safe per-file con scrittura atomica (`NamedTemporaryFile` + `os.replace`). |
+| `sync_engine.py` | Stub post-disconnessione Sheets (nessuna connessione Google API; verifica `integrity_check()` all'avvio). |
 
 ---
 
-## 18. Configurazione
+## 13. Blueprint e API REST (`routes/`, `server.py`, `router.py`)
 
-### `data/provinces.json` — definizioni province
+Salvo diversa indicazione (`POST /api/login`, `GET /api/config`), tutte le API richiedono sessione autenticata (`@login_required`) e tutte le mutazioni richiedono header `X-CSRF-Token`.
+
+### Auth, Mappa, Impostazioni & SSE (`server.py`)
+| Metodo | Endpoint | Descrizione |
+|---|---|---|
+| `GET` / `POST` | `/login`, `/api/login`, `/api/logout`, `/logout`, `/api/user` | Autenticazione, sessione corrente (username, ruolo, province) |
+| `GET` | `/`, `/filone`, `/api/config`, `/data/<path>` | Mappa HTML, vista Filone, config provincia, JSON protetti |
+| `GET` | `/api/events` | Stream Server-Sent Events (`connected`, `sync_complete`, keepalive 10s) |
+| `POST` | `/api/route_geometry` | Calcolo geometria percorso stradale OSRM tra coordinate |
+| `GET` / `PUT` | `/api/settings` | Lettura/salvataggio override in `data/{prov}/settings.json` (`@admin_required` per `PUT`) |
+| `POST` / `GET` | `/api/internal/trigger-sync`, `/api/internal/auto-import` | Endpoint interni solo localhost usati da CLI/cron |
+
+### Contatori, Filone & Access Points (`routes/contatori.py`, `routes/access_points.py`, `routes/sigilli.py`)
+| Metodo | Endpoint | Descrizione |
+|---|---|---|
+| `GET` / `PUT` | `/api/contatore/<eneltel>` | Dettaglio e modifica singolo contatore su `state.db` |
+| `POST` | `/api/contatori/bulk-pianifica` | Pianificazione massiva data/operatore dalla mappa |
+| `POST` | `/api/contatori/excel-assegnati`, `/api/contatori/check-inactive-lcl` | Export Excel assegnazioni e verifica LCL disabilitate |
+| `POST` | `/api/contatore/<eneltel>/{appuntamento,rimuovi-appuntamento}` | Fissazione/rimozione slot appuntamento |
+| `GET` | `/api/filone`, `/api/filone/log` | Dati completi vista Excel e log variazioni |
+| `GET`/`PUT` | `/api/filone/notes`, `/api/filone/row/<row_num>` | Commenti celle e aggiornamento riga |
+| `POST` | `/api/filone/bulk`, `/api/filone/append` | Modifiche massive ed aggiunta nuova riga |
+| `POST` / `GET` | `/api/genera-orari-lettere`, `/api/download-excel-lettere/<filename>` | Calcolo fasce e download Excel generato |
+| `GET`/`POST`/`DELETE` | `/api/access-point/<eneltel>`, `/undo`, `/snap` | Letture, override manuali, undo e snap OSRM dell'access point |
+| `GET` / `PUT` | `/api/sigilli/pending`, `/api/sigillo/<eneltel>`, `/api/matricole/pending`, `/api/matricola/<eneltel>` | Monitoraggio ed inserimento sigilli e matricole installati |
+
+### Sync, Backup & BOXBEAT (`routes/sync.py`)
+| Metodo | Endpoint | Descrizione |
+|---|---|---|
+| `POST` / `GET` | `/api/filone/sync`, `/api/sync`, `/api/sync/status` | Trigger patch/sync immediato e stato sync loop |
+| `GET`/`POST`/`DELETE` | `/api/backup/{lista,esegui,ripristina,elimina,scarica_excel}` | Gestione backup JSON ed export Excel |
+| `POST` | `/api/upload-BOXBEAT` | Upload singolo/multiplo report installazioni E-Distribuzione (Beat) |
+
+### Distinte, Lettere, Mail, Comuni, Template, Agenda & Analytics
+| Area | Endpoint principali |
+|---|---|
+| **Distinte (`routes/distinte.py`)** | `/distinte`, `/whatsapp`, `/api/distinte/parse-distinta`, `/sovrascrivi`, `/aggiorna-operatori`, `/aggiorna-data`, `/salva-{nota,telefono,email}`, `/strikethrough-telefono`, `/segna-errato`, `/appuntamento`, `/rimuovi-appuntamento`, `/templates`, `/allegati`, `/invia-{singola-email,email-prova,singolo-sms}`, `/smtp-*`, `/sms-*` |
+| **Lettere (`routes/lettere.py`)** | `/lettere`, `/api/lettere/generazioni*`, `/aziende*`, `/privati`, `/riclassifica`, `/contatti*`, `/statistiche`, `/allegati`, `/invia-email` |
+| **Mail (`routes/mail.py`)** | `/mail` (`/webmail`, `/gestione-mail`), `/api/mail/{stats,messages*,send,save-draft,batch-action,toggle-starred,mark-read,set-category,move-folder,sync-imap,categories*,templates*,template-settings,resolve-template,contacts-search,standard-attachments,upload-attachment,attachment/...}` |
+| **Comuni (`routes/comuni.py`)** | `/comuni`, `/api/comuni/{list,update,import-excel,bulk-preview,bulk-send,send-single,download-excel/<comune>,export-excel}`, `/api/admin/export-comuni-excel` |
+| **Template (`routes/templates.py`)** | `/templates`, `/api/templates/{all,save,delete/<id>,settings,preview}` |
+| **Calendario & Bacheca (`routes/calendario.py`, `routes/bacheca.py`, `routes/appuntamenti.py`)** | `/calendario`, `/api/calendario*`, `/api/workflow*`, `/api/boxbeat/*`, `/api/bacheca/{promemoria,tutti}`, `/appuntamenti`, `/api/appuntamenti`, `/api/appuntamenti/excel` |
+| **Dashboard & Report (`routes/dashboard.py`, `routes/report.py`)** | `/dashboard`, `/api/dashboard`, `/report`, `/api/report`, `/api/report/export` |
+
+### Admin Backend & Router Multi-Tenant (`server.py`, `router.py`)
+- **Backend provincia (`@admin_required`):** `/api/admin/users*`, `/api/admin/lcls`, `/api/admin/{smtp,sms}-{settings,test*}`, `/api/admin/db-{stats,pending,action,dump/...}`, `/api/admin/outbox*`, `/api/admin/export-full-excel`, `/api/admin/import-excel`, `/api/admin/auto-import-{sheets,status}`, `/api/admin/columns*`, `/api/admin/column-mapping`, `/api/admin/lettere-excel-config`.
+- **Router `admin.*` (`router.py`):** `/api/provinces*` (CRUD, lifecycle `start`/`stop`/`restart`), `/api/status`, `/api/logs` (`journalctl`), `/api/health-overview`, `/_router/health`, oltre al proxy admin trasparente verso `/api/provinces/<slug>/{db-action,dump-eneltel,smtp-*,sms-*,auto-import*,import-excel,outbox*,export-full-excel,export-comuni-excel,column-mapping,lettere-excel-config,lcls,columns*}` e gestione `/api/admin/users*`.
+
+---
+
+## 14. Configurazione e variabili d'ambiente
+
+### Schema [`data/provinces.json`](data/provinces.json)
 
 ```json
 {
   "TORINO": {
     "nome": "Torino",
-    "deposito": {"Nome": "Volpiano", "Lat": 45.32, "Lon": 7.78},
-    "operatori_vip": ["AE101392", "AG49808"],
-    "colori_operatori": {"AE101392": "#e74c3c"},
-    "operatori_dict": {"Mario Rossi": "AE101392"},
+    "deposito": { "Nome": "DEPOSITO VOLPIANO", "Lat": 45.1964682, "Lon": 7.7888303 },
+    "operatori_vip": ["AE101392", "..."],
+    "colori_operatori": { "AE101392": "#e74c3c" },
+    "operatori_dict": { "PAUL": "AE101392" },
     "ora_inizio_giornata": 540,
     "ora_fine_giornata": 1020,
+    "velocita_media_kmh": 35,
+    "tempo_intervento_min": 20,
     "data_inizio": "2025-10-01",
-    "data_fine": ""
+    "data_fine": "",
+    "usa_localita_come_comune": false,
+    "sottodominio": "torino.mappa-algeco.com",
+    "porta": 5001,
+    "operatori_disabilitati": [],
+    "lcl_disabilitati": ["6600101316"],
+    "google_sheet_url": "https://docs.google.com/spreadsheets/d/...",
+    "auto_import_enabled": true
   }
 }
 ```
 
-Aggiungibile/modificabile dall'UI admin (`admin.*` o `/admin/*`).
+### Costanti principali (`config.py`) e Override (`data/{prov}/settings.json`)
 
-### `config.py` — costanti globali
+| Costante (`config.py`) | Default / Origine | Descrizione |
+|---|---|---|
+| `OSRM_SERVER` / `OSRM_TIMEOUT` | `http://localhost:5000` / `30` | Server e timeout chiamate routing OSRM |
+| `VELOCITA_MEDIA_KMH` / `TEMPO_INTERVENTO_MIN` | `35` / `20` (override per provincia) | Parametri stima tempi di viaggio/sostituzione |
+| `FATTORE_CORREZIONE_HAVERSINE` | `1.35` | Moltiplicatore fallback geometrico su assenza OSRM |
+| `INTERVALLO_SYNC_SECONDI` | `300` | Solo fallback client in caso di assenza SSE |
+| `DB_PATH` | `data/{prov}/state.db` | Database SQLite WAL della provincia |
+| `CARTO_API_KEY` | `os.environ.get('CARTO_API_KEY')` o default repo | Chiave basemap CARTO |
 
-| Costante | Valore default | Descrizione |
-| --- | --- | --- |
-| `OSRM_SERVER` | `http://localhost:5000` | Server OSRM |
-| `OSRM_TIMEOUT` | 30 | Timeout in secondi |
-| `VELOCITA_MEDIA_KMH` | 35 | Stima fallback (override per provincia) |
-| `TEMPO_INTERVENTO_MIN` | 20 | Minuti per sostituzione |
-| `INTERVALLO_SYNC_SECONDI` | 300 | Solo fallback polling client se SSE down |
-| `DATA_INIZIO` / `DATA_FINE` | provincia-specifico | Range filtro date |
-| `DIMENSIONE_CELLA_ZONA_KM` | 8 | Raggio clustering DBSCAN |
-| `FATTORE_CORREZIONE_HAVERSINE` | 1.35 | Moltiplicatore fallback haversine |
-| `DB_PATH` | `data/{prov}/state.db` | Path DB SQLite |
-| `USE_DB_BACKEND` | `primary` | `primary` (default) o `off` (kill-switch) |
+`data/{prov}/settings.json` può sovrascrivere a runtime `operatori_vip`, `colori_operatori`, `operatori_dict`, `operatori_disabilitati`, `lcl_disabilitati`, `deposito`, `ora_inizio_giornata`, `ora_fine_giornata`, `velocita_media_kmh`, `tempo_intervento_min`, `data_inizio`, `data_fine`, `mappatura_colonne`, `lettere_excel`, `carto_api_key`, `google_sheet_url`, `auto_import_enabled`.
 
-### `data/{prov}/settings.json` — override da UI admin
+### Variabili d'ambiente principali
 
-Può sovrascrivere: `operatori_vip`, `colori_operatori`, `operatori_dict`, `deposito`, `ora_inizio_giornata`, `ora_fine_giornata`, `velocita_media_kmh`, `tempo_intervento_min`, `data_inizio`, `data_fine`, `mappatura_colonne`.
-
-### Variabili d'ambiente
-
-| Variabile | Descrizione |
-| --- | --- |
-| `PROVINCIA` | Provincia attiva (`TORINO` / `PAVIA` / ...) |
-| `FLASK_PORT` | Porta del server Flask (default 5001) |
-| `ROUTER_PORT` | Porta del router (default 5050) |
-| `GUNICORN_THREADS` | Override threads gunicorn (default 32) |
-| `USE_DB_BACKEND` | Override modalità DB (`primary` / `off`) |
+| Variabile | Default | Ruolo |
+|---|---|---|
+| `PROVINCIA` | `TORINO` | Seleziona la provincia del processo backend |
+| `FLASK_PORT` | `5001` | Porta ascolto backend provinciale |
+| `ROUTER_HOST` / `ROUTER_PORT` | `127.0.0.1` / `5050` | Bind del reverse proxy `router.py` |
+| `GUNICORN_THREADS` | `32` | Thread per worker in `gunicorn.conf.py` (`workers=1`, `gthread`) |
+| `FLASK_ENV` | — | Se `production` attiva `SESSION_COOKIE_SECURE=True` |
+| `SESSION_COOKIE_DOMAIN` | — | Esempio `.mappa-algeco.com` per auth cross-subdomain (incluso `admin.*`) |
+| `DOMINIO_BASE` | `mappa-algeco.com` | Dominio base usato per origin/CORS fidate |
+| `ADMIN_HOST_PREFIX` | `admin` | Prefisso hostname per servire la dashboard admin del router |
+| `CARTO_API_KEY` | vedi `config.py` | Override basemap CARTO |
 
 ---
 
-## 19. Cache e performance
+## 15. Cache e performance
 
-### File di cache
-
-| File | Contenuto | Chiave |
-| --- | --- | --- |
-| `cache/cache_distanze_{prov}.json` | Matrici distanze/durate OSRM | `"{tecnico}_{data}"` |
-| `cache/cache_hash_{prov}.json` | Hash MD5 dei dati per invalidazione | `"{tecnico}_{data}"` |
-| `cache/cache_ordine_percorsi_{prov}.json` | Ordine TSP pre-calcolato | `"{tecnico}_{data}"` |
-
-### Strategia di invalidazione
-
-1. Per ogni coppia **tecnico + data** viene calcolato un **hash MD5** dei dati rilevanti (coordinate, appuntamenti, fasce orarie).
-2. Se l'hash è identico al sync precedente, le distanze NON vengono ricalcolate.
-3. Se l'hash è diverso (nuovo contatore, cambio posizione, ecc.), la cache per quella chiave viene invalidata.
-4. La cache è **permanente** (nessuna scadenza temporale).
-
-### Quando viene invalidata
-
-- Aggiunta/rimozione di un contatore
-- Cambio coordinate
-- Cambio appuntamento
-- Cambio operatore assegnato
-- Cambio data pianificata
-
-### Memoria
-
-Singolo worker gunicorn (`workers=1`, `threads=32`, `worker_class=gthread`). Il DataFrame + cache + `mappa_data` occupa ~300 MB in memoria. Con N worker la memoria si moltiplicherebbe: si è scelto **1 worker** perché il pattern è I/O-bound (DB + OSRM) e il volume di traffico basso (~5 utenti). I thread gthread gestiscono la concorrenza, inclusi SSE long-lived.
+| Risorsa / File | Tecnologia | Scopo |
+|---|---|---|
+| `cache/cache_distanze_{prov}.db` | **SQLite** lazy (`moduli/cache.py`) | Memorizza le tabelle `distanze` e `hashes` on-demand per coppia `"{tecnico}_{data}"` evitando il caricamento in RAM dell'intero albero storico. Migra automaticamente eventuali vecchi `.json`. |
+| `cache/auto_import_{prov}.json` & `last_sheet_{prov}.xlsx` | JSON / XLSX | Salva ultimo hash SHA-256 ZIP CRC dello Sheet ed ultima istantanea scaricata. |
+| `cache/cache_comuni_italiani.json` | JSON (TTL 30 gg) | Cache locale del database comuni ISTAT/CAP da `comuni-json`. |
+| `cache/cache_appuntamenti_visti_{prov}.json` | JSON | Tracciamento chiavi promemoria già elaborate. |
+| `gunicorn.conf.py` | `workers=1`, `threads=32`, `gthread` | Mantiene un solo stato in RAM per provincia (~data + dataframe) gestendo richieste e stream SSE long-lived su 32 thread con `max_requests=1000`. |
 
 ---
 
-## 20. Algoritmo di ottimizzazione percorsi
+## 16. Algoritmo di ottimizzazione percorsi, Access Points e Clustering
 
-Il modulo `percorso.py` delega il TSP a **OSRM Trip API**, che lo risolve nativamente sulla rete stradale reale (sensi unici, svincoli, autostrade).
-
-### Pipeline
-
-```
-Input: lista punti con coordinate (Lat/Lon o Lat_access/Lon_access)
-  │
-  ▼
-1. CATEGORIZZAZIONE
-   ├─ app_normali: appuntamenti del giorno con orario parsato
-   ├─ app_serali : appuntamenti dopo soglia (17:00 TO / 15:00 PA)
-   └─ punti_base : tutto il resto
-  │
-  ▼
-2. SE NESSUN APPUNTAMENTO → OSRM Trip roundtrip
-   GET /trip/v1/driving/{deposito;p1;p2;...;pn;deposito}
-       ?roundtrip=true&source=first&destination=last
-  │
-  ▼
-3. SE CI SONO APPUNTAMENTI → strategia "ancore temporali"
-   ├─ Ordina app_normali per ora_min crescente.
-   ├─ Per ogni segmento (pos → prossimo_app):
-   │    budget = ora_min(app) - orario_corrente - tempo_diretto(pos, app)
-   │    n_max  = floor(budget / TEMPO_TAPPA_MEDIO)
-   │    Sceglie i n_max punti base con minor "deviazione" dal segmento
-   │    e li ordina con OSRM Trip non-roundtrip (start=pos, end=app).
-   ├─ Aggiunge l'appuntamento (se arriva prima di ora_min, "aspetta").
-   ├─ Punti base rimanenti: OSRM Trip pos → deposito.
-   └─ Appuntamenti serali in coda, in ordine cronologico.
-  │
-  ▼
-4. FALLBACK (OSRM down): sweep angolare dal deposito
-  │
-  ▼
-Output: lista punti ordinata
-```
-
-### Rilevamento appuntamenti
-
-`IS_APPUNTAMENTO=True` se la nota inizia con la parola `APP` (case-insensitive, token `^\W*app\b`). Non ci sono parole in blacklist (parole come "chiamare", "da rifissare", ecc. non escludono l'appuntamento se la nota inizia con "APP"). Vedi `rileva_appuntamento` in `moduli/appuntamenti_core.py`.
-
-### Parsing orario
-
-L'orario dell'appuntamento viene ricavato **SOLO dalla colonna "Orari"** (e non più dalle note, per evitare falsi positivi o orari obsoleti presenti nelle note libere).
-
-`estrai_orario_e_fascia` riconosce:
-
-- `dalle 8 alle 12` → `(08:00, 12:00)`
-- `dalle 09:00 alle 12:30` → `(09:00, 12:30)`
-- `ORE 10:30/12:00` → `(10:30, 12:00)`
-- `10/12`, `10-12` → `(10:00, 12:00)`
-- `10:30` → `(10:30, 10:30)`
-- `alle 14`, `ore 14` → `(14:00, 14:00)`
-
-### Perché le autostrade
-
-OSRM con `profile=driving` restituisce il percorso **più veloce** (non il più breve in km). Per Torino i tecnici usano la tangenziale/autostrada anziché attraversare il centro.
+1. **Access Point stradali (`moduli/access_points.py`):** per ogni contatore con civico valido interroga OSRM `/nearest?number=15` confrontando il nome strada normalizzato (prefissi rimossi) con soglia di similarità `0.85` ed entro `80.0 m`. La coordinata originale rimane il marker visivo del fabbricato, mentre `Lat_access`/`Lon_access` viene usata per il routing OSRM. Gli operatori/admin possono applicare override manuali e undo tramite `/api/access-point/<eneltel>`.
+2. **Routing TSP con ancore temporali (`moduli/percorso.py`):**
+   - `IS_APPUNTAMENTO = True` sse la nota inizia con token `^\W*app\b` ([`moduli/appuntamenti_core.py`](moduli/appuntamenti_core.py)); l'orario/fascia viene estratto **solo dalla colonna Orari**.
+   - Se non ci sono appuntamenti: `OSRM /trip?roundtrip=true&source=first&destination=last`.
+   - Con appuntamenti: gli appuntamenti normali diventano **ancore cronologiche** ordinate per `ora_min`; ogni intervallo tra due ancore seleziona i punti base a minor deviazione entro il budget temporale e li ordina con OSRM `/trip` non-roundtrip (`start → end`), accodando infine residui e appuntamenti serali. Fallback geografico tramite sweep angolare dal deposito se OSRM non risponde.
+3. **Fasce orarie lettere (`moduli/fasce_orarie.py`):** 7 fasce (`'8/11'`, `'9/12'`, `'10/13'`, `'11/14'`, `'12/15'`, `'13/16'`, `'14/17'`), modalità fissa (`4` tappe/fascia) o bilanciata, con consolidamento automatico degli indirizzi aziendali ([`moduli/rilevamento_aziende.py`](moduli/rilevamento_aziende.py)).
+4. **Clustering geografico (`moduli/zone_geografiche.py`):** DBSCAN (`sklearn.cluster.DBSCAN`, `metric='precomputed'`) sui centroidi comunali in km (`dimensione_cella_km=8`, `eps_km = dimensione_cella_km * 0.625`, `min_samples=1`), seguito da suddivisione ricorsiva di zone troppo estese e fusione delle zone piccole (`min_contatori_zona=15`).
 
 ---
 
-## 21. Sistema di refresh mappa
+## 17. Test, CI/CD e Troubleshooting
 
-### Refresh event-driven
+### Suite di test e Lint (CI su GitHub Actions)
 
-Il sistema NON gira più un sync periodico ogni 3 minuti. La mappa viene rigenerata solo quando serve:
-
-- Dopo un POST utente (modifica contatore, sigillo, matricola, appuntamento, ecc.)
-- Dopo un import (FILONE Excel o Report Beat)
-- Su trigger manuale (`/api/sync` o pulsante "Sync" in sidebar)
-
-`server.py:trigger_sync_after_edit()` decide se applicare una **patch in-place** o eseguire il **sync_loop classico**.
-
-### Patch in-place (soft edit, ~50ms)
-
-Per modifiche cosmetiche (email, telefono, nominativo, indirizzo, sigillo, matricola, NOTE APP senza pattern `APP`, ecc.) `moduli/mappa_data_patcher.py` patcha direttamente `data/{prov}/mappa_data.json` e invia SSE `sync_complete`. Niente sync_loop.
-
-### Sync_loop classico (cambi strutturali, ~7-10s)
-
-Per cambi strutturali (DATA PIAN, Operatore, Lat/Lon, Comune, NOTE APP con pattern `APP`, Esito) si esegue l'intera pipeline: DB → DataFrame → distanze → zone → mappa.
-
-### Notifiche SSE
-
-```
-event: sync_complete
-data: {"source": "inplace_patch" | "sync_loop", "timestamp": "..."}
-```
-
-Il JS nel browser riceve l'evento e ricarica i JSON da `data/`. Quando l'SSE è giù, fallback su polling JSON ogni `INTERVALLO_SYNC_SECONDI` (default 300s).
-
----
-
-## 22. Aggiungere una nuova provincia
-
-### Passo 1 — Wizard UI admin (consigliato)
-
-Dalla UI admin (`admin.*`) c'è un wizard che chiede nome, deposito, operatori e genera automaticamente la voce in `data/provinces.json` + cartella `data/{slug}/` + DB iniziale vuoto. L'utente che crea la provincia ottiene auto-grant di accesso.
-
-### Passo 2 — Aggiunta manuale (per dev)
-
-1. Modifica `data/provinces.json`:
-   ```json
-   "NUOVA_PROVINCIA": {
-     "nome": "Nuova Provincia",
-     "deposito": {"Nome": "DEPOSITO", "Lat": 45.0, "Lon": 9.0},
-     "operatori_vip": ["OP1"],
-     "colori_operatori": {"OP1": "#e74c3c"},
-     "operatori_dict": {"Operatore 1": "OP1"},
-     "ora_inizio_giornata": 480
-   }
-   ```
-2. Crea la cartella `data/nuova_provincia/`.
-3. Importa un Excel iniziale per popolare il DB (UI admin → Import FILONE).
-4. Riavvia il router: `systemctl restart mappa-algeco-router`.
-
----
-
-## 23. Troubleshooting
-
-### OSRM non raggiungibile
-
-```bash
-# Produzione (nativo)
-sudo systemctl status osrm-routed
-
-# Dev (Docker)
-docker ps
-curl "http://localhost:5000/route/v1/driving/7.68,45.07;7.78,45.19"
-```
-
-### Mappa HTML vuota o errore
-
-- Controlla `journalctl -u mappa-algeco-router` per i log del sync
-- Verifica che `data/{prov}/mappa_data.json` contenga dati validi
-- Forza un sync manuale dalla sidebar
-
-### Cache corrotta
-
-```bash
-rm /opt/mappa-algeco/cache/cache_*.json
-sudo systemctl restart mappa-algeco-router
-```
-
-### DB corrotto
+Configurazione in [`.github/workflows/test.yml`](.github/workflows/test.yml) e [`pyproject.toml`](pyproject.toml):
 
 ```bash
 PY=/opt/mappa-algeco/venv/bin/python
-$PY tools/dump_db.py        # mostra anche PRAGMA integrity_check
 
-# Restore da snapshot
-cp /opt/mappa-algeco/backup/torino/state_YYYY-MM-DD.db \
-   /opt/mappa-algeco/data/torino/state.db
-sudo systemctl restart mappa-algeco-router
+# Lint Ruff (py312, line-length=100, F/E9/W6)
+$PY -m ruff check .
+
+# Suite completa Pytest (usa DB temporanei tramite fixture db_isolato in tests/conftest.py)
+$PY -m pytest -v
 ```
 
-### Import Excel non aggiorna alcune righe
-
-Verifica il timestamp di export inserito al momento dell'upload: se è precedente alle ultime modifiche locali, la politica "vince il più recente" protegge il DB. Vedi [DB_LOCALE_README.md](DB_LOCALE_README.md#troubleshooting-rapido).
-
-### Debug API
-
-I log nel journal sono prefissati per area:
-
-| Prefisso | Modulo |
-| --- | --- |
-| `[SYNC]` | Refresh mappa |
-| `[SSE]` | Server-Sent Events |
-| `[REPORT]` | Import installazioni Beat |
-| `[IMPORT]` | Import FILONE Excel |
-| `[SIGILLI]` | Gestione sigilli |
-| `[MATRICOLE]` | Gestione matricole |
-| `[DISTINTE]` | Gestione distinte |
+### Log e diagnostica rapida
 
 ```bash
+# Log centralizzati router + worker Gunicorn
 sudo journalctl -u mappa-algeco-router -f
+
+# Verifica integrità, conflitti, outbox e anomalie di una provincia
+/opt/mappa-algeco/venv/bin/python tools/dump_db.py
+PROVINCIA=PAVIA /opt/mappa-algeco/venv/bin/python tools/dump_db.py --pending --anomalies
 ```
 
----
-
-## Glossario
-
-| Termine | Significato |
-| --- | --- |
-| **FILONE** | Il foglio principale con tutti i contatori da sostituire. Storicamente Google Sheets, oggi DB SQLite locale. |
-| **ENELTEL** | Codice identificativo univoco del contatore Enel |
-| **POD** | Point of Delivery — codice punto di consegna energia |
-| **Report / BOXBEAT** | File Excel di ritorno da Beat con gli esiti delle installazioni |
-| **Distinta / DistintaBase** | Ordine di lavoro PDF da Enel con dati delle sostituzioni programmate |
-| **OSRM** | Open Source Routing Machine — calcolo percorsi stradali reali |
-| **LCL** | Codice località/area del contatore |
-| **Fascia oraria** | Intervallo di 3 ore in cui il tecnico prevede di arrivare |
-| **TSP** | Travelling Salesman Problem — ottimizzazione dell'ordine di visita |
-| **SSE** | Server-Sent Events — notifiche push dal server al browser |
-| **Sigillo** | Sigillo di sicurezza applicato ai contatori trifase/fotovoltaici |
-| **Sync_loop** | Pipeline completa di rigenerazione mappa (DB → DataFrame → distanze → zone → JSON + HTML) |
-| **Patch in-place** | Aggiornamento diretto di `mappa_data.json` per soft edit (no sync_loop) |
-
----
+In caso di anomalie sulla cache distanze è sufficiente rimuovere `cache/cache_distanze_{prov}.db` (verrà rigenerata al sync successivo). Per restore di `state.db` vedere [`DB_LOCALE_README.md`](DB_LOCALE_README.md#troubleshooting-rapido).

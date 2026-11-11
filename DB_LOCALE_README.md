@@ -1,188 +1,216 @@
-# Architettura DB locale (post-disconnessione Google Sheets)
+# Architettura DB locale e sincronizzazione dati
 
 ## Storia
 
-Fino al 21/05/2026 il sistema era a doppia fonte di verità: DB SQLite locale + Google Sheets, con un sync engine bidirezionale (pull periodico Sheets→DB, drainer asincrono DB→Sheets). Il 21/05/2026 il dispatch automatico cross-colonna ha causato uno **span massivo** (numeri di telefono finiti nella colonna SIGILLO perché matchavano il pattern `\d{8,14}`).
+Fino al 21/05/2026 il sistema manteneva una doppia fonte di verità: DB SQLite locale + Google Sheets con sync engine bidirezionale. A seguito di un incidente di scrittura cross-colonna, Google Sheets è stato **scollegato dal canale di scrittura**.
 
-A seguito di quell'incidente Google Sheets è stato **scollegato completamente**. Da allora:
+Da allora:
 
-- Il **DB SQLite locale** è l'unica fonte di verità.
-- I dati esterni entrano via **import Excel manuale** (admin scarica il foglio come `.xlsx`/`.csv` e lo carica dall'UI admin).
-- `moduli/sync_engine.py` è oggi uno **stub no-op** ([moduli/sync_engine.py:1-17](moduli/sync_engine.py)) che mantiene la firma delle funzioni storiche (`pull_once`, `drain_once`, `trigger_drain_now`, `start_workers`, `stop_workers`) per non rompere gli import residui.
-- I nomi gspread (`safe_batch_update_by_name`, `get_worksheet`, `carica_dati_google_sheets`, ecc.) sopravvivono come **alias legacy**: le route Blueprint non sono state toccate, ma internamente tutto legge/scrive sul DB. Le chiamate gspread reali sollevano eccezioni ([moduli/shared.py:179-277](moduli/shared.py)).
+- Il **DB SQLite locale** (`data/{provincia}/state.db`, modalità WAL, **Schema v7**) è l'**unica fonte di verità operativa**.
+- Le scritture dell'app non toccano mai Google Sheets: `moduli/sync_engine.py` è uno **stub no-op** ([moduli/sync_engine.py](moduli/sync_engine.py)) che al boot esegue solo `PRAGMA integrity_check`, e i nomi legacy in [`moduli/shared.py`](moduli/shared.py) (`safe_batch_update_by_name`, `get_worksheet`, ...) instradano ogni lettura/scrittura direttamente su SQLite.
+- I dati esterni entrano nel DB tramite:
+  1. **Import Excel/CSV manuale** dalla UI admin (`POST /api/admin/import-excel`), gestito da [`moduli/excel_importer.py`](moduli/excel_importer.py).
+  2. **Auto-import orario in sola lettura** da Google Sheets (download dell'export `.xlsx` pubblico senza credenziali OAuth/gspread), gestito da [`moduli/auto_import.py`](moduli/auto_import.py) e [`tools/auto_import_filone.py`](tools/auto_import_filone.py).
+- Le modifiche effettuate localmente dagli operatori sono tracciate nella coda Outbox (`pending_writes`) tramite [`moduli/outbox.py`](moduli/outbox.py) ed esportabili in formato `.xlsx` compatto per l'eventuale riallineamento verso sistemi esterni.
 
-## Modalità di funzionamento
+> **Nota storica:** la vecchia variabile `USE_DB_BACKEND` è stata rimossa dal codice; il DB SQLite locale è sempre l'unico backend attivo.
 
-Controllata da `USE_DB_BACKEND` in [config.py](config.py) (env var omonima). Nel nuovo regime esistono due soli valori utili:
-
-| Valore | Comportamento |
-|---|---|
-| `primary` (default) | DB = source of truth. Route → DB → invalidate cache → mappa rigenerata. |
-| `off` | Kill-switch d'emergenza: le route scrivono comunque nel DB (Sheets era già off, quindi è equivalente in pratica). |
-
-Per rollback emergenziale al comportamento pre-disconnessione (sconsigliato, riapre l'incident del 21/05) occorre `git checkout` di un commit precedente a `5d24775`.
+---
 
 ## Flusso operativo
 
 ```
-┌──────────────────┐  POST   ┌──────────────┐
-│  UI / route      │────────▶│  DB SQLite   │  filone, audit_log
-└──────────────────┘ <50ms   └──────┬───────┘
-                                    │
-                              ┌─────┴───────────────┐
-                              ▼                     ▼
-                      patch in-place        sync_loop classico
-                      mappa_data.json       (rigenera DataFrame +
-                      (~50ms, soft edit)    percorsi + mappa, ~7-10s,
-                              │             cambi strutturali)
-                              ▼
-                       SSE 'sync_complete' → browser
+┌──────────────────────┐  POST/PUT  ┌───────────────────┐  filone, audit_log,
+│ UI Web / API Routes  │───────────▶│ DB SQLite (WAL)   │  pending_writes (Outbox)
+└──────────────────────┘   <50ms    └─────────┬─────────┘
+                                              │
+                         ┌────────────────────┴────────────────────┐
+                         ▼                                         ▼
+               try_patch_inplace()                        sync_loop classico
+               mappa_data.json                            (riprocessa DataFrame,
+               (~50ms, soft edit)                         zone DBSCAN, percorsi OSRM,
+                         │                                cache access point, ~7-10s)
+                         └────────────────────┬────────────────────┘
+                                              ▼
+                                 SSE 'sync_complete' → Browser
 ```
 
-**Scrittura (POST utente)**
+### 1. Scrittura (utente / API)
 
-1. La route filtra i campi modificabili → chiama `safe_batch_update_by_name` ([moduli/shared.py:366](moduli/shared.py)) o helper di alto livello.
-2. La funzione entra nel branch `primary` (l'unico oggi attivo) e instrada a `_route_to_db_primary`:
-   - Risolve `eneltel_key` (PK del DB) via anchor (Eneltel/POD) o `sheets_row`.
-   - **Dedup**: confronta col valore corrente in DB. Se uguale → no-op.
-   - `db.record_local_change(...)` ([moduli/db.py:490](moduli/db.py)) aggiorna `filone` + scrive entry in `audit_log`.
-3. Risposta API in ~50ms.
+1. La route valida i campi modificabili e chiama `safe_batch_update_by_name` ([`moduli/shared.py`](moduli/shared.py)) o gli helper diretti su [`moduli/db.py`](moduli/db.py).
+2. `db.record_local_change(...)` risolve la chiave primaria `(eneltel_key, lcl)`:
+   - **Dedup:** confronta il nuovo valore con il DB; se invariato, non esegue scritture.
+   - Aggiorna la tabella `filone` (o `filone_extra` per colonne custom) e `last_local_change_ts`.
+   - Registra una riga immutabile in `audit_log` (`source='local'`).
+   - Accoda/coalesce il campo modificato in `pending_writes` (`state='pending'`) per l'Outbox.
+3. `server.py:trigger_sync_after_edit()` tenta prima [`moduli/mappa_data_patcher.py`](moduli/mappa_data_patcher.py) (`try_patch_inplace`):
+   - Se le modifiche toccano solo campi non strutturali (`SOFT_FIELDS_DB`: telefono, email, nominativo, indirizzo, sigillo, matricola, note senza appuntamento), patcha `data/{prov}/mappa_data.json` in ~50 ms e invia l'evento SSE `sync_complete`.
+   - Per modifiche strutturali (`DATA PIAN`, `Operatore`, coordinate, `COMUNE`, note con pattern `APP`, `Esito`), risveglia il `sync_loop` completo.
 
-Nota: la coda `pending_writes` (storicamente usata dal drainer verso Sheets) viene ancora popolata da alcuni path per audit/storico, ma non viene mai drenata verso un sistema esterno. Il cron mensile `cleanup_done_pendings.py` la mantiene piccola.
+### 2. Import Excel e Auto-Import orario (Sheets → DB)
 
-**Patch in-place mappa_data.json (soft edit)**
+[`moduli/excel_importer.py`](moduli/excel_importer.py) implementa un merge sicuro con politica **"vince il più recente" a granularità di RIGA**:
 
-`server.py:trigger_sync_after_edit()` tenta prima [moduli/mappa_data_patcher.py:try_patch_inplace](moduli/mappa_data_patcher.py). Se le modifiche in volo sono **tutte cosmetiche** (email, telefono, nominativo, indirizzo, posizione_misuratore, sigillo, codice_*, matricola_*, NOTE APP senza pattern `APP`, ecc.), patcha direttamente `data/{prov}/mappa_data.json` in ~50ms e invia SSE `sync_complete`. Niente sync_loop.
+- Confronta `last_local_change_ts` (DB) con `excel_export_ts` (fornito dall'admin oppure timestamp corrente in caso di download live).
+- Se una riga è stata modificata localmente **dopo** `excel_export_ts`, l'intera riga nel DB viene preservata per evitare sovrascritture accidentali del lavoro d'ufficio.
+- Altrimenti applica gli aggiornamenti cella per cella, registrandoli in `audit_log` (`source='import_excel'`) e segnando come gestite eventuali `pending_writes` antecedenti all'export.
 
-Per cambi **strutturali** (DATA PIAN, Operatore, Lat/Lon, COMUNE, NOTE APP con pattern `APP`, Esito) cade nel sync_loop classico (~7-10s): riprocesso DataFrame, ricalcolo zone/percorsi/access points, rigenera `mappa_data.json` e HTML.
+[`moduli/auto_import.py`](moduli/auto_import.py) automatizza il pull in sola lettura:
 
-**Import Excel manuale**
+1. Scarica `https://docs.google.com/spreadsheets/d/<ID>/export?format=xlsx&gid=<GID>` per le province con `google_sheet_url` valorizzato e `auto_import_enabled: true`.
+2. Calcola un **hash SHA-256 deterministico dei CRC dei file interni dello ZIP XLSX** (escludendo `docProps/`, i cui timestamp variano a ogni download Google).
+3. Se l'hash coincide con l'ultima importazione salvata in `cache/auto_import_{prov}.json`, salta l'import senza toccare il DB.
+4. Se il foglio è cambiato, salva lo snapshot in `cache/last_sheet_{prov}.xlsx`, invoca `import_excel(..., protect_pending_rows=True)` e risveglia la sincronizzazione della mappa (`/api/internal/trigger-sync`).
 
-[moduli/excel_importer.py](moduli/excel_importer.py) sostituisce il vecchio pull periodico. Flusso:
+### 3. Outbox modifiche locali (DB → Excel)
 
-1. L'admin scarica il foglio Sheets come `.xlsx` o `.csv` e lo carica dall'endpoint admin.
-2. L'importer legge il file, risolve il mapping colonne (header alla riga 1 o configurato), e fa **merge cella-per-cella** col DB.
-3. Politica di merge: **"vince il più recente"** a granularità RIGA. Per ogni `eneltel` confronta `last_local_change_ts` del DB con `excel_export_ts` (fornito dall'utente nel form). Se la riga è stata modificata nel programma DOPO l'export Excel, il DB vince e Excel viene ignorato per quella riga; altrimenti vincono i valori Excel, cella per cella.
+[`moduli/outbox.py`](moduli/outbox.py) utilizza `pending_writes` (`state = 'pending'`) come coda delle variazioni prodotte dal gestionale:
 
-Granularità a livello riga: una sola modifica locale post-export protegge l'intera riga dall'import. È la scelta più sicura per evitare di sovrascrivere lavoro recente.
+- Coalesce per `(eneltel_key, lcl, column_name)` mantenendo il valore più recente (`_list_pending_coalesced`).
+- **Scarica cambiamenti** (`GET /api/admin/outbox/excel`): genera un file `.xlsx` compatto con la colonna identificativa `POD` + le sole colonne effettivamente modificate e le celle variate evidenziate in giallo.
+- **Segna gestite** (`POST /api/admin/outbox/mark-delivered`): porta le righe `pending` allo stato `done` (azzerando i badge nella UI admin).
+- **Scarica completo** (`GET /api/admin/export-full-excel`): esporta l'intero snapshot del DB (`build_full_xlsx`) nel formato standard del filone.
 
-## Schema DB
+---
 
-File: `data/{provincia}/state.db` (SQLite + WAL). Schema in [moduli/db.py](moduli/db.py).
+## Schema DB (SQLite WAL — v7)
+
+File per provincia: `data/{provincia}/state.db`. Definito in [`moduli/db.py`](moduli/db.py) (`SCHEMA_VERSION_CORRENTE = 7`).
+
+### Core Filone & Audit
 
 | Tabella | Contenuto |
 |---|---|
-| `filone` | Una riga per contatore. **PK composta `(eneltel_key, lcl)`** (schema v2, per supportare i casi multi-LCL di Pavia). ~30 colonne tipizzate (pod, nominativo, comune, data_pianificata, operatore, lat/lon, ecc.) + meta (row_hash, last_local_change_ts, sheets_row, is_orphan). |
-| `filone_extra` | Colonne del foglio non mappate alle ~30 note (es. `Mot. Rich.`, `MID`, `ZTL`). Key-value `(eneltel_key, lcl, column_name) → value`. |
-| `pending_writes` | Coda storica delle scritture. Oggi rimane popolata per audit ma **non viene drenata** verso sistemi esterni. Stati: `pending` / `in_flight` / `done` / `quarantined` / `failed`. Pulita dal cron mensile. |
-| `audit_log` | Storico di ogni modifica. `source` ∈ {`local`, `import_excel`, `bootstrap`, `quarantine`}. |
-| `column_registry` | Mappatura nome colonna → chiave interna, aggiornata ad ogni import Excel. |
-| `filone_anomalies` | Righe Excel anomale (Eneltel duplicato, riga senza Eneltel). Ricalcolato ad ogni import. |
-| `sync_state` | Key/value: `schema_version`, `last_import_ts`, `last_import_filename`, ecc. |
+| `filone` | Una riga per utenza/ordine. **PK composta `(eneltel_key, lcl)`** (introdotta in v2 per ordini multi-LCL). ~30 colonne tipizzate + metadati (`row_hash`, `last_local_change_ts`, `sheets_row`, `is_orphan`). |
+| `filone_extra` | Colonne non standard del foglio (es. campi custom creati da admin o import Excel). Key-value `(eneltel_key, lcl, column_name) → value`. |
+| `cell_comments` | Commenti/annotazioni associati a singole celle `(eneltel_key, lcl, column_name)`. |
+| `pending_writes` | Coda **Outbox** delle modifiche locali (`pending`, `in_flight`, `done`, `quarantined`, `failed`). Coalesce univoco su `(eneltel_key, lcl, column_name)` per record attivi. |
+| `audit_log` | Storico cronologico di ogni variazione (`ts`, `eneltel_key`, `column_name`, `old_value`, `new_value`, `source`, `user`, `detail`). |
+| `column_registry` | Registro delle colonne del filone (`column_name`, `chiave_interna`, `last_index`, `last_seen_ts`). |
+| `filone_anomalies` | Righe anomale rilevate in fase di import (es. Eneltel duplicato o mancante). |
+| `sync_state` | Coppie chiave/valore di stato DB (`schema_version`, `last_import_ts`, `last_import_filename`, ...). |
+
+### Moduli Territoriali, Lettere & Mail
+
+| Tabella | Contenuto |
+|---|---|
+| `comuni_info` | Anagrafica comuni per provincia: ZTL, indicazioni operative, tipologie zone, PEC/email e telefoni di Comune, Polizia Locale e Ufficio Tecnico. |
+| `lettere_generazioni` | Registro degli export Excel generati per spedizioni postali (`output/lettere/*.xlsx`), con hash SHA-256 e conteggi righe. |
+| `lettere_righe` | Dettaglio singole righe associate a ciascuna generazione lettere. |
+| `lettere_contatti` | Rubrica persistente dei destinatari (`contact_key`), inclusi recapiti aziendali, privati, PEC ed esiti contatto. |
+| `lettere_aziende_generazione` | Raggruppamento per azienda/ente di una generazione, stato lavorazione ed esito risposta. |
+| `lettere_invii` | Storico delle email/PEC inviate alle aziende dal modulo Gestione Lettere. |
+| `lettere_classificazione_override` | Override manuali della classificazione automatica `azienda`/`privato`/`condominio`/`ente_pubblico`. |
+| `mail_messages` | Archivio webmail integrata (cartelle `inbox`, `sent`, `drafts`, `scheduled`, `trash`, `archive`), allegati, thread e categorie. |
+| `mail_categories` | Regole di categorizzazione intelligente email (Comuni, Aziende, Appuntamenti, ecc.). |
+| `mail_templates_snippets` | Modelli completi Email/SMS/WhatsApp e frasario/snippet riutilizzabili. |
+
+> Oltre a `state.db`, le distanze stradali OSRM per provincia sono memorizzate nella cache SQLite lazy `cache/cache_distanze_{provincia}.db` ([`moduli/cache.py`](moduli/cache.py)).
+
+---
 
 ## Strumenti CLI
 
-Tutti in `/opt/mappa-algeco/tools/`, da eseguire con `/opt/mappa-algeco/venv/bin/python`. Per Pavia: prepostazione `PROVINCIA=PAVIA`.
+Tutti in `/opt/mappa-algeco/tools/`, da eseguire con il venv Python del progetto (`/opt/mappa-algeco/venv/bin/python`). Per selezionare una provincia diversa dal default (`TORINO`), anteporre `PROVINCIA=PAVIA` o `PROVINCIA=LECCO`.
 
 ```bash
 PY=/opt/mappa-algeco/venv/bin/python
 
-# Stato generale del DB
+# Stato generale e PRAGMA integrity_check del DB
 $PY tools/dump_db.py
 PROVINCIA=PAVIA $PY tools/dump_db.py
 
-# Dettagli su una riga specifica (audit, pending, ...)
+# Dettagli su una riga specifica (campi filone, audit, pending, anomalie)
 $PY tools/dump_db.py --eneltel 12345
 
-# Pending residue (dovrebbero essere ~zero in regime normale)
+# Diagnostica Outbox, conflitti, anomalie di import, mappatura colonne
 $PY tools/dump_db.py --pending
-
-# Anomalie rilevate dall'ultimo import
+$PY tools/dump_db.py --conflicts
 $PY tools/dump_db.py --anomalies
-
-# Mappatura colonne (column_registry)
 $PY tools/dump_db.py --columns
 
-# Cleanup pending in stato `done` > 30 giorni (info conservata in audit_log)
+# Auto-import read-only da Google Sheets (usato anche dal cron orario)
+$PY tools/auto_import_filone.py --all
+$PY tools/auto_import_filone.py --provincia TORINO --dry-run
+$PY tools/auto_import_filone.py --provincia PAVIA --force
+
+# Cleanup pending in stato `done` > 30 giorni (lo storico resta in audit_log)
 $PY tools/cleanup_done_pendings.py            # dry-run
 $PY tools/cleanup_done_pendings.py --apply
 
-# Archivia audit_log > 6 mesi in backup/{prov}/audit_log_archive_YYYY-MM.jsonl.gz
+# Archiviazione audit_log > 180 giorni in backup/{prov}/audit_log_archive_YYYY-MM.jsonl.gz
 $PY tools/archive_audit_log.py
 $PY tools/archive_audit_log.py --apply
 
-# Confronto offline tra due percorsi pre-calcolati (debug)
-$PY tools/confronta_percorsi.py
+# Manutenzione e backport storici
+$PY tools/cleanup_cross_province_pollution.py # pulizia righe cross-provincia (Torino)
+$PY tools/import_lettere_storiche.py          # import archivio Excel lettere storici nel DB
+$PY tools/import_invii_email_storici.py       # import storico invii email lettere
+$PY tools/riclassifica_aziende_lettere.py     # ricalcolo euristico aziende/privati su rubrica
+
+# Confronto A/B offline tra algoritmi di ordinamento percorsi su backup JSON
+$PY tools/confronta_percorsi.py --provincia torino --max-giornate 5
 ```
 
-> **Tool rimossi post-disconnessione**: `migrate_to_sqlite.py`, `validate_shadow.py`, `cleanup_quarantined.py` non esistono più (servivano per bootstrap da Sheets e validazione DB↔Sheets).
+---
 
-## Cron schedulati
+## Automazioni e backup schedulati
 
-| File | Quando | Cosa fa |
+| Job / File | Frequenza | Cosa fa |
 |---|---|---|
-| `/etc/cron.d/mappa-algeco-audit-archive` | 1° del mese: Torino 04:00, Pavia 04:15 | Archivia `audit_log` > 180 giorni in `backup/{prov}/audit_log_archive_YYYY-MM.jsonl.gz` |
-| `/etc/cron.d/mappa-algeco-cleanup-pendings` | 1° del mese: Torino 05:00, Pavia 05:15 | Cancella `pending_writes` in stato `done` > 30 giorni |
+| [`deploy/mappa-algeco-auto-import`](deploy/mappa-algeco-auto-import) (`/etc/cron.d/mappa-algeco-auto-import`) | Ogni ora al minuto `:05` | Esegue `tools/auto_import_filone.py --all` per le province con `google_sheet_url` configurato e `auto_import_enabled: true`. Log: `/var/log/mappa-auto-import.log`. |
+| Audit Archive cron | 1° del mese (Torino 04:00, Pavia 04:15) | Archivia voci `audit_log` più vecchie di 180 giorni in `.jsonl.gz`. |
+| Cleanup Pendings cron | 1° del mese (Torino 05:00, Pavia 05:15) | Rimuove record `pending_writes` in stato `done` da oltre 30 giorni. |
+| `backup_periodico_auto()` ([`moduli/backup.py`](moduli/backup.py)) | Al primo `full_sync` del giorno | Produce sia il dump JSON giornaliero (`backup/{prov}/filone_{prov}_YYYY-MM-DD.json`) sia lo snapshot binario SQLite via `VACUUM INTO` (`backup/{prov}/state_YYYY-MM-DD.db`, rotazione ultimi 7 giorni). |
+| [`deploy/mappa-algeco-restart.timer.example`](deploy/mappa-algeco-restart.timer.example) | Ogni notte alle `04:30` (+ jitter 5m) | Riavvio preventivo di `mappa-algeco-router.service` per liberare memoria accumulata dai worker. |
 
-Backup giornaliero del DB:
-- `backup/{prov}/state_YYYY-MM-DD.db` (snapshot via `VACUUM INTO`, rotation: ultimi 7)
-- Eseguito da `backup_periodico_auto()` (vedi [moduli/backup.py](moduli/backup.py))
+---
 
-Log:
-- `/var/log/mappa-audit-archive-{torino,pavia}.log`
-- `/var/log/mappa-cleanup-pendings-{torino,pavia}.log`
+## Endpoint admin (DB, Outbox, Auto-Import, Colonne)
 
-## Endpoint admin
+Tutte le API richiedono autenticazione con ruolo `admin` (e sul router `admin.*` sono esposte sotto `/api/provinces/<slug>/...`):
 
-| Endpoint | Cosa fa |
+| Endpoint backend | Cosa fa |
 |---|---|
-| `GET /api/admin/db-stats` | Stats live del DB locale + `health.warnings` se backlog ≥ 500 o `max_attempts` ≥ 10. |
-| `GET /api/admin/db-pending?state=pending` | Lista pending per stato. Parametri: `state`, `limit`. |
-| `POST /api/admin/import-excel` | Upload foglio Sheets esportato come Excel/CSV. Form data: file + `excel_export_ts`. |
+| `GET /api/admin/db-stats` | Statistiche live del DB locale, integrità, numero righe/orfani/anomalie. |
+| `GET /api/admin/db-pending` | Lista record `pending_writes` filtrabile per `state` e `limit`. |
+| `GET /api/admin/db-dump/eneltel/<eneltel>` | Ispezione dettagliata di un contatore (campi `filone`, `extra`, `audit_log`, `pending_writes`). |
+| `GET /api/admin/db-dump/{conflicts,columns,anomalies}` | Conflitti, registro colonne e anomalie dall'ultimo import. |
+| `POST /api/admin/db-action` | Azioni manuali (`sync` per risvegliare il loop, `snapshot-db` per backup immediato via `VACUUM INTO`). |
+| `GET /api/admin/outbox` | Conteggio celle/contatori in attesa di export nella coda Outbox. |
+| `GET /api/admin/outbox/excel` | Scarica `.xlsx` compatto dei soli cambiamenti pendenti (evidenziati in giallo). |
+| `POST /api/admin/outbox/mark-delivered` | Marca tutte le modifiche `pending` correnti come `done`. |
+| `GET /api/admin/export-full-excel` | Esporta l'intero filone dal DB come file `.xlsx`. |
+| `POST /api/admin/import-excel` | Upload manuale `.xlsx`/`.csv` con parametro `excel_export_ts` per il merge sicuro. |
+| `POST /api/admin/auto-import-sheets` | Trigger manuale dell'import read-only dal Google Sheet configurato. |
+| `GET /api/admin/auto-import-status` | Stato dell'ultimo check auto-import (`hash`, `skipped`, righe modificate) e config URL. |
+| `GET/POST/PUT/DELETE /api/admin/columns*` | CRUD colonne custom del filone, rinomina sicura e bootstrap schema standard. |
+| `GET/PUT /api/admin/column-mapping` | Lettura e personalizzazione della mappatura intestazioni Excel → chiavi interne. |
 
-## Tassonomia delle modifiche
+---
 
-| Tipo | Esempi | Cosa scatta |
+## Tassonomia delle modifiche e file chiave
+
+| Tipo | Campi | Azione post-scrittura |
 |---|---|---|
-| **Soft (in-place patch)** | email, telefono, nominativo, indirizzo, civico, posizione_mis, smart_test, sigillo, codice_*, matricola_*, NOTE APP senza pattern `APP` | Patch diretta di `mappa_data.json` (~50ms). Nessun sync_loop. |
-| **Strutturali** | DATA PIAN, Operatore, Latitudine/Longitudine, Comune/Localita, NOTE APP con pattern `APP`, Esito | Sync_loop completo (~7-10s): riprocesso DataFrame, ricalcolo zone/percorsi/access points, rigenera `mappa_data.json` e HTML. |
+| **Soft (in-place patch)** | `email`, `telefono`, `nominativo`, `indirizzo`, `civico`, `posizione_mis`, `smart_test`, `sigillo`, `codice_*`, `matricola_*`, `note_appuntamento` senza prefisso `APP`, ecc. (`SOFT_FIELDS_DB` in [`moduli/mappa_data_patcher.py`](moduli/mappa_data_patcher.py)) | Patch diretta di `mappa_data.json` (~50 ms) + SSE `sync_complete`. |
+| **Strutturali** | `data_pianificata`, `operatore`, `latitudine`/`longitudine`, `comune`/`localita`, `note_appuntamento` con prefisso `APP`, `esito` (`STRUCTURAL_FIELDS_DB`) | Riprocesso completo DataFrame, ricalcolo zone DBSCAN, percorsi OSRM e rigenerazione `mappa_data.json` (~7–10 s). |
 
-Definizione "soft" in [moduli/mappa_data_patcher.py:SOFT_FIELDS_DB](moduli/mappa_data_patcher.py).
-Definizione "strutturale" del DataFrame in [moduli/data_loader.py:_COLONNE_STRUTTURALI](moduli/data_loader.py).
-
-## File chiave
-
-| File | Ruolo |
-|---|---|
-| [moduli/db.py](moduli/db.py) | Schema SQLite v2, connection thread-local, `record_local_change`, `find_eneltel_by_pod`, `canonical_column_name`, `dump_filone_as_rows`, `audit`, migrations. |
-| [moduli/excel_importer.py](moduli/excel_importer.py) | Import Excel/CSV con merge "vince il più recente" per riga. |
-| [moduli/sync_engine.py](moduli/sync_engine.py) | **Stub post-disconnessione**. `pull_once`/`drain_once` no-op; `start_workers` esegue solo PRAGMA integrity_check al boot. |
-| [moduli/data_loader.py](moduli/data_loader.py) | Legge dal DB e produce il DataFrame pandas usato dalla mappa. `mark_data_changed` invalida l'hash per forzare il riprocessing. |
-| [moduli/mappa_data_patcher.py](moduli/mappa_data_patcher.py) | Patch in-place di `mappa_data.json` per soft edit. |
-| [moduli/shared.py](moduli/shared.py) | API legacy compatibile gspread che instrada al DB. Helper di lookup row leggono solo dal DB. |
-| [moduli/backup.py](moduli/backup.py) | Backup giornaliero JSON + snapshot DB rotativo (`esegui_backup_db`). |
-| [server.py](server.py) | `trigger_sync_after_edit` (prova patch in-place → fallback sync_loop), endpoint admin (`db-stats`, `db-pending`, `import-excel`). |
-| [tools/dump_db.py](tools/dump_db.py) | Diagnostica CLI. |
-| [tools/cleanup_done_pendings.py](tools/cleanup_done_pendings.py) | Cancellazione mensile delle pending `done` vecchie. |
-| [tools/archive_audit_log.py](tools/archive_audit_log.py) | Archiviazione mensile audit_log. |
+---
 
 ## Troubleshooting rapido
 
-**Problema**: modifica utente non appare sulla UI.
-- `$PY tools/dump_db.py --eneltel <ENELTEL>` → controlla che il `filone` mostri il nuovo valore.
-- Se il DB è aggiornato ma la mappa no: controlla `mappa_data.json` con `grep <ENELTEL> data/{prov}/mappa_data.json | head -1`. Se manca, il sync_loop / patch in-place ha fallito.
-- Log: `journalctl -u mappa-algeco-router.service | grep -E "patch|sync_complete|FILONE"` per i 30s precedenti.
+**Modifica utente salvata ma non visibile sulla mappa**
+- `$PY tools/dump_db.py --eneltel <ENELTEL>` → verifica il valore in `filone` e lo storico `audit_log`.
+- Se il DB è corretto ma la mappa no, controlla `journalctl -u mappa-algeco-router -n 100 | grep -E "patch|sync_complete|FILONE"`.
 
-**Problema**: import Excel non aggiorna alcune righe.
-- Verifica `excel_export_ts` inserito al momento dell'upload: se è precedente alle ultime modifiche locali, la politica "vince il più recente" protegge il DB e quelle righe vengono ignorate.
-- `$PY tools/dump_db.py --eneltel <ENELTEL>` → controlla `last_local_change_ts`.
-- Anomalie (Eneltel duplicati, righe senza Eneltel): `$PY tools/dump_db.py --anomalies`.
+**L'import Excel non aggiorna alcune righe**
+- Controlla `excel_export_ts`: se il DB ha un `last_local_change_ts` più recente del file importato, la politica "vince il più recente" protegge le modifiche locali.
+- Controlla le anomalie dell'import: `$PY tools/dump_db.py --anomalies`.
 
-**Problema**: DB corrotto.
-- `PRAGMA integrity_check` via `$PY tools/dump_db.py` (mostra anche `integrity` nella sezione stats).
-- Restore da snapshot: `cp backup/{prov}/state_YYYY-MM-DD.db data/{prov}/state.db` (poi `systemctl restart mappa-algeco-router`).
-
-**Problema**: pending residue non vengono pulite (rimangono nello stato `done` per > 30 giorni).
-- Verifica che il cron `cleanup-pendings` sia attivo: `cat /etc/cron.d/mappa-algeco-cleanup-pendings`.
-- Esegui manualmente: `$PY tools/cleanup_done_pendings.py --apply`.
-
+**Ripristino del DB da snapshot binario**
+```bash
+systemctl stop mappa-algeco-router
+cp backup/torino/state_YYYY-MM-DD.db data/torino/state.db
+systemctl start mappa-algeco-router
+```

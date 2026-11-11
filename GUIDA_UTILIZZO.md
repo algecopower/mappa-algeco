@@ -1,863 +1,306 @@
 ﻿# Guida all'utilizzo — Gestionale Mappa Contatori
 
-> Guida pratica passo-passo per l'uso quotidiano del sistema.
-> Per informazioni tecniche e di installazione, vedi `DOCUMENTAZIONE.md`.
+> Guida operativa completa per l'uso quotidiano della piattaforma **Mappa Algeco**.  
+> Per architettura tecnica, API e deploy consulta [`DOCUMENTAZIONE.md`](DOCUMENTAZIONE.md), [`DB_LOCALE_README.md`](DB_LOCALE_README.md) e [`deploy/README.md`](deploy/README.md).
 
 ---
 
 ## Indice
 
-1. [Accesso al sistema](#1-accesso-al-sistema)
-2. [Panoramica dell&#39;interfaccia](#2-panoramica-dellinterfaccia)
-3. [La mappa — Vista Zone](#3-la-mappa--vista-zone)
-4. [La mappa — Vista Comuni](#4-la-mappa--vista-comuni)
-5. [La mappa — Vista Dettaglio (per data)](#5-la-mappa--vista-dettaglio-per-data)
-6. [La mappa — Percorso Operatore](#6-la-mappa--percorso-operatore)
-7. [Filtri: data, operatore, LCL, appuntamenti](#7-filtri-data-operatore-lcl-appuntamenti)
-8. [Popup contatore — Consultazione](#8-popup-contatore--consultazione)
-9. [Modificare i dati di un contatore](#9-modificare-i-dati-di-un-contatore)
-10. [Impostare un appuntamento](#10-impostare-un-appuntamento)
-11. [Ricerca contatori](#11-ricerca-contatori)
-12. [Ricerca indirizzo sulla mappa](#12-ricerca-indirizzo-sulla-mappa)
-13. [Pinnare un contatore](#13-pinnare-un-contatore)
-14. [Caricare file Report da Beat](#14-caricare-file-report-da-beat-contatori-installati)
-15. [Inserimento sigilli](#15-inserimento-sigilli)
-16. [Inserimento matricole](#16-inserimento-matricole)
-17. [Flusso post-installazione](#17-flusso-post-installazione--aggiornamento-dati)
-18. [Gestione Distinte](#18-gestione-distinte)
-19. [Tema chiaro e scuro](#19-tema-chiaro-e-scuro)
-20. [Aggiornamento dei dati](#20-aggiornamento-dei-dati)
-21. [Legenda colori](#21-legenda-colori)
-22. [Scorciatoie da tastiera](#22-scorciatoie-da-tastiera)
+1. [Accesso al sistema e Login](#1-accesso-al-sistema-e-login)
+2. [Panoramica dell'interfaccia e Menu Gestionale](#2-panoramica-dellinterfaccia-e-menu-gestionale)
+3. [Viste Mappa: Zone, Comuni, Dettaglio e Percorso Operatore](#3-viste-mappa-zone-comuni-dettaglio-e-percorso-operatore)
+4. [Modalità Pianificazione (Assegnazione massiva sulla mappa)](#4-modalità-pianificazione-assegnazione-massiva-sulla-mappa)
+5. [Filtri, Badge Orari, Ricerca Avanzata (Multi-POD/Eneltel) e Pin Multipli](#5-filtri-badge-orari-ricerca-avanzata-multi-podeneltel-e-pin-multipli)
+6. [Popup, Modifica Contatori e Appuntamenti](#6-popup-modifica-contatori-e-appuntamenti)
+7. [Caricamento BOXBEAT, Sigilli e Matricole](#7-caricamento-boxbeat-sigilli-e-matricole)
+8. [Vista Excel Filone (`/filone`)](#8-vista-excel-filone-filone)
+9. [PDF E-Distribuzione — Gestione Distinte, WhatsApp, Email e SMS (`/distinte`)](#9-pdf-e-distribuzione--gestione-distinte-whatsapp-email-e-sms-distinte)
+10. [Gestione Lettere — Archivio, Aziende/PEC e SMS Privati (`/lettere`)](#10-gestione-lettere--archivio-aziendepec-e-sms-privati-lettere)
+11. [Gestione Mail — Webmail SMTP/IMAP (`/mail`)](#11-gestione-mail--webmail-smtpimap-mail)
+12. [Gestione Comuni e ZTL (`/comuni`)](#12-gestione-comuni-e-ztl-comuni)
+13. [Modelli, Template & Frasario Centralizzato (`/templates`)](#13-modelli-template--frasario-centralizzato-templates)
+14. [Calendario Attività, Bacheca Promemoria e Appuntamenti (`/calendario`, `/appuntamenti`)](#14-calendario-attività-bacheca-promemoria-e-appuntamenti-calendario-appuntamenti)
+15. [Dashboard Operativa, Reportistica e Backup (`/dashboard`, `/report`)](#15-dashboard-operativa-reportistica-e-backup-dashboard-report)
+16. [Pannello Admin Multi-Provincia (`admin.*`)](#16-pannello-admin-multi-provincia-admin)
+17. [Aggiornamento dati in tempo reale (DB locale + SSE) e Tema](#17-aggiornamento-dati-in-tempo-reale-db-locale--sse-e-tema)
+18. [Legenda colori operatori e Scorciatoie](#18-legenda-colori-operatori-e-scorciatoie)
 
 ---
 
-## 1. Accesso al sistema
+## 1. Accesso al sistema e Login
 
-### Aprire il programma
+### URL di accesso
 
-Dopo aver avviato il server (vedi `DOCUMENTAZIONE.md`), apri il browser all'indirizzo:
+In produzione tramite router multi-tenant + Cloudflare Tunnel:
+- **Torino:** `https://torino.mappa-algeco.com/`
+- **Pavia:** `https://pavia.mappa-algeco.com/`
+- **Lecco:** `https://lecco.mappa-algeco.com/`
+- **Pannello Admin Multi-Provincia (solo ruolo `admin`):** `https://admin.mappa-algeco.com/`
 
-- **Torino:** http://localhost:5001
-- **Pavia:** http://localhost:5002
+In sviluppo locale standalone: `http://localhost:5001/` (Torino), `http://localhost:5002/` (Pavia), `http://localhost:5003/` (Lecco).
 
-Se il sistema è configurato con Cloudflare:
+### Login e sicurezza sessione
 
-- **Torino:** https://torino.mappa-algeco.com
-- **Pavia:** https://pavia.mappa-algeco.com
-
-### Pagina di login
-
-1. Inserisci il tuo **username** nel primo campo (già selezionato automaticamente)
-2. Inserisci la **password** nel secondo campo
-3. Clicca **Accedi** oppure premi **Invio**
-
-**Suggerimenti:**
-
-- Clicca l'icona 👁️ a destra del campo password per mostrare/nascondere la password
-- In basso a destra appare un badge con la **provincia** attiva (es. "TORINO")
-- Dopo **5 tentativi falliti**, il pulsante si blocca per 30 secondi. Appare un conto alla rovescia; attendi che si sblochi
-- La sessione resta attiva per **24 ore**, poi dovrai rifare il login.
-
-## 2. Panoramica dell'interfaccia
-
-L'interfaccia è divisa in due aree principali:
-
-```
-┌──────────────────┬────────────────────────────────────────┐
-│                  │                                        │
-│    SIDEBAR       │             MAPPA                      │
-│  (pannello       │         (Leaflet.js)                   │
-│   sinistro)      │                                        │
-│                  │                                        │
-│  - Filtri        │   - Marker contatori                   │
-│  - Zone/Comuni   │   - Linee percorso                     │
-│  - Dettaglio     │   - Deposito                           │
-│  - Percorsi      │   - Popup informativi                  │
-│  - Pulsanti      │                                        │
-│    gestionale    │                                        │
-│                  │                                        │
-├──────────────────┴────────────────────────────────────────┤
-│  Barra statistiche (zone, contatori, appuntamenti)        │
-└───────────────────────────────────────────────────────────┘
-```
-
-### Sidebar (pannello sinistro)
-
-La sidebar è il pannello di controllo. Contiene:
-
-- **Intestazione** con nome provincia e ora dell'ultimo aggiornamento dei dati;
-- **Sezione pulsanti** per cambiare vista (vedi sezioni [3](#3-la-mappa--vista-zone)–[6](#6-la-mappa--percorso-operatore)), cambiare tema (vedi [sezione 19](#19-tema-chiaro-e-scuro)), effettuare ricerche (vedi sezioni [11](#11-ricerca-contatori) e [12](#12-ricerca-indirizzo-sulla-mappa)) e ricaricare i dati;
-- **Sezione per il filtraggio** del contenuto;
-- **Contenuto** che cambia in base alle diverse viste e i filtri selezionati;
-- **Pulsanti gestionale** in fondo (BOXBEAT, Sigilli, Distinte).
-
-Puoi **nascondere/mostrare** la sidebar con il pulsante freccia ◀/▶ sul bordo destro della sidebar.
-
-### Mappa
-
-La mappa occupa tutta l'area rimanente. Mostra:
-
-- I **raggruppamenti delle zone vicine** come cerchi semitrasparenti, e/o **singoli comuni** come ulteriori segnaposti colorati
-- I **contatori**, che vengono rivelati accedendo alla relativa zona/comune come ulteriori segnaposti colorati numerati
-- Il **deposito** come segnaposto verde fisso
-
-### Barra inferiore
-
-Mostra le statistiche attuali: numero zone visibili, contatori, appuntamenti.
+1. Inserisci **username** (case-insensitive) e **password** (puoi usare l'icona 👁️ per verificarla).
+2. Premi **Accedi** o `Invio`.
+3. La sessione resta attiva per **24 ore** ed è condivisa tra le province autorizzate e `admin.*` quando `SESSION_COOKIE_DOMAIN` è configurato.
+4. Dopo **5 tentativi falliti**, l'accesso viene temporaneamente bloccato per **60 secondi** (`429 Too Many Requests`).
 
 ---
 
-## 3. La mappa — Vista Zone
+## 2. Panoramica dell'interfaccia e Menu Gestionale
 
-Questa è la **vista predefinita** quando apri la mappa. Mostra il territorio diviso in **zone geografiche** colorate.
-
-### Cosa vedi sulla sidebar
-
-Le zone appaiono come **card colorate** con:
-
-- **Nome zona** (es. "ZONA NORD - Settimo Torinese") e pallino dello stesso colore utilizzato dalla mappa per visualizzarlo
-- **Numero totale contatori** nella zona
-- **Lista dei comuni** che compongono la zona
-- **Indicatore LCL**
-- **Distanza dal deposito** (in km) e **direzione** (Nord, Sud-Est, ecc.)
-- **Date pianificate** — le prime 5 date sono visibili; se ce ne sono di più, clicca **"📋 Mostra altre N date"** per vederle tutte
-
-### Quando usarla
-
-La vista Zone è ideale per:
-
-- Avere una **visione d'insieme** del territorio
-- Pianificare la **distribuzione settimanale** delle zone
-- Capire **quanti contatori** ci sono in ogni area
-- Vedere le **date** già pianificate per ogni zona
+La schermata principale (`/`) è composta da:
+- **Sidebar sinistra** (comprimibile con il pulsante `◀` sul bordo destro): intestazione con provincia e timestamp ultimo aggiornamento, controlli vista/ricerca/pianificazione, filtri cumulativi, elenco zone/comuni/tappe e barra statistiche (`Zone`, `Contatori`, `Appuntamenti`).
+- **Mappa interattiva Leaflet** sulla destra: marker per zona/comune o singolo contatore, percorsi stradali OSRM, deposito, slider zoom (`−`/`+`), pulsante `🎯 Adatta vista`, `🖨️ Stampa Mappa` e `📋 Stampa Tappe`.
+- **Pulsanti floating in basso a destra:**
+  - **🔔 Bacheca Promemoria** (`bacheca.js`): mostra promemoria, scadenze calendario e avvisi BOXBEAT del giorno.
+  - **⊞ Menu Gestionale & Moduli** (`#gestionaleFab`): apre il lanciatore categorizzato con barra di ricerca rapida, stella per **Preferiti Rapidi** e filtro per categoria (`Operatività`, `Documenti`, `Pianificazione`, `Sistema & Admin`):
+    - *Operatività:* **Orari Lettere**, **Carica Installato (BOXBEAT)**, **Sigilli & Matricole**, **Vista Excel Filone**
+    - *Documenti & Comunicazioni:* **Gestione Mail**, **Gestione Lettere**, **PDF E-Distribuzione**, **Gestione Comuni**, **Modelli & Template**
+    - *Pianificazione & Analisi:* **Calendario Attività**, **Gestione Appuntamenti**, **Dashboard & Statistiche**, **Reportistica Operatori**
+    - *Sistema & Admin:* **Backup / Ripristino**, **Pannello Admin / Impostazioni** (Operatori, LCL e Zone, Date, Utenti per `admin`), **Disconnetti**
 
 ---
 
-## 4. La mappa — Vista Comuni
+## 3. Viste Mappa: Zone, Comuni, Dettaglio e Percorso Operatore
 
-Alterna alla vista Comuni cliccando il pulsante **🏘️ Comuni** nell'header della sidebar.
+### Vista Zone e Vista Comuni
 
-### Differenze dalla vista Zone
+- Il pulsante **🗺️ Zone / Comuni** nell'header della sidebar alterna il raggruppamento per **macro-zone geografiche** (generate via DBSCAN) oppure per **singolo comune**.
+- Ogni card mostra riepilogo contatori, date pianificate e contatti utili.
 
-- Anziché zone aggregate, mostra ogni **singolo comune** come entità separata
-- Utile per una visione più granulare quando le zone sono troppo ampie
+### Vista Dettaglio (per zona/comune e data)
 
-### Tornare alla vista Zone
+1. Clicca una **data** dentro una card Zona/Comune oppure seleziona una data dal filtro **Tutte le date**.
+2. La barra superiore (breadcrumb) mostra zona/comune, data corrente, frecce **◀ / ▶** per cambiare giorno e il **Date Picker** cliccando sulla data centrale.
+3. I contatori con appuntamento (`APP ...`) sono evidenziati sulla mappa da un'animazione pulsante e dal badge **☎️ APP**.
 
-Clicca il pulsante **🗺️ Zone** nell'header della sidebar.
+### Vista Percorso Operatore & Multi-Operatore
 
----
-
-## 5. La mappa — Vista Dettaglio (per data)
-
-Quando dalla vista Zone o Comuni clicchi su una **data specifica**, entri nella vista **Dettaglio**. Qui puoi visualizzare i singoli contatori per tale data SOLO per quella specifica zona/comune.
-
-### Come arrivarci
-
-1. Vista Zone → clicca una data dentro una card zona
-2. Oppure: usa il **dropdown Data** nella barra filtri per selezionare direttamente una data
-
-### Cosa vedi sulla sidebar
-
-- **Barra** in alto: mostra il nome della zona/comune e la data cliccata precedentemente (es. "ZONA NORD → 15/01/2025"). Clicca **← Indietro** per uscire
-- Per ogni **operatore/tecnico** sarà visibile:
-  - Nome operatore e conteggio tappe
-  - Lista ordinata dei **contatori ordinati in tappe** assegnati a ciascun operatore
-  - Al clic su un utente dalla lista verrà mostrata, sulla mappa a destra, una scheda informativa (sotto forma di **popup** posto immediatamente sopra il segnaposto corrispondente) con: numero progressivo, nome cliente, comune, via, eneltel, LCL, telefono, note (vedi [sezione 8](#8-popup-contatore--consultazione))
-  - Indicatore **☎️ APP** se il contatore ha un appuntamento (con orario, se presente)
-- **Deposito** all'inizio e alla fine del percorso
-
-### Contatori con appuntamento
-
-I contatori con appuntamento hanno un'**animazione pulsante** (cerchio che si espande e contrae) per renderli immediatamente riconoscibili sulla mappa.
-
-### Filtri disponibili in questa vista
-
-- **☐ Tutte le date** — spunta per mostrare i contatori di TUTTE le date contemporaneamente (utile per avere il quadro completo)
-- **☐ Solo app.** — spunta per mostrare solo i contatori che hanno un appuntamento
-
-### Navigazione tra le date
-
-In vista Dettaglio, puoi navigare rapidamente tra le date.
-
-#### Con le frecce nella sidebar
-
-- Clicca **◀** per passare alla data **precedente**
-- Clicca **▶** per passare alla data **successiva**
-
-#### Con la tastiera
-
-- Premi **freccia sinistra ←** per la data precedente
-- Premi **freccia destra →** per la data successiva
-
-> Funziona solo se nessun campo di testo è attivo e il mouse non è sopra la mappa.
-
-#### Con il calendario
-
-1. Clicca sulla **data** mostrata nel breadcrumb
-2. Si apre un **Date Picker** con tutte le date disponibili
-3. Ogni data mostra il **numero di contatori** pianificati
-4. Clicca una data per saltare direttamente a quella
+1. Selezionando una **data** dal filtro principale, compare la lista degli operatori impegnati nella giornata e il dropdown **👥 Tutti gli operatori** (con selezione singola o **multi-operatore**).
+2. Per ciascun operatore il percorso viene ordinato da **Deposito → Tappa 1 → Tappa 2 → ... → Deposito** rispettando gli orari degli appuntamenti come ancore temporali.
+3. Ogni tappa mostra distanza e tempo di guida stimato da OSRM (`🚗 X min (Y km)`).
+4. **Stampa percorso:** usa **🖨️ Stampa Mappa** per generare la mappa di stampa con zoom regolabile e label ENELTEL anti-sovrapposizione (ultime 3 cifre) e **📋 Stampa Tappe** per il foglio tappe ordinato.
 
 ---
 
-## 6. La mappa — Percorso Operatore
+## 4. Modalità Pianificazione (Assegnazione massiva sulla mappa)
 
-Dalla schermata iniziale, selezionando una data precisa dal **filtro data** (vedi [sezione 7](#7-filtri-data-operatore-lcl-appuntamenti)), è possibile isolare il percorso di un singolo operatore per quella giornata.
+Clicca **📋 Pianifica** nell'header della sidebar per entrare in modalità pianificazione:
 
-### Come arrivarci
-
-1. Seleziona una **data** dal filtro (il cui valore iniziale è "📅 Tutte le date"). A questo punto, nella sidebar sarà visibile una lista riepilogativa del giorno in cui viene indicato:
-   * la matricola di ciascun operatore
-   * quanti contatori sono assegnati a ciascuno
-   * i comuni visitati da ciascuno
-2. Seleziona un **operatore** nel dropdown che apparirà a destra del filtro date (il cui valore iniziale è "👥 Tutti gli operatori") oppure cliccando sull'operatore desiderato direttamente nella lista riepilogativa.
-
-### Cosa vedi in più
-
-- **Tempi di percorrenza** tra un contatore e l'altro: ogni tappa mostra **🚗 X min (Y km)** — il tempo stimato e la distanza dal punto precedente
-- Percorso completo ordinato secondo un algoritmo pre-impostato ottimizzato: **Deposito → Tappa 1 → Tappa 2 → ... → Deposito**
-- **Strade tracciate** con linee colorate sulla base dei percorsi reali che gli operatori percorreranno;
-
-### Pulsante stampa
-
-In questa vista appare il pulsante **🖨️ Stampa** che permette di stampare il percorso (vedi [Stampare un percorso](#stampare-un-percorso) qui sotto).
-
-### Tornare indietro
-
-- Clicca **← Indietro** per tornare alla vista riepilogativa di tutti gli operatori
-- Clicca di nuovo **← Indietro** per tornare alla vista Zone/Comuni
-
-### Stampare un percorso
-
-Puoi stampare una mappa con il percorso ottimizzato di un operatore insieme alle **ultime 3 cifre dell'Eneltel** per ciascun contatore, scritte in delle etichette disposte automaticamente sulla base dello spazio disponibile.
-
-#### Prerequisito
-
-Devi essere nella **vista Percorso Operatore** (vedi [sezione 6](#6-la-mappa--percorso-operatore)).
-
-#### Procedura
-
-1. Assicurati di essere nella vista del percorso di un singolo operatore
-2. Clicca il pulsante **🖨️ Stampa** che appare nell'header
-3. Si apre un **pannello di anteprima** a schermo intero con:
-   - Una **mappa dedicata** (tema chiaro, senza scritte di attribuzione)
-   - I **marker numerati** con l'ordine di visita
-   - Le **etichette ENELTEL** (ultime 3 cifre) posizionate automaticamente vicino ai marker senza sovrapporsi
-   - **Frecce tratteggiate** che collegano le etichette ai marker
-   - Un **slider zoom** per regolare il livello di dettaglio
-   - Se ci sono più tecnici, un **dropdown** per selezionare quale percorso stampare
-
-#### Stampa effettiva
-
-1. Regola lo zoom fino a ottenere la vista desiderata
-2. Clicca **🖨️ Stampa** nel pannello anteprima
-3. Il sistema genera uno screenshot ad **alta risoluzione** (2× la dimensione schermo)
-4. Si apre la finestra di stampa del browser (puoi stampare su carta o salvare come PDF)
-
-#### Contatori sovrapposti nella stampa
-
-Se più contatori sono situati nel raggio di pochi metri, vengono **raggruppati insieme** con un indicatore di quanti contatori sono presenti in quel punto. I codici Eneltel sono elencati sottoforma di lista per ottimizzare gli spazi.
+1. **Filtra** i contatori per:
+   - Stato: `📋 Schedulabili` e/o `📅 Pianificati` (con ulteriore filtro per Data e Operatore sui pianificati);
+   - `Nome`, `Zona`, `Comune`, `Telefono` (`Tutti` / `Con ☎️` / `Senza`), `Tipologia`, `Posizione`, `LCL`.
+2. **Seleziona** i marker sulla mappa con la barra dedicata:
+   - `👆` Selezione singola (clic sui marker)
+   - `▭` Selezione a rettangolo
+   - `✂` Selezione libera (lasso)
+   - `☑` Seleziona tutti i visibili / `☐` Deseleziona tutto
+3. Clicca **📅 Assegna**, scegli **Data Pianificata** e/o **Operatore**, quindi conferma: il sistema salva in bulk su SQLite (`POST /api/contatori/bulk-pianifica`) e aggiorna la mappa via SSE.
 
 ---
 
-## 7. Filtri: data, operatore, LCL, appuntamenti
+## 5. Filtri, Badge Orari, Ricerca Avanzata (Multi-POD/Eneltel) e Pin Multipli
 
-### Filtro per data
+### Filtri nella sidebar
+- Barra di testo rapida per filtrare in tempo reale le card visibili.
+- Filtro **LCL** (le LCL disabilitate dall'admin vengono nascoste automaticamente).
+- Checkbox **☎️ Solo appuntamenti** (con contatore live).
+- Checkbox **🕒 Badge orari per tutti** (visibile nelle viste a marker singolo e nella zoom bar) per mostrare le fasce orarie `orari_lettere` / `ora_appuntamento` su tutte le tappe con decluttering anti-collisione.
 
-Da utilizzare per far sì che la mappa e la sidebar mostrino tutti i contatori programmati per una data specifica, indipendentemente dalle zone.
+### Ricerca Utente Avanzata & Ricerca Multipla POD / Eneltel
 
-### Filtro per operatore
+Clicca **🔍 Ricerca Utente** per cercare in **tutto il database** della provincia tramite 6 criteri combinabili (`Nominativo`, `POD`, `Eneltel`, `Comune`, `Via`, `Telefono`):
+- **Ricerca multipla attiva di default su POD ed Eneltel:** incolla elenchi di POD o Eneltel separati da spazio, virgola o a capo. Il sistema mostra il badge con il numero di token riconosciuti ed evidenzia eventuali codici non trovati nel DB.
+- Spunta opzionale **Apri in Vista Zona** per isolare la zona specifica anziché la giornata provinciale.
 
-Dopo aver scelto una data, sarà disponibile accanto un **dropdown Operatore** da utilizzare per mostrare solo i contatori di quel tecnico e il suo percorso ottimizzato generato automaticamente.
+### Ricerca Indirizzo & Pin Multipli (`📌`)
 
-### Filtro per LCL
-
-Da utilizzare per mostrate solo le zone o i contatori **associati a quella LCL.**
-
-### Filtro "Solo appuntamenti"
-
-In vista Dettaglio, spunta la checkbox **☐ Solo app.** per mostrare **unicamente** i contatori con appuntamento.
-
-### Filtro "Tutte le date"
-
-In vista Dettaglio, spunta la checkbox **☐ Tutte le date** per mostrare i contatori di **tutte le date** contemporaneamente nella zona selezionata. Utile per avere il quadro completo di una zona.
-
-### Combinare i filtri
-
-I filtri sono cumulativi: puoi selezionare una data + un operatore + un LCL per una vista molto mirata.
+- **📍 Cerca Indirizzo:** interroga OpenStreetMap/Nominatim e posiziona un marker viola temporaneo per verifiche logistiche.
+- **Pin multipli:** da popup o ricerca puoi fissare **più contatori contemporaneamente** (`📌`). Quando almeno un contatore è pinnato compare la **Floating Pinned Toolbar** con le azioni rapide: **🎯 Centra** (inquadra tutti i pin), **🔍 Cerca** e **🗑️ Rimuovi tutti**.
 
 ---
 
-## 8. Popup contatore — Consultazione
+## 6. Popup, Modifica Contatori e Appuntamenti
 
-Il popup si apre cliccando su un **segnaposto** sulla mappa o su una **tappa** nella sidebar.
-
-### Informazioni mostrate
-
-Il popup contiene (dall'alto in basso):
-
-1. **Indicatore appuntamento** (se presente): sfondo rosso con icona ☎️, testo "APP" e orario
-2. **Tempo percorrenza** (se in vista percorso): 🚗 con minuti stimati dal punto precedente
-3. **Numero tappa + Nome cliente** in grassetto
-4. **Data pianificazione** con icona 📅
-5. **Comune** con icona 🏘️
-6. **Località** (solo se diversa dal comune) con icona 📍
-7. **Via e civico** con icona 🏠
-8. **ENELTEL** con icona 🔌
-9. **POD** con icona 📋
-10. **LCL** con icona 🏷️
-11. **Telefono** con icona 📞
-12. **Ora pianificazione** con icona ⏰ (se presente)
-13. **Posizione misuratore** con icona 📐 (se presente)
-14. **Note** con icona 📝 (se presenti)
-15. **Pulsanti azione**:
-    - **📌 Fissa questo** — pinna il contatore (vedi [sezione 13](#13-pinnare-un-contatore))
-    - **✏️ Modifica** — apre la modifica (vedi [sezione 9](#9-modificare-i-dati-di-un-contatore))
-
-### Contatori sovrapposti
-
-Quando più contatori si trovano **entro 5 metri** l'uno dall'altro (es. stesso condominio), il sistema li raggruppa in un **segnaposto cluster** con un indicatore numerico.
-
-- Clic sul cluster → si apre un **popup lista** con tutti i contatori sovrapposti
-- Ogni contatore nella lista mostra: nome, eneltel, badge appuntamento
-- Clic su un contatore nella lista → si apre il popup singolo completo
+- **Contatori sovrapposti:** più utenze alle stesse coordinate (~5 m) vengono raggruppate in un popup multiplo con lista cliccabile.
+- **Modifica:** dal popup (`✏️ Modifica`), dalla sidebar (`✏️`) o dai risultati di ricerca puoi aggiornare Data Pianificata, Note/Appuntamento, Nominativo, Via, Civico, Telefono, Posizione Misuratore e Operatore.
+- **Appuntamenti:** nella sezione dedicata imposta **orario inizio** e **orario fine** e salva (**☎️ Salva Appuntamento**): viene scritta l'etichetta `APP HH:MM-HH:MM` nelle note e salvato lo slot, vincolando il routing OSRM a quell'orario.
+- **Aggiornamento ~50 ms:** le modifiche ai campi non strutturali applicano una patch in-place immediata e aggiornano tutti i client connessi via SSE senza ricaricare la pagina.
 
 ---
 
-## 9. Modificare i dati di un contatore
+## 7. Caricamento BOXBEAT, Sigilli e Matricole
 
-Puoi modificare i dati di un contatore in **3 modi.**
+Apri dal **Menu Gestionale (`⊞`)**:
 
-### Modifica dal popup
-
-1. Apri il popup del contatore (clic sul marker o sulla tappa in sidebar)
-2. Clicca **✏️ Modifica**
-
-### Modifica dalla sidebar
-
-1. Nella sidebar, trova il contatore desiderato nella lista;
-2. Clicca il pulsante **✏️** a destra della tappa
-
-### Modifica dalla Ricerca Utente (vedi [sezione 11](#11-ricerca-contatori))
-
-1. Cerca un contatore per nominativo, POD, Eneltel, telefono, ecc.
-2. Clicca il pulsante **✏️** posto sulla destra del risultato corretto.
-
-### Dati modificabili
-
-In tutti i casi, si aprirà un **pannello a schermo** intero che permette di modificare i seguenti campi:
-
-- **Data pianificata** — campo data
-- **Note/Appuntamento** — campo testo grande
-- **Nominativo** — campo testo
-- **Indirizzo** — campo testo
-- **Civico** — campo testo
-- **Telefono** — campo testo
-- **Posizione misuratore** — dropdown (Nell'appartamento, accessibile dall'esterno, ecc.)
-- **Operatore** — dropdown con operatori assegnabili
-- **Sezione appuntamento** dedicata (vedi [sezione 10](#10-impostare-un-appuntamento) di seguito)
-
-### Cosa succede dopo il salvataggio
-
-1. I dati vengono scritti sul DB locale (il FILONE)
-2. Parte una **patch immediata** che aggiorna in-place mappa, percorsi e sidebar (~50 ms)
-3. La sidebar e la mappa si aggiornano automaticamente senza ricaricare la pagina
-4. Appare una conferma visiva
+1. **📦 Carica Installato (BOXBEAT):**
+   - Trascina uno o più export Excel/CSV E-Distribuzione (`.xlsx`, `.xls`, `.csv`; intestazioni attese alla riga 3).
+   - Per i record con `Esito OK`, cerca il `POD` sul DB e aggiorna `Operatore`, `Data Installazione` ed `Esito = ESITO OK`.
+2. **🔐 Sigilli & Matricole:**
+   - **Tab Sigilli:** elenca gli installati dell'anno corrente di tipo **trifase semidiretto** e **fotovoltaico** (Eneltel terminante con `A` o `B`) privi di sigillo; inserimento rapido con `Invio` e avanzamento automatico al campo successivo.
+   - **Tab Matricole:** elenca tutti gli installati dell'anno corrente privi di matricola nuovo contatore (supporta lettura barcode + salvataggio istantaneo su DB).
 
 ---
 
-## 10. Impostare un appuntamento
+## 8. Vista Excel Filone (`/filone`)
 
-1. Apri la **schermata di modifica** di un contatore (vedi [sezione 9](#9-modificare-i-dati-di-un-contatore) precedente)
-2. Nella sezione **Appuntamento** in basso trovi:
-
-- Selettore **Orario inizio** (es. 10:00)
-- Selettore **Orario fine** (es. 12:00)
-
-3. Clicca **☎️ Salva Appuntamento**
-4. Il sistema scrive "APP 10:00-12:00" nella colonna note del FILONE (DB locale)
-
-### Dalla pagina Gestione Distinte
-
-1. Apri `/distinte`
-2. Nella card di un contatto, usa il selettore data e orario posti in basso
-3. Clicca **📅 Salva**
-
-### Rimuovere un appuntamento
-
-All'interno della modalità modifica, cancella il testo "APP..." dalla nota e salva
-
-### Come appare sulla mappa
-
-- I contatori con appuntamento hanno un'**animazione pulsante** (cerchio che si espande)
-- Nella scheda informativa del segnaposto appare un **indicatore** con sfondo rosso ☎️ APP con l'orario (se presente)
-- Anche nella sidebar, la tappa mostra **☎️ APP** con l'orario
-
-### Effetto sull'ottimizzazione del percorso
-
-L'appuntamento è un **vincolo temporale**: il sistema posiziona il contatore nel percorso in modo che il tecnico arrivi all'orario giusto. I contatori senza appuntamento vengono inseriti nei "buchi" tra un appuntamento e l'altro.
+Accessibile dal Menu Gestionale (`⊞`) → **Vista Excel Filone** oppure all'URL `/filone`:
+- Tabella stile foglio di calcolo sincronizzata con SQLite `state.db` (`filone` + `filone_extra`).
+- **Multi-Tab indipendenti (`➕`):** apri più schede nella stessa pagina, ciascuna con i propri filtri, ricerca e ordinamento separati.
+- **Editing inline** delle celle consentite con salvataggio diretto su DB e notifica SSE alla mappa.
+- **Aggiunta dati (`➕ Singolo Contatore` / `📥 Importa Excel / Nuova LCL`):** inserisci singole utenze o importa nuove LCL/fogli direttamente dal modale dedicato.
+- Export dei dati visualizzati e pannello audit/commenti.
 
 ---
 
-## 11. Ricerca contatori
+## 9. PDF E-Distribuzione — Gestione Distinte, WhatsApp, Email e SMS (`/distinte`)
 
-Il sistema offre due livelli di ricerca.
+Accessibile dal Menu Gestionale (`⊞`) → **PDF E-Distribuzione** (`/distinte`):
 
-### Ricerca rapida (barra di ricerca)
-
-Nella sidebar c'è una **barra di ricerca** sempre visibile:
-
-1. Digita il testo da cercare (nome, indirizzo, comune, ENELTEL, POD...)
-2. I risultati si filtrano **in tempo reale** mentre digiti
-3. La ricerca avviene sulle zone/comuni/tappe visibili nella vista corrente
-4. Clicca la **✕** per cancellare la ricerca
-
-### Ricerca avanzata (modale)
-
-Per cercare **in tutti i contatori** (non solo quelli visibili):
-
-1. Clicca il pulsante **🔍 Ricerca Utente** posto sotto l'intestazione della sidebar
-2. Si apre un **modale** con **6 campi** di ricerca:
-   - **Nominativo** — nome del cliente
-   - **POD** — codice Point of Delivery
-   - **Eneltel** — codice contatore
-   - **Comune** — nome del comune
-   - **Via** — indirizzo
-   - **Telefono** — numero di telefono
-3. Compila **uno o più campi** (tutti i campi devono corrispondere tra loro)
-4. Premi **Invio** o clicca il pulsante di ricerca
-5. Appaiono fino a **10 risultati** con nome, indirizzo, eneltel, POD e data
-
-### Cosa puoi fare con i risultati
-
-| Azione               | Risultato                                                                                                                             |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| Clic su un risultato | Il contatore viene fissato automaticamente: la mappa naviga alla zona/data del contatore, fa zoom e apre il popup dopo mezzo secondo |
-| Clic su ✏️         | Si apre la schermata modifica del contatore, senza doverlo ricercare nella sidebar o sulla mappa                                      |
-
-> **Nota:** i termini di ricerca vengono salvati localmente e ripristinati quando riapri il modale.
+1. **Upload PDF:** trascina uno o più file PDF **DistintaBase** o **Moduli Maxy** E-Distribuzione ed elabora.
+2. **Classificazione & Confronto con Filone:**
+   - Suddivide i contatti in **Cellulare** (verde), **Fisso** (arancione) e **Senza telefono** (grigio).
+   - Confronta Data, Telefono, Nominativo, Indirizzo e Comune rispetto al DB locale evidenziando le discrepanze (con azione per sovrascrivere il DB).
+3. **Azioni rapide su ogni card contatto:**
+   - **📱 WhatsApp / Template:** genera messaggi precompilati usando i modelli centralizzati.
+   - **📧 Email:** invia email dirette via SMTP aziendale (con anteprima e allegati configurabili).
+   - **💬 SMS Gateway (singolo o `📱 Invio Multiplo SMS`):** invia SMS tramite smartphone aziendale (app open source SMS Gateway for Android) o webhook HTTP con preset (`Tutti`, `Monofase`, `Trifase`, `Semidiretta`, `Con Note`, `Senza Note`), contatore GSM-7 / UCS-2 e pausa anti-flood configurabile. Ogni invio aggiorna automaticamente le note sul DB (`mandato wa` / `mandata mail` / `mandato SMS`).
+   - **🔍 Cerca telefono**, **Segna errato** (barrato `ERRATO`), note rapide e fissazione appuntamento inline con aggiornamento data/orari.
 
 ---
 
-## 12. Ricerca indirizzo sulla mappa
+## 10. Gestione Lettere — Archivio, Aziende/PEC e SMS Privati (`/lettere`)
 
-Questa funzione permette di cercare un **indirizzo qualsiasi** e visualizzarlo sulla mappa.
+Accessibile dal Menu Gestionale (`⊞`) → **Gestione Lettere** (`/lettere`) insieme alla modale **Orari Lettere** sulla mappa:
 
-1. Clicca il pulsante **📍 Cerca Indirizzo** nell'header della sidebar
-2. Si apre un modale con un campo di testo
-3. Scrivi l'indirizzo (es. "Via Roma 15, Torino")
-4. Premi **Invio** o clicca Cerca
-5. Appaiono fino a **5 risultati** da OpenStreetMap (Nominatim), limitati all'Italia
-6. Clicca su un risultato
-
-### Cosa succede
-
-- Il modale si chiude automaticamente
-- Sulla mappa appare un **marker viola** 📍 nel punto cercato
-- La mappa fa zoom a livello 16 centrata sul punto
-- Si apre un popup con l'indirizzo e le coordinate
-
-### Rimuovere il marker
-
-Nel popup del marker viola, clicca **🗑️ Rimuovi marker**.
-
-### Quando usarla
-
-- Per orientarsi sulla mappa quando non conosci la zona
-- Per verificare la posizione di un indirizzo rispetto ai contatori vicini
-- Per avere un riferimento visivo durante la pianificazione
+- **Orari Lettere (mappa) & Generazioni:** calcola le fasce orarie ottimizzate su percorso (`8/11`, `9/12`, `10/13`, `11/14`, `12/15`, `13/16`, `14/17`) e genera i fogli Excel multi-tab (`MONOFASE`, `EMME2`, `SEMIDIRETTI`, `SOLO MONOFASE`, `SOLO TRIFASE DIRETTI`) salvati e scaricabili dall'archivio `/lettere`.
+- **Rilevamento automatico Aziende / Enti vs Privati** (`moduli/rilevamento_aziende.py`): distingue SRL/SPA/ditte individuali/condomini/enti pubblici dalle persone fisiche, con possibilità di **riclassificazione manuale** (override persistente in DB).
+- **Aziende e Contatti / Invio Mail & PEC in bulk:** gestisce rubrica aziendale, allegati personalizzati per azienda (elenco contatori Excel generato dinamicamente) e tracciamento dello stato di risposta (`lettere_invii`).
+- **Privati & Invio Multiplo SMS:** invia avvisi SMS in bulk agli utenti privati della generazione tramite `SMS Gateway`.
 
 ---
 
-## 13. Pinnare un contatore
+## 11. Gestione Mail — Webmail SMTP/IMAP (`/mail`)
 
-Il **pin** permette di tenere un contatore evidenziato sulla mappa anche quando cambi vista, data o zoom: utile per prendere appuntamento e individuare a colpo d'occhio la potenziale giornata migliore per quel contatore
+Accessibile dal Menu Gestionale (`⊞`) → **Gestione Mail** (`/mail`, alias `/webmail`, `/gestione-mail`):
 
-### Come pinnare
-
-1. Apri il popup di un contatore (clic sul segnaposto)
-2. Clicca **📌 Fissa questo**
-
-### Come appare
-
-- Il contatore pinnato diventa un **marker speciale rosa** con icona 📌
-- Resta visibile a **qualsiasi livello di zoom** e in **qualsiasi vista**
-
-### Come rimuovere il pin
-
-1. Clicca sul marker pinnato (il rosa con 📌)
-2. Nel popup, clicca **❌ Rimuovi pin**
-
-### Quando usarlo
-
-- Per non perdere di vista un contatore specifico mentre esplori la mappa
-- Per confrontare la posizione di un contatore con altre zone
-- Per tornare velocemente a un contatore quando hai cambiato vista
+- **Client Email integrato** con cartelle `Posta in arrivo`, `Inviate`, `Bozze`, `Programmate`, `Archivio` e `Cestino`, sincronizzazione IMAP manuale e automatica.
+- **Invio immediato e programmato:** i messaggi schedulati vengono inviati automaticamente in background (`mail_manager.process_scheduled_queue()`).
+- **Categorizzazione intelligente (`Gestione Categorie Intelligenti`):** associa colori e regole automatiche basate su mittente, rubriche Comuni/Aziende e parole chiave.
+- **Composizione avanzata:** autocompletamento contatti unificato (Filone, Comuni, Aziende, Storico), inserimento rapido di **Template Completi** e **Frasario / Snippet**, allegati custom e **Allegati Standard Aziendali** (`data/allegati/`).
 
 ---
 
-## 14. Caricare file Report da Beat (contatori installati)
+## 12. Gestione Comuni e ZTL (`/comuni`)
 
-Il Report è il file Excel che E-Distribuzione rilascia con gli esiti delle installazioni. Caricandolo, il sistema aggiorna automaticamente il FILONE.
+Accessibile dal Menu Gestionale (`⊞`) → **Gestione Comuni** (`/comuni`):
 
-### Procedura
-
-1. Nella sezione in fondo della sidebar, clicca **📦 Carica installato**
-2. Si apre un **modale** con un'area di upload
-3. **Trascina** i file nell'area tratteggiata OPPURE **clicca** per selezionarli dal computer
-4. Formati accettati: `.xlsx`, `.xls`, `.csv`
-5. Puoi caricare **più file** contemporaneamente
-6. Una volta selezionati, clicca il pulsante per avviare l'elaborazione
-7. Appare una **barra di progresso** durante l'upload
-
-### Cosa viene aggiornato
-
-Per ogni riga del BOXBEAT con **Esito OK**, il sistema cerca il **POD** corrispondente nel FILONE e aggiorna:
-
-| Dal BOXBEAT        | Nel FILONE         |
-| ------------------ | ------------------ |
-| Matricola preposto | Operatore          |
-| Data esecuzione    | Data Installazione |
-| (automatico)       | Esito = ESITO OK   |
-
-### Risultati
-
-Al termine appare un riepilogo:
-
-- Numero **file elaborati**
-- Numero **righe lette** in totale
-- Numero **record con Esito OK**
-- Numero **contatori aggiornati** sul FILONE
-- Eventuali **errori** (file non leggibili, colonne mancanti, ecc.)
-
-> **Nota:** i titoli delle colonne del file Report sono situati e attesi dal programma alla **riga 3, non sulla prima**
+- **Rubrica Comuni** salvata in `comuni_info`: stato **ZTL** e relative indicazioni operative, numero CE, tipologie zone, PEC/email e telefoni di Comune, Polizia Locale e Ufficio Tecnico.
+- **Import/Export Excel** massivo della rubrica comunale.
+- **Invio Mail/PEC in bulk ai Comuni:** anteprima personalizzata e invio verso Comune / Polizia Locale / Ufficio Tecnico con elenco Excel dei contatori del territorio allegato automaticamente.
+- **Ricerca rapida contatti** integrata.
 
 ---
 
-## 15. Inserimento sigilli
+## 13. Modelli, Template & Frasario Centralizzato (`/templates`)
 
-I sigilli sono necessari per i contatori **trifase semidiretti** e **fotovoltaici** (ENELTEL che termina con A o B).
+Accessibile dal Menu Gestionale (`⊞`) → **Modelli & Template** (`/templates`) o direttamente dall'editor dentro Gestione Mail:
 
-### Procedura
-
-1. Nella sezione in fondo della sidebar, clicca **🔐 Sigilli / Matricole**
-2. Si apre un **pannello fullscreen**
-3. Assicurati che il **tab "🔐 Sigilli"** in alto sia selezionato
-4. Appare la lista dei contatori installati (**Esito OK**) che **non hanno ancora** un sigillo associato
-
-### Filtri disponibili
-
-- **Per tipo:** Tutti / Trifase / Fotovoltaico
-- **Per operatore:** dropdown con i tecnici
-
-### Come inserire un sigillo
-
-1. Trova il contatore nella lista (ogni card mostra: nome, comune, via, eneltel, data installazione, operatore)
-2. Scrivi il numero di sigillo nel campo **input** della card
-3. Premi **Invio**
-4. Il sigillo viene salvato sul DB e la card viene **evidenziata in giallo**
-5. Il cursore passa automaticamente al **campo successivo** per un inserimento rapido
-
-### Indicatori visivi
-
-- **Indicatore ✅** — sigillo già inserito
-- **Indicatore caricamento** — durante il salvataggio
-
-> Solo le installazioni dell'**anno corrente** vengono mostrate.
+- **Template Completi (Email / WhatsApp / SMS):** gestione centralizzata di oggetti e corpi con segnaposto automatici (`{nome}`, `{data}`, `{comune}`, `{indirizzo}`, `{pod}`, ecc.) condivisi tra Mappa, Distinte, Lettere, Comuni e Mail.
+- **Frasario & Snippet Rapidi:** blocchi testuali riutilizzabili con un clic in fase di composizione email.
+- **Firma & Recapiti Ufficio:** impostazione di firma standard, contatti telefonici ed email/PEC di riferimento per provincia (usata anche in CCN automatico SMTP quando configurata).
 
 ---
 
-## 16. Inserimento matricole
+## 14. Calendario Attività, Bacheca Promemoria e Appuntamenti (`/calendario`, `/appuntamenti`)
 
-Le matricole sono i numeri seriali dei nuovi contatori installati. A differenza dei sigilli, le matricole riguardano **tutti** i tipi di contatori.
+### Calendario Attività & Workflow Giornaliero (`/calendario`)
+- Vista **Lista** e vista **Calendario mensile** condivise a livello provinciale (`data/{prov}/calendario.json`).
+- **Promemoria Appuntamento (BOXBEAT):** promemoria automatici o manuali generati in relazione agli esiti e alle note appuntamento.
+- **Configura La mia Giornata (Workflow):** checklist giornaliera interattiva per operatore/ufficio.
+- **Bacheca Promemoria (FAB sulla mappa):** mostra all'apertura o al cambio data i promemoria pertinenti alla giornata selezionata.
 
-### Procedura
-
-1. Nella sidebar della mappa, clicca **🔐 Sigilli / Matricole**
-2. Si apre il pannello fullscreen
-3. Seleziona il **tab "🔢 Matricole"**
-4. Appare la lista di TUTTI i contatori installati (**Esito OK**) senza matricola
-
-### Come inserire una matricola
-
-1. Trova il contatore nella lista
-2. Spara l'etichetta nel campo input
-3. La matricola viene salvata sul DB e la card viene **evidenziata in verde**
-4. Il cursore passa automaticamente al campo successivo
+### Gestione Appuntamenti (`/appuntamenti`)
+- Tabella operativa dedicata a tutti gli appuntamenti pianificati nel filone locale, filtrabile per periodo/operatore/comune/esito e scaricabile come file Excel formattato (`GET /api/appuntamenti/excel`).
 
 ---
 
-## 17. Flusso post-installazione — Aggiornamento dati
+## 15. Dashboard Operativa, Reportistica e Backup (`/dashboard`, `/report`)
 
-1. Ricevi i **file BOXBEAT** da Enel
-2. Nella mappa, clicca **📦 Carica installato**
-3. **Carica** i file BOXBEAT
-4. Verifica il **riepilogo** (contatori aggiornati, errori)
-5. Vai su **🔐 Sigilli / Matricole**:
-   - Tab Sigilli → inserisci i sigilli per trifase e fotovoltaici
-   - Tab Matricole → inserisci le matricole per tutti i contatori
-6. I dati si aggiornano automaticamente sul DB e la mappa viene rigenerata
+- **Dashboard Operativa (`/dashboard`):** KPI in tempo reale sul filone locale, riepilogo contatori installati/rimanenti/appuntamenti, avanzamento per LCL e stima km percorsi dagli operatori.
+- **Reportistica Operatori (`/report`):** analisi storica per intervallo di date divisa in 4 schede (**Panoramica**, **Dettaglio Operatori**, **Esiti**, **Confronto**) con export report in `.xlsx`.
+- **Backup / Ripristino (Menu Gestionale → Backup / Ripristino):** lista backup JSON giornalieri generati automaticamente dal DB locale, creazione backup manuale, download come `.xlsx` ed eventuale ripristino controllato (gli snapshot binari SQLite `.db` sono gestiti anche lato admin).
 
 ---
 
-## 18. Gestione Distinte
+## 16. Pannello Admin Multi-Provincia (`admin.*`)
 
-La pagina Distinte (`/distinte`) è uno strumento dedicato per:
+Riservato agli utenti con ruolo `admin` su `https://admin.<tuo-dominio>/`:
 
-- **Elaborare le** **distinte PDF** scaricate da Beat
-- **Agevolare il contatto con gli utenti** via WhatsApp o telefono
-- **Confrontare** i dati presenti sulla distinta con quelli del FILONE
-- **Aggiornare** i dati sul FILONE direttamente dalla distinta
-
-### Come accedervi
-
-- Dalla sidebar della mappa: clicca **📋 Gestione Distinte**
-- Oppure digita `/distinte` nell'URL (es. https://torino.mappa-algeco.com/distinte)
-
-### Layout
-
-```
-┌───────────────────────────────────────────────────────┐
-│  Intestazione: Logo + Titolo + Badge provincia        │
-├───────────────────────────────────────────────────────┤
-│  Area upload PDF (drag & drop)                        │
-├───────────────────────────────────────────────────────┤
-│  Filtri: 📱 Cellulare  ☎️ Fisso  ❌ Senza N. 	│
-├───────────────────────────────────────────────────────┤
-│  Card contatto 1                                      │
-│  Card contatto 2                                      │
-│  Card contatto 3                                      │
-│  ...                                                  │
-└───────────────────────────────────────────────────────┘
-```
-
-### Caricare ed elaborare i PDF
-
-1. Apri la pagina `/distinte`
-2. Nell'area di upload ci sono due opzioni:
-
-- **Trascina** uno o più file PDF nell'area tratteggiata verde
-- **Clicca** sull'area per aprire il selettore file
-
-3. I file accettati devono essere **PDF** e idealmente avere nel nome "DistintaBase"
-4. I file caricati appaiono come **chip** con il nome del file e un pulsante **✕** per rimuoverli
-5. Clicca **"Elabora Distinte"** per avviare l'estrazione
-6. Il sistema:
-   - Estrae i dati da ogni PDF (nome, indirizzo, telefono, POD, ecc.)
-   - Classifica i contatti per tipo di telefono
-   - Confronta con il FILONE per trovare differenze
-7. I risultati appaiono come **card** sotto i filtri
-
-### Classificazione automatica
-
-Il sistema divide automaticamente i contatti in tre categorie:
-
-| Categoria                | Icona | Colore bordo | Descrizione                                           |
-| ------------------------ | ----- | ------------ | ----------------------------------------------------- |
-| **Cellulare**      | 📱    | Verde        | Numero mobile (prefisso 320-399), pronto per WhatsApp |
-| **Fisso**          | ☎️  | Arancione    | Numero di rete fissa, da chiamare manualmente         |
-| **Senza telefono** | ❌    | Grigio       | Nessun numero disponibile, da cercare                 |
-
-### Marcare come completato
-
-Ogni card ha una **checkbox** (☐). Spuntala per segnare che hai già contattato quel cliente. Lo stato viene salvato in localmente e persiste alla riapertura della pagina o nel caso in cui le stesse distinte venissero ricaricate in futuro.
-
-### Inviare messaggi WhatsApp
-
-Per i contatti con **numero di cellulare**, puoi inviare messaggi WhatsApp precompilati:
-
-1. Trova la card di un contatto con bordo **verde** (cellulare)
-2. Clicca il pulsante **📱 WhatsApp/Template**
-3. Si aprirà un modale che offre la possibilità di:
-   * Scegliere un template;
-   * **Copiare** o **inviare direttamente su WhatsApp (web o app) il messaggio precompilato** con i dati del contatto (nome, data, indirizzo, ecc.)
-
-### Template messaggi
-
-Il sistema offre **6 template** di messaggio preconfigurati, ciascuno pensato per una situazione diversa.
-
-| # | Nome                     | Scopo                                                                                                                                                                                                             |
-| - | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1 | **WA Conferma**    | Messaggio WhatsApp per confermare appuntamento già programmato con lettera                                                                                                                                       |
-| 2 | **WA Sollecito**   | Messaggio WhatsApp di sollecito in seguito a una chiamata non risposta                                                                                                                                            |
-| 3 | **Spiegone**       | Messaggio lungo e dettagliato con spiegazione lavoro                                                                                                                                                              |
-| 4 | **Appuntamento 1** | Primo template per fissare appuntamento                                                                                                                                                                           |
-| 5 | **Appuntamento 2** | Secondo template appuntamento (variante)                                                                                                                                                                          |
-| 6 | **Email Società** | Template per email alla ditta/amministratore<br />(utilizza un indirizzo email specifico per provincia)<br />Cliccando **📧 Email** si apre il client email con il destinatario e l'oggetto già compilati. |
-
-### Cercare un numero di telefono
-
-Per i contatti **senza telefono**, puoi cercare il numero tramite servizi esterni:
-
-1. Trova una card con bordo **grigio** (senza telefono)
-2. Clicca il pulsante **🔍 Cerca telefono**
-3. Si apre un **modale** con:
-
-- Link a **Pagine Bianche** — precompilato con nome e indirizzo del cliente
-- Link a **Google** — precompilato con nome e comune
-- **Campo di inserimento manuale** — per digitare il numero trovato e salvarlo sul FILONE
-
-### Segnare un numero come errato
-
-Se un numero di telefono è sbagliato (non risponde, non esiste, ecc.):
-
-1. Nella card del contatto, cerca l'opzione per segnare il numero errato
-2. Il sistema:
-   - Aggiunge **"ERRATO"** al valore del telefono nel FILONE (DB)
-   - Mostra il numero con **formattazione barrato** nella UI della distinta
-
-### Note e appuntamenti
-
-Ogni contatto ha una sezione per le note:
-
-1. Usa il **dropdown note rapide** per selezionare e inserire note predefinite:
-   - "Mandato WA"
-   - "Non risponde"
-   - "Chiamare"
-   - "Numero errato"
-2. Oppure scrivi una **nota libera** nel campo testo
-3. La nota si salva automaticamente premendo **Invio** o cliccando fuori dal campo
-4. La nota viene salvata sul FILONE (DB locale)
-
-### Impostare un appuntamento dalla distinta
-
-1. Nella card del contatto, puoi trovare anche una sezione per fissare **appuntamento** sul momento
-2. Seleziona la **data** con il selettore apposito
-3. Seleziona l'**orario inizio** e l'**orario fine** (se si tratta di una fascia estesa)
-4. Clicca **📅 Salva**
-5. Il sistema scrive la nota "APP [orario]" nel FILONE e applica la patch in-place
-
-### Confronto tra distinte e FILONE
-
-Quando elabori le distinte PDF, il sistema **confronta automaticamente** i dati estratti con quelli presenti nel FILONE, ovvero:
-
-- **Data intervento** — la data nella distinta vs quella pianificata nel FILONE
-- **Telefono** — il numero nella distinta vs quello nel FILONE
-- **Nominativo** — il nome nella distinta vs quello nel FILONE
-- **Indirizzo** — via e civico della distinta vs quelli nel FILONE
-- **Comune** — il comune della distinta vs quello nel FILONE
-
-Le differenze vengono evidenziate come **alert** con:
-
-- Il **campo** che differisce
-- Il **valore della distinta** (nuovo)
-- Il **valore del FILONE** (attuale)
-
-Per ogni differenza puoi:
-
-- **Sovrascrivere** (aggiornare il FILONE con il valore della distinta o viceversa)
-- **Ignorare** (mantenere il valore attuale del FILONE)
-
-> Questo è particolarmente utile per aggiornare numeri di telefono, date e indirizzi quando E-Distribuzione fornisce dati più aggiornati, o, viceversa, quando mancano.
-
-### Flusso settimanale — Contattare i clienti
-
-1. Apri `/distinte`
-2. **Carica** le distinte PDF ricevute da Enel
-3. **Controlla le differenze** con il FILONE e aggiorna se necessario
-4. **Contatta via WhatsApp** i clienti con cellulare (pulsante 📱)
-5. **Chiama** i clienti con telefono fisso
-6. Per quelli **senza telefono**: cerca su Pagine Bianche (🔍) e salva il numero
-7. **Segna gli appuntamenti** fissati durante le chiamate
-8. **Spunta** ogni contatto come completato (checkbox ☐)
+- **Stato worker e Health overview:** controllo stato processi Gunicorn per provincia, statistiche DB, anomali e badge celle Outbox da esportare.
+- **Gestione ciclo di vita:** `▶ Avvia`, `🔄 Riavvia`, `⏸ Ferma`, `➕ Aggiungi provincia`, `✏️ Modifica`, `🗑️ Elimina` (con opzione wipe completo).
+- **Dati e sincronizzazione Excel/Sheets:**
+  - **🪄 Configura (wizard):** configurazione in 3 step (colonne standard, operatori, accessi utenti) per nuove province.
+  - **📥 Importa Excel:** upload `.xlsx`/`.csv` con timestamp di export per merge protetto "vince il più recente".
+  - **⚡ Da Sheets:** trigger immediato auto-import in sola lettura dall'URL Google Sheet configurato.
+  - **📤 Scarica cambiamenti / ✓ Segna gestite:** Outbox Excel compatto (`POD` + celle modificate in giallo) e reset badge `pending`.
+  - **📋 Scarica completo** e **💾 Backup (`snapshot-db`)**.
+- **Configurazione per provincia:** **🗂️ Colonne** (CRUD colonne + mapping intestazioni), **📬 Excel lettere**, **👥 Operatori**, **🏷️ LCL e Zone**, **📧 SMTP**, **📱 SMS Gateway**.
+- **Strumenti trasversali:** **🔑 Utenti** (CRUD account, ruoli, province, reset password), **🔍 Ricerca Eneltel** globale e **📋 Log in tempo reale** filtrabili per provincia/router e livello (`journalctl`).
 
 ---
 
-## 19. Tema chiaro e scuro
+## 17. Aggiornamento dati in tempo reale (DB locale + SSE) e Tema
 
-L'interfaccia supporta due temi visivi.
+### Flusso DB-first & Notifiche SSE
+- Ogni modifica viene salvata prima su SQLite (`data/{prov}/state.db`).
+- Le modifiche cosmetiche/puntuali aggiornano `mappa_data.json` in ~50 ms; quelle strutturali rilanciano il `sync_loop` (~7–10 s).
+- Al termine, il backend notifica i browser via **Server-Sent Events** (`/api/events`): l'orario nell'intestazione della sidebar lampeggia e la vista si aggiorna preservando lo stato corrente. In caso di disconnessioni persistenti entra in gioco un fallback di polling automatico.
 
-### Come cambiare tema
-
-- Nella sidebar della mappa: di default è impostato il tema scuro **🌙** (luna). Clicca sul pulsante **Tema** **☀️** (sole) per tema chiaro
-- La pagina distinte eredita automaticamente il tema scelto dalla mappa
-
-### Persistenza
-
-La scelta del tema viene salvata localmente. Quando ricarichi la pagina o se dovesse essere riavviato il server, il tema scelto viene ripristinato automaticamente sul dispositivo. Il tema si riflette su tutte le pagine del programma.
+### Tema chiaro e scuro
+- Switch tema 🌙 / ☀️ dalla sidebar (mappa) o dall'header delle viste secondarie e admin: la preferenza è salvata in `localStorage` e applicata coerentemente su tutto il gestionale.
 
 ---
 
-## 20. Aggiornamento dei dati
+## 18. Legenda colori operatori e Scorciatoie
 
-Dal 21/05/2026 il sistema non è più collegato a Google Sheets: la fonte di verità è il **DB locale SQLite** per provincia. Gli aggiornamenti sono **event-driven** invece che a polling.
+Le configurazioni predefinite in [`data/provinces.json`](data/provinces.json) (personalizzabili da Admin → `👥 Operatori`):
 
-### Patch in-place (modifiche puntuali, ~50 ms)
+### Torino (`DEPOSITO VOLPIANO`)
+| Colore | Matricola | Operatore |
+|---|---|---|
+| 🔴 `#e74c3c` | `AE101392` | PAUL |
+| 🟡 `#f1c40f` | `AG49808` | MIHAI |
+| 🟢 `#2ecc71` | `AG18966` | SIDI |
+| 🟣 `#db33a6` | `AE94428` | ALECCI |
+| 🟢 `#a0db33` | `AG05928` | GUINDO |
+| 🔵 `#3498db` | `AG46824` | FENOCCHIO |
 
-Quando un utente modifica un contatore, inserisce un sigillo/matricola, aggiorna una nota o salva un appuntamento:
+### Pavia (`DEPOSITO PAVIA`)
+| Colore | Matricola | Operatore |
+|---|---|---|
+| 🔵 `#3498db` | `AG49808` | CIOBANU |
+| 🟢 `#60db33` | `AG46824` | FENOCCHIO |
+| 🟠 `#db7f33` | `AE101392` | PAUL |
+| 🩵 `#33dbbf` | `AF09076` | SIMONE |
+| 🟣 `#d833db` | `AG18966` | SIDI |
+| 🟡 `#bfdb33` | `AG69238` | CLAUDIO |
+| 🟪 `#6633db` | `AF34814` | ALESSANDRO |
 
-1. La scrittura va direttamente sul DB
-2. Il server applica una **patch in-place** che aggiorna solo le strutture impattate (mappa, percorsi, sidebar)
-3. Tutti i browser collegati ricevono la patch via **SSE** e la applicano senza reload
+### Lecco (`DEPOSITO LECCO`)
+| Colore | Matricola | Operatore |
+|---|---|---|
+| 🟣 `#8d31bf` | `AG29392` | MARCO |
+| 🔵 `#3498db` | `AG12345` | PIPPO |
 
-### Rigenerazione completa (cambi strutturali, ~7-10 s)
+**Marker speciali:** 🟢 Deposito (partenza/arrivo) • 🟣 Indirizzo cercato • 🩷 Contatore pinnato (`📌`) • 🔴 Cerchio pulsante (`☎️ APP`).
 
-Per modifiche che alterano la geometria dei percorsi (import Excel, BOXBEAT, cambi operatore di massa) parte un **sync_loop** che ricostruisce da capo zone, percorsi e cache OSRM. Anche in questo caso la notifica arriva via SSE.
+### Scorciatoie da tastiera
 
-### Notifica al browser (SSE)
-
-Il browser riceve una **notifica in tempo reale** quando i dati cambiano:
-
-- L'**orario** nell'intestazione della sidebar **lampeggia in verde** brevemente
-- I dati della mappa si **aggiornano automaticamente** senza ricaricare la pagina
-- La sidebar mantiene la vista corrente (non ti interrompe)
-
-Se la connessione SSE si interrompe (es. problema di rete), il sistema riprova fino a 5 volte con tempi crescenti (5s, 10s, 20s...). Dopo 5 tentativi falliti, passa a un **polling tradizionale** come backup.
-
-### Sincronizzazione manuale
-
-Se hai bisogno di forzare un aggiornamento immediato:
-
-1. Clicca il pulsante **🔄** nell'intestazione della sidebar
-2. Il server lancia immediatamente una rigenerazione completa
-3. La pagina si ricarica da zero con i dati aggiornati
-
-In alternativa: dopo ogni **modifica manuale** (salvataggio contatore, upload Report Beat, import Excel, ecc.), il refresh parte **automaticamente** senza dover cliccare nulla.
-
----
-
-## 21. Legenda colori
-
-Ogni **operatore/tecnico** ha un colore assegnato. I colori predefiniti sono:
-
-**Torino:**
-
-| Colore              | Operatore       |
-| ------------------- | --------------- |
-| 🔴 Rosso (#e74c3c)  | AE101392        |
-| 🟡 Giallo (#f1c40f) | AG49808         |
-| 🟢 Verde (#2ecc71)  | AG18966         |
-| 🔵 Ciano (#00bcd4)  | SENZA OPERATORE |
-
-**Pavia:**
-
-| Colore              | Operatore  |
-| ------------------- | ---------- |
-| 🔴 Rosso (#e74c3c)  | ALESSANDRO |
-| 🟡 Giallo (#f1c40f) | MELEK      |
-
-### Colori speciali sulla mappa
-
-| Colore         | Significato                  |
-| -------------- | ---------------------------- |
-| 🟢 Verde fisso | Deposito (partenza/arrivo)   |
-| 🟣 Viola       | Segnaposto indirizzo cercato |
-| 🩷 Rosa        | Contatore pinnato            |
-
----
-
-## 22. Scorciatoie da tastiera
-
-Riepilogo delle scorciatoie disponibili nell'interfaccia.
-
-| Scorciatoia                   | Azione                                    | Condizione                                                             |
-| ----------------------------- | ----------------------------------------- | ---------------------------------------------------------------------- |
-| **← Freccia sinistra** | Vai alla data precedente                  | Vista Dettaglio, nessun campo di testo attivo, mouse fuori dalla mappa |
-| **→ Freccia destra**   | Vai alla data successiva                  | Vista Dettaglio, nessun campo di testo attivo, mouse fuori dalla mappa |
-| **Invio**               | Conferma ricerca, login, inserimento dati | Quando un campo di testo o un modale è attivo                         |
-
----
-
-*Per assistenza tecnica e configurazione, consulta `DOCUMENTAZIONE.md`.*
+| Scorciatoia | Azione | Contesto |
+|---|---|---|
+| `←` / `→` | Giorno precedente / successivo | Vista Dettaglio con nessun input attivo e mouse fuori dalla mappa |
+| `Invio` | Conferma ricerca, login, inserimento rapido sigillo/matricola | Campo attivo / modale |

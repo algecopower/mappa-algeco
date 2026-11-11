@@ -46,8 +46,8 @@ L'applicazione open source **SMS Gateway for Android** ([capcom6/android-sms-gat
 
 ## Configurazione nel Gestionale Mappa Algeco
 
-1. Accedi alla **Dashboard Admin**: `http://admin.<tuo-dominio>` oppure `http://localhost:5050/admin`.
-2. Nella card della provincia desiderata (es. **Torino** o **Pavia**), clicca sul pulsante `📱 SMS Gateway` (oppure direttamente nella pagina Distinte con l'icona ingranaggio).
+1. Accedi alla **Dashboard Admin**: `https://admin.<tuo-dominio>/` (ad esempio `https://admin.mappa-algeco.com/` — assicurati di aver effettuato prima il login su una provincia).
+2. Nella card della provincia desiderata (es. **Torino**, **Pavia** o **Lecco**), clicca sul pulsante `📱 SMS Gateway` (oppure clicca su **`Gateway SMS`** direttamente nell'intestazione della pagina Distinte).
 3. Configura:
    - **Abilita Gateway SMS**: Spuntato.
    - **Provider**: `Android SMS Gateway (App Open Source su smartphone aziendale)`.
@@ -59,14 +59,15 @@ L'applicazione open source **SMS Gateway for Android** ([capcom6/android-sms-gat
 
 ---
 
-## Utilizzo nella schermata Distinte
+## Utilizzo nel Gestionale (Distinte e Gestione Lettere)
 
-1. Vai nella pagina **Gestione Distinte** della provincia.
-2. Quando ci sono contatti con cellulare, il pulsante **`📱 Invio Multiplo SMS`** è pronto all'uso.
-3. Clicca sul pulsante:
-   - Seleziona un template predefinito (es. `SMS Preavviso Breve` ottimizzato per 1 SMS / 160 caratteri).
-   - Verifica i destinatari selezionati tramite le checkbox.
-   - Il contatore live controlla caratteri ed eventuali caratteri speciali non GSM-7.
+La modale di invio multiplo SMS è disponibile sia nella pagina **Gestione Distinte** (`/distinte`) sia nella pagina **Gestione Lettere** (`/lettere`, sezione *Invio Multiplo SMS a Utenti Privati*):
+
+1. Apri la pagina desiderata (**Distinte** oppure **Gestione Lettere**).
+2. Clicca sul pulsante **`📱 Invio Multiplo SMS`**.
+3. Configura l'invio nella modale:
+   - Seleziona un template predefinito o personalizza il testo con i segnaposto automatici (`{nome}`, `{data}`, `{comune}`, ecc.).
+   - Filtra o seleziona i destinatari con numero di cellulare valido (la normalizzazione in E.164 `+39...` e i preset `Tutti`, `Monofase`, `Trifase`, `Semidiretta`, `Con Note`, `Senza Note` velocizzano la selezione in Distinte).
+   - Il contatore live verifica lunghezza caratteri, encoding (**GSM-7** 160 car/SMS vs **UCS-2** con emoji/caratteri speciali) e numero stimato di SMS.
    - Premi **Invia SMS Multipli**.
-4. Il sistema esegue l'invio sequenziale rispettando la pausa anti-flood e aggiorna in tempo reale la barra di avanzamento e i log di esito.
-5. Per ogni SMS consegnato con successo viene aggiornata la nota nel DB SQLite locale e registrato l'evento nell'audit log.
+4. Il sistema esegue l'invio sequenziale rispettando la pausa anti-flood, mostra avanzamento ed esito per singolo destinatario e registra automaticamente la nota nel DB SQLite locale (`mandato SMS`) e nell'`audit_log`.
